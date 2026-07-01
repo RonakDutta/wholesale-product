@@ -8,7 +8,7 @@ export default function Navbar() {
           {/* Logo Section */}
           <div className="shrink-0 flex items-center cursor-pointer">
             <span className="text-2xl font-extrabold text-teal-600 tracking-tight">
-              Trade<span className="text-slate-800">B2B</span>
+              wholesale<span className="text-slate-800"> market.</span>
             </span>
           </div>
 

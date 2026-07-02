@@ -6,7 +6,7 @@ const FilterBar = () => {
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-3 mb-2 border-b border-sage/30">
       <div className="text-sm font-medium text-espresso">
         <span className="text-sage mr-2">Results:</span>
-        Showing 124 products
+        Showing 8 products
       </div>
 
       <div className="flex items-center gap-3 w-full sm:w-auto">

@@ -3,8 +3,7 @@ import { ArrowRight, Store } from "lucide-react";
 
 const CTABanner = () => {
   return (
-    <div className="w-full bg-espresso rounded-2xl mt-5 overflow-hidden relative">
-      {/* perforated top edge, ties to the "tear-off / invite" idea */}
+    <div className="w-full bg-espresso/90 rounded-xl mt-5 overflow-hidden relative">
       <div className="border-t border-dashed border-cream/20" />
 
       <div className="px-5 py-7 sm:px-10 sm:py-9 flex flex-col sm:flex-row items-center sm:items-end justify-between gap-6 sm:gap-8">

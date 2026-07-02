@@ -1,7 +1,15 @@
 import React from "react";
 import { MessageCircle, ShieldCheck, MapPin, IndianRupee } from "lucide-react";
+import ContactVendorBtn from "./ContactVendorBtn";
 
 const ProductCard = () => {
+  const product = {
+    name: "Premium Industrial Packaging Cartons",
+    price: 45,
+    vendorName: "Apex Traders",
+    vendorId: "v_12345",
+  };
+
   return (
     <div className="bg-white border border-slate-200 rounded-lg overflow-hidden flex flex-col h-full transition-all duration-200 hover:shadow-lg hover:border-slate-300">
       {/* Image */}
@@ -67,12 +75,15 @@ const ProductCard = () => {
 
         {/* Actions */}
         <div className="grid grid-cols-2 gap-1.5 sm:gap-2 mt-1.5 sm:mt-2">
-          <button className="flex items-center justify-center gap-1 sm:gap-1.5 py-1.5 sm:py-2 border border-slate-300 text-slate-700 text-[10px] sm:text-xs font-semibold rounded-sm hover:bg-slate-50 transition-colors cursor-pointer">
-            <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
-            <span>Message</span>
-          </button>
+          <ContactVendorBtn
+            vendorId={product.vendorId}
+            vendorName={product.vendorName}
+            productName={product.name}
+          />
           <button className="flex items-center justify-center gap-1 sm:gap-1.5 py-1.5 sm:py-2 bg-clay text-white text-[10px] sm:text-xs font-semibold rounded-sm hover:bg-clay/90 transition-colors cursor-pointer">
-            <span>Get quote</span>
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wide">
+              get quote
+            </span>
           </button>
         </div>
       </div>

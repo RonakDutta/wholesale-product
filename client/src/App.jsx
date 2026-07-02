@@ -1,27 +1,22 @@
+import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Navbar from "./components/Navbar";
-import Hero from "./components/Hero";
-import CategoryGrid from "./components/CategoryGrid";
-import FeaturedProducts from "./components/FeaturedProducts";
-import Footer from "./components/Footer";
+import MainLayout from "./layouts/MainLayout";
+import MarketplaceHome from "./pages/MarketplaceHome";
+// import ProductDetails from "./pages/ProductDetails";
+// import WholesalerStore from "./pages/WholesalerStore";
 
-export default function App() {
+const App = () => {
   return (
     <BrowserRouter>
       <Routes>
-        <Route
-          path="/"
-          element={
-            <>
-              <Navbar />
-              <Hero />
-              <CategoryGrid />
-              <FeaturedProducts />
-              <Footer />
-            </>
-          }
-        />
+        <Route path="/" element={<MainLayout />}>
+          <Route index element={<MarketplaceHome />} />
+          {/* <Route path="product/:id" element={<ProductDetails />} />
+          <Route path="store/:id" element={<WholesalerStore />} /> */}
+        </Route>
       </Routes>
     </BrowserRouter>
   );
-}
+};
+
+export default App;

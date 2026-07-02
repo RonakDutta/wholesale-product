@@ -7,6 +7,7 @@ import HeroCarousel from "../components/HeroCarousel";
 import CTABanner from "../components/CTABanner";
 import LoadMore from "../components/LoadMore";
 import MarketAlert from "../components/MarketAlert";
+import mockProducts from "../utils/mockProducts";
 
 const MarketplaceHome = () => {
 	const containerRef = useRef(null);
@@ -65,11 +66,9 @@ const MarketplaceHome = () => {
 
 			<div className="flex flex-col gap-2 page-load-anim">
 				<FilterBar />
-				<div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6 w-full">
-					{[1, 2, 3, 4, 5, 6, 7, 8].map((item) => (
-						<div key={item} className="product-card-anim">
-							<ProductCard />
-						</div>
+				<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+					{mockProducts.map((product) => (
+						<ProductCard key={product.id} product={product} />
 					))}
 				</div>
 			</div>

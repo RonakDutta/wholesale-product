@@ -12,7 +12,7 @@ const HeroCarousel = () => {
         "Connect directly with verified suppliers. Get real-time dynamic pricing based on your location and market demand.",
       buttonText: "Explore Catalog",
       image:
-        "https://images.unsplash.com/photo-1586528116311-ad8ed745120c?q=80&w=2070&auto=format&fit=crop",
+        "https://images.pexels.com/photos/2199293/pexels-photo-2199293.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
     },
     {
       badge: "Dynamic Pricing",
@@ -21,7 +21,7 @@ const HeroCarousel = () => {
         "Our localized supply and demand algorithm ensures you get the most competitive rates in your region.",
       buttonText: "View Live Rates",
       image:
-        "https://images.unsplash.com/photo-1504642252876-db9310636cc6?q=80&w=2070&auto=format&fit=crop",
+        "https://images.pexels.com/photos/1214259/pexels-photo-1214259.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
     },
     {
       badge: "Direct Payments",
@@ -30,7 +30,7 @@ const HeroCarousel = () => {
         "Settle invoices instantly with integrated UPI payments directly to your suppliers' accounts.",
       buttonText: "Setup Payment",
       image:
-        "https://images.unsplash.com/photo-1553413077-208172c918a2?q=80&w=2070&auto=format&fit=crop",
+        "https://images.pexels.com/photos/6169668/pexels-photo-6169668.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
     },
   ];
 

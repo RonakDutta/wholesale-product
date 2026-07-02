@@ -16,7 +16,7 @@ const ContactVendorBtn = ({ vendorId, vendorName, productName }) => {
     >
       <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
       <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wide">
-        Discuss
+        message
       </span>
     </button>
   );

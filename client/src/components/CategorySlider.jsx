@@ -12,7 +12,7 @@ const CategorySlider = () => {
   ];
 
   return (
-    <div className="w-full overflow-x-auto pb-2 mb-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none">
+    <div className="w-full overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none">
       <div className="flex gap-3">
         {categories.map((category, index) => (
           <button

@@ -81,8 +81,9 @@ const ProductCard = () => {
             productName={product.name}
           />
           <button className="flex items-center justify-center gap-1 sm:gap-1.5 py-1.5 sm:py-2 bg-clay text-white text-[10px] sm:text-xs font-semibold rounded-sm hover:bg-clay/90 transition-colors cursor-pointer">
+            <IndianRupee className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wide">
-              get quote
+              buy
             </span>
           </button>
         </div>

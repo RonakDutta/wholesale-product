@@ -53,14 +53,14 @@ const ProductCard = () => {
               className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600 shrink-0"
               strokeWidth={2.5}
             />
-            <span className="text-base sm:text-lg font-bold text-amber-600">
+            <span className="text-base sm:text-xl font-bold text-amber-600">
               45
             </span>
             <span className="text-[10px] sm:text-xs text-slate-400">
               / unit
             </span>
           </div>
-          <div className="font-mono text-[9px] sm:text-[10px] text-slate-400 mt-0.5">
+          <div className="font-mono text-[10px] sm:text-[12px] text-slate-400 mt-0.5">
             ₹42/unit at 1,000+ units
           </div>
         </div>

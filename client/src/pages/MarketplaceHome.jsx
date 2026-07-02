@@ -5,6 +5,7 @@ import FilterBar from "../components/FilterBar";
 import HeroCarousel from "../components/HeroCarousel";
 import CTABanner from "../components/CTABanner";
 import { TrendingUp } from "lucide-react";
+import LoadMore from "../components/LoadMore";
 
 const MarketplaceHome = () => {
   return (
@@ -38,6 +39,7 @@ const MarketplaceHome = () => {
           ))}
         </div>
       </div>
+      <LoadMore />
 
       <CTABanner />
     </div>

@@ -15,6 +15,7 @@ import {
   Plus,
   ShoppingBag,
   Check,
+  Tag,
 } from "lucide-react";
 import { gsap } from "gsap";
 import mockProducts from "../utils/mockProducts";
@@ -71,7 +72,6 @@ const ProductDetails = () => {
 
   const handleAddToCart = () => {
     addToCart(product, quantity);
-    // Assuming flyToCart is defined in your broader scope or a custom hook you have
     if (typeof flyToCart === "function") {
       flyToCart(addToCartBtnRef.current);
     }
@@ -181,53 +181,73 @@ const ProductDetails = () => {
             </h1>
           </div>
 
-          {/* Pricing Box */}
-          <div className="bg-white border border-slate-200 border-l-4 border-l-clay rounded-lg p-4 flex flex-col gap-4">
-            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
-              <span className="text-sm font-bold uppercase tracking-wider text-slate-500 font-mono">
-                Wholesale Pricing
+          {/* REDESIGNED Pricing Box */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex flex-col">
+            <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">
+                Pricing Tiers
               </span>
-              <div className="flex items-center gap-1 bg-cream border border-clay/30 text-clay font-mono text-xs font-bold px-2 py-0.5 rounded-sm">
-                <TrendingDown className="w-3.5 h-3.5" />
-                <span>Volume Discount</span>
-              </div>
+              {savingsPercent > 0 && (
+                <div className="flex items-center gap-1 bg-emerald-100/80 text-emerald-700 text-[10px] font-extrabold px-2 py-1 rounded-sm uppercase tracking-widest border border-emerald-200">
+                  <Tag className="w-3 h-3" />
+                  <span>Save {savingsPercent}% on Bulk</span>
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <span className="block text-xs text-slate-500 font-medium mb-1">
-                  Base Price (Min. Order)
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              {/* Tier 1: Standard Rate */}
+              <div className="border border-slate-200 rounded-lg p-3.5 flex flex-col justify-center bg-white shadow-xs relative">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                  Standard Rate
                 </span>
-                <div className="flex items-baseline gap-1 font-mono">
+                <div className="flex items-baseline gap-0.5 font-mono">
                   <IndianRupee
                     className="w-4 h-4 text-slate-800 shrink-0"
                     strokeWidth={2.5}
                   />
-                  <span className="text-xl font-bold text-slate-900">
+                  <span className="text-2xl font-bold text-slate-800">
                     {product.price}
                   </span>
-                  <span className="text-sm text-slate-500">/unit</span>
+                  <span className="text-xs text-slate-500 ml-1">/unit</span>
                 </div>
-              </div>
-              <div>
-                <span className="block text-xs text-slate-500 font-medium mb-1">
-                  Bulk Price ({product.bulkQuantity}+ units)
+                <span className="text-xs text-slate-400 mt-1 font-medium">
+                  Min. order: {product.moq}
                 </span>
-                <div className="flex items-baseline gap-1 font-mono">
+              </div>
+
+              {/* Tier 2: Bulk Rate (Highlighted) */}
+              <div className="border-2 border-clay rounded-lg p-3.5 flex flex-col justify-center bg-clay/5 relative shadow-xs">
+                {/* Floating Badge */}
+                <div className="absolute -top-2.5 right-3 bg-clay text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1">
+                  <TrendingDown className="w-3 h-3" strokeWidth={3} />
+                  Best Value
+                </div>
+
+                <span className="text-[11px] font-bold uppercase tracking-wider text-clay mb-2">
+                  Bulk Rate
+                </span>
+                <div className="flex items-baseline gap-0.5 font-mono">
                   <IndianRupee
                     className="w-4 h-4 text-clay shrink-0"
-                    strokeWidth={2.5}
+                    strokeWidth={3}
                   />
-                  <span className="text-xl font-bold text-clay">
+                  <span className="text-2xl font-black text-clay">
                     {product.bulkPrice}
                   </span>
-                  <span className="text-sm text-slate-500">/unit</span>
-                </div>
-                {savingsPercent > 0 && (
-                  <span className="block font-mono text-xs text-clay/90 mt-1 font-medium">
-                    Save {savingsPercent}% per unit
+                  <span className="text-xs text-clay/70 ml-1 font-bold">
+                    /unit
                   </span>
-                )}
+                </div>
+
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-xs text-slate-500 font-medium line-through decoration-slate-300">
+                    ₹{product.price}
+                  </span>
+                  <span className="text-xs text-clay font-semibold">
+                    ({product.bulkQuantity}+ units)
+                  </span>
+                </div>
               </div>
             </div>
           </div>

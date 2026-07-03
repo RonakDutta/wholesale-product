@@ -69,6 +69,8 @@ export const CartProvider = ({ children }) => {
     [items],
   );
 
+  const uniqueItemCount = items.length;
+
   const subtotal = useMemo(
     () =>
       items.reduce((sum, i) => {
@@ -90,6 +92,7 @@ export const CartProvider = ({ children }) => {
         updateQuantity,
         clearCart,
         itemCount,
+        uniqueItemCount,
         subtotal,
         isCartOpen,
         setIsCartOpen,

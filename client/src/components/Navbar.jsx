@@ -3,7 +3,7 @@ import { useCart } from "../context/CartContext";
 import CartDrawer from "./CartDrawer";
 
 const Navbar = () => {
-  const { itemCount, setIsCartOpen } = useCart();
+  const { uniqueItemCount, setIsCartOpen } = useCart();
 
   return (
     <>
@@ -33,12 +33,12 @@ const Navbar = () => {
               id="cart-icon-target"
               onClick={() => setIsCartOpen(true)}
               className="cursor-pointer relative p-2 hover:bg-sage/20 rounded-lg transition-colors group"
-              aria-label={`Open cart, ${itemCount} item${itemCount === 1 ? "" : "s"}`}
+              aria-label={`Open cart, ${uniqueItemCount} item${uniqueItemCount === 1 ? "" : "s"}`}
             >
               <ShoppingCart className="w-5 h-5 text-espresso group-hover:scale-110 transition-transform" />
-              {itemCount > 0 && (
+              {uniqueItemCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-clay text-cream text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full ring-2 ring-cream">
-                  {itemCount > 9 ? "9+" : itemCount}
+                  {uniqueItemCount > 9 ? "9+" : uniqueItemCount}
                 </span>
               )}
             </button>

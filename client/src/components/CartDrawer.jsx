@@ -34,7 +34,7 @@ const CartDrawer = () => {
         onClick={() => setIsCartOpen(false)}
       />
       <div
-        className={`fixed top-0 right-0 h-full w-full sm:w-[26rem] bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${
+        className={`fixed top-0 right-0 h-full w-full sm:w-104 bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${
           isVisible ? "translate-x-0" : "translate-x-full"
         }`}
       >
@@ -125,7 +125,7 @@ const CartDrawer = () => {
                           >
                             <Minus className="w-3 h-3" />
                           </button>
-                          <span className="px-2.5 text-xs font-mono font-bold text-slate-900 min-w-[2.25rem] text-center">
+                          <span className="px-2.5 text-xs font-mono font-bold text-slate-900 min-w-9 text-center">
                             {item.quantity}
                           </span>
                           <button

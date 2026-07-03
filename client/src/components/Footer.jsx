@@ -69,10 +69,6 @@ const Footer = () => {
       </div>
     </footer>
   );
-<<<<<<< HEAD
-}
-=======
 };
 
 export default Footer;
->>>>>>> feature/v4

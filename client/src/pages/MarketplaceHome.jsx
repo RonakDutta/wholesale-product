@@ -22,8 +22,6 @@ const MarketplaceHome = () => {
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [sortBy, setSortBy] = useState("recommended");
 
-  // Unique categories from the full catalog, not the filtered set,
-  // so options don't disappear as you filter.
   const categories = useMemo(() => {
     const set = new Set(mockProducts.map((p) => p.category).filter(Boolean));
     return Array.from(set).sort();
@@ -56,7 +54,6 @@ const MarketplaceHome = () => {
     return result;
   }, [selectedCategory, verifiedOnly, sortBy]);
 
-  // Reset pagination whenever the filtered/sorted set changes
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [selectedCategory, verifiedOnly, sortBy]);
@@ -70,8 +67,6 @@ const MarketplaceHome = () => {
 
   const handleLoadMore = () => {
     setIsLoadingMore(true);
-    // Simulated delay so the spinner reads as real work.
-    // Swap this for your actual fetch/pagination call when you wire up an API.
     setTimeout(() => {
       setVisibleCount((prev) =>
         Math.min(prev + PAGE_SIZE, filteredSorted.length),
@@ -84,10 +79,10 @@ const MarketplaceHome = () => {
     setVerifiedOnly(false);
   };
 
-  // Initial page-load animation for the top sections (runs once)
   useEffect(() => {
+    window.scrollTo(0, 0);
+
     let ctx = gsap.context(() => {
-      //  fromTo prevents the flash of unstyled content before GSAP loads
       gsap.fromTo(
         ".page-load-anim",
         { y: 20, opacity: 0 },

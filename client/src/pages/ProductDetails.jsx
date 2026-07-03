@@ -28,29 +28,23 @@ const ProductDetails = () => {
   const addToCartBtnRef = useRef(null);
   const { addToCart } = useCart();
 
-  // Find product by id from dynamic mock database
   const product = mockProducts.find((p) => p.id === id) || mockProducts[0];
 
-  // Extraction of pure numeric value from MOQ string (e.g., "500 units" -> 500)
   const baseMoq = parseInt(product.moq) || 1;
   const [quantity, setQuantity] = useState(baseMoq);
   const [justAdded, setJustAdded] = useState(false);
 
-  // Scale the +/- step with the MOQ so bulk quantities don't take forever
-  // to reach one click at a time (e.g. MOQ 1000 -> step of 100, not 1).
   const quantityStep = Math.max(1, Math.round(baseMoq / 10));
-
-  // Dynamic ledger price calculation based on breakdown volume tiers
   const currentUnitPrice =
     quantity >= product.bulkQuantity ? product.bulkPrice : product.price;
   const totalCost = currentUnitPrice * quantity;
 
-  // Per-unit savings at the bulk tier — helps justify ordering more
   const unitSavings = product.price - product.bulkPrice;
   const savingsPercent =
     product.price > 0 ? Math.round((unitSavings / product.price) * 100) : 0;
 
   useEffect(() => {
+    window.scrollTo(0, 0);
     let ctx = gsap.context(() => {
       gsap.fromTo(
         ".detail-fade-in",

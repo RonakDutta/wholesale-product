@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import MainLayout from "./layouts/MainLayout";
-import Home from "./pages/Home";
-=======
 import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { CartProvider } from "./context/CartContext";
@@ -26,7 +21,6 @@ const App = () => {
     </CartProvider>
   );
 };
->>>>>>> feature/v4
 
 export default function App() {
   return (

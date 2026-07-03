@@ -9,7 +9,7 @@ import LoadMore from "../components/LoadMore";
 import MarketAlert from "../components/MarketAlert";
 import mockProducts from "../utils/mockProducts";
 
-const PAGE_SIZE = 4;
+const PAGE_SIZE = 8;
 
 const MarketplaceHome = () => {
   const containerRef = useRef(null);

@@ -1,4 +1,5 @@
 import { ShieldCheck, MapPin, IndianRupee } from "lucide-react";
+import { Link } from "react-router-dom";
 import ContactVendorBtn from "./ContactVendorBtn";
 
 const ProductCard = ({ product }) => {
@@ -90,10 +91,13 @@ const ProductCard = ({ product }) => {
             vendorName={vendorName}
             productName={name}
           />
-          <button className="flex items-center justify-center gap-0.5 sm:gap-1 md:gap-1.5 py-1 sm:py-1.5 md:py-2 bg-espresso text-cream text-[8px] sm:text-[10px] md:text-xs font-semibold rounded-md sm:rounded-lg hover:bg-clay transition-all duration-300 cursor-pointer">
+          <Link
+            to={`/product/${product.id}`}
+            className="flex items-center justify-center gap-0.5 sm:gap-1 md:gap-1.5 py-1 sm:py-1.5 md:py-2 bg-espresso text-cream text-[8px] sm:text-[10px] md:text-xs font-semibold rounded-md sm:rounded-lg hover:bg-clay transition-all duration-300 cursor-pointer"
+          >
             <IndianRupee className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-4 md:h-4 shrink-0" />
             <span className="font-bold uppercase tracking-wide">Buy</span>
-          </button>
+          </Link>
         </div>
       </div>
     </div>

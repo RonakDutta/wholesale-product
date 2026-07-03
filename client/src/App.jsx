@@ -22,14 +22,4 @@ const App = () => {
   );
 };
 
-export default function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<MainLayout />}>
-          <Route path="/" element={<Home />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
-  );
-}
+export default App;

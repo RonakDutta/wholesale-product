@@ -1,4 +1,5 @@
-import { Search, MapPin, ShoppingCart } from "lucide-react";
+import { Search, MapPin, ShoppingCart, User } from "lucide-react";
+import { Link } from "react-router";
 import { useCart } from "../context/CartContext";
 import CartDrawer from "./CartDrawer";
 
@@ -41,6 +42,27 @@ const Navbar = () => {
                   {uniqueItemCount > 9 ? "9+" : uniqueItemCount}
                 </span>
               )}
+            </button>
+
+            {/* Auth Buttons (Desktop) */}
+            <div className="hidden sm:flex items-center gap-3">
+              <Link
+                to="login"
+                className="text-sm font-semibold text-espresso hover:text-clay transition-colors cursor-pointer whitespace-nowrap"
+              >
+                Log in
+              </Link>
+              <Link
+                to="signup"
+                className="text-sm font-semibold bg-espresso text-cream px-4 py-2 rounded-lg hover:bg-clay transition-all duration-300 cursor-pointer whitespace-nowrap shadow-sm"
+              >
+                Sign up
+              </Link>
+            </div>
+
+            {/* Auth Icon (Mobile) */}
+            <button className="sm:hidden p-2 hover:bg-sage/20 rounded-lg transition-colors text-espresso">
+              <User className="w-5 h-5" />
             </button>
           </div>
         </div>

@@ -1,25 +1,31 @@
-import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { CartProvider } from "./context/CartContext";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { Toaster } from "sonner";
 import MainLayout from "./layouts/MainLayout";
+import AuthLayout from "./layouts/AuthLayout";
+
 import MarketplaceHome from "./pages/MarketplaceHome";
-import ProductDetails from "./pages/ProductDetails";
-// import WholesalerStore from "./pages/WholesalerStore";
+import SignUp from "./pages/SignUp";
+import Login from "./pages/Login";
 
-const App = () => {
-  return (
-    <CartProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<MainLayout />}>
-            <Route index element={<MarketplaceHome />} />
-            <Route path="product/:id" element={<ProductDetails />} />
-            {/* <Route path="store/:id" element={<WholesalerStore />} /> */}
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </CartProvider>
-  );
-};
+const router = createBrowserRouter([
+	{
+		element: <MainLayout />,
+		children: [{ path: "/", element: <MarketplaceHome /> }],
+	},
+	{
+		element: <AuthLayout />,
+		children: [
+			{ path: "login", element: <Login /> },
+			{ path: "signup", element: <SignUp /> },
+		],
+	},
+]);
 
-export default App;
+export default function App() {
+	return (
+		<>
+			<Toaster richColors position="top-right" />
+			<RouterProvider router={router} />
+		</>
+	);
+}

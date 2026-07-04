@@ -1,3 +1,4 @@
+// SupplierCard.jsx
 import PropTypes from "prop-types";
 import { ShieldCheck, Star, MapPin, IndianRupee } from "lucide-react";
 
@@ -9,122 +10,134 @@ const SupplierCard = ({
   onBuyNow,
   badges,
 }) => {
+  const metricItems = [
+    {
+      label: "Price",
+      value: (
+        <span className="inline-flex items-center gap-0.5">
+          <IndianRupee className="w-3 h-3" />
+          {supplier.price}
+        </span>
+      ),
+      badge: badges.lowestPrice,
+      badgeText: "Best",
+      badgeColor: "text-emerald-700",
+    },
+    {
+      label: "MOQ",
+      value: supplier.moq,
+      badge: badges.lowestMOQ,
+      badgeText: "Lowest",
+      badgeColor: "text-emerald-700",
+    },
+    {
+      label: "Rating",
+      value: (
+        <span className="inline-flex items-center gap-0.5">
+          <Star className="w-3 h-3 text-amber-500" />
+          {supplier.rating.toFixed(1)}
+        </span>
+      ),
+      badge: badges.highestRating,
+      badgeText: "Top",
+      badgeColor: "text-amber-700",
+    },
+    {
+      label: "Stock",
+      value: supplier.stock,
+      badge: badges.highestStock,
+      badgeText: "Highest",
+      badgeColor: "text-emerald-700",
+    },
+    {
+      label: "Shipping",
+      value: `${supplier.shippingDays}d`,
+      badge: badges.fastestShipping,
+      badgeText: "Fastest",
+      badgeColor: "text-sky-700",
+    },
+    {
+      label: "Response",
+      value: supplier.responseRate,
+      badge: badges.bestResponse,
+      badgeText: "Best",
+      badgeColor: "text-violet-700",
+    },
+  ];
+
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-lg">
+    <div
+      className={`rounded-3xl border p-5 transition-all duration-200 ${
+        isSelected
+          ? "border-clay/30 bg-clay/3 shadow-sm"
+          : "border-slate-200 bg-white"
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 text-base font-semibold text-slate-900">
-            <span>{supplier.name}</span>
-            {supplier.verified && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">
-                <ShieldCheck className="w-3 h-3" /> Verified
-              </span>
-            )}
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
-            <span className="inline-flex items-center gap-1">
-              <Star className="w-3 h-3 text-amber-500" />{" "}
-              {supplier.rating.toFixed(1)}
-            </span>
-            <span>{supplier.reviews} reviews</span>
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="w-3 h-3" /> {supplier.city}, {supplier.country}
-            </span>
-          </div>
-        </div>
-        <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+        <label className="inline-flex items-center gap-3 cursor-pointer">
           <input
             type="checkbox"
             checked={isSelected}
             onChange={() => onToggleSelect(supplier.id)}
-            className="h-4 w-4 rounded border-slate-300 text-clay focus:ring-clay"
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-clay focus:ring-clay/20"
           />
-          Compare
+          <div>
+            <span className="font-dmsans text-sm font-bold text-slate-900">
+              {supplier.name}
+            </span>
+            <span className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500">
+              <MapPin className="w-3 h-3" />
+              {supplier.city}, {supplier.country}
+            </span>
+          </div>
         </label>
+        {supplier.verified && (
+          <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+            <ShieldCheck className="w-3 h-3" />
+            Verified
+          </span>
+        )}
       </div>
 
-      <div className="mt-4 grid gap-3 text-sm text-slate-700">
-        <div className="flex items-center justify-between gap-2">
-          <span>Price</span>
-          <span
-            className={
-              badges.lowestPrice
-                ? "text-emerald-700 font-semibold"
-                : "font-semibold text-slate-900"
-            }
+      <div className="mt-4 grid grid-cols-3 gap-2.5">
+        {metricItems.map((item) => (
+          <div
+            key={item.label}
+            className="rounded-2xl border border-slate-100 bg-slate-50/70 px-3 py-2.5"
           >
-            <IndianRupee className="w-3.5 h-3.5 inline-block align-text-bottom" />
-            {supplier.price}
-          </span>
-        </div>
-        <div className="flex items-center justify-between gap-2">
-          <span>MOQ</span>
-          <span
-            className={
-              badges.lowestMOQ
-                ? "text-emerald-700 font-semibold"
-                : "text-slate-900 font-semibold"
-            }
-          >
-            {supplier.moq}
-          </span>
-        </div>
-        <div className="flex items-center justify-between gap-2">
-          <span>Stock</span>
-          <span
-            className={
-              badges.highestStock
-                ? "text-emerald-700 font-semibold"
-                : "text-slate-900 font-semibold"
-            }
-          >
-            {supplier.stock}
-          </span>
-        </div>
-        <div className="flex items-center justify-between gap-2">
-          <span>Shipping</span>
-          <span
-            className={
-              badges.fastestShipping
-                ? "text-sky-700 font-semibold"
-                : "text-slate-900 font-semibold"
-            }
-          >
-            {supplier.shippingDays} Days
-          </span>
-        </div>
-        <div className="flex items-center justify-between gap-2">
-          <span>Response</span>
-          <span
-            className={
-              badges.bestResponse
-                ? "text-violet-700 font-semibold"
-                : "text-slate-900 font-semibold"
-            }
-          >
-            {supplier.responseRate}
-          </span>
-        </div>
-        <div className="flex items-center justify-between gap-2">
-          <span>GST Verified</span>
-          <span className="text-sm font-semibold text-slate-900">
-            {supplier.gstVerified ? "Yes" : "No"}
-          </span>
-        </div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+              {item.label}
+            </p>
+            <p
+              className={`mt-1 font-dmsans text-sm font-bold ${
+                item.badge ? item.badgeColor : "text-slate-900"
+              }`}
+            >
+              {item.value}
+            </p>
+            {item.badge && (
+              <p
+                className={`mt-0.5 text-[10px] font-semibold ${item.badgeColor}`}
+              >
+                {item.badgeText}
+              </p>
+            )}
+          </div>
+        ))}
       </div>
 
-      <div className="mt-5 grid gap-3">
+      <div className="mt-4 flex gap-2">
         <button
           type="button"
           onClick={() => onContact(supplier)}
-          className="rounded-full border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition"
+          className="flex-1 rounded-full border border-slate-200 bg-white py-2.5 text-xs font-bold uppercase tracking-wider text-slate-700 transition hover:bg-slate-50"
         >
-          Chat with Supplier
+          Contact
         </button>
         <button
           type="button"
           onClick={() => onBuyNow(supplier)}
-          className="rounded-full bg-clay px-4 py-3 text-sm font-semibold text-white hover:bg-clay/90 transition"
+          className="flex-1 rounded-full bg-clay py-2.5 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-clay/90"
         >
           Buy Now
         </button>
@@ -147,7 +160,6 @@ SupplierCard.propTypes = {
     city: PropTypes.string,
     country: PropTypes.string,
     responseRate: PropTypes.string,
-    gstVerified: PropTypes.bool,
   }).isRequired,
   isSelected: PropTypes.bool.isRequired,
   onToggleSelect: PropTypes.func.isRequired,

@@ -28,7 +28,7 @@ const SupplierComparisonModal = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 p-4 sm:p-8">
-      <div className="mx-auto max-w-6xl rounded-[32px] bg-white shadow-2xl ring-1 ring-slate-200 overflow-hidden">
+      <div className="mx-auto max-w-6xl rounded-4xl bg-white shadow-2xl ring-1 ring-slate-200 overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">

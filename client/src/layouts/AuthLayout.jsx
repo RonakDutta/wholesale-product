@@ -1,7 +1,7 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
-import { Box, Star } from "lucide-react";
+import { Box, Star, ArrowLeft } from "lucide-react";
 
 const AuthLayout = () => {
   const location = useLocation();
@@ -17,7 +17,6 @@ const AuthLayout = () => {
   const statProductsRef = useRef(null);
   const statRegionsRef = useRef(null);
 
-  // Left panel entrance animation
   useEffect(() => {
     const ctx = gsap.context(() => {
       const tl = gsap.timeline({ defaults: { ease: "power2.out" } });
@@ -29,7 +28,6 @@ const AuthLayout = () => {
     return () => ctx.revert();
   }, []);
 
-  // Counter animation
   useEffect(() => {
     const animateCounter = (el, target, suffix = "") => {
       if (!el.current) return;
@@ -53,7 +51,6 @@ const AuthLayout = () => {
     animateCounter(statRegionsRef, 100, "+");
   }, []);
 
-  // Floating shapes
   useEffect(() => {
     const container = shapesRef.current;
     if (!container) return;
@@ -66,7 +63,7 @@ const AuthLayout = () => {
       shape.className = "float-shape";
       const size = Math.random() * 6 + 3;
       const color = colors[Math.floor(Math.random() * colors.length)];
-      shape.style.cssText = `width:${size}px;height:${size}px;background:${color};left:${Math.random() * 100}%;top:${Math.random() * 100}%;`;
+      shape.style.cssText = `position:absolute;border-radius:9999px;width:${size}px;height:${size}px;background:${color};left:${Math.random() * 100}%;top:${Math.random() * 100}%;`;
       container.appendChild(shape);
       shapes.push(shape);
 
@@ -91,7 +88,6 @@ const AuthLayout = () => {
     };
   }, []);
 
-  // Glow blob parallax
   const handleMouseMove = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width - 0.5;
@@ -110,8 +106,9 @@ const AuthLayout = () => {
     });
   };
 
-  // Form content stagger on route change
   useEffect(() => {
+    window.scrollTo(0, 0);
+
     if (formContentRef.current) {
       const elements = formContentRef.current.querySelectorAll(".form-stagger");
       if (elements.length > 0) {
@@ -132,30 +129,26 @@ const AuthLayout = () => {
   }, [location.pathname]);
 
   return (
-    <main className="min-h-screen flex">
-      {/* ====== LEFT PANEL ====== */}
+    <main className="h-screen w-full flex overflow-hidden">
       <div
         ref={leftPanelRef}
         onMouseMove={handleMouseMove}
-        className="hidden lg:flex relative w-[55%] bg-espresso grid-pattern overflow-hidden flex-col justify-between px-10 xl:p-14"
+        className="hidden lg:flex relative w-[55%] bg-espresso grid-pattern overflow-hidden flex-col justify-between px-10 py-10 lg:p-14"
       >
-        {/* Glow blobs */}
         <div
           ref={glowBlob1Ref}
-          className="glow-blob w-75 h-75 bg-clay/15 -top-20 -left-20"
+          className="glow-blob absolute rounded-full blur-3xl pointer-events-none w-75 h-75 bg-clay/15 -top-20 -left-20"
         />
         <div
           ref={glowBlob2Ref}
-          className="glow-blob w-62.5 h-62.5 bg-sage/10 bottom-20 right-10"
+          className="glow-blob absolute rounded-full blur-3xl pointer-events-none w-62.5 h-62.5 bg-sage/10 bottom-20 right-10"
         />
 
-        {/* Floating shapes */}
         <div
           ref={shapesRef}
           className="absolute inset-0 pointer-events-none overflow-hidden"
         />
 
-        {/* Logo */}
         <div
           className="relative z-10 brand-top"
           style={{ opacity: 0, transform: "translateY(20px)" }}
@@ -165,7 +158,7 @@ const AuthLayout = () => {
               <Box className="w-5 h-5 text-cream" />
             </div>
             <span className="text-cream font-bold font-dmsans text-xl tracking-tight">
-              Marketplace
+              marketplace.
             </span>
           </div>
         </div>
@@ -174,12 +167,10 @@ const AuthLayout = () => {
           className="relative z-10 max-w-md brand-center"
           style={{ opacity: 0, transform: "translateY(30px)" }}
         >
-          <div className="flex items-center gap-3 mb-6">
-            <span className="h-px w-8 bg-clay" />
-            <span className="text-clay text-xs font-bold uppercase tracking-[0.15em]">
-              B2B Wholesale Platform
-            </span>
+          <div className="text-clay/90 text-[10px] font-bold uppercase tracking-widest mb-4 font-inter">
+            B2B Wholesale Platform
           </div>
+
           <h1 className="font-raleway text-4xl xl:text-5xl font-black text-cream leading-[1.1] tracking-tight mb-5">
             Source smarter.
             <br />
@@ -191,7 +182,6 @@ const AuthLayout = () => {
             integrated UPI payments.
           </p>
 
-          {/* Stats */}
           <div className="flex gap-8 mt-10">
             <div>
               <div
@@ -229,7 +219,6 @@ const AuthLayout = () => {
           </div>
         </div>
 
-        {/* Testimonial */}
         <div
           className="relative z-10 brand-bottom"
           style={{ opacity: 0, transform: "translateY(20px)" }}
@@ -262,21 +251,32 @@ const AuthLayout = () => {
         </div>
       </div>
 
-      {/* ====== RIGHT PANEL ====== */}
-      <div className="flex-1 bg-cream flex flex-col min-h-screen relative">
-        {/* Mobile logo */}
-        <div className="lg:hidden flex items-center gap-3 p-6 pb-0">
-          <div className="w-9 h-9 bg-clay rounded-lg flex items-center justify-center">
-            <Box className="w-4 h-4 text-cream" />
+      <div
+        className="flex-1 bg-cream flex flex-col h-full relative overflow-y-auto overflow-x-hidden"
+        style={{ scrollbarGutter: "stable" }}
+      >
+        <div className="flex shrink-0 items-center justify-between p-6 lg:px-14 lg:pt-10">
+          <div className="lg:hidden flex items-center gap-3">
+            <div className="w-9 h-9 bg-clay rounded-lg flex items-center justify-center">
+              <Box className="w-4 h-4 text-cream" />
+            </div>
+            <span className="text-espresso font-dmsans font-bold text-lg tracking-tight">
+              marketplace.
+            </span>
           </div>
-          <span className="text-espresso font-dmsans font-bold text-lg tracking-tight">
-            Marketplace
-          </span>
+
+          <button
+            onClick={() => navigate("/")}
+            className="group flex items-center gap-2 text-slate-500 hover:text-espresso text-sm font-semibold transition-colors cursor-pointer ml-auto"
+          >
+            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+            <span className="hidden sm:inline">Back to Home</span>
+            <span className="sm:hidden">Back</span>
+          </button>
         </div>
 
-        <div className="flex-1 flex items-center justify-center px-6 py-10 lg:px-14">
+        <div className="flex-1 flex shrink-0 items-start justify-center px-6 pt-4 pb-10 lg:pt-10 lg:pb-14">
           <div className="w-full max-w-105">
-            {/* Tab switcher */}
             <div className="relative bg-white rounded-xl p-1 mb-8 shadow-sm border border-slate-200/60">
               <div
                 className="tab-slider absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] bg-espresso rounded-lg z-0"
@@ -310,9 +310,9 @@ const AuthLayout = () => {
           </div>
         </div>
 
-        <div className=" p-6 pt-0 text-center">
+        <div className="px-6 pb-6 lg:px-14 text-center shrink-0">
           <p className="text-[11px] text-slate-500 font-medium">
-            2026 Marketplace. All rights reserved.
+            2026 marketplace.. All rights reserved.
           </p>
         </div>
       </div>

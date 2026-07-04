@@ -1,22 +1,31 @@
-import { ShieldCheck, MapPin, IndianRupee } from "lucide-react";
+import { ShieldCheck, MapPin, IndianRupee, Heart } from "lucide-react";
 import { Link } from "react-router-dom";
 import ContactVendorBtn from "./ContactVendorBtn";
+import { useWishlist } from "../context/WishlistContext";
 
 const ProductCard = ({ product }) => {
+  const primarySupplier = product.suppliers?.[0] ?? {};
   const {
     name = "Untitled Product",
+    image = "https://placehold.co/400x300/e2e8f0/1e293b?text=Image",
+    description = "",
+  } = product;
+  const {
     price = 0,
     vendorName = "Unknown Vendor",
     vendorId = "",
-    location = "India",
+    country = "India",
+    city = "",
     supplySignal = "In stock",
     verified = false,
     moq = "",
-    specs = "",
-    bulkPrice,
-    bulkQuantity,
-    image = "https://placehold.co/400x300/e2e8f0/1e293b?text=Image",
-  } = product;
+    discountPrice,
+  } = primarySupplier;
+  const location = city && country ? `${city}, ${country}` : "India";
+  const bulkPrice = discountPrice;
+  const bulkQuantity = moq;
+  const { toggleWishlist, isWishlisted } = useWishlist();
+  const wishlisted = isWishlisted(product.id);
 
   return (
     <div className="bg-white border border-slate-200 rounded-lg sm:rounded-xl overflow-hidden flex flex-col h-full transition-all duration-300 hover:shadow-xl hover:border-sage/50 hover:-translate-y-1 group">
@@ -30,6 +39,23 @@ const ProductCard = ({ product }) => {
         <div className="absolute top-1.5 right-1.5 sm:top-2.5 sm:right-2.5 bg-white/90 backdrop-blur-sm text-slate-700 text-[7px] sm:text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full border border-slate-200 shadow-sm whitespace-nowrap">
           {supplySignal}
         </div>
+
+        <button
+          type="button"
+          onClick={() => toggleWishlist(product)}
+          aria-label={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
+          className={`absolute top-1.5 left-1.5 sm:top-2.5 sm:left-2.5 z-10 p-1.5 sm:p-2 rounded-full border transition-all duration-300 hover:scale-110 hover:shadow-md cursor-pointer ${
+            wishlisted
+              ? "bg-rose-50 border-rose-200 text-rose-500"
+              : "bg-white/90 border-slate-200 text-slate-600 hover:border-rose-200 hover:text-rose-500"
+          }`}
+        >
+          <Heart
+            className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-all duration-300 ${
+              wishlisted ? "fill-current scale-110" : "fill-none"
+            }`}
+          />
+        </button>
 
         {/* Verified stamp – only show if verified; shortened label on mobile */}
         {verified && (
@@ -57,11 +83,11 @@ const ProductCard = ({ product }) => {
           {name}
         </h3>
 
-        {(moq || specs) && (
+        {(moq || description) && (
           <div className="font-mono text-[7px] sm:text-[9px] md:text-[10px] text-slate-500 truncate">
             {moq && <span>MOQ {moq}</span>}
-            {moq && specs && <span> · </span>}
-            {specs && <span>{specs}</span>}
+            {moq && description && <span> · </span>}
+            {description && <span>{description}</span>}
           </div>
         )}
 

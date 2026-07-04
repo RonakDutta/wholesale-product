@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -16,11 +16,14 @@ import {
   ShoppingBag,
   Check,
   Tag,
+  Heart,
 } from "lucide-react";
 import { gsap } from "gsap";
 import mockProducts from "../utils/mockProducts";
 import ContactVendorBtn from "../components/ContactVendorBtn";
+import SupplierComparison from "../components/SupplierComparison";
 import { useCart } from "../context/CartContext";
+import { useWishlist } from "../context/WishlistContext";
 
 const ProductDetails = () => {
   const { id } = useParams();
@@ -28,21 +31,38 @@ const ProductDetails = () => {
   const pageRef = useRef(null);
   const addToCartBtnRef = useRef(null);
   const { addToCart } = useCart();
+  const { toggleWishlist, isWishlisted } = useWishlist();
 
   const product = mockProducts.find((p) => p.id === id) || mockProducts[0];
+  const primarySupplier = product.suppliers?.[0] ?? {};
 
-  const baseMoq = parseInt(product.moq) || 1;
+  const baseMoq = primarySupplier.moq ?? 1;
   const [quantity, setQuantity] = useState(baseMoq);
   const [justAdded, setJustAdded] = useState(false);
 
   const quantityStep = Math.max(1, Math.round(baseMoq / 10));
   const currentUnitPrice =
-    quantity >= product.bulkQuantity ? product.bulkPrice : product.price;
+    quantity >= (primarySupplier.moq ?? 0)
+      ? (primarySupplier.discountPrice ?? primarySupplier.price ?? 0)
+      : (primarySupplier.price ?? 0);
   const totalCost = currentUnitPrice * quantity;
 
-  const unitSavings = product.price - product.bulkPrice;
+  const unitSavings =
+    (primarySupplier.price ?? 0) - (primarySupplier.discountPrice ?? 0);
   const savingsPercent =
-    product.price > 0 ? Math.round((unitSavings / product.price) * 100) : 0;
+    primarySupplier.price > 0
+      ? Math.round((unitSavings / primarySupplier.price) * 100)
+      : 0;
+  const wishlisted = isWishlisted(product.id);
+  const location =
+    primarySupplier.city && primarySupplier.country
+      ? `${primarySupplier.city}, ${primarySupplier.country}`
+      : "India";
+  const supplySignal =
+    product.supplySignal ||
+    (primarySupplier.stock >= 500 ? "High supply" : "Limited stock");
+  const productSpecs =
+    primarySupplier.responseTime || product.description || "Standard options";
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -71,10 +91,11 @@ const ProductDetails = () => {
   };
 
   const handleAddToCart = () => {
-    addToCart(product, quantity);
-    if (typeof flyToCart === "function") {
-      flyToCart(addToCartBtnRef.current);
-    }
+    const supplier = product.suppliers?.[0] ?? null;
+    const selectedQuantity = supplier
+      ? Math.max(quantity, supplier.moq)
+      : quantity;
+    addToCart(product, selectedQuantity, supplier);
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 1600);
   };
@@ -109,11 +130,9 @@ const ProductDetails = () => {
               className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105"
             />
 
-            {product.supplySignal && (
-              <div className="absolute top-3 right-3 bg-white/95 text-slate-700 text-xs font-semibold px-3 py-1.5 rounded-md border border-slate-200 shadow-sm">
-                {product.supplySignal}
-              </div>
-            )}
+            <div className="absolute top-3 right-3 bg-white/95 text-slate-700 text-xs font-semibold px-3 py-1.5 rounded-md border border-slate-200 shadow-sm">
+              {supplySignal}
+            </div>
           </div>
 
           {/* Quick Specs Grid */}
@@ -124,7 +143,7 @@ const ProductDetails = () => {
                 Min Order
               </span>
               <span className="text-sm font-bold text-slate-800 mt-1 truncate max-w-full">
-                {product.moq}
+                {primarySupplier.moq ?? product.moq}
               </span>
             </div>
             <div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">
@@ -133,7 +152,7 @@ const ProductDetails = () => {
                 Variant
               </span>
               <span className="text-sm font-bold text-slate-800 mt-1 truncate max-w-full">
-                {product.specs}
+                {productSpecs}
               </span>
             </div>
             <div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">
@@ -154,9 +173,9 @@ const ProductDetails = () => {
           <div className="flex flex-col gap-2 pb-3 border-b border-slate-200">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-base font-bold text-slate-800">
-                {product.vendorName}
+                {primarySupplier.name ?? product.vendorName}
               </span>
-              {product.verified && (
+              {(primarySupplier.verified || product.verified) && (
                 <div className="flex items-center gap-1 bg-white border border-emerald-600 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full shadow-xs">
                   <ShieldCheck className="w-3.5 h-3.5" strokeWidth={2.5} />
                   <span>Verified Supplier</span>
@@ -165,7 +184,7 @@ const ProductDetails = () => {
             </div>
             <div className="flex items-center gap-1 text-sm text-slate-500 font-medium">
               <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
-              <span>{product.location}</span>
+              <span>{location}</span>
               <span className="text-slate-300 mx-1">•</span>
               <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
               <span className="font-mono text-xs text-slate-400">
@@ -207,12 +226,12 @@ const ProductDetails = () => {
                     strokeWidth={2.5}
                   />
                   <span className="text-2xl font-bold text-slate-800">
-                    {product.price}
+                    {primarySupplier.price ?? 0}
                   </span>
                   <span className="text-xs text-slate-500 ml-1">/unit</span>
                 </div>
                 <span className="text-xs text-slate-400 mt-1 font-medium">
-                  Min. order: {product.moq}
+                  Min. order: {primarySupplier.moq ?? product.moq}
                 </span>
               </div>
 
@@ -233,7 +252,9 @@ const ProductDetails = () => {
                     strokeWidth={3}
                   />
                   <span className="text-2xl font-black text-clay">
-                    {product.bulkPrice}
+                    {primarySupplier.discountPrice ??
+                      primarySupplier.price ??
+                      0}
                   </span>
                   <span className="text-xs text-clay/70 ml-1 font-bold">
                     /unit
@@ -242,10 +263,10 @@ const ProductDetails = () => {
 
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-xs text-slate-500 font-medium line-through decoration-slate-300">
-                    ₹{product.price}
+                    ₹{primarySupplier.price ?? 0}
                   </span>
                   <span className="text-xs text-clay font-semibold">
-                    ({product.bulkQuantity}+ units)
+                    ({primarySupplier.moq ?? "—"}+ units)
                   </span>
                 </div>
               </div>
@@ -325,7 +346,7 @@ const ProductDetails = () => {
             {quantity < baseMoq && (
               <p className="text-xs text-rose-600 font-medium">
                 * Note: Your order quantity is below the minimum order of{" "}
-                {product.moq}.
+                {primarySupplier.moq ?? product.moq}.
               </p>
             )}
           </div>
@@ -333,10 +354,28 @@ const ProductDetails = () => {
           {/* Action Buttons */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
             <ContactVendorBtn
-              vendorId={product.vendorId}
-              vendorName={product.vendorName}
+              vendorId={product.suppliers?.[0]?.id ?? product.vendorId}
+              vendorName={product.suppliers?.[0]?.name ?? product.vendorName}
               productName={product.name}
             />
+            <button
+              type="button"
+              onClick={() => toggleWishlist(product)}
+              className={`flex items-center justify-center gap-2 py-3 text-sm font-bold rounded-sm transition-all cursor-pointer shadow-sm active:scale-[0.99] border ${
+                wishlisted
+                  ? "bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100"
+                  : "bg-white border-slate-200 text-slate-700 hover:border-rose-200 hover:text-rose-500"
+              }`}
+            >
+              <Heart
+                className={`w-5 h-5 shrink-0 transition-all ${
+                  wishlisted ? "fill-current scale-110" : "fill-none"
+                }`}
+              />
+              <span>
+                {wishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
+              </span>
+            </button>
             <button
               ref={addToCartBtnRef}
               onClick={handleAddToCart}
@@ -361,6 +400,16 @@ const ProductDetails = () => {
           </div>
         </div>
       </div>
+
+      <SupplierComparison
+        product={product}
+        onAddToCart={(productObj, qty, supplier) =>
+          addToCart(productObj, qty, supplier)
+        }
+        onContactSupplier={(supplier) =>
+          console.log("Contact supplier:", supplier.name, supplier.id)
+        }
+      />
     </div>
   );
 };

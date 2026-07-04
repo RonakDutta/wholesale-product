@@ -29,7 +29,8 @@ const MarketplaceHome = () => {
 
   const filteredSorted = useMemo(() => {
     let result = mockProducts.filter((product) => {
-      if (verifiedOnly && !product.verified) return false;
+      const primarySupplier = product.suppliers?.[0] ?? {};
+      if (verifiedOnly && !primarySupplier.verified) return false;
       if (selectedCategory && product.category !== selectedCategory)
         return false;
       return true;
@@ -37,14 +38,22 @@ const MarketplaceHome = () => {
 
     switch (sortBy) {
       case "price-asc":
-        result = [...result].sort((a, b) => a.price - b.price);
+        result = [...result].sort(
+          (a, b) =>
+            (a.suppliers?.[0]?.price ?? 0) - (b.suppliers?.[0]?.price ?? 0),
+        );
         break;
       case "price-desc":
-        result = [...result].sort((a, b) => b.price - a.price);
+        result = [...result].sort(
+          (a, b) =>
+            (b.suppliers?.[0]?.price ?? 0) - (a.suppliers?.[0]?.price ?? 0),
+        );
         break;
       case "verified":
         result = [...result].sort(
-          (a, b) => Number(b.verified) - Number(a.verified),
+          (a, b) =>
+            Number(b.suppliers?.[0]?.verified) -
+            Number(a.suppliers?.[0]?.verified),
         );
         break;
       default:

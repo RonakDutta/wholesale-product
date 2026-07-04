@@ -1,12 +1,14 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { Toaster } from "sonner";
 import { CartProvider } from "./context/CartContext";
+import { WishlistProvider } from "./context/WishlistContext";
 
 import MainLayout from "./layouts/MainLayout";
 import AuthLayout from "./layouts/AuthLayout";
 
 import MarketplaceHome from "./pages/MarketplaceHome";
 import ProductDetails from "./pages/ProductDetails";
+import Wishlist from "./pages/Wishlist";
 import SignUp from "./pages/SignUp";
 import Login from "./pages/Login";
 
@@ -17,6 +19,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <MarketplaceHome /> },
       { path: "product/:id", element: <ProductDetails /> },
+      { path: "wishlist", element: <Wishlist /> },
     ],
   },
   {
@@ -31,8 +34,10 @@ const router = createBrowserRouter([
 export default function App() {
   return (
     <CartProvider>
-      <Toaster richColors position="top-right" />
-      <RouterProvider router={router} />
+      <WishlistProvider>
+        <Toaster richColors position="top-right" />
+        <RouterProvider router={router} />
+      </WishlistProvider>
     </CartProvider>
   );
 }

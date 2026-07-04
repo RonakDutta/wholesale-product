@@ -1,10 +1,12 @@
-import { Search, MapPin, ShoppingCart, User } from "lucide-react";
-import { Link } from "react-router";
+import { Search, MapPin, ShoppingCart, User, Heart } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useCart } from "../context/CartContext";
+import { useWishlist } from "../context/WishlistContext";
 import CartDrawer from "./CartDrawer";
 
 const Navbar = () => {
   const { uniqueItemCount, setIsCartOpen } = useCart();
+  const { itemCount: wishlistCount } = useWishlist();
 
   return (
     <>
@@ -28,6 +30,19 @@ const Navbar = () => {
               <MapPin className="w-4 h-4 group-hover:scale-110 transition-transform" />
               <span className="hidden sm:inline">Delhi NCR</span>
             </button>
+
+            <Link
+              to="/wishlist"
+              className="cursor-pointer relative p-2 hover:bg-sage/20 rounded-lg transition-colors group"
+              aria-label={`Open wishlist, ${wishlistCount} item${wishlistCount === 1 ? "" : "s"}`}
+            >
+              <Heart className="w-5 h-5 text-espresso group-hover:scale-110 transition-transform" />
+              {wishlistCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-rose-500 text-cream text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full ring-2 ring-cream">
+                  {wishlistCount > 9 ? "9+" : wishlistCount}
+                </span>
+              )}
+            </Link>
 
             {/* id is the fly-to-cart animation's landing target — keep it on this element */}
             <button

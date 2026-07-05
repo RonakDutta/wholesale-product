@@ -11,6 +11,7 @@ import ProductDetails from "./pages/ProductDetails";
 import Wishlist from "./pages/Wishlist";
 import SignUp from "./pages/SignUp";
 import Login from "./pages/Login";
+import SearchResults from "./pages/SearchResults";
 
 const router = createBrowserRouter([
   {
@@ -19,7 +20,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <MarketplaceHome /> },
       { path: "product/:id", element: <ProductDetails /> },
-      { path: "wishlist", element: <Wishlist /> },
+      { path: "search", element: <SearchResults /> },
     ],
   },
   {

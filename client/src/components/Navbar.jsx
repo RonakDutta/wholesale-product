@@ -1,110 +1,129 @@
-import { Search, MapPin, ShoppingCart, User, Heart } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Search, ShoppingCart, User, X } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import CartDrawer from "./CartDrawer";
 
 const Navbar = () => {
-  const { uniqueItemCount, setIsCartOpen } = useCart();
-  const { itemCount: wishlistCount } = useWishlist();
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const { uniqueItemCount } = useCart();
+  const navigate = useNavigate();
 
-  // Reusable icon group to keep mobile and desktop layouts DRY
-  const ActionIcons = () => (
-    <>
-      <button className="flex items-center gap-1.5 p-2 text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-colors group cursor-pointer">
-        <MapPin className="w-5 h-5 group-hover:scale-110 transition-transform" />
-        <span className="hidden xl:inline">Delhi NCR</span>
-      </button>
-
-      <Link
-        to="/wishlist"
-        className="relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-colors group cursor-pointer"
-        aria-label={`Open wishlist, ${wishlistCount} items`}
-      >
-        <Heart className="w-5 h-5 group-hover:scale-110 transition-transform" />
-        {wishlistCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 translate-x-1/2 -translate-y-1/2 bg-rose-500 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full ring-2 ring-white">
-            {wishlistCount > 9 ? "9+" : wishlistCount}
-          </span>
-        )}
-      </Link>
-
-      <button
-        id="cart-icon-target"
-        onClick={() => setIsCartOpen(true)}
-        className="relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-colors group cursor-pointer"
-        aria-label={`Open cart, ${uniqueItemCount} items`}
-      >
-        <ShoppingCart className="w-5 h-5 group-hover:scale-110 transition-transform" />
-        {uniqueItemCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 translate-x-1/2 -translate-y-1/2 bg-clay text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full ring-2 ring-white">
-            {uniqueItemCount > 9 ? "9+" : uniqueItemCount}
-          </span>
-        )}
-      </button>
-    </>
-  );
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      setIsMobileSearchOpen(false);
+    }
+  };
 
   return (
     <>
-      <nav className="sticky top-0 z-50 w-full bg-white border-b border-slate-200 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between px-4 sm:px-6 py-3 sm:py-4 max-w-7xl mx-auto gap-3 md:gap-8">
-          {/* Top Row (Mobile) / Left Side (Desktop) */}
-          <div className="flex items-center justify-between w-full md:w-auto shrink-0">
-            <Link
-              to="/"
-              className="text-xl sm:text-2xl font-black tracking-tighter text-slate-900 cursor-pointer select-none"
-            >
-              market<span className="text-clay">place.</span>
-            </Link>
+      <nav className="sticky top-0 z-50 w-full bg-cream/80 backdrop-blur-md border-b border-sage/30 shadow-sm">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 max-w-7xl mx-auto">
+          <Link
+            to="/"
+            className="text-2xl font-black tracking-tighter text-espresso cursor-pointer select-none flex-shrink-0"
+          >
+            market<span className="text-clay">place</span>
+          </Link>
 
-            {/* Mobile-only Icons */}
-            <div className="flex items-center gap-1 md:hidden -mr-2">
-              <ActionIcons />
-              <Link
-                to="/login"
-                className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-colors cursor-pointer"
-              >
-                <User className="w-5 h-5" />
-              </Link>
-            </div>
-          </div>
-
-          <div className="w-full md:flex-1 relative group order-last md:order-0">
+          {/* Desktop Search */}
+          <form
+            onSubmit={handleSearch}
+            className="hidden md:flex flex-1 mx-8 relative group"
+          >
             <input
               type="text"
-              placeholder="Search products, categories, or wholesalers..."
-              className="w-full bg-slate-100 border border-transparent rounded-lg py-2.5 pl-4 pr-10 text-sm text-slate-900 placeholder-slate-500 focus:ring-2 focus:ring-clay/20 focus:border-clay focus:outline-none focus:bg-white transition-all duration-300"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search products or wholesalers..."
+              className="w-full bg-white/50 border border-sage/50 rounded-xl py-2.5 pl-4 pr-10 text-sm text-espresso placeholder-espresso/50 focus:ring-2 focus:ring-clay focus:border-clay focus:outline-none focus:bg-white transition-all duration-300"
             />
-            <Search className="absolute right-3.5 top-3 w-4 h-4 text-slate-400 group-focus-within:text-clay transition-colors pointer-events-none" />
-          </div>
+            <button
+              type="submit"
+              className="absolute right-4 top-3 w-4 h-4 text-espresso/60 hover:text-clay transition-colors"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          </form>
 
-          {/* Desktop-only Action Icons & Auth */}
-          <div className="hidden md:flex items-center gap-2 lg:gap-4 shrink-0">
-            <div className="flex items-center gap-1">
-              <ActionIcons />
-            </div>
+          <div className="flex items-center gap-3 sm:gap-5 flex-shrink-0">
+            {/* Mobile search toggle */}
+            <button
+              onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
+              className="md:hidden p-2 hover:bg-sage/20 rounded-lg transition-colors text-espresso"
+              aria-label="Toggle search"
+            >
+              {isMobileSearchOpen ? (
+                <X className="w-5 h-5" />
+              ) : (
+                <Search className="w-5 h-5" />
+              )}
+            </button>
 
-            <div className="w-px h-6 bg-slate-200 mx-1 hidden lg:block"></div>
+            <button
+              id="cart-icon-target"
+              onClick={() => setIsCartOpen(true)}
+              className="cursor-pointer relative p-2 hover:bg-sage/20 rounded-lg transition-colors group"
+              aria-label={`Open cart, ${uniqueItemCount} item${uniqueItemCount === 1 ? "" : "s"}`}
+            >
+              <ShoppingCart className="w-5 h-5 text-espresso group-hover:scale-110 transition-transform" />
+              {uniqueItemCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-clay text-cream text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full ring-2 ring-cream">
+                  {uniqueItemCount > 9 ? "9+" : uniqueItemCount}
+                </span>
+              )}
+            </button>
 
-            <div className="flex items-center gap-4 ml-2">
+            {/* Auth buttons (desktop) */}
+            <div className="hidden sm:flex items-center gap-3">
               <Link
                 to="/login"
-                className="text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer whitespace-nowrap"
+                className="text-sm font-semibold text-espresso hover:text-clay transition-colors cursor-pointer whitespace-nowrap"
               >
                 Log in
               </Link>
               <Link
                 to="/signup"
-                className="text-sm font-bold bg-clay text-white px-4 py-2 rounded-md hover:bg-clay/90 transition-all duration-200 cursor-pointer whitespace-nowrap shadow-sm"
+                className="text-sm font-semibold bg-espresso text-cream px-4 py-2 rounded-lg hover:bg-clay transition-all duration-300 cursor-pointer whitespace-nowrap shadow-sm"
               >
                 Sign up
               </Link>
             </div>
+
+            {/* Auth icon (mobile) */}
+            <button className="cursor-pointer sm:hidden p-2 hover:bg-sage/20 rounded-lg transition-colors text-espresso">
+              <User className="w-5 h-5" />
+            </button>
           </div>
         </div>
+
+        {isMobileSearchOpen && (
+          <div className="md:hidden border-t border-sage/20 bg-cream/90 backdrop-blur-md px-4 py-3 shadow-inner animate-slide-down">
+            <form onSubmit={handleSearch} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search products or wholesalers..."
+                className="flex-1 bg-white/80 border border-sage/50 rounded-xl py-2.5 px-4 text-sm text-espresso placeholder-espresso/50 focus:ring-2 focus:ring-clay focus:border-clay focus:outline-none transition-all"
+                autoFocus
+              />
+              <button
+                type="submit"
+                className="cursor-pointer bg-clay text-cream px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-clay/90 transition-colors shadow-sm whitespace-nowrap"
+              >
+                Search
+              </button>
+            </form>
+          </div>
+        )}
       </nav>
-      <CartDrawer />
+      <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
     </>
   );
 };

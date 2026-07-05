@@ -1,6 +1,6 @@
-// SupplierComparisonRow.jsx
 import PropTypes from "prop-types";
 import { ShieldCheck, Star, MapPin, IndianRupee } from "lucide-react";
+import { getEffectivePrice } from "../utils/supplierUtils";
 
 const SupplierComparisonRow = ({
   supplier,
@@ -67,12 +67,8 @@ const SupplierComparisonRow = ({
               badges.lowestPrice ? "text-emerald-700" : "text-slate-400"
             }`}
           />
-          <span
-            className={`font-dmsans text-sm font-bold ${
-              badges.lowestPrice ? "text-emerald-700" : "text-slate-900"
-            }`}
-          >
-            {supplier.price}
+          <span className="font-dmsans text-sm font-bold ...">
+            {getEffectivePrice(supplier)}
           </span>
         </span>
       </td>

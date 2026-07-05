@@ -1,6 +1,6 @@
-// SupplierCard.jsx
 import PropTypes from "prop-types";
 import { ShieldCheck, Star, MapPin, IndianRupee } from "lucide-react";
+import { getEffectivePrice } from "../utils/supplierUtils";
 
 const SupplierCard = ({
   supplier,
@@ -16,19 +16,19 @@ const SupplierCard = ({
       value: (
         <span className="inline-flex items-center gap-0.5">
           <IndianRupee className="w-3 h-3" />
-          {supplier.price}
+          {getEffectivePrice(supplier)}
         </span>
       ),
       badge: badges.lowestPrice,
       badgeText: "Best",
-      badgeColor: "text-emerald-700",
+      badgeColor: "text-clay",
     },
     {
       label: "MOQ",
       value: supplier.moq,
       badge: badges.lowestMOQ,
       badgeText: "Lowest",
-      badgeColor: "text-emerald-700",
+      badgeColor: "text-clay",
     },
     {
       label: "Rating",
@@ -40,28 +40,28 @@ const SupplierCard = ({
       ),
       badge: badges.highestRating,
       badgeText: "Top",
-      badgeColor: "text-amber-700",
+      badgeColor: "text-clay",
     },
     {
       label: "Stock",
       value: supplier.stock,
       badge: badges.highestStock,
       badgeText: "Highest",
-      badgeColor: "text-emerald-700",
+      badgeColor: "text-clay",
     },
     {
       label: "Shipping",
       value: `${supplier.shippingDays}d`,
       badge: badges.fastestShipping,
       badgeText: "Fastest",
-      badgeColor: "text-sky-700",
+      badgeColor: "text-clay",
     },
     {
       label: "Response",
       value: supplier.responseRate,
       badge: badges.bestResponse,
       badgeText: "Best",
-      badgeColor: "text-violet-700",
+      badgeColor: "text-clay",
     },
   ];
 

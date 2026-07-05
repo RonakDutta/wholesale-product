@@ -8,6 +8,10 @@ import CTABanner from "../components/CTABanner";
 import LoadMore from "../components/LoadMore";
 import MarketAlert from "../components/MarketAlert";
 import mockProducts from "../utils/mockProducts";
+import {
+  getCheapestSupplier,
+  hasVerifiedSupplier,
+} from "../utils/supplierUtils";
 
 const PAGE_SIZE = 8;
 
@@ -27,10 +31,10 @@ const MarketplaceHome = () => {
     return Array.from(set).sort();
   }, []);
 
+  // replace the filteredSorted useMemo body with:
   const filteredSorted = useMemo(() => {
     let result = mockProducts.filter((product) => {
-      const primarySupplier = product.suppliers?.[0] ?? {};
-      if (verifiedOnly && !primarySupplier.verified) return false;
+      if (verifiedOnly && !hasVerifiedSupplier(product)) return false;
       if (selectedCategory && product.category !== selectedCategory)
         return false;
       return true;
@@ -38,26 +42,39 @@ const MarketplaceHome = () => {
 
     switch (sortBy) {
       case "price-asc":
-        result = [...result].sort(
-          (a, b) =>
-            (a.suppliers?.[0]?.price ?? 0) - (b.suppliers?.[0]?.price ?? 0),
-        );
+        result = [...result].sort((a, b) => {
+          const pa =
+            getCheapestSupplier(a)?.discountPrice ??
+            getCheapestSupplier(a)?.price ??
+            0;
+          const pb =
+            getCheapestSupplier(b)?.discountPrice ??
+            getCheapestSupplier(b)?.price ??
+            0;
+          return pa - pb;
+        });
         break;
       case "price-desc":
-        result = [...result].sort(
-          (a, b) =>
-            (b.suppliers?.[0]?.price ?? 0) - (a.suppliers?.[0]?.price ?? 0),
-        );
+        result = [...result].sort((a, b) => {
+          const pa =
+            getCheapestSupplier(a)?.discountPrice ??
+            getCheapestSupplier(a)?.price ??
+            0;
+          const pb =
+            getCheapestSupplier(b)?.discountPrice ??
+            getCheapestSupplier(b)?.price ??
+            0;
+          return pb - pa;
+        });
         break;
       case "verified":
         result = [...result].sort(
           (a, b) =>
-            Number(b.suppliers?.[0]?.verified) -
-            Number(a.suppliers?.[0]?.verified),
+            Number(hasVerifiedSupplier(b)) - Number(hasVerifiedSupplier(a)),
         );
         break;
       default:
-        break; // "recommended" = catalog order
+        break;
     }
 
     return result;

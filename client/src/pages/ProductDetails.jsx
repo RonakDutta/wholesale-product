@@ -24,6 +24,11 @@ import ContactVendorBtn from "../components/ContactVendorBtn";
 import SupplierComparison from "../components/SupplierComparison";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
+import {
+  getCheapestSupplier,
+  getEffectivePrice,
+  getSupplyLabel,
+} from "../utils/supplierUtils";
 
 const ProductDetails = () => {
   const { id } = useParams();
@@ -34,35 +39,48 @@ const ProductDetails = () => {
   const { toggleWishlist, isWishlisted } = useWishlist();
 
   const product = mockProducts.find((p) => p.id === id) || mockProducts[0];
-  const primarySupplier = product.suppliers?.[0] ?? {};
+  const suppliers = product.suppliers ?? [];
 
-  const baseMoq = primarySupplier.moq ?? 1;
-  const [quantity, setQuantity] = useState(baseMoq);
+  const [selectedSupplierId, setSelectedSupplierId] = useState(
+    () => getCheapestSupplier(product)?.id ?? suppliers[0]?.id ?? null,
+  );
+  const [quantity, setQuantity] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
 
+  const selectedSupplier =
+    suppliers.find((s) => s.id === selectedSupplierId) ?? suppliers[0] ?? {};
+  const baseMoq = selectedSupplier.moq ?? 1;
   const quantityStep = Math.max(1, Math.round(baseMoq / 10));
-  const currentUnitPrice =
-    quantity >= (primarySupplier.moq ?? 0)
-      ? (primarySupplier.discountPrice ?? primarySupplier.price ?? 0)
-      : (primarySupplier.price ?? 0);
+
+  // Reset supplier selection whenever the product itself changes
+  useEffect(() => {
+    setSelectedSupplierId(
+      getCheapestSupplier(product)?.id ?? product.suppliers?.[0]?.id ?? null,
+    );
+  }, [id]);
+
+  // Quantity always starts at (and can't go below) the selected supplier's MOQ
+  useEffect(() => {
+    setQuantity(baseMoq);
+  }, [selectedSupplierId, baseMoq]);
+
+  const currentUnitPrice = getEffectivePrice(selectedSupplier);
   const totalCost = currentUnitPrice * quantity;
 
   const unitSavings =
-    (primarySupplier.price ?? 0) - (primarySupplier.discountPrice ?? 0);
+    (selectedSupplier.price ?? 0) - (selectedSupplier.discountPrice ?? 0);
   const savingsPercent =
-    primarySupplier.price > 0
-      ? Math.round((unitSavings / primarySupplier.price) * 100)
+    selectedSupplier.price > 0
+      ? Math.round((unitSavings / selectedSupplier.price) * 100)
       : 0;
+
   const wishlisted = isWishlisted(product.id);
   const location =
-    primarySupplier.city && primarySupplier.country
-      ? `${primarySupplier.city}, ${primarySupplier.country}`
+    selectedSupplier.city && selectedSupplier.country
+      ? `${selectedSupplier.city}, ${selectedSupplier.country}`
       : "India";
-  const supplySignal =
-    product.supplySignal ||
-    (primarySupplier.stock >= 500 ? "High supply" : "Limited stock");
-  const productSpecs =
-    primarySupplier.responseTime || product.description || "Standard options";
+  const supplySignal = getSupplyLabel(selectedSupplier.stock);
+  const responseTimeSpec = selectedSupplier.responseTime || "Standard options";
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -70,32 +88,22 @@ const ProductDetails = () => {
       gsap.fromTo(
         ".detail-fade-in",
         { y: 15, opacity: 0 },
-        {
-          y: 0,
-          opacity: 1,
-          duration: 0.5,
-          stagger: 0.08,
-          ease: "power2.out",
-        },
+        { y: 0, opacity: 1, duration: 0.5, stagger: 0.08, ease: "power2.out" },
       );
     }, pageRef);
     return () => ctx.revert();
   }, [id]);
 
   const handleQuantityChange = (val) => {
-    if (isNaN(val) || val < 1) {
-      setQuantity(1);
+    if (isNaN(val) || val < baseMoq) {
+      setQuantity(baseMoq);
     } else {
       setQuantity(val);
     }
   };
 
   const handleAddToCart = () => {
-    const supplier = product.suppliers?.[0] ?? null;
-    const selectedQuantity = supplier
-      ? Math.max(quantity, supplier.moq)
-      : quantity;
-    addToCart(product, selectedQuantity, supplier);
+    addToCart(product, quantity, selectedSupplier);
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 1600);
   };
@@ -129,7 +137,6 @@ const ProductDetails = () => {
               alt={product.name}
               className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105"
             />
-
             <div className="absolute top-3 right-3 bg-white/95 text-slate-700 text-xs font-semibold px-3 py-1.5 rounded-md border border-slate-200 shadow-sm">
               {supplySignal}
             </div>
@@ -143,16 +150,16 @@ const ProductDetails = () => {
                 Min Order
               </span>
               <span className="text-sm font-bold text-slate-800 mt-1 truncate max-w-full">
-                {primarySupplier.moq ?? product.moq}
+                {baseMoq}
               </span>
             </div>
             <div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">
               <Layers className="w-5 h-5 text-slate-400 mb-1" />
               <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">
-                Variant
+                Response Time
               </span>
               <span className="text-sm font-bold text-slate-800 mt-1 truncate max-w-full">
-                {productSpecs}
+                {responseTimeSpec}
               </span>
             </div>
             <div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">
@@ -161,7 +168,9 @@ const ProductDetails = () => {
                 Shipping
               </span>
               <span className="text-sm font-bold text-slate-800 mt-1 truncate max-w-full">
-                FOB Options
+                {selectedSupplier.shippingDays
+                  ? `${selectedSupplier.shippingDays}d`
+                  : "FOB Options"}
               </span>
             </div>
           </div>
@@ -173,9 +182,9 @@ const ProductDetails = () => {
           <div className="flex flex-col gap-2 pb-3 border-b border-slate-200">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-base font-bold text-slate-800">
-                {primarySupplier.name ?? product.vendorName}
+                {selectedSupplier.name}
               </span>
-              {(primarySupplier.verified || product.verified) && (
+              {selectedSupplier.verified && (
                 <div className="flex items-center gap-1 bg-white border border-emerald-600 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full shadow-xs">
                   <ShieldCheck className="w-3.5 h-3.5" strokeWidth={2.5} />
                   <span>Verified Supplier</span>
@@ -193,6 +202,45 @@ const ProductDetails = () => {
             </div>
           </div>
 
+          {/* Vendor Switcher — the key fix: pick any of the available suppliers */}
+          {suppliers.length > 1 && (
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                {suppliers.length} suppliers available — switch vendor
+              </span>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {suppliers.map((s) => {
+                  const active = s.id === selectedSupplierId;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setSelectedSupplierId(s.id)}
+                      className={`shrink-0 flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-all cursor-pointer ${
+                        active
+                          ? "border-clay bg-clay/5 shadow-sm"
+                          : "border-slate-200 bg-white hover:border-slate-300"
+                      }`}
+                    >
+                      <span className="flex items-center gap-1 text-xs font-bold text-slate-800">
+                        {s.name}
+                        {s.verified && (
+                          <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                        )}
+                      </span>
+                      <span className="font-mono text-xs font-bold text-clay">
+                        ₹{getEffectivePrice(s)}
+                        <span className="text-slate-400 font-normal">
+                          /unit
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Product Title */}
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight">
@@ -200,7 +248,7 @@ const ProductDetails = () => {
             </h1>
           </div>
 
-          {/* REDESIGNED Pricing Box */}
+          {/* Pricing Box */}
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex flex-col">
             <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">
@@ -215,7 +263,6 @@ const ProductDetails = () => {
             </div>
 
             <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              {/* Tier 1: Standard Rate */}
               <div className="border border-slate-200 rounded-lg p-3.5 flex flex-col justify-center bg-white shadow-xs relative">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
                   Standard Rate
@@ -226,23 +273,20 @@ const ProductDetails = () => {
                     strokeWidth={2.5}
                   />
                   <span className="text-2xl font-bold text-slate-800">
-                    {primarySupplier.price ?? 0}
+                    {selectedSupplier.price ?? 0}
                   </span>
                   <span className="text-xs text-slate-500 ml-1">/unit</span>
                 </div>
                 <span className="text-xs text-slate-400 mt-1 font-medium">
-                  Min. order: {primarySupplier.moq ?? product.moq}
+                  Min. order: {baseMoq}
                 </span>
               </div>
 
-              {/* Tier 2: Bulk Rate (Highlighted) */}
               <div className="border-2 border-clay rounded-lg p-3.5 flex flex-col justify-center bg-clay/5 relative shadow-xs">
-                {/* Floating Badge */}
                 <div className="absolute -top-2.5 right-3 bg-clay text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1">
                   <TrendingDown className="w-3 h-3" strokeWidth={3} />
                   Best Value
                 </div>
-
                 <span className="text-[11px] font-bold uppercase tracking-wider text-clay mb-2">
                   Bulk Rate
                 </span>
@@ -252,21 +296,20 @@ const ProductDetails = () => {
                     strokeWidth={3}
                   />
                   <span className="text-2xl font-black text-clay">
-                    {primarySupplier.discountPrice ??
-                      primarySupplier.price ??
+                    {selectedSupplier.discountPrice ??
+                      selectedSupplier.price ??
                       0}
                   </span>
                   <span className="text-xs text-clay/70 ml-1 font-bold">
                     /unit
                   </span>
                 </div>
-
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-xs text-slate-500 font-medium line-through decoration-slate-300">
-                    ₹{primarySupplier.price ?? 0}
+                    ₹{selectedSupplier.price ?? 0}
                   </span>
                   <span className="text-xs text-clay font-semibold">
-                    ({primarySupplier.moq ?? "—"}+ units)
+                    ({baseMoq}+ units)
                   </span>
                 </div>
               </div>
@@ -285,21 +328,25 @@ const ProductDetails = () => {
                 <label className="text-sm font-medium text-slate-600">
                   Order Quantity
                 </label>
-
                 <div className="flex items-stretch border border-slate-300 rounded-sm overflow-hidden focus-within:ring-1 focus-within:ring-clay focus-within:border-clay">
                   <button
                     type="button"
+                    disabled={quantity <= baseMoq}
                     onClick={() =>
                       handleQuantityChange(quantity - quantityStep)
                     }
-                    className="px-3 flex items-center justify-center text-slate-500 bg-slate-50 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer border-r border-slate-200 shrink-0"
+                    className={`px-3 flex items-center justify-center bg-slate-50 border-r border-slate-200 shrink-0 transition-colors ${
+                      quantity <= baseMoq
+                        ? "text-slate-300 cursor-not-allowed"
+                        : "text-slate-500 hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
+                    }`}
                     aria-label="Decrease quantity"
                   >
                     <Minus className="w-4 h-4" />
                   </button>
                   <input
                     type="number"
-                    min="1"
+                    min={baseMoq}
                     value={quantity}
                     onChange={(e) =>
                       handleQuantityChange(parseInt(e.target.value))
@@ -318,11 +365,10 @@ const ProductDetails = () => {
                   </button>
                 </div>
                 <span className="text-xs font-mono text-slate-400">
-                  Increments of {quantityStep} units
+                  Increments of {quantityStep} units · Min {baseMoq}
                 </span>
               </div>
 
-              {/* Cost Outputs */}
               <div className="flex flex-row sm:flex-col justify-between sm:justify-center px-2 sm:px-4 py-2 sm:py-0 border-t sm:border-t-0 sm:border-l border-slate-200 gap-2 font-mono shrink-0">
                 <div>
                   <span className="block text-xs text-slate-400 uppercase font-bold tracking-wide">
@@ -342,44 +388,39 @@ const ProductDetails = () => {
                 </div>
               </div>
             </div>
-
-            {quantity < baseMoq && (
-              <p className="text-xs text-rose-600 font-medium">
-                * Note: Your order quantity is below the minimum order of{" "}
-                {primarySupplier.moq ?? product.moq}.
-              </p>
-            )}
           </div>
 
           {/* Action Buttons */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-            <ContactVendorBtn
-              vendorId={product.suppliers?.[0]?.id ?? product.vendorId}
-              vendorName={product.suppliers?.[0]?.name ?? product.vendorName}
-              productName={product.name}
-            />
-            <button
-              type="button"
-              onClick={() => toggleWishlist(product)}
-              className={`flex items-center justify-center gap-2 py-3 text-sm font-bold rounded-sm transition-all cursor-pointer shadow-sm active:scale-[0.99] border ${
-                wishlisted
-                  ? "bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100"
-                  : "bg-white border-slate-200 text-slate-700 hover:border-rose-200 hover:text-rose-500"
-              }`}
-            >
-              <Heart
-                className={`w-5 h-5 shrink-0 transition-all ${
-                  wishlisted ? "fill-current scale-110" : "fill-none"
-                }`}
+          {/* Action Buttons */}
+          <div className="flex flex-col gap-3 mt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <ContactVendorBtn
+                vendorId={selectedSupplier.id}
+                vendorName={selectedSupplier.name}
+                productName={product.name}
               />
-              <span>
-                {wishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => toggleWishlist(product)}
+                className={`flex items-center justify-center gap-2 py-3 text-sm font-bold rounded-sm transition-all cursor-pointer shadow-sm active:scale-[0.99] border ${
+                  wishlisted
+                    ? "bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100"
+                    : "bg-white border-slate-200 text-slate-700 hover:border-rose-200 hover:text-rose-500"
+                }`}
+              >
+                <Heart
+                  className={`w-5 h-5 shrink-0 transition-all ${wishlisted ? "fill-current scale-110" : "fill-none"}`}
+                />
+                <span>
+                  {wishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
+                </span>
+              </button>
+            </div>
+
             <button
               ref={addToCartBtnRef}
               onClick={handleAddToCart}
-              className={`flex items-center justify-center gap-2 py-3 text-sm font-bold rounded-sm transition-all cursor-pointer shadow-sm active:scale-[0.99] ${
+              className={`w-full flex items-center justify-center gap-2 py-3.5 text-sm font-bold rounded-sm transition-all cursor-pointer shadow-sm active:scale-[0.99] ${
                 justAdded
                   ? "bg-emerald-600 text-white"
                   : "bg-clay text-white hover:bg-clay/90"
@@ -403,12 +444,14 @@ const ProductDetails = () => {
 
       <SupplierComparison
         product={product}
-        onAddToCart={(productObj, qty, supplier) =>
-          addToCart(productObj, qty, supplier)
-        }
-        onContactSupplier={(supplier) =>
-          console.log("Contact supplier:", supplier.name, supplier.id)
-        }
+        onAddToCart={(productObj, qty, supplier) => {
+          addToCart(productObj, qty, supplier);
+          setSelectedSupplierId(supplier.id);
+        }}
+        onContactSupplier={(supplier) => {
+          setSelectedSupplierId(supplier.id);
+          console.log("Contact supplier:", supplier.name, supplier.id);
+        }}
       />
     </div>
   );

@@ -76,7 +76,8 @@ const mockProducts = [
     name: "Heavy-Duty Shipping Pallets",
     category: "Packaging",
     image: "https://placehold.co/400x300/d1d5db/1f2937?text=Pallets",
-    description: "Robust wooden pallets suitable for warehouse and container logistics.",
+    description:
+      "Robust wooden pallets suitable for warehouse and container logistics.",
     suppliers: [
       {
         id: "s2-201",
@@ -148,7 +149,8 @@ const mockProducts = [
     name: '4K USB-C Monitor 27"',
     category: "Electronics",
     image: "https://placehold.co/400x300/bfdbfe/1e40af?text=Monitor",
-    description: "Crystal-clear 4K USB-C monitor designed for business workstations and control rooms.",
+    description:
+      "Crystal-clear 4K USB-C monitor designed for business workstations and control rooms.",
     suppliers: [
       {
         id: "s3-301",
@@ -220,7 +222,8 @@ const mockProducts = [
     name: "Lithium-Ion Battery Pack 48V 20Ah",
     category: "Electronics",
     image: "https://placehold.co/400x300/fef08a/854d0e?text=Battery+Pack",
-    description: "Reliable battery pack with integrated BMS for industrial power backups.",
+    description:
+      "Reliable battery pack with integrated BMS for industrial power backups.",
     suppliers: [
       {
         id: "s4-401",
@@ -292,7 +295,8 @@ const mockProducts = [
     name: "Industrial Grade Copper Wire (10 AWG)",
     category: "Raw Materials",
     image: "https://placehold.co/400x300/fcd34d/92400e?text=Copper+Wire",
-    description: "High-purity copper wire for electrical and industrial applications.",
+    description:
+      "High-purity copper wire for electrical and industrial applications.",
     suppliers: [
       {
         id: "s5-501",
@@ -364,7 +368,8 @@ const mockProducts = [
     name: "Polypropylene Granules (PP)",
     category: "Raw Materials",
     image: "https://placehold.co/400x300/c7d2fe/4338ca?text=PP+Granules",
-    description: "Injection molding grade polypropylene granules for plastics manufacturing.",
+    description:
+      "Injection molding grade polypropylene granules for plastics manufacturing.",
     suppliers: [
       {
         id: "s6-601",
@@ -436,7 +441,8 @@ const mockProducts = [
     name: "Stainless Steel Hex Bolts M12 x 50mm",
     category: "Hardware",
     image: "https://placehold.co/400x300/e5e7eb/374151?text=Hex+Bolts",
-    description: "Precision stainless steel bolts for heavy-duty industrial assemblies.",
+    description:
+      "Precision stainless steel bolts for heavy-duty industrial assemblies.",
     suppliers: [
       {
         id: "s7-701",
@@ -508,7 +514,8 @@ const mockProducts = [
     name: "Ball Bearings 6205-2RS",
     category: "Hardware",
     image: "https://placehold.co/400x300/d1d5db/111827?text=Bearings",
-    description: "Durable double-sealed ball bearings for motors and conveyor systems.",
+    description:
+      "Durable double-sealed ball bearings for motors and conveyor systems.",
     suppliers: [
       {
         id: "s8-801",
@@ -580,7 +587,8 @@ const mockProducts = [
     name: "Organic Cotton Yarn (Ne 30/1)",
     category: "Textiles",
     image: "https://placehold.co/400x300/f3f4f6/374151?text=Cotton+Yarn",
-    description: "GOTS-certified organic cotton yarn for premium textile manufacturing.",
+    description:
+      "GOTS-certified organic cotton yarn for premium textile manufacturing.",
     suppliers: [
       {
         id: "s9-901",

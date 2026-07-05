@@ -1,5 +1,6 @@
 import PropTypes from "prop-types";
 import { X, ShieldCheck, Star, IndianRupee, CheckCircle } from "lucide-react";
+import { getEffectivePrice } from "../utils/supplierUtils";
 
 const SupplierComparisonModal = ({
   open,
@@ -84,7 +85,10 @@ const SupplierComparisonModal = ({
                     {feature.label}
                   </td>
                   {suppliers.map((supplier) => {
-                    const value = supplier[feature.key];
+                    const value =
+                      feature.key === "price"
+                        ? getEffectivePrice(supplier)
+                        : supplier[feature.key];
                     const isBest =
                       (feature.key === "price" &&
                         metrics.lowestPriceId === supplier.id) ||

@@ -21,6 +21,7 @@ const router = createBrowserRouter([
       { index: true, element: <MarketplaceHome /> },
       { path: "product/:id", element: <ProductDetails /> },
       { path: "search", element: <SearchResults /> },
+      { path: "wishlist", element: <Wishlist /> },
     ],
   },
   {

@@ -13,7 +13,6 @@ const ProductCard = ({ product }) => {
   const sortedSuppliers = getSortedSuppliers(product);
   const bestSupplier = sortedSuppliers[0];
 
-  // Limit visible suppliers to a maximum of 2 to keep card heights uniform
   const displayedSuppliers = sortedSuppliers.slice(0, 2);
 
   if (!bestSupplier) return null;
@@ -51,7 +50,6 @@ const ProductCard = ({ product }) => {
       </div>
 
       <div className="p-2 pt-3 sm:p-3 sm:pt-4 md:p-4 md:pt-5 flex flex-col flex-1 gap-1.5 sm:gap-2">
-        {/* Title explicitly reserves 2 lines of height (2.75em relative to font size) */}
         <h3 className="text-[11px] sm:text-xs md:text-sm font-bold text-slate-900 line-clamp-2 leading-snug min-h-[2.75em]">
           {name}
         </h3>
@@ -61,7 +59,6 @@ const ProductCard = ({ product }) => {
           </p>
         )}
 
-        {/* mt-auto pushes everything below the description to the very bottom, ensuring perfect grid alignment */}
         <div className="mt-auto flex flex-col gap-1.5 sm:gap-2 pt-1">
           <div className="flex items-baseline gap-0.5 sm:gap-1 font-mono">
             <IndianRupee

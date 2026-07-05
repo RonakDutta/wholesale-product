@@ -151,11 +151,11 @@ const Login = () => {
 				className="flex items-center gap-3 mb-6 form-stagger"
 				style={{ opacity: 0, transform: "translateY(20px)" }}
 			>
-				<div className="divider-line" />
+				<div className="divider-line flex-1 h-px bg-slate-200" />
 				<span className="text-slate-400 text-xs font-medium uppercase tracking-wider">
 					or
 				</span>
-				<div className="divider-line" />
+				<div className="divider-line flex-1 h-px bg-slate-200" />
 			</div>
 
 			<form onSubmit={handleSubmit} noValidate>
@@ -251,7 +251,7 @@ const Login = () => {
 							type="checkbox"
 							checked={remember}
 							onChange={(e) => setRemember(e.target.checked)}
-							className="custom-check"
+							className="custom-check accent-clay"
 						/>
 						<span className="text-xs font-inter text-slate-500 font-medium">
 							Remember me

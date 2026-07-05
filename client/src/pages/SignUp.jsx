@@ -220,16 +220,15 @@ const SignUp = () => {
 				</button>
 			</div>
 
-			{/* Divider */}
 			<div
 				className="flex items-center gap-3 mb-6 form-stagger"
 				style={{ opacity: 0, transform: "translateY(20px)" }}
 			>
-				<div className="divider-line" />
+				<div className="divider-line flex-1 h-px bg-slate-200" />
 				<span className="text-slate-400 text-xs font-medium uppercase tracking-wider">
 					or
 				</span>
-				<div className="divider-line" />
+				<div className="divider-line flex-1 h-px bg-slate-200" />
 			</div>
 
 			<form onSubmit={handleSubmit} noValidate>
@@ -303,7 +302,6 @@ const SignUp = () => {
 					</div>
 				</div>
 
-				{/* dropdown */}
 				<div
 					className={`input-wrapper relative mb-5 form-stagger ${
 						shakeFields.bizType ? "error-shake" : ""
@@ -343,7 +341,6 @@ const SignUp = () => {
 					</p>
 				</div>
 
-				{/* Email */}
 				<div
 					className={`input-wrapper relative mb-5 form-stagger ${
 						shakeFields.email ? "error-shake" : ""
@@ -378,7 +375,6 @@ const SignUp = () => {
 					</p>
 				</div>
 
-				{/* Phone */}
 				<div
 					className={`input-wrapper relative mb-5 form-stagger ${
 						shakeFields.phone ? "error-shake" : ""
@@ -414,7 +410,6 @@ const SignUp = () => {
 					</p>
 				</div>
 
-				{/* Password */}
 				<div
 					className={`input-wrapper relative mb-2 form-stagger ${
 						shakeFields.password ? "error-shake" : ""
@@ -460,7 +455,6 @@ const SignUp = () => {
 					</p>
 				</div>
 
-				{/* Password strength */}
 				<div
 					className="flex gap-1.5 mb-5 form-stagger"
 					style={{ opacity: 0, transform: "translateY(20px)" }}
@@ -478,7 +472,7 @@ const SignUp = () => {
 						/>
 					))}
 					<span
-						className="text-[10px] font-semibold ml-2 min-w-[50px]"
+						className="text-[10px] font-semibold ml-2 min-w-12.5"
 						style={{
 							color:
 								password.length > 0 && passwordStrength > 0
@@ -494,7 +488,6 @@ const SignUp = () => {
 					</span>
 				</div>
 
-				{/* Terms */}
 				<div
 					className="flex items-start gap-2 mb-7 form-stagger"
 					style={{ opacity: 0, transform: "translateY(20px)" }}
@@ -503,7 +496,7 @@ const SignUp = () => {
 						type="checkbox"
 						checked={terms}
 						onChange={(e) => setTerms(e.target.checked)}
-						className="custom-check mt-0.5"
+						className="custom-check accent-clay mt-0.5"
 						id="termsCheck"
 					/>
 					<label
@@ -529,7 +522,6 @@ const SignUp = () => {
 					</label>
 				</div>
 
-				{/* Submit */}
 				<div
 					className="form-stagger"
 					style={{ opacity: 0, transform: "translateY(20px)" }}

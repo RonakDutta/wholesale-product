@@ -15,6 +15,7 @@ import {
   Plus,
   ShoppingBag,
   Check,
+  Tag,
 } from "lucide-react";
 import { gsap } from "gsap";
 import mockProducts from "../utils/mockProducts";
@@ -71,7 +72,9 @@ const ProductDetails = () => {
 
   const handleAddToCart = () => {
     addToCart(product, quantity);
-    flyToCart(addToCartBtnRef.current);
+    if (typeof flyToCart === "function") {
+      flyToCart(addToCartBtnRef.current);
+    }
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 1600);
   };
@@ -107,143 +110,161 @@ const ProductDetails = () => {
             />
 
             {product.supplySignal && (
-              <div className="absolute top-3 right-3 bg-white/95 text-slate-700 text-xs font-semibold px-2.5 py-1 rounded-md border border-slate-200 shadow-sm">
+              <div className="absolute top-3 right-3 bg-white/95 text-slate-700 text-xs font-semibold px-3 py-1.5 rounded-md border border-slate-200 shadow-sm">
                 {product.supplySignal}
               </div>
             )}
           </div>
 
-          {/* Core Operational Quick Specs Grid */}
+          {/* Quick Specs Grid */}
           <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="bg-white border border-slate-200 p-2.5 rounded-lg flex flex-col items-center justify-center shadow-xs">
-              <Scale className="w-4 h-4 text-slate-400 mb-1" />
-              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+            <div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">
+              <Scale className="w-5 h-5 text-slate-400 mb-1" />
+              <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">
                 Min Order
               </span>
-              <span className="text-xs font-bold text-slate-800 mt-0.5 truncate max-w-full">
+              <span className="text-sm font-bold text-slate-800 mt-1 truncate max-w-full">
                 {product.moq}
               </span>
             </div>
-            <div className="bg-white border border-slate-200 p-2.5 rounded-lg flex flex-col items-center justify-center shadow-xs">
-              <Layers className="w-4 h-4 text-slate-400 mb-1" />
-              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
-                Spec Variant
+            <div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">
+              <Layers className="w-5 h-5 text-slate-400 mb-1" />
+              <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">
+                Variant
               </span>
-              <span className="text-xs font-bold text-slate-800 mt-0.5 truncate max-w-full">
+              <span className="text-sm font-bold text-slate-800 mt-1 truncate max-w-full">
                 {product.specs}
               </span>
             </div>
-            <div className="bg-white border border-slate-200 p-2.5 rounded-lg flex flex-col items-center justify-center shadow-xs">
-              <Truck className="w-4 h-4 text-slate-400 mb-1" />
-              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
-                Logistics
+            <div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">
+              <Truck className="w-5 h-5 text-slate-400 mb-1" />
+              <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">
+                Shipping
               </span>
-              <span className="text-xs font-bold text-slate-800 mt-0.5 truncate max-w-full">
+              <span className="text-sm font-bold text-slate-800 mt-1 truncate max-w-full">
                 FOB Options
               </span>
             </div>
           </div>
         </div>
 
-        {/* Right Side: Information Ledger & Transaction Console */}
+        {/* Right Side: Information & Pricing */}
         <div className="detail-fade-in flex flex-col gap-5">
-          {/* Vendor Details Header */}
-          <div className="flex flex-col gap-1.5 pb-3 border-b border-slate-200">
+          {/* Vendor Details */}
+          <div className="flex flex-col gap-2 pb-3 border-b border-slate-200">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-bold text-slate-800">
+              <span className="text-base font-bold text-slate-800">
                 {product.vendorName}
               </span>
               {product.verified && (
-                <div className="flex items-center gap-1 bg-white border border-emerald-600 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
-                  <ShieldCheck className="w-3 h-3" strokeWidth={2.5} />
+                <div className="flex items-center gap-1 bg-white border border-emerald-600 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full shadow-xs">
+                  <ShieldCheck className="w-3.5 h-3.5" strokeWidth={2.5} />
                   <span>Verified Supplier</span>
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-1 text-xs text-slate-500 font-medium">
-              <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <div className="flex items-center gap-1 text-sm text-slate-500 font-medium">
+              <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
               <span>{product.location}</span>
               <span className="text-slate-300 mx-1">•</span>
-              <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <span className="font-mono text-[11px] text-slate-400">
+              <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
+              <span className="font-mono text-xs text-slate-400">
                 {product.category} Industry
               </span>
             </div>
           </div>
 
-          {/* Product Title Section */}
+          {/* Product Title */}
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight">
               {product.name}
             </h1>
           </div>
 
-          {/* Commercial Ledger Tier Matrix Box */}
-          <div className="bg-white border border-slate-200 border-l-4 border-l-clay rounded-lg p-4 flex flex-col gap-3">
-            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono">
-                B2B Wholesaler Matrix
+          {/* REDESIGNED Pricing Box */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex flex-col">
+            <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">
+                Pricing Tiers
               </span>
-              <div className="flex items-center gap-1 bg-cream border border-clay/30 text-clay font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-sm">
-                <TrendingDown className="w-3 h-3" />
-                <span>Dynamic Rate</span>
-              </div>
+              {savingsPercent > 0 && (
+                <div className="flex items-center gap-1 bg-emerald-100/80 text-emerald-700 text-[10px] font-extrabold px-2 py-1 rounded-sm uppercase tracking-widest border border-emerald-200">
+                  <Tag className="w-3 h-3" />
+                  <span>Save {savingsPercent}% on Bulk</span>
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <span className="block text-[11px] text-slate-500 font-medium mb-0.5">
-                  Base Rate (MOQ Tier)
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              {/* Tier 1: Standard Rate */}
+              <div className="border border-slate-200 rounded-lg p-3.5 flex flex-col justify-center bg-white shadow-xs relative">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                  Standard Rate
                 </span>
                 <div className="flex items-baseline gap-0.5 font-mono">
                   <IndianRupee
-                    className="w-3.5 h-3.5 text-slate-800 shrink-0"
+                    className="w-4 h-4 text-slate-800 shrink-0"
                     strokeWidth={2.5}
                   />
-                  <span className="text-lg font-bold text-slate-900">
+                  <span className="text-2xl font-bold text-slate-800">
                     {product.price}
                   </span>
-                  <span className="text-xs text-slate-400">/unit</span>
+                  <span className="text-xs text-slate-500 ml-1">/unit</span>
                 </div>
+                <span className="text-xs text-slate-400 mt-1 font-medium">
+                  Min. order: {product.moq}
+                </span>
               </div>
-              <div>
-                <span className="block text-[11px] text-slate-500 font-medium mb-0.5">
-                  Bulk Rate (At {product.bulkQuantity}+ units)
+
+              {/* Tier 2: Bulk Rate (Highlighted) */}
+              <div className="border-2 border-clay rounded-lg p-3.5 flex flex-col justify-center bg-clay/5 relative shadow-xs">
+                {/* Floating Badge */}
+                <div className="absolute -top-2.5 right-3 bg-clay text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1">
+                  <TrendingDown className="w-3 h-3" strokeWidth={3} />
+                  Best Value
+                </div>
+
+                <span className="text-[11px] font-bold uppercase tracking-wider text-clay mb-2">
+                  Bulk Rate
                 </span>
                 <div className="flex items-baseline gap-0.5 font-mono">
                   <IndianRupee
-                    className="w-3.5 h-3.5 text-clay shrink-0"
-                    strokeWidth={2.5}
+                    className="w-4 h-4 text-clay shrink-0"
+                    strokeWidth={3}
                   />
-                  <span className="text-lg font-bold text-clay">
+                  <span className="text-2xl font-black text-clay">
                     {product.bulkPrice}
                   </span>
-                  <span className="text-xs text-slate-400">/unit</span>
-                </div>
-                {savingsPercent > 0 && (
-                  <span className="block font-mono text-[10px] text-clay/80 mt-0.5">
-                    Save {savingsPercent}% per unit at bulk
+                  <span className="text-xs text-clay/70 ml-1 font-bold">
+                    /unit
                   </span>
-                )}
+                </div>
+
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-xs text-slate-500 font-medium line-through decoration-slate-300">
+                    ₹{product.price}
+                  </span>
+                  <span className="text-xs text-clay font-semibold">
+                    ({product.bulkQuantity}+ units)
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Interactive Live Price Tier Calculator Engine */}
+          {/* Quantity Calculator */}
           <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-col gap-4 shadow-xs">
-            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-600 font-mono">
+            <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-600 font-mono">
               <Calculator className="w-4 h-4 text-clay" />
-              <span>Real-Time Volume Calculator</span>
+              <span>Calculate Total</span>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <div className="flex flex-col gap-1 flex-1">
-                <label className="text-xs font-medium text-slate-500">
-                  Specify Order Quantity
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+              <div className="flex flex-col gap-1.5 flex-1">
+                <label className="text-sm font-medium text-slate-600">
+                  Order Quantity
                 </label>
 
-                {/* Custom stepper replaces the native number input's spinner
-                    arrows, which were overlapping the "units" suffix. */}
                 <div className="flex items-stretch border border-slate-300 rounded-sm overflow-hidden focus-within:ring-1 focus-within:ring-clay focus-within:border-clay">
                   <button
                     type="button"
@@ -253,7 +274,7 @@ const ProductDetails = () => {
                     className="px-3 flex items-center justify-center text-slate-500 bg-slate-50 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer border-r border-slate-200 shrink-0"
                     aria-label="Decrease quantity"
                   >
-                    <Minus className="w-3.5 h-3.5" />
+                    <Minus className="w-4 h-4" />
                   </button>
                   <input
                     type="number"
@@ -262,7 +283,7 @@ const ProductDetails = () => {
                     onChange={(e) =>
                       handleQuantityChange(parseInt(e.target.value))
                     }
-                    className="w-full min-w-0 text-center py-2 text-sm font-mono font-bold text-slate-900 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="w-full min-w-0 text-center py-2 text-base font-mono font-bold text-slate-900 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                   <button
                     type="button"
@@ -272,29 +293,29 @@ const ProductDetails = () => {
                     className="px-3 flex items-center justify-center text-slate-500 bg-slate-50 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer border-l border-slate-200 shrink-0"
                     aria-label="Increase quantity"
                   >
-                    <Plus className="w-3.5 h-3.5" />
+                    <Plus className="w-4 h-4" />
                   </button>
                 </div>
-                <span className="text-[10px] font-mono text-slate-400">
-                  units · steps of {quantityStep}
+                <span className="text-xs font-mono text-slate-400">
+                  Increments of {quantityStep} units
                 </span>
               </div>
 
-              {/* Dynamic Cost Output Panels */}
-              <div className="flex flex-row sm:flex-col justify-between sm:justify-center px-2 sm:px-4 py-1.5 sm:py-0 border-t sm:border-t-0 sm:border-l border-slate-200 gap-1 font-mono shrink-0">
+              {/* Cost Outputs */}
+              <div className="flex flex-row sm:flex-col justify-between sm:justify-center px-2 sm:px-4 py-2 sm:py-0 border-t sm:border-t-0 sm:border-l border-slate-200 gap-2 font-mono shrink-0">
                 <div>
-                  <span className="block text-[10px] text-slate-400 uppercase font-bold tracking-wide">
-                    Applied Rate
+                  <span className="block text-xs text-slate-400 uppercase font-bold tracking-wide">
+                    Price per unit
                   </span>
-                  <span className="text-xs font-bold text-slate-700">
-                    ₹{currentUnitPrice}/unit
+                  <span className="text-sm font-bold text-slate-700">
+                    ₹{currentUnitPrice}
                   </span>
                 </div>
-                <div className="text-right sm:text-left mt-0 sm:mt-1.5">
-                  <span className="block text-[10px] text-slate-400 uppercase font-bold tracking-wide">
-                    Estimated Invoice
+                <div className="text-right sm:text-left">
+                  <span className="block text-xs text-slate-400 uppercase font-bold tracking-wide">
+                    Total Cost
                   </span>
-                  <span className="text-sm font-black text-clay">
+                  <span className="text-lg font-black text-clay">
                     ₹{totalCost.toLocaleString("en-IN")}
                   </span>
                 </div>
@@ -302,14 +323,14 @@ const ProductDetails = () => {
             </div>
 
             {quantity < baseMoq && (
-              <p className="text-[11px] text-rose-600 font-medium">
-                * Note: Your input order quantity falls below the vendor
-                specified MOQ of {product.moq}.
+              <p className="text-xs text-rose-600 font-medium">
+                * Note: Your order quantity is below the minimum order of{" "}
+                {product.moq}.
               </p>
             )}
           </div>
 
-          {/* Action Terminal Buttons */}
+          {/* Action Buttons */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
             <ContactVendorBtn
               vendorId={product.vendorId}
@@ -327,12 +348,12 @@ const ProductDetails = () => {
             >
               {justAdded ? (
                 <>
-                  <Check className="w-4 h-4 shrink-0" />
+                  <Check className="w-5 h-5 shrink-0" />
                   <span>Added to Cart</span>
                 </>
               ) : (
                 <>
-                  <ShoppingBag className="w-4 h-4 shrink-0" />
+                  <ShoppingBag className="w-5 h-5 shrink-0" />
                   <span>Add to Cart</span>
                 </>
               )}

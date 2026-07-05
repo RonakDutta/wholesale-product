@@ -1,6 +1,7 @@
-import React, { useState } from "react";
-import { Search, MapPin, ShoppingCart, User, X } from "lucide-react";
+import { Search, MapPin, ShoppingCart, User } from "lucide-react";
 import { Link } from "react-router";
+import { useCart } from "../context/CartContext";
+import CartDrawer from "./CartDrawer";
 
 const Navbar = () => {
 	const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
@@ -37,6 +38,7 @@ const Navbar = () => {
 						)}
 					</button>
 
+<<<<<<< HEAD
 					{/* Location (Hidden on very small screens) */}
 					<button className="hidden lg:flex items-center gap-2 text-sm font-semibold text-espresso cursor-pointer hover:text-clay transition-colors group">
 						<MapPin className="w-4 h-4 group-hover:scale-110 transition-transform" />
@@ -90,6 +92,49 @@ const Navbar = () => {
 			)}
 		</nav>
 	);
+=======
+            {/* id is the fly-to-cart animation's landing target — keep it on this element */}
+            <button
+              id="cart-icon-target"
+              onClick={() => setIsCartOpen(true)}
+              className="cursor-pointer relative p-2 hover:bg-sage/20 rounded-lg transition-colors group"
+              aria-label={`Open cart, ${uniqueItemCount} item${uniqueItemCount === 1 ? "" : "s"}`}
+            >
+              <ShoppingCart className="w-5 h-5 text-espresso group-hover:scale-110 transition-transform" />
+              {uniqueItemCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-clay text-cream text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full ring-2 ring-cream">
+                  {uniqueItemCount > 9 ? "9+" : uniqueItemCount}
+                </span>
+              )}
+            </button>
+
+            {/* Auth Buttons (Desktop) */}
+            <div className="hidden sm:flex items-center gap-3">
+              <Link
+                to="login"
+                className="text-sm font-semibold text-espresso hover:text-clay transition-colors cursor-pointer whitespace-nowrap"
+              >
+                Log in
+              </Link>
+              <Link
+                to="signup"
+                className="text-sm font-semibold bg-espresso text-cream px-4 py-2 rounded-lg hover:bg-clay transition-all duration-300 cursor-pointer whitespace-nowrap shadow-sm"
+              >
+                Sign up
+              </Link>
+            </div>
+
+            {/* Auth Icon (Mobile) */}
+            <button className="sm:hidden p-2 hover:bg-sage/20 rounded-lg transition-colors text-espresso">
+              <User className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      </nav>
+      <CartDrawer />
+    </>
+  );
+>>>>>>> 9c10a8484ad83efd506ff4478f360ae94cc5e406
 };
 
 export default Navbar;

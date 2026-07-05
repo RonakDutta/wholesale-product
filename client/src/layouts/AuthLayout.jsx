@@ -1,4 +1,4 @@
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import { Box, Star, ArrowLeft } from "lucide-react";
@@ -153,14 +153,14 @@ const AuthLayout = () => {
 					className="relative z-10 brand-top"
 					style={{ opacity: 0, transform: "translateY(20px)" }}
 				>
-					<div className="flex items-center gap-3">
+					<Link to="/" className="cursor-pointer flex items-center gap-3">
 						<div className="w-10 h-10 bg-clay rounded-lg flex items-center justify-center">
 							<Box className="w-5 h-5 text-cream" />
 						</div>
 						<span className="text-cream font-bold font-dmsans text-xl tracking-tight">
 							marketplace.
 						</span>
-					</div>
+					</Link>
 				</div>
 
 				<div
@@ -310,9 +310,9 @@ const AuthLayout = () => {
 					</div>
 				</div>
 
-				<div className="px-6 pb-6 lg:px-14 text-center shrink-0">
+				<div className="font-inter px-6 pb-6 lg:px-14 text-center shrink-0">
 					<p className="text-[11px] text-slate-500 font-medium">
-						2026 marketplace.. All rights reserved.
+						2026 <i>marketplace.</i> All rights reserved.
 					</p>
 				</div>
 			</div>

@@ -5,70 +5,58 @@
 @import "tailwindcss";
 
 @theme {
-  --color-cream: #faf6ef;
-  --color-clay: #c56b4a;
-  --color-espresso: #3d2e24;
-  --color-sage: #7a8b6f;
-  --font-inter: "Inter", sans-serif;
-  --font-dmsans: "DM Sans", sans-serif;
-  --font-raleway: "Raleway", sans-serif;
-  --font-lato: "Lato", sans-serif;
+	--color-cream: #faf6ef;
+	--color-clay: #c56b4a;
+	--color-espresso: #3d2e24;
+	--color-sage: #7a8b6f;
+	--font-inter: "Inter", sans-serif;
+	--font-dmsans: "DM Sans", sans-serif;
+	--font-raleway: "Raleway", sans-serif;
+	--font-lato: "Lato", sans-serif;
+}
+
+html {
+	scroll-behavior: smooth;
 }
 
 .input-line {
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  width: 0;
-  height: 2px;
-  background: #c56b4a;
-  transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
-  transform: translateX(-50%);
-  border-radius: 2px;
+	position: absolute;
+	bottom: 0;
+	left: 50%;
+	width: 0;
+	height: 2px;
+	background: #c56b4a;
+	transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+	transform: translateX(-50%);
+	border-radius: 2px;
 }
 .input-wrapper:focus-within .input-line {
-  width: 100%;
+	width: 100%;
 }
 .input-wrapper:focus-within .input-icon {
-  color: #c56b4a;
+	color: #c56b4a;
 }
 
 /* Floating shapes on left panel */
 .float-shape {
-<<<<<<< HEAD
 	position: absolute;
 	border-radius: 50%;
 	opacity: 0;
 	will-change: transform, opacity;
-=======
-  position: absolute;
-  border-radius: 50%;
-  opacity: 0;
-  will-change: transform, opacity;
->>>>>>> 9c10a8484ad83efd506ff4478f360ae94cc5e406
 }
 
 /* Tab slider pill */
 .tab-slider {
-<<<<<<< HEAD
 	transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
-=======
-  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
->>>>>>> 9c10a8484ad83efd506ff4478f360ae94cc5e406
 }
 
 /* Password strength segments */
 .strength-segment {
-<<<<<<< HEAD
 	transition: background 0.3s ease;
-=======
-  transition: background 0.3s ease;
->>>>>>> 9c10a8484ad83efd506ff4478f360ae94cc5e406
 }
 
 /* Custom checkbox */
 .custom-check {
-<<<<<<< HEAD
 	appearance: none;
 	width: 18px;
 	height: 18px;
@@ -97,88 +85,35 @@
 .custom-check:focus-visible {
 	outline: 2px solid #c56b4a;
 	outline-offset: 2px;
-=======
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  border: 2px solid #d1d5db;
-  border-radius: 4px;
-  cursor: pointer;
-  position: relative;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-}
-.custom-check:checked {
-  background: #c56b4a;
-  border-color: #c56b4a;
-}
-.custom-check:checked::after {
-  content: "";
-  position: absolute;
-  top: 1px;
-  left: 5px;
-  width: 5px;
-  height: 9px;
-  border: solid white;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-.custom-check:focus-visible {
-  outline: 2px solid #c56b4a;
-  outline-offset: 2px;
->>>>>>> 9c10a8484ad83efd506ff4478f360ae94cc5e406
 }
 
 /* Social button hover */
 .social-btn {
-<<<<<<< HEAD
 	transition: all 0.25s ease;
 }
 .social-btn:hover {
 	border-color: #c56b4a;
 	background: #c56b4a08;
-=======
-  transition: all 0.25s ease;
-}
-.social-btn:hover {
-  border-color: #c56b4a;
-  background: #c56b4a08;
->>>>>>> 9c10a8484ad83efd506ff4478f360ae94cc5e406
 }
 
 /* Grid pattern on dark panel */
 .grid-pattern {
-<<<<<<< HEAD
 	background-image:
 		linear-gradient(rgba(250, 246, 239, 0.03) 1px, transparent 1px),
 		linear-gradient(90deg, rgba(250, 246, 239, 0.03) 1px, transparent 1px);
 	background-size: 40px 40px;
-=======
-  background-image:
-    linear-gradient(rgba(250, 246, 239, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(250, 246, 239, 0.03) 1px, transparent 1px);
-  background-size: 40px 40px;
->>>>>>> 9c10a8484ad83efd506ff4478f360ae94cc5e406
 }
 
 /* Glow blobs */
 .glow-blob {
-<<<<<<< HEAD
 	position: absolute;
 	border-radius: 50%;
 	filter: blur(80px);
 	will-change: transform;
-=======
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  will-change: transform;
->>>>>>> 9c10a8484ad83efd506ff4478f360ae94cc5e406
 }
 
 /* Error shake */
 @keyframes errorShake {
-<<<<<<< HEAD
 	0%,
 	100% {
 		transform: translateX(0);
@@ -198,38 +133,11 @@
 }
 .error-shake {
 	animation: errorShake 0.5s ease;
-=======
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  20% {
-    transform: translateX(-6px);
-  }
-  40% {
-    transform: translateX(6px);
-  }
-  60% {
-    transform: translateX(-4px);
-  }
-  80% {
-    transform: translateX(4px);
-  }
-}
-.error-shake {
-  animation: errorShake 0.5s ease;
->>>>>>> 9c10a8484ad83efd506ff4478f360ae94cc5e406
 }
 
 /* Divider gradient line */
 .divider-line {
-<<<<<<< HEAD
 	flex: 1;
 	height: 1px;
 	background: linear-gradient(90deg, transparent, #d1d5db, transparent);
-=======
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, #d1d5db, transparent);
->>>>>>> 9c10a8484ad83efd506ff4478f360ae94cc5e406
 }

@@ -9,6 +9,7 @@ import MarketplaceHome from "./pages/MarketplaceHome";
 import ProductDetails from "./pages/ProductDetails";
 import SignUp from "./pages/SignUp";
 import Login from "./pages/Login";
+import SearchResults from "./pages/SearchResults";
 
 const router = createBrowserRouter([
 	{
@@ -17,6 +18,7 @@ const router = createBrowserRouter([
 		children: [
 			{ index: true, element: <MarketplaceHome /> },
 			{ path: "product/:id", element: <ProductDetails /> },
+			{ path: "search", element: <SearchResults /> },
 		],
 	},
 	{

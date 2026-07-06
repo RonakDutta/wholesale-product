@@ -5,6 +5,7 @@ import { WishlistProvider } from "./context/WishlistContext";
 
 import MainLayout from "./layouts/MainLayout";
 import AuthLayout from "./layouts/AuthLayout";
+import InfoLayout from "./layouts/InfoLayout";
 
 import MarketplaceHome from "./pages/MarketplaceHome";
 import ProductDetails from "./pages/ProductDetails";
@@ -12,6 +13,7 @@ import Wishlist from "./pages/Wishlist";
 import SignUp from "./pages/SignUp";
 import Login from "./pages/Login";
 import SearchResults from "./pages/SearchResults";
+import FooterInfoPage from "./pages/FooterInfoPage";
 
 const router = createBrowserRouter([
   {
@@ -21,6 +23,38 @@ const router = createBrowserRouter([
       { index: true, element: <MarketplaceHome /> },
       { path: "product/:id", element: <ProductDetails /> },
       { path: "search", element: <SearchResults /> },
+    ],
+  },
+  {
+    element: <InfoLayout />,
+    children: [
+      {
+        path: "browse-products",
+        element: <FooterInfoPage page="browse-products" />,
+      },
+      {
+        path: "verified-sellers",
+        element: <FooterInfoPage page="verified-sellers" />,
+      },
+      {
+        path: "dynamic-pricing",
+        element: <FooterInfoPage page="dynamic-pricing" />,
+      },
+      { path: "help-center", element: <FooterInfoPage page="help-center" /> },
+      { path: "upi-guide", element: <FooterInfoPage page="upi-guide" /> },
+      { path: "contact-us", element: <FooterInfoPage page="contact-us" /> },
+      {
+        path: "terms-of-service",
+        element: <FooterInfoPage page="terms-of-service" />,
+      },
+      {
+        path: "privacy-policy",
+        element: <FooterInfoPage page="privacy-policy" />,
+      },
+      {
+        path: "seller-agreement",
+        element: <FooterInfoPage page="seller-agreement" />,
+      },
     ],
   },
   {

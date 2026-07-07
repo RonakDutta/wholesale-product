@@ -99,10 +99,9 @@ const ProductCard = ({ product }) => {
           {/* Enhanced CTA Button */}
           <Link
             to={`/product/${id}`}
-            className="group/btn mt-4 flex items-center justify-center gap-2 w-full py-3 sm:py-3.5 bg-slate-900 text-white text-[10px] sm:text-sm font-bold rounded-xl hover:bg-clay transition-all duration-300 hover:shadow-lg hover:shadow-clay/20 active:scale-[0.98]"
+            className="group/btn mt-4 flex items-center justify-center gap-2 w-full py-3 sm:py-3.5 bg-slate-900 text-white text-[10px] sm:text-sm font-bold rounded-xl hover:bg-clay transition-all duration-300  active:scale-[0.98]"
           >
             <span>Compare and Buy</span>
-            <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover/btn:translate-x-1" />
           </Link>
         </div>
       </div>

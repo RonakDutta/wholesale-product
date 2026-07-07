@@ -1,102 +1,107 @@
-import { ShieldCheck, MapPin, IndianRupee } from "lucide-react";
+import { Heart, IndianRupee, Users, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
-import ContactVendorBtn from "./ContactVendorBtn";
+import { useWishlist } from "../context/WishlistContext";
+import { getSortedSuppliers } from "../utils/supplierUtils";
+import SupplierRow from "./SupplierRow";
 
 const ProductCard = ({ product }) => {
-  const {
-    name = "Untitled Product",
-    price = 0,
-    vendorName = "Unknown Vendor",
-    vendorId = "",
-    location = "India",
-    supplySignal = "In stock",
-    verified = false,
-    moq = "",
-    specs = "",
-    bulkPrice,
-    bulkQuantity,
-    image = "https://placehold.co/400x300/e2e8f0/1e293b?text=Image",
-  } = product;
+  const { id, name = "Untitled Product", image, description = "" } = product;
+  const suppliers = product.suppliers ?? [];
+  const { toggleWishlist, isWishlisted } = useWishlist();
+  const wishlisted = isWishlisted(id);
+
+  const sortedSuppliers = getSortedSuppliers(product);
+  const bestSupplier = sortedSuppliers[0];
+
+  const displayedSuppliers = sortedSuppliers.slice(0, 2);
+
+  if (!bestSupplier) return null;
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg sm:rounded-xl overflow-hidden flex flex-col h-full transition-all duration-300 hover:shadow-xl hover:border-sage/50 hover:-translate-y-1 group">
-      <div className="relative w-full aspect-4/3 bg-slate-100 overflow-hidden">
+    <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl overflow-hidden flex flex-col h-full transition-all duration-300 hover:shadow-2xl hover:shadow-slate-200/50 hover:-translate-y-1 hover:border-slate-300 group">
+      {/* Image Section */}
+      <div className="relative w-full aspect-4/3 bg-slate-50 overflow-hidden shrink-0 border-b border-slate-100">
         <img
           src={image}
           alt={name}
-          className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105"
+          className="object-cover w-full h-full transition-transform duration-700 group-hover:scale-105"
         />
 
-        <div className="absolute top-1.5 right-1.5 sm:top-2.5 sm:right-2.5 bg-white/90 backdrop-blur-sm text-slate-700 text-[7px] sm:text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full border border-slate-200 shadow-sm whitespace-nowrap">
-          {supplySignal}
+        {/* Suppliers Badge */}
+        <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-md text-slate-700 text-[10px] sm:text-xs font-bold px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full shadow-sm whitespace-nowrap flex items-center gap-1.5 ring-1 ring-slate-900/5">
+          <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-clay" />
+          {suppliers.length} suppliers
         </div>
 
-        {/* Verified stamp – only show if verified; shortened label on mobile */}
-        {verified && (
-          <div className="cursor-default absolute bottom-1.5 left-1.5 sm:bottom-2.5 sm:left-2.5 flex items-center gap-0.5 sm:gap-1 bg-white border border-emerald-600 text-emerald-700 text-[7px] sm:text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full shadow-sm whitespace-nowrap">
-            <ShieldCheck
-              className="w-2 h-2 sm:w-2.5 sm:h-2.5 md:w-3 md:h-3 shrink-0"
-              strokeWidth={2.5}
-            />
-            <span className="hidden sm:inline">Verified supplier</span>
-            <span className="sm:hidden">Verified</span>
-          </div>
-        )}
+        {/* Wishlist Button */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            toggleWishlist(product);
+          }}
+          aria-label={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
+          className={`absolute top-3 left-3 z-10 p-2 sm:p-2.5 rounded-full backdrop-blur-md transition-all duration-300 hover:scale-110 cursor-pointer shadow-sm ring-1 ${
+            wishlisted
+              ? "bg-rose-50/90 ring-rose-200 text-rose-500"
+              : "bg-white/90 ring-slate-900/5 text-slate-400 hover:ring-rose-200 hover:text-rose-500"
+          }`}
+        >
+          <Heart
+            className={`w-4 h-4 sm:w-4.5 sm:h-4.5 transition-all duration-300 ${
+              wishlisted ? "fill-current scale-110" : "fill-none"
+            }`}
+          />
+        </button>
       </div>
 
-      {/* Content */}
-      <div className="p-2 pt-3 sm:p-3 sm:pt-4 md:p-4 md:pt-5 flex flex-col flex-1 gap-1 sm:gap-1.5 md:gap-2">
-        <div className="flex items-center gap-1 text-slate-400 text-[7px] sm:text-[9px] md:text-[10px] font-semibold uppercase tracking-wider overflow-hidden">
-          <span className="text-slate-600 truncate min-w-0">{vendorName}</span>
-          <span className="text-slate-300 shrink-0">•</span>
-          <MapPin className="w-2 h-2 sm:w-2.5 sm:h-2.5 shrink-0" />
-          <span className="truncate min-w-0">{location}</span>
-        </div>
-
-        <h3 className="text-[11px] sm:text-xs md:text-sm font-bold text-slate-900 line-clamp-2 leading-snug">
-          {name}
-        </h3>
-
-        {(moq || specs) && (
-          <div className="font-mono text-[7px] sm:text-[9px] md:text-[10px] text-slate-500 truncate">
-            {moq && <span>MOQ {moq}</span>}
-            {moq && specs && <span> · </span>}
-            {specs && <span>{specs}</span>}
-          </div>
-        )}
-
-        <div className="mt-auto pt-1.5 sm:pt-2 md:pt-3 border-t border-slate-100">
-          <div className="flex items-baseline gap-0.5 sm:gap-1 font-mono">
-            <IndianRupee
-              className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-3.5 md:h-3.5 text-clay shrink-0"
-              strokeWidth={2.5}
-            />
-            <span className="text-sm sm:text-base md:text-xl font-bold text-clay">
-              {price}
-            </span>
-            <span className="text-[8px] sm:text-[10px] md:text-xs text-slate-400">
-              / unit
-            </span>
-          </div>
-          {bulkPrice && bulkQuantity && (
-            <div className="font-mono text-[7px] sm:text-[8px] md:text-[11.5px] text-slate-400 mt-0.5 truncate">
-              ₹{bulkPrice}/unit at {bulkQuantity}+ units
-            </div>
+      {/* Content Section */}
+      <div className="p-4 sm:p-5 flex flex-col flex-1 gap-2 sm:gap-3">
+        <div>
+          <h3 className="text-sm sm:text-base font-bold text-slate-900 line-clamp-2 leading-snug group-hover:text-clay transition-colors">
+            {name}
+          </h3>
+          {description && (
+            <p className="mt-1 text-xs sm:text-sm text-slate-500 line-clamp-1">
+              {description}
+            </p>
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-1 sm:gap-1.5 md:gap-2 mt-1.5 sm:mt-2 md:mt-3">
-          <ContactVendorBtn
-            vendorId={vendorId}
-            vendorName={vendorName}
-            productName={name}
-          />
+        <div className="mt-auto flex flex-col pt-2">
+          {/* Price Layout */}
+          <div className="flex items-end gap-1.5 mb-3 sm:mb-4">
+            <div className="flex items-center text-clay">
+              <IndianRupee
+                className="w-4 h-4 sm:w-5 sm:h-5 mb-0.5"
+                strokeWidth={2.5}
+              />
+              <span className="text-xl sm:text-2xl font-black leading-none tracking-tight">
+                {bestSupplier.discountPrice ?? bestSupplier.price}
+              </span>
+            </div>
+            <span className="text-[10px] sm:text-xs font-medium text-slate-400 mb-0.5 uppercase tracking-wider">
+              / unit starts
+            </span>
+          </div>
+
+          {/* Suppliers List */}
+          <div className="border-t border-slate-100 pt-3 sm:pt-4 flex flex-col gap-2">
+            {displayedSuppliers.map((supplier, idx) => (
+              <SupplierRow
+                key={supplier.id}
+                supplier={supplier}
+                isBest={idx === 0}
+              />
+            ))}
+          </div>
+
+          {/* Enhanced CTA Button */}
           <Link
-            to={`/product/${product.id}`}
-            className="flex items-center justify-center gap-0.5 sm:gap-1 md:gap-1.5 py-1 sm:py-1.5 md:py-2 bg-espresso text-cream text-[8px] sm:text-[10px] md:text-xs font-semibold rounded-md sm:rounded-lg hover:bg-clay transition-all duration-300 cursor-pointer"
+            to={`/product/${id}`}
+            className="group/btn mt-4 flex items-center justify-center gap-2 w-full py-3 sm:py-3.5 bg-slate-900 text-white text-[10px] sm:text-sm font-bold rounded-xl hover:bg-clay transition-all duration-300  active:scale-[0.98]"
           >
-            <IndianRupee className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-4 md:h-4 shrink-0" />
-            <span className="font-bold uppercase tracking-wide">Buy</span>
+            <span>Compare and Buy</span>
           </Link>
         </div>
       </div>

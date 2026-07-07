@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -15,11 +15,20 @@ import {
   Plus,
   ShoppingBag,
   Check,
+  Tag,
+  Heart,
 } from "lucide-react";
 import { gsap } from "gsap";
 import mockProducts from "../utils/mockProducts";
 import ContactVendorBtn from "../components/ContactVendorBtn";
+import SupplierComparison from "../components/SupplierComparison";
 import { useCart } from "../context/CartContext";
+import { useWishlist } from "../context/WishlistContext";
+import {
+  getCheapestSupplier,
+  getEffectivePrice,
+  getSupplyLabel,
+} from "../utils/supplierUtils";
 
 const ProductDetails = () => {
   const { id } = useParams();
@@ -27,57 +36,74 @@ const ProductDetails = () => {
   const pageRef = useRef(null);
   const addToCartBtnRef = useRef(null);
   const { addToCart } = useCart();
+  const { toggleWishlist, isWishlisted } = useWishlist();
 
-  // Find product by id from dynamic mock database
   const product = mockProducts.find((p) => p.id === id) || mockProducts[0];
+  const suppliers = product.suppliers ?? [];
 
-  // Extraction of pure numeric value from MOQ string (e.g., "500 units" -> 500)
-  const baseMoq = parseInt(product.moq) || 1;
-  const [quantity, setQuantity] = useState(baseMoq);
+  const [selectedSupplierId, setSelectedSupplierId] = useState(
+    () => getCheapestSupplier(product)?.id ?? suppliers[0]?.id ?? null,
+  );
+  const [quantity, setQuantity] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
 
-  // Scale the +/- step with the MOQ so bulk quantities don't take forever
-  // to reach one click at a time (e.g. MOQ 1000 -> step of 100, not 1).
+  const selectedSupplier =
+    suppliers.find((s) => s.id === selectedSupplierId) ?? suppliers[0] ?? {};
+  const baseMoq = selectedSupplier.moq ?? 1;
   const quantityStep = Math.max(1, Math.round(baseMoq / 10));
 
-  // Dynamic ledger price calculation based on breakdown volume tiers
-  const currentUnitPrice =
-    quantity >= product.bulkQuantity ? product.bulkPrice : product.price;
+  // Reset supplier selection whenever the product itself changes
+  useEffect(() => {
+    setSelectedSupplierId(
+      getCheapestSupplier(product)?.id ?? product.suppliers?.[0]?.id ?? null,
+    );
+  }, [id]);
+
+  // Quantity always starts at (and can't go below) the selected supplier's MOQ
+  useEffect(() => {
+    setQuantity(baseMoq);
+  }, [selectedSupplierId, baseMoq]);
+
+  const currentUnitPrice = getEffectivePrice(selectedSupplier);
   const totalCost = currentUnitPrice * quantity;
 
-  // Per-unit savings at the bulk tier — helps justify ordering more
-  const unitSavings = product.price - product.bulkPrice;
+  const unitSavings =
+    (selectedSupplier.price ?? 0) - (selectedSupplier.discountPrice ?? 0);
   const savingsPercent =
-    product.price > 0 ? Math.round((unitSavings / product.price) * 100) : 0;
+    selectedSupplier.price > 0
+      ? Math.round((unitSavings / selectedSupplier.price) * 100)
+      : 0;
+
+  const wishlisted = isWishlisted(product.id);
+  const location =
+    selectedSupplier.city && selectedSupplier.country
+      ? `${selectedSupplier.city}, ${selectedSupplier.country}`
+      : "India";
+  const supplySignal = getSupplyLabel(selectedSupplier.stock);
+  const responseTimeSpec = selectedSupplier.responseTime || "Standard options";
 
   useEffect(() => {
+    window.scrollTo(0, 0);
     let ctx = gsap.context(() => {
       gsap.fromTo(
         ".detail-fade-in",
         { y: 15, opacity: 0 },
-        {
-          y: 0,
-          opacity: 1,
-          duration: 0.5,
-          stagger: 0.08,
-          ease: "power2.out",
-        },
+        { y: 0, opacity: 1, duration: 0.5, stagger: 0.08, ease: "power2.out" },
       );
     }, pageRef);
     return () => ctx.revert();
   }, [id]);
 
   const handleQuantityChange = (val) => {
-    if (isNaN(val) || val < 1) {
-      setQuantity(1);
+    if (isNaN(val) || val < baseMoq) {
+      setQuantity(baseMoq);
     } else {
       setQuantity(val);
     }
   };
 
   const handleAddToCart = () => {
-    addToCart(product, quantity);
-    flyToCart(addToCartBtnRef.current);
+    addToCart(product, quantity, selectedSupplier);
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 1600);
   };
@@ -111,164 +137,221 @@ const ProductDetails = () => {
               alt={product.name}
               className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105"
             />
-
-            {product.supplySignal && (
-              <div className="absolute top-3 right-3 bg-white/95 text-slate-700 text-xs font-semibold px-2.5 py-1 rounded-md border border-slate-200 shadow-sm">
-                {product.supplySignal}
-              </div>
-            )}
+            <div className="absolute top-3 right-3 bg-white/95 text-slate-700 text-xs font-semibold px-3 py-1.5 rounded-md border border-slate-200 shadow-sm">
+              {supplySignal}
+            </div>
           </div>
 
-          {/* Core Operational Quick Specs Grid */}
+          {/* Quick Specs Grid */}
           <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="bg-white border border-slate-200 p-2.5 rounded-lg flex flex-col items-center justify-center shadow-xs">
-              <Scale className="w-4 h-4 text-slate-400 mb-1" />
-              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+            <div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">
+              <Scale className="w-5 h-5 text-slate-400 mb-1" />
+              <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">
                 Min Order
               </span>
-              <span className="text-xs font-bold text-slate-800 mt-0.5 truncate max-w-full">
-                {product.moq}
+              <span className="text-sm font-bold text-slate-800 mt-1 truncate max-w-full">
+                {baseMoq}
               </span>
             </div>
-            <div className="bg-white border border-slate-200 p-2.5 rounded-lg flex flex-col items-center justify-center shadow-xs">
-              <Layers className="w-4 h-4 text-slate-400 mb-1" />
-              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
-                Spec Variant
+            <div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">
+              <Layers className="w-5 h-5 text-slate-400 mb-1" />
+              <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">
+                Response Time
               </span>
-              <span className="text-xs font-bold text-slate-800 mt-0.5 truncate max-w-full">
-                {product.specs}
+              <span className="text-sm font-bold text-slate-800 mt-1 truncate max-w-full">
+                {responseTimeSpec}
               </span>
             </div>
-            <div className="bg-white border border-slate-200 p-2.5 rounded-lg flex flex-col items-center justify-center shadow-xs">
-              <Truck className="w-4 h-4 text-slate-400 mb-1" />
-              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
-                Logistics
+            <div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">
+              <Truck className="w-5 h-5 text-slate-400 mb-1" />
+              <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">
+                Shipping
               </span>
-              <span className="text-xs font-bold text-slate-800 mt-0.5 truncate max-w-full">
-                FOB Options
+              <span className="text-sm font-bold text-slate-800 mt-1 truncate max-w-full">
+                {selectedSupplier.shippingDays
+                  ? `${selectedSupplier.shippingDays}d`
+                  : "FOB Options"}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Right Side: Information Ledger & Transaction Console */}
+        {/* Right Side: Information & Pricing */}
         <div className="detail-fade-in flex flex-col gap-5">
-          {/* Vendor Details Header */}
-          <div className="flex flex-col gap-1.5 pb-3 border-b border-slate-200">
+          {/* Vendor Details */}
+          <div className="flex flex-col gap-2 pb-3 border-b border-slate-200">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-bold text-slate-800">
-                {product.vendorName}
+              <span className="text-base font-bold text-slate-800">
+                {selectedSupplier.name}
               </span>
-              {product.verified && (
-                <div className="flex items-center gap-1 bg-white border border-emerald-600 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
-                  <ShieldCheck className="w-3 h-3" strokeWidth={2.5} />
+              {selectedSupplier.verified && (
+                <div className="flex items-center gap-1 bg-white border border-emerald-600 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full shadow-xs">
+                  <ShieldCheck className="w-3.5 h-3.5" strokeWidth={2.5} />
                   <span>Verified Supplier</span>
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-1 text-xs text-slate-500 font-medium">
-              <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <span>{product.location}</span>
+            <div className="flex items-center gap-1 text-sm text-slate-500 font-medium">
+              <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
+              <span>{location}</span>
               <span className="text-slate-300 mx-1">•</span>
-              <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <span className="font-mono text-[11px] text-slate-400">
+              <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
+              <span className="font-mono text-xs text-slate-400">
                 {product.category} Industry
               </span>
             </div>
           </div>
 
-          {/* Product Title Section */}
+          {/* Vendor Switcher — the key fix: pick any of the available suppliers */}
+          {suppliers.length > 1 && (
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                {suppliers.length} suppliers available
+              </span>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {suppliers.map((s) => {
+                  const active = s.id === selectedSupplierId;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setSelectedSupplierId(s.id)}
+                      className={`shrink-0 flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-all cursor-pointer ${
+                        active
+                          ? "border-clay bg-clay/5 shadow-sm"
+                          : "border-slate-200 bg-white hover:border-slate-300"
+                      }`}
+                    >
+                      <span className="flex items-center gap-1 text-xs font-bold text-slate-800">
+                        {s.name}
+                        {s.verified && (
+                          <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                        )}
+                      </span>
+                      <span className="font-mono text-xs font-bold text-clay">
+                        ₹{getEffectivePrice(s)}
+                        <span className="text-slate-400 font-normal">
+                          /unit
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Product Title */}
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight">
               {product.name}
             </h1>
           </div>
 
-          {/* Commercial Ledger Tier Matrix Box */}
-          <div className="bg-white border border-slate-200 border-l-4 border-l-clay rounded-lg p-4 flex flex-col gap-3">
-            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono">
-                B2B Wholesaler Matrix
+          {/* Pricing Box */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex flex-col">
+            <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">
+                Pricing Tiers
               </span>
-              <div className="flex items-center gap-1 bg-cream border border-clay/30 text-clay font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-sm">
-                <TrendingDown className="w-3 h-3" />
-                <span>Dynamic Rate</span>
-              </div>
+              {savingsPercent > 0 && (
+                <div className="flex items-center gap-1 bg-emerald-100/80 text-emerald-700 text-[10px] font-extrabold px-2 py-1 rounded-sm uppercase tracking-widest border border-emerald-200">
+                  <Tag className="w-3 h-3" />
+                  <span>Save {savingsPercent}% on Bulk</span>
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <span className="block text-[11px] text-slate-500 font-medium mb-0.5">
-                  Base Rate (MOQ Tier)
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              <div className="border border-slate-200 rounded-lg p-3.5 flex flex-col justify-center bg-white shadow-xs relative">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                  Standard Rate
                 </span>
                 <div className="flex items-baseline gap-0.5 font-mono">
                   <IndianRupee
-                    className="w-3.5 h-3.5 text-slate-800 shrink-0"
+                    className="w-4 h-4 text-slate-800 shrink-0"
                     strokeWidth={2.5}
                   />
-                  <span className="text-lg font-bold text-slate-900">
-                    {product.price}
+                  <span className="text-2xl font-bold text-slate-800">
+                    {selectedSupplier.price ?? 0}
                   </span>
-                  <span className="text-xs text-slate-400">/unit</span>
+                  <span className="text-xs text-slate-500 ml-1">/unit</span>
                 </div>
+                <span className="text-xs text-slate-400 mt-1 font-medium">
+                  Min. order: {baseMoq}
+                </span>
               </div>
-              <div>
-                <span className="block text-[11px] text-slate-500 font-medium mb-0.5">
-                  Bulk Rate (At {product.bulkQuantity}+ units)
+
+              <div className="border-2 border-clay rounded-lg p-3.5 flex flex-col justify-center bg-clay/5 relative shadow-xs">
+                <div className="absolute -top-2.5 right-3 bg-clay text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1">
+                  <TrendingDown className="w-3 h-3" strokeWidth={3} />
+                  Best Value
+                </div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-clay mb-2">
+                  Bulk Rate
                 </span>
                 <div className="flex items-baseline gap-0.5 font-mono">
                   <IndianRupee
-                    className="w-3.5 h-3.5 text-clay shrink-0"
-                    strokeWidth={2.5}
+                    className="w-4 h-4 text-clay shrink-0"
+                    strokeWidth={3}
                   />
-                  <span className="text-lg font-bold text-clay">
-                    {product.bulkPrice}
+                  <span className="text-2xl font-black text-clay">
+                    {selectedSupplier.discountPrice ??
+                      selectedSupplier.price ??
+                      0}
                   </span>
-                  <span className="text-xs text-slate-400">/unit</span>
+                  <span className="text-xs text-clay/70 ml-1 font-bold">
+                    /unit
+                  </span>
                 </div>
-                {savingsPercent > 0 && (
-                  <span className="block font-mono text-[10px] text-clay/80 mt-0.5">
-                    Save {savingsPercent}% per unit at bulk
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-xs text-slate-500 font-medium line-through decoration-slate-300">
+                    ₹{selectedSupplier.price ?? 0}
                   </span>
-                )}
+                  <span className="text-xs text-clay font-semibold">
+                    ({baseMoq}+ units)
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Interactive Live Price Tier Calculator Engine */}
+          {/* Quantity Calculator */}
           <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-col gap-4 shadow-xs">
-            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-600 font-mono">
+            <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-600 font-mono">
               <Calculator className="w-4 h-4 text-clay" />
-              <span>Real-Time Volume Calculator</span>
+              <span>Calculate Total</span>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <div className="flex flex-col gap-1 flex-1">
-                <label className="text-xs font-medium text-slate-500">
-                  Specify Order Quantity
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+              <div className="flex flex-col gap-1.5 flex-1">
+                <label className="text-sm font-medium text-slate-600">
+                  Order Quantity
                 </label>
-
-                {/* Custom stepper replaces the native number input's spinner
-                    arrows, which were overlapping the "units" suffix. */}
                 <div className="flex items-stretch border border-slate-300 rounded-sm overflow-hidden focus-within:ring-1 focus-within:ring-clay focus-within:border-clay">
                   <button
                     type="button"
+                    disabled={quantity <= baseMoq}
                     onClick={() =>
                       handleQuantityChange(quantity - quantityStep)
                     }
-                    className="px-3 flex items-center justify-center text-slate-500 bg-slate-50 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer border-r border-slate-200 shrink-0"
+                    className={`px-3 flex items-center justify-center bg-slate-50 border-r border-slate-200 shrink-0 transition-colors ${
+                      quantity <= baseMoq
+                        ? "text-slate-300 cursor-not-allowed"
+                        : "text-slate-500 hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
+                    }`}
                     aria-label="Decrease quantity"
                   >
-                    <Minus className="w-3.5 h-3.5" />
+                    <Minus className="w-4 h-4" />
                   </button>
                   <input
                     type="number"
-                    min="1"
+                    min={baseMoq}
                     value={quantity}
                     onChange={(e) =>
                       handleQuantityChange(parseInt(e.target.value))
                     }
-                    className="w-full min-w-0 text-center py-2 text-sm font-mono font-bold text-slate-900 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="w-full min-w-0 text-center py-2 text-base font-mono font-bold text-slate-900 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                   <button
                     type="button"
@@ -278,54 +361,65 @@ const ProductDetails = () => {
                     className="px-3 flex items-center justify-center text-slate-500 bg-slate-50 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer border-l border-slate-200 shrink-0"
                     aria-label="Increase quantity"
                   >
-                    <Plus className="w-3.5 h-3.5" />
+                    <Plus className="w-4 h-4" />
                   </button>
                 </div>
-                <span className="text-[10px] font-mono text-slate-400">
-                  units · steps of {quantityStep}
+                <span className="text-xs font-mono text-slate-400">
+                  Increments of {quantityStep} units · Min {baseMoq}
                 </span>
               </div>
 
-              {/* Dynamic Cost Output Panels */}
-              <div className="flex flex-row sm:flex-col justify-between sm:justify-center px-2 sm:px-4 py-1.5 sm:py-0 border-t sm:border-t-0 sm:border-l border-slate-200 gap-1 font-mono shrink-0">
+              <div className="flex flex-row sm:flex-col justify-between sm:justify-center px-2 sm:px-4 py-2 sm:py-0 border-t sm:border-t-0 sm:border-l border-slate-200 gap-2 font-mono shrink-0">
                 <div>
-                  <span className="block text-[10px] text-slate-400 uppercase font-bold tracking-wide">
-                    Applied Rate
+                  <span className="block text-xs text-slate-400 uppercase font-bold tracking-wide">
+                    Price per unit
                   </span>
-                  <span className="text-xs font-bold text-slate-700">
-                    ₹{currentUnitPrice}/unit
+                  <span className="text-sm font-bold text-slate-700">
+                    ₹{currentUnitPrice}
                   </span>
                 </div>
-                <div className="text-right sm:text-left mt-0 sm:mt-1.5">
-                  <span className="block text-[10px] text-slate-400 uppercase font-bold tracking-wide">
-                    Estimated Invoice
+                <div className="text-right sm:text-left">
+                  <span className="block text-xs text-slate-400 uppercase font-bold tracking-wide">
+                    Total Cost
                   </span>
-                  <span className="text-sm font-black text-clay">
+                  <span className="text-lg font-black text-clay">
                     ₹{totalCost.toLocaleString("en-IN")}
                   </span>
                 </div>
               </div>
             </div>
-
-            {quantity < baseMoq && (
-              <p className="text-[11px] text-rose-600 font-medium">
-                * Note: Your input order quantity falls below the vendor
-                specified MOQ of {product.moq}.
-              </p>
-            )}
           </div>
 
-          {/* Action Terminal Buttons */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-            <ContactVendorBtn
-              vendorId={product.vendorId}
-              vendorName={product.vendorName}
-              productName={product.name}
-            />
+          {/* Action Buttons */}
+          <div className="flex flex-col gap-3 mt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <ContactVendorBtn
+                vendorId={selectedSupplier.id}
+                vendorName={selectedSupplier.name}
+                productName={product.name}
+              />
+              <button
+                type="button"
+                onClick={() => toggleWishlist(product)}
+                className={`flex items-center justify-center gap-2 py-3 text-sm font-bold rounded-sm transition-all cursor-pointer shadow-sm active:scale-[0.99] border ${
+                  wishlisted
+                    ? "bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100"
+                    : "bg-white border-slate-200 text-slate-700 hover:border-rose-200 hover:text-rose-500"
+                }`}
+              >
+                <Heart
+                  className={`w-5 h-5 shrink-0 transition-all ${wishlisted ? "fill-current scale-110" : "fill-none"}`}
+                />
+                <span>
+                  {wishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
+                </span>
+              </button>
+            </div>
+
             <button
               ref={addToCartBtnRef}
               onClick={handleAddToCart}
-              className={`flex items-center justify-center gap-2 py-3 text-sm font-bold rounded-sm transition-all cursor-pointer shadow-sm active:scale-[0.99] ${
+              className={`w-full flex items-center justify-center gap-2 py-3.5 text-sm font-bold rounded-sm transition-all cursor-pointer shadow-sm active:scale-[0.99] ${
                 justAdded
                   ? "bg-emerald-600 text-white"
                   : "bg-clay text-white hover:bg-clay/90"
@@ -333,12 +427,12 @@ const ProductDetails = () => {
             >
               {justAdded ? (
                 <>
-                  <Check className="w-4 h-4 shrink-0" />
+                  <Check className="w-5 h-5 shrink-0" />
                   <span>Added to Cart</span>
                 </>
               ) : (
                 <>
-                  <ShoppingBag className="w-4 h-4 shrink-0" />
+                  <ShoppingBag className="w-5 h-5 shrink-0" />
                   <span>Add to Cart</span>
                 </>
               )}
@@ -346,6 +440,18 @@ const ProductDetails = () => {
           </div>
         </div>
       </div>
+
+      <SupplierComparison
+        product={product}
+        onAddToCart={(productObj, qty, supplier) => {
+          addToCart(productObj, qty, supplier);
+          setSelectedSupplierId(supplier.id);
+        }}
+        onContactSupplier={(supplier) => {
+          setSelectedSupplierId(supplier.id);
+          console.log("Contact supplier:", supplier.name, supplier.id);
+        }}
+      />
     </div>
   );
 };

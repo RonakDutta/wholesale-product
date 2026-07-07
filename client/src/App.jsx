@@ -1,25 +1,45 @@
-import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { Toaster } from "sonner";
 import { CartProvider } from "./context/CartContext";
+import { WishlistProvider } from "./context/WishlistContext";
+
 import MainLayout from "./layouts/MainLayout";
+import AuthLayout from "./layouts/AuthLayout";
+
 import MarketplaceHome from "./pages/MarketplaceHome";
 import ProductDetails from "./pages/ProductDetails";
-// import WholesalerStore from "./pages/WholesalerStore";
+import Wishlist from "./pages/Wishlist";
+import SignUp from "./pages/SignUp";
+import Login from "./pages/Login";
+import SearchResults from "./pages/SearchResults";
 
-const App = () => {
+const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <MainLayout />,
+    children: [
+      { index: true, element: <MarketplaceHome /> },
+      { path: "product/:id", element: <ProductDetails /> },
+      { path: "search", element: <SearchResults /> },
+      { path: "wishlist", element: <Wishlist /> },
+    ],
+  },
+  {
+    element: <AuthLayout />,
+    children: [
+      { path: "login", element: <Login /> },
+      { path: "signup", element: <SignUp /> },
+    ],
+  },
+]);
+
+export default function App() {
   return (
     <CartProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<MainLayout />}>
-            <Route index element={<MarketplaceHome />} />
-            <Route path="product/:id" element={<ProductDetails />} />
-            {/* <Route path="store/:id" element={<WholesalerStore />} /> */}
-          </Route>
-        </Routes>
-      </BrowserRouter>
+      <WishlistProvider>
+        <Toaster richColors position="top-right" />
+        <RouterProvider router={router} />
+      </WishlistProvider>
     </CartProvider>
   );
-};
-
-export default App;
+}

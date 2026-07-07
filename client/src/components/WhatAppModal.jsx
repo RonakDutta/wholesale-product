@@ -131,7 +131,7 @@ const WhatsAppModal = ({
           target="_blank"
           rel="noreferrer"
           onClick={onClose}
-          className="flex flex-[2] items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 shadow-sm"
+          className="flex flex-2 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 shadow-sm"
         >
           <MessageCircle className="h-4 w-4" />
           Send on WhatsApp

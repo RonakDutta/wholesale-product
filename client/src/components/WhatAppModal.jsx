@@ -71,7 +71,7 @@ const WhatsAppModal = ({
 
       <div className="px-5 sm:px-6 flex flex-col gap-6">
         <div>
-          <h3 className="text-xl font-extrabold text-slate-900 leading-tight">
+          <h3 className="text-xl font-bold text-slate-900 leading-tight">
             Message {vendorName || "the seller"}
           </h3>
           <p className="text-sm text-slate-500 mt-1">

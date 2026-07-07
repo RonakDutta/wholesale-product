@@ -398,6 +398,11 @@ const ProductDetails = () => {
                 vendorId={selectedSupplier.id}
                 vendorName={selectedSupplier.name}
                 productName={product.name}
+                vendorPhone={
+                  selectedSupplier.phone ??
+                  selectedSupplier.contactNo ??
+                  selectedSupplier.mobile
+                }
               />
               <button
                 type="button"

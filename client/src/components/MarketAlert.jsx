@@ -36,13 +36,13 @@ const MarketAlert = ({
         </div>
       </div>
 
-      <button
+      {/* <button
         onClick={onActionClick}
         className="group flex items-center justify-center gap-1.5 bg-clay text-white text-xs font-semibold px-5 py-2 rounded-sm hover:bg-clay/90 transition-colors cursor-pointer w-full sm:w-auto shrink-0 shadow-sm"
       >
         <span>View deals</span>
         <ArrowRight className="w-3.5 h-3.5 shrink-0 transition-transform group-hover:translate-x-0.5" />
-      </button>
+      </button> */}
     </div>
   );
 };

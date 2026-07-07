@@ -307,7 +307,7 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
                   supplier={supplier}
                   isSelected={selectedSupplierIds.includes(supplier.id)}
                   onToggleSelect={toggleSelect}
-                  onContact={handleContact}
+                  productName={product.name}
                   onBuyNow={handleBuyNow}
                   badges={{
                     lowestPrice: metrics.lowestPriceId === supplier.id,
@@ -342,7 +342,7 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
               supplier={supplier}
               isSelected={selectedSupplierIds.includes(supplier.id)}
               onToggleSelect={toggleSelect}
-              onContact={handleContact}
+              productName={product.name}
               onBuyNow={handleBuyNow}
               badges={{
                 lowestPrice: metrics.lowestPriceId === supplier.id,

@@ -6,6 +6,7 @@ import { WishlistProvider } from "./context/WishlistContext";
 import MainLayout from "./layouts/MainLayout";
 import AuthLayout from "./layouts/AuthLayout";
 import InfoLayout from "./layouts/InfoLayout";
+import DashboardLayout from "./layouts/DashboardLayout";
 
 import MarketplaceHome from "./pages/MarketplaceHome";
 import ProductDetails from "./pages/ProductDetails";
@@ -15,6 +16,12 @@ import Login from "./pages/Login";
 import SearchResults from "./pages/SearchResults";
 import FooterInfoPage from "./pages/FooterInfoPage";
 import { AuthProvider } from "./context/AuthContext";
+import DashboardOverview from "./pages/dashboard/DashboardOverview";
+import MyProducts from "./pages/dashboard/MyProducts";
+import AddProduct from "./pages/dashboard/AddProduct";
+import Orders from "./pages/dashboard/Orders";
+import Messages from "./pages/dashboard/Messages";
+import Settings from "./pages/dashboard/Settings";
 
 const router = createBrowserRouter([
   {
@@ -25,6 +32,18 @@ const router = createBrowserRouter([
       { path: "product/:id", element: <ProductDetails /> },
       { path: "search", element: <SearchResults /> },
       { path: "wishlist", element: <Wishlist /> },
+    ],
+  },
+  {
+    path: "/dashboard",
+    element: <DashboardLayout />,
+    children: [
+      { index: true, element: <DashboardOverview /> },
+      { path: "products", element: <MyProducts /> },
+      { path: "products/new", element: <AddProduct /> },
+      { path: "orders", element: <Orders /> },
+      { path: "messages", element: <Messages /> },
+      { path: "settings", element: <Settings /> },
     ],
   },
   {

@@ -12,11 +12,6 @@ export const AuthProvider = ({ children }) => {
     const initAuth = async () => {
       if (token) {
         try {
-          // TODO: Replace with your actual backend "/me" or profile endpoint
-          // const response = await api.get("/api/users/me");
-          // setUser(response.data.user);
-
-          // Temporary placeholder until your backend endpoint is ready:
           setUser({ name: "Logged In User" });
         } catch (error) {
           console.error("Failed to fetch user profile", error);

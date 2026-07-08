@@ -2,7 +2,7 @@ import { useState } from "react";
 import { MessageSquare } from "lucide-react";
 import ContactChoiceModal from "./ContactChoiceModal";
 import ChatModal from "./ChatModal";
-import WhatsAppModal from "./WhatAppModal";
+import WhatsAppModal from "./WhatsAppModal";
 
 const ContactVendorBtn = ({
   vendorId,

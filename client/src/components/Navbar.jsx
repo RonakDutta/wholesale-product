@@ -3,11 +3,13 @@ import { Search, MapPin, ShoppingCart, User, Heart } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
+import { useAuth } from "../context/AuthContext";
 import CartDrawer from "./CartDrawer";
 
 const Navbar = () => {
   const { uniqueItemCount, setIsCartOpen } = useCart();
   const { itemCount: wishlistCount } = useWishlist();
+  const { isAuthenticated, user, logout } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState("");
   const navigate = useNavigate();
@@ -77,12 +79,23 @@ const Navbar = () => {
             {/* Mobile Icons */}
             <div className="flex items-center gap-1 md:hidden -mr-2">
               <ActionIcons />
-              <Link
-                to="/login"
-                className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-colors"
-              >
-                <User className="w-5 h-5" />
-              </Link>
+              {isAuthenticated ? (
+                <button
+                  onClick={logout}
+                  className="p-2 text-clay hover:bg-slate-50 rounded-md transition-colors cursor-pointer"
+                  aria-label="Log out"
+                >
+                  <User className="w-5 h-5" />
+                </button>
+              ) : (
+                <Link
+                  to="/login"
+                  className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-colors cursor-pointer"
+                  aria-label="Log in"
+                >
+                  <User className="w-5 h-5" />
+                </Link>
+              )}
             </div>
           </div>
 
@@ -101,7 +114,7 @@ const Navbar = () => {
 
             <button
               type="submit"
-              className="absolute right-3.5 top-3 text-slate-400 hover:text-clay transition-colors"
+              className="absolute right-3.5 top-3 text-slate-400 hover:text-clay transition-colors cursor-pointer"
               aria-label="Search"
             >
               <Search className="w-4 h-4" />
@@ -117,19 +130,34 @@ const Navbar = () => {
             <div className="hidden lg:block w-px h-6 bg-slate-200 mx-1"></div>
 
             <div className="flex items-center gap-4 ml-2">
-              <Link
-                to="/login"
-                className="text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap"
-              >
-                Log in
-              </Link>
-
-              <Link
-                to="/signup"
-                className="text-sm font-bold bg-clay text-white px-4 py-2 rounded-md hover:bg-clay/90 transition-all duration-200 whitespace-nowrap shadow-sm"
-              >
-                Sign up
-              </Link>
+              {isAuthenticated ? (
+                <>
+                  <span className="text-sm font-semibold text-slate-700">
+                    Hi, {user?.firstName || user?.name || "Ronak"}
+                  </span>
+                  <button
+                    onClick={logout}
+                    className="text-sm font-bold text-slate-600 hover:text-rose-600 transition-colors whitespace-nowrap cursor-pointer"
+                  >
+                    Log out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to="/login"
+                    className="text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap cursor-pointer"
+                  >
+                    Log in
+                  </Link>
+                  <Link
+                    to="/signup"
+                    className="text-sm font-bold bg-clay text-white px-4 py-2 rounded-md hover:bg-clay/90 transition-all duration-200 whitespace-nowrap shadow-sm cursor-pointer"
+                  >
+                    Sign up
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>

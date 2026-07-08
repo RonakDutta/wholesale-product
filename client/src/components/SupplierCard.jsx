@@ -75,7 +75,7 @@ const SupplierCard = ({
           : "border-slate-200 bg-white"
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="font-dmsans flex items-start justify-between gap-3">
         <label className="inline-flex items-center gap-3 cursor-pointer">
           <input
             type="checkbox"

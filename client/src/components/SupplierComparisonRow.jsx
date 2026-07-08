@@ -14,7 +14,7 @@ const SupplierComparisonRow = ({
 }) => {
   return (
     <tr
-      className={`group transition-colors duration-150 ${
+      className={`group  transition-colors duration-150 ${
         isSelected ? "bg-clay/3" : "hover:bg-slate-50/80"
       }`}
     >

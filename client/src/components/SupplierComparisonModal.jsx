@@ -44,7 +44,7 @@ const SupplierComparisonModal = ({
   return (
     <ModalShell onClose={onClose} maxWidth="max-w-5xl">
       {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
+      <div className="font-dmsans sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-clay">
             Side-by-side
@@ -200,7 +200,7 @@ const SupplierComparisonModal = ({
       </div>
 
       {/* DESKTOP: Refined modern table */}
-      <div className="hidden md:block p-6 bg-slate-50/50">
+      <div className="hidden font-dmsans md:block p-6 bg-slate-50/50">
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-900/5">
           <table className="w-full text-left text-sm table-fixed">
             <thead className="bg-slate-50/80 border-b border-slate-200">

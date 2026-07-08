@@ -324,12 +324,10 @@ const FooterInfoPage = ({ page }) => {
 				</Link>
 
 				<div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-					{/* Main Content */}
 					<div className="lg:col-span-8 flex flex-col gap-8">
 						<div
 							className={`relative rounded-2xl ${config.gradientBg} p-8 overflow-hidden`}
 						>
-							{/* Decorative Elements */}
 							<div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2"></div>
 							<div className="absolute bottom-0 left-0 w-32 h-32 bg-white/10 rounded-full translate-y-1/2 -translate-x-1/2"></div>
 							<div className="absolute top-1/2 right-1/3 w-16 h-16 bg-white/10 rounded-full"></div>
@@ -345,32 +343,31 @@ const FooterInfoPage = ({ page }) => {
 										/>
 									</div>
 									<span
-										className={`inline-flex items-center gap-2 bg-white/80 backdrop-blur-sm text-[11px] font-bold uppercase tracking-wider ${config.iconColor} px-4 py-1.5 rounded-full shadow-sm`}
+										className={`inline-flex items-center gap-2 bg-white/80 backdrop-blur-sm text-[11px] font-bold uppercase tracking-wider font-dmsans ${config.iconColor} px-4 py-1.5 rounded-full shadow-sm`}
 									>
 										<Sparkles className="w-3.5 h-3.5" />
 										{content.tag}
 									</span>
 								</div>
 
-								<h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 leading-tight tracking-tight mb-4">
+								<h1 className="font-raleway text-3xl sm:text-4xl font-extrabold text-slate-900 leading-tight tracking-tight mb-4">
 									{content.title}
 								</h1>
 
-								<p className="text-base text-slate-700 max-w-2xl leading-relaxed">
+								<p className="font-dmsans text-base text-slate-700 max-w-2xl leading-relaxed">
 									{content.description}
 								</p>
 							</div>
 						</div>
 
-						{/* Highlights with Card Design */}
 						<div>
-							<h2 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-5 flex items-center gap-3">
+							<h2 className="font-raleway text-sm font-bold uppercase tracking-wider text-slate-500 mb-5 flex items-center gap-3">
 								<div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
 									<Star className="w-4 h-4 text-slate-500" />
 								</div>
 								Key Features
 							</h2>
-							<div className="grid gap-4 sm:grid-cols-2">
+							<div className="font-dmsans grid gap-4 sm:grid-cols-2">
 								{content.highlights.map((item, idx) => (
 									<div
 										key={idx}
@@ -397,7 +394,6 @@ const FooterInfoPage = ({ page }) => {
 							</div>
 						</div>
 
-						{/* Extra Info with Enhanced Design */}
 						<div className="relative">
 							<div
 								className={`absolute inset-0 ${config.lightGradient} rounded-2xl blur-xl opacity-30`}
@@ -411,11 +407,11 @@ const FooterInfoPage = ({ page }) => {
 									>
 										<Lightbulb className={`w-5 h-5 ${config.iconColor}`} />
 									</div>
-									<h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">
+									<h2 className="font-raleway text-sm font-bold uppercase tracking-wider text-slate-700">
 										Good to Know
 									</h2>
 								</div>
-								<ul className="grid gap-4 sm:grid-cols-2">
+								<ul className="font-dmsans grid gap-4 sm:grid-cols-2">
 									{content.extra.map((item, idx) => (
 										<li
 											key={idx}
@@ -431,14 +427,13 @@ const FooterInfoPage = ({ page }) => {
 							</div>
 						</div>
 
-						{/* CTAs — no longer duplicates the top nav; offers a forward action instead */}
 						<div className="flex flex-wrap gap-4 pt-2">
 							<Link
 								to="/browse-products"
 								className="group inline-flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-bold text-white transition-all hover:bg-slate-800 hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.98] relative overflow-hidden"
 							>
 								<div className="absolute inset-0 bg-gradient-to-r from-slate-800 to-slate-900 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-								<div className="relative z-10 flex items-center gap-2">
+								<div className="font-dmsans relative z-10 flex items-center gap-2">
 									<Compass className="w-4 h-4" />
 									Explore Products
 									<ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
@@ -451,7 +446,7 @@ const FooterInfoPage = ({ page }) => {
 								<div
 									className={`absolute inset-0 ${config.bgAccent} opacity-0 group-hover:opacity-100 transition-opacity`}
 								></div>
-								<div className="relative z-10 flex items-center gap-2">
+								<div className="font-raleway relative z-10 flex items-center gap-2">
 									<MessageSquare className="w-4 h-4" />
 									Contact Support
 								</div>
@@ -459,9 +454,7 @@ const FooterInfoPage = ({ page }) => {
 						</div>
 					</div>
 
-					{/* Sidebar with Enhanced Design */}
 					<aside className="lg:col-span-4 lg:sticky lg:top-8 self-start flex flex-col gap-6">
-						{/* Page Summary Card with Enhanced Design */}
 						<div
 							className={`relative overflow-hidden rounded-2xl border ${config.borderAccent} bg-white shadow-sm`}
 						>
@@ -471,15 +464,15 @@ const FooterInfoPage = ({ page }) => {
 							<div className="p-6">
 								<div className="flex items-center gap-4">
 									<div
-										className={`w-14 h-14 rounded-xl ${config.iconBg} flex items-center justify-center`}
+										className={` w-14 h-14 rounded-xl ${config.iconBg} flex items-center justify-center`}
 									>
 										<Icon className={`w-7 h-7 ${config.iconColor}`} />
 									</div>
 									<div>
-										<p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+										<p className="font-raleway text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
 											{content.tag}
 										</p>
-										<p className="text-sm text-slate-600 leading-relaxed">
+										<p className="font-dmsans text-sm text-slate-600">
 											Quick overview of this section.
 										</p>
 									</div>
@@ -487,15 +480,14 @@ const FooterInfoPage = ({ page }) => {
 							</div>
 						</div>
 
-						{/* Quick Links with Enhanced Design */}
 						<nav className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
 							<div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
-								<h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-									<Zap className="w-3.5 h-3.5" />
+								<h3 className="font-raleway text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+									<Zap className="w-3.5 h-3.5" color="blue" />
 									Explore
 								</h3>
 							</div>
-							<ul className="divide-y divide-slate-50">
+							<ul className="divide-y font-dmsans  divide-slate-50">
 								{Object.entries(PAGE_CONFIG)
 									.filter(([key]) => key !== page)
 									.slice(0, 5)
@@ -522,15 +514,14 @@ const FooterInfoPage = ({ page }) => {
 							</ul>
 						</nav>
 
-						{/* Contact Card with Enhanced Design */}
 						<div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
 							<div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
-								<h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+								<h3 className="font-raleway text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
 									<MessageSquare className="w-3.5 h-3.5" />
 									Need assistance?
 								</h3>
 							</div>
-							<div className="p-5 space-y-4">
+							<div className="p-5 font-dmsans  space-y-4">
 								<a
 									href="mailto:support@marketplace.in"
 									className="group flex items-center gap-3 text-slate-600 hover:text-slate-900 transition-colors"

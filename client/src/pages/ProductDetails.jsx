@@ -429,7 +429,7 @@ const ProductDetails = () => {
 											₹{selectedSupplier.price ?? 0}
 										</span>
 										<span className="text-[11px] text-clay font-bold tabular-nums">
-											-₹{unitSavings} each
+											-₹{Math.abs(unitSavings).toFixed(2)} each
 										</span>
 									</div>
 								)}
@@ -437,7 +437,6 @@ const ProductDetails = () => {
 						</div>
 					</div>
 
-					{/* ── Quantity Calculator ── */}
 					<div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
 						<div className="flex items-center gap-2 mb-4">
 							<div className="w-7 h-7 rounded-lg bg-clay/10 flex items-center justify-center">
@@ -548,7 +547,7 @@ const ProductDetails = () => {
 									}`}
 								/>
 								<span className="hidden sm:inline">
-									{wishlisted ? "Saved" : "Save"}
+									{wishlisted ? "Saved" : `Wishlist this`}
 								</span>
 							</button>
 						</div>

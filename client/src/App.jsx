@@ -14,6 +14,7 @@ import SignUp from "./pages/SignUp";
 import Login from "./pages/Login";
 import SearchResults from "./pages/SearchResults";
 import FooterInfoPage from "./pages/FooterInfoPage";
+import { AuthProvider } from "./context/AuthContext";
 
 const router = createBrowserRouter([
   {
@@ -69,11 +70,13 @@ const router = createBrowserRouter([
 
 export default function App() {
   return (
-    <CartProvider>
-      <WishlistProvider>
-        <Toaster richColors position="top-right" />
-        <RouterProvider router={router} />
-      </WishlistProvider>
-    </CartProvider>
+    <AuthProvider>
+      <CartProvider>
+        <WishlistProvider>
+          <Toaster richColors position="top-right" />
+          <RouterProvider router={router} />
+        </WishlistProvider>
+      </CartProvider>
+    </AuthProvider>
   );
 }

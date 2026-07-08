@@ -13,7 +13,7 @@ import {
   Phone,
   ChevronDown,
 } from "lucide-react";
-import api from "../utils/axios";
+import { useAuth } from "../context/AuthContext";
 
 const GoogleIcon = () => (
   <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -67,6 +67,8 @@ const strengthConfig = [
 
 const SignUp = () => {
   const navigate = useNavigate();
+  const { register } = useAuth();
+
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [bizType, setBizType] = useState("");
@@ -177,7 +179,7 @@ const SignUp = () => {
     setLoading(true);
 
     try {
-      await api.post("/api/auth/register", {
+      await register({
         firstName,
         lastName,
         email,

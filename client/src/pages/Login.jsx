@@ -109,9 +109,7 @@ const Login = () => {
 
     try {
       const response = await api.post("/api/auth/login", { email, password });
-
-      // Assume backend returns { token: "...", user: {...} }
-      login(response.data.token, response.data.user);
+      await login(response.data.token);
 
       toast.success("Signed in successfully!");
       navigate("/");

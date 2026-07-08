@@ -8,26 +8,30 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem("token") || null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const initAuth = async () => {
-      if (token) {
-        try {
-          setUser({ name: "Logged In User" });
-        } catch (error) {
-          console.error("Failed to fetch user profile", error);
-          logout();
-        }
-      }
+  const fetchUser = async (currentToken) => {
+    try {
+      const response = await api.get("/api/auth/me");
+      setUser(response.data.user);
+    } catch (error) {
+      console.error("Failed to fetch user", error);
+      logout();
+    } finally {
       setIsLoading(false);
-    };
+    }
+  };
 
-    initAuth();
+  useEffect(() => {
+    if (token) {
+      fetchUser(token);
+    } else {
+      setIsLoading(false);
+    }
   }, [token]);
 
-  const login = (newToken, userData) => {
+  const login = async (newToken) => {
     localStorage.setItem("token", newToken);
     setToken(newToken);
-    setUser(userData);
+    await fetchUser(newToken);
   };
 
   const register = async (userData) => {

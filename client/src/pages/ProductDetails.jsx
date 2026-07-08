@@ -38,8 +38,48 @@ const ProductDetails = () => {
   const { addToCart } = useCart();
   const { toggleWishlist, isWishlisted } = useWishlist();
 
-  const product = mockProducts.find((p) => p.id === id) || mockProducts[0];
-  const suppliers = product.suppliers ?? [];
+  const sellerProducts = JSON.parse(
+    localStorage.getItem("seller_products") || "{}",
+  );
+  const sellerProduct = Object.values(sellerProducts)
+    .flatMap((items) => (Array.isArray(items) ? items : []))
+    .find((p) => String(p.id) === String(id));
+
+  const product =
+    sellerProduct || mockProducts.find((p) => p.id === id) || mockProducts[0];
+
+  const suppliers =
+    sellerProduct && !Array.isArray(sellerProduct.suppliers)
+      ? [
+          {
+            id:
+              sellerProduct.supplierEmail ||
+              sellerProduct.supplierName ||
+              sellerProduct.id,
+            name:
+              sellerProduct.supplierName ||
+              sellerProduct.supplierCompany ||
+              "Supplier",
+            company:
+              sellerProduct.supplierCompany ||
+              sellerProduct.supplierName ||
+              "Supplier",
+            price: Number(sellerProduct.price) || 0,
+            discountPrice: sellerProduct.discountPrice
+              ? Number(sellerProduct.discountPrice)
+              : undefined,
+            moq: Number(sellerProduct.moq) || 1,
+            verified: true,
+            city: sellerProduct.supplierCity || "",
+            country: sellerProduct.supplierCountry || "India",
+            phone: sellerProduct.supplierPhone || "",
+            shippingDays: sellerProduct.shippingDays,
+            stock: sellerProduct.stock,
+            responseTime: sellerProduct.responseTime,
+            contactNo: sellerProduct.supplierPhone || sellerProduct.contactNo,
+          },
+        ]
+      : (product.suppliers ?? []);
 
   const [selectedSupplierId, setSelectedSupplierId] = useState(
     () => getCheapestSupplier(product)?.id ?? suppliers[0]?.id ?? null,

@@ -31,10 +31,28 @@ export const WishlistProvider = ({ children }) => {
     }
   }, [items]);
 
+  const normalizeProduct = (product) => {
+    const productId =
+      product?.id ?? product?.productId ?? product?.slug ?? null;
+    if (!productId) return null;
+
+    return {
+      ...product,
+      id: String(productId),
+      name: product?.name ?? "Untitled Product",
+      image: product?.image ?? "",
+      description: product?.description ?? "",
+      suppliers: Array.isArray(product?.suppliers) ? product.suppliers : [],
+    };
+  };
+
   const addToWishlist = (product) => {
+    const normalizedProduct = normalizeProduct(product);
+    if (!normalizedProduct) return;
+
     setItems((prev) => {
-      if (prev.some((item) => item.id === product.id)) return prev;
-      return [...prev, { ...product }];
+      if (prev.some((item) => item.id === normalizedProduct.id)) return prev;
+      return [...prev, normalizedProduct];
     });
   };
 
@@ -43,17 +61,20 @@ export const WishlistProvider = ({ children }) => {
   };
 
   const toggleWishlist = (product) => {
+    const normalizedProduct = normalizeProduct(product);
+    if (!normalizedProduct) return;
+
     setItems((prev) => {
-      const exists = prev.some((item) => item.id === product.id);
+      const exists = prev.some((item) => item.id === normalizedProduct.id);
       if (exists) {
-        return prev.filter((item) => item.id !== product.id);
+        return prev.filter((item) => item.id !== normalizedProduct.id);
       }
 
-      return [...prev, { ...product }];
+      return [...prev, normalizedProduct];
     });
   };
 
-  const isWishlisted = (id) => items.some((item) => item.id === id);
+  const isWishlisted = (id) => items.some((item) => item.id === String(id));
 
   const clearWishlist = () => setItems([]);
 

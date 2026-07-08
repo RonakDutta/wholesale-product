@@ -6,16 +6,20 @@ import SupplierRow from "./SupplierRow";
 
 const ProductCard = ({ product }) => {
   const { id, name = "Untitled Product", image, description = "" } = product;
-  const suppliers = product.suppliers ?? [];
+  const suppliers = Array.isArray(product?.suppliers) ? product.suppliers : [];
   const { toggleWishlist, isWishlisted } = useWishlist();
   const wishlisted = isWishlisted(id);
 
-  const sortedSuppliers = getSortedSuppliers(product);
-  const bestSupplier = sortedSuppliers[0];
-
+  const sortedSuppliers = getSortedSuppliers({ ...product, suppliers });
+  const bestSupplier = sortedSuppliers[0] ?? null;
   const displayedSuppliers = sortedSuppliers.slice(0, 2);
-
-  if (!bestSupplier) return null;
+  const displayPrice =
+    bestSupplier?.discountPrice ??
+    bestSupplier?.price ??
+    product?.price ??
+    product?.discountPrice ??
+    0;
+  const supplierCount = suppliers.length;
 
   return (
     <div className="bg-white border border-slate-200 rounded-lg sm:rounded-xl overflow-hidden flex flex-col h-full transition-all duration-300 hover:shadow-xl hover:border-sage/50 group">
@@ -28,7 +32,7 @@ const ProductCard = ({ product }) => {
 
         <div className="absolute top-1.5 right-1.5 sm:top-2.5 sm:right-2.5 bg-white/90 backdrop-blur-sm text-slate-700 text-[7px] sm:text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full border border-slate-200 shadow-sm whitespace-nowrap flex items-center gap-1">
           <Users className="w-2.5 h-2.5" />
-          {suppliers.length} suppliers
+          {supplierCount > 0 ? `${supplierCount} suppliers` : "Direct seller"}
         </div>
 
         <button
@@ -53,8 +57,13 @@ const ProductCard = ({ product }) => {
         <h3 className="text-[11px] sm:text-xs md:text-sm font-bold text-slate-900 line-clamp-2 leading-snug min-h-[2.75em]">
           {name}
         </h3>
+        {(bestSupplier?.company || bestSupplier?.name) && (
+          <p className="text-[8px] sm:text-[10px] md:text-[11px] text-slate-500 uppercase tracking-wide">
+            Supplier: {bestSupplier?.company || bestSupplier?.name}
+          </p>
+        )}
         {description && (
-          <p className="text-[7px] sm:text-[9px] md:text-[10px] text-slate-500 line-clamp-1">
+          <p className="text-[7px] sm:text-[9px] md:text-[10px] text-slate-500 line-clamp-2">
             {description}
           </p>
         )}
@@ -66,28 +75,34 @@ const ProductCard = ({ product }) => {
               strokeWidth={2.5}
             />
             <span className="text-sm sm:text-base md:text-xl font-bold text-clay">
-              {bestSupplier.discountPrice ?? bestSupplier.price}
+              {displayPrice}
             </span>
             <span className="text-[8px] sm:text-[10px] md:text-xs text-slate-400">
-              / unit · lowest price
+              {supplierCount > 0
+                ? "/ unit · lowest price"
+                : "/ unit · contact seller"}
             </span>
           </div>
 
-          <div className="mt-1 sm:mt-1.5 border-t border-slate-100 pt-1.5 sm:pt-2 flex flex-col gap-1 sm:gap-1.5">
-            {displayedSuppliers.map((supplier, idx) => (
-              <SupplierRow
-                key={supplier.id}
-                supplier={supplier}
-                isBest={idx === 0}
-              />
-            ))}
-          </div>
+          {displayedSuppliers.length > 0 && (
+            <div className="mt-1 sm:mt-1.5 border-t border-slate-100 pt-1.5 sm:pt-2 flex flex-col gap-1 sm:gap-1.5">
+              {displayedSuppliers.map((supplier, idx) => (
+                <SupplierRow
+                  key={supplier.id}
+                  supplier={supplier}
+                  isBest={idx === 0}
+                />
+              ))}
+            </div>
+          )}
 
           <Link
             to={`/product/${id}`}
             className="mt-1 text-center py-1.5 sm:py-2 bg-espresso text-cream text-[8px] sm:text-[10px] md:text-xs font-semibold rounded-md sm:rounded-lg hover:bg-clay transition-all duration-300"
           >
-            View all {suppliers.length} suppliers & full details
+            {supplierCount > 0
+              ? `View all ${supplierCount} suppliers & full details`
+              : "View product details"}
           </Link>
         </div>
       </div>

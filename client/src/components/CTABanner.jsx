@@ -1,7 +1,9 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { ArrowRight, Store } from "lucide-react";
 
 const CTABanner = () => {
+  const navigate = useNavigate();
   return (
     <div className="w-full bg-white border border-slate-200 rounded-lg mt-8 overflow-hidden relative shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-200">
       {/* packaging-tape stripe — nods to the logistics/wholesale product, not a generic accent bar */}
@@ -45,7 +47,11 @@ const CTABanner = () => {
         </div>
         <div className="hidden sm:block self-stretch border-l border-dashed border-slate-200" />
 
-        <button className="group flex items-center justify-center gap-2 bg-clay text-white px-6 py-2.5 rounded-sm font-semibold text-sm hover:bg-clay/90 transition-colors cursor-pointer w-full sm:w-auto shrink-0 shadow-sm">
+        <button
+          type="button"
+          onClick={() => navigate("/signup?role=seller")}
+          className="group flex items-center justify-center gap-2 bg-clay text-white px-6 py-2.5 rounded-sm font-semibold text-sm hover:bg-clay/90 transition-colors cursor-pointer w-full sm:w-auto shrink-0 shadow-sm"
+        >
           <span>Become a seller</span>
           <ArrowRight className="w-4 h-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
         </button>

@@ -2,6 +2,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { Toaster } from "sonner";
 import { CartProvider } from "./context/CartContext";
 import { WishlistProvider } from "./context/WishlistContext";
+import { AuthProvider } from "./context/AuthContext";
 
 import MainLayout from "./layouts/MainLayout";
 import AuthLayout from "./layouts/AuthLayout";
@@ -14,6 +15,8 @@ import SignUp from "./pages/SignUp";
 import Login from "./pages/Login";
 import SearchResults from "./pages/SearchResults";
 import FooterInfoPage from "./pages/FooterInfoPage";
+import SupplierDashboard from "./pages/SupplierDashboard";
+import BuyerDashboard from "./pages/BuyerDashboard";
 
 const router = createBrowserRouter([
   {
@@ -22,6 +25,9 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <MarketplaceHome /> },
       { path: "product/:id", element: <ProductDetails /> },
+      { path: "wishlist", element: <Wishlist /> },
+      { path: "dashboard", element: <BuyerDashboard /> },
+      { path: "supplier-dashboard", element: <SupplierDashboard /> },
       { path: "search", element: <SearchResults /> },
     ],
   },
@@ -68,11 +74,13 @@ const router = createBrowserRouter([
 
 export default function App() {
   return (
-    <CartProvider>
-      <WishlistProvider>
-        <Toaster richColors position="top-right" />
-        <RouterProvider router={router} />
-      </WishlistProvider>
-    </CartProvider>
+    <AuthProvider>
+      <CartProvider>
+        <WishlistProvider>
+          <Toaster richColors position="top-right" />
+          <RouterProvider router={router} />
+        </WishlistProvider>
+      </CartProvider>
+    </AuthProvider>
   );
 }

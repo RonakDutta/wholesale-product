@@ -28,7 +28,10 @@ module.exports = pool;
 //     gstin VARCHAR(50),
 //     trust_score VARCHAR(10) DEFAULT '0%',
 //     response_rate VARCHAR(10) DEFAULT '0%',
-//     is_verified BOOLEAN DEFAULT false
+//     is_verified BOOLEAN DEFAULT false,
+//     upi_id VARCHAR(100),
+//     city VARCHAR(100) DEFAULT 'Delhi',
+//     country VARCHAR(100) DEFAULT 'India';
 // );
 
 // CREATE TABLE products (
@@ -49,4 +52,24 @@ module.exports = pool;
 //     moq INTEGER NOT NULL,
 //     stock INTEGER NOT NULL,
 //     shipping_days INTEGER NOT NULL
+// );
+
+// CREATE TABLE orders (
+//     id SERIAL PRIMARY KEY,
+//     buyer_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+//     inventory_item_id INTEGER REFERENCES supplier_inventory(id) ON DELETE CASCADE,
+//     quantity INTEGER NOT NULL,
+//     total_amount DECIMAL(12, 2) NOT NULL,
+//     status VARCHAR(50) DEFAULT 'Processing', -- 'Processing', 'Shipped', 'Delivered', 'Cancelled'
+//     payment_status VARCHAR(50) DEFAULT 'Pending', -- 'Pending', 'Completed', 'Failed'
+//     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+// );
+
+// CREATE TABLE messages (
+//     id SERIAL PRIMARY KEY,
+//     sender_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+//     receiver_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+//     message_text TEXT NOT NULL,
+//     is_read BOOLEAN DEFAULT false,
+//     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 // );

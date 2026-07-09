@@ -71,6 +71,36 @@ const AddProduct = () => {
     return () => clearTimeout(timer);
   }, [formData.name, catalogChoice]);
 
+  // Add this inside your AddProduct component:
+  useEffect(() => {
+    const checkProfileCompleteness = async () => {
+      try {
+        const res = await api.get("/api/profile");
+        const profile = res.data;
+
+        // The Mandatory Fields Guard check
+        if (
+          !profile.company_name ||
+          !profile.contact_phone ||
+          !profile.upi_id ||
+          !profile.city
+        ) {
+          toast.error(
+            "Profile Incomplete! You must add your Company Name, Phone, City, and UPI ID before listing products.",
+            {
+              duration: 5000,
+            },
+          );
+          navigate("/dashboard/settings");
+        }
+      } catch (err) {
+        console.error("Error checking profile:", err);
+      }
+    };
+
+    checkProfileCompleteness();
+  }, [navigate]);
+
   const handleSelectMatch = (product) => {
     setSelectedProduct(product);
     setCatalogChoice("existing");

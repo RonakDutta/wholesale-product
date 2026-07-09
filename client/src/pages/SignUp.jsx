@@ -14,6 +14,7 @@ import {
   Phone,
   ChevronDown,
 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 const GoogleIcon = () => (
   <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -67,11 +68,10 @@ const strengthConfig = [
 
 const SignUp = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { signup } = useContext(AuthContext);
+  const { register } = useAuth();
+
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [company, setCompany] = useState("");
   const [bizType, setBizType] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -107,17 +107,6 @@ const SignUp = () => {
     setShakeFields({});
   }, []);
 
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const role = params.get("role");
-    if (role === "seller" || role === "both") {
-      setBizType(role === "both" ? "both" : "seller");
-      toast.info(
-        "Seller role selected — please complete the form to register as a seller",
-      );
-    }
-  }, [location.search]);
-
   const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
   const passwordStrength = useMemo(() => {
@@ -142,7 +131,7 @@ const SignUp = () => {
     clearError("phone");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     clearAllErrors();
     let valid = true;
@@ -188,27 +177,28 @@ const SignUp = () => {
 
     if (!valid) return;
 
-    // persist user locally
-    const userPayload = { email, firstName, lastName, company, bizType, phone };
-    try {
-      signup && signup(userPayload);
-    } catch (e) {
-      const all = JSON.parse(localStorage.getItem("users") || "[]");
-      all.push(userPayload);
-      localStorage.setItem("users", JSON.stringify(all));
-      localStorage.setItem("currentUser", JSON.stringify(userPayload));
-    }
-
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+
+    try {
+      await register({
+        firstName,
+        lastName,
+        email,
+        phone: rawPhone,
+        password,
+        role: bizType,
+      });
+
       toast.success("Account created! Check your email for verification.");
-      if (bizType === "seller" || bizType === "both") {
-        setTimeout(() => navigate("/seller-agreement"), 1200);
-      } else {
-        setTimeout(() => navigate("/login"), 1200);
-      }
-    }, 2000);
+      navigate("/login");
+    } catch (error) {
+      const errorMessage =
+        error.response?.data?.message ||
+        "Registration failed. Please try again.";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const errStyle = (field) =>
@@ -330,40 +320,6 @@ const SignUp = () => {
               {errors.lastName}
             </p>
           </div>
-        </div>
-
-        <div
-          className={`input-wrapper relative mb-5 form-stagger ${
-            shakeFields.company ? "error-shake" : ""
-          }`}
-          style={{ opacity: 0, transform: "translateY(20px)" }}
-        >
-          <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
-            Company name
-          </label>
-          <div className="relative">
-            <Building2 className="input-icon absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 transition-colors duration-300" />
-            <input
-              type="text"
-              value={company}
-              onChange={(e) => {
-                setCompany(e.target.value);
-                clearError("company");
-              }}
-              className="w-full bg-transparent border-b-2 border-slate-200 focus:border-clay outline-none pl-7 pb-2.5 pt-1 text-sm text-espresso placeholder:text-slate-400 font-medium transition-colors duration-300"
-              placeholder="Your company name"
-              autoComplete="organization"
-              style={errStyle("company")}
-            />
-            <div className="input-line" />
-          </div>
-          <p
-            className={`text-xs mt-1.5 font-medium ${
-              errors.company ? "text-red-500" : "hidden"
-            }`}
-          >
-            {errors.company}
-          </p>
         </div>
 
         <div

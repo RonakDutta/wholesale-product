@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { toast } from "sonner";
 import { Mail, Lock, Eye, EyeOff, ArrowRight, Smartphone } from "lucide-react";
+import api from "../utils/axios";
+import { useAuth } from "../context/AuthContext";
 
 const GoogleIcon = () => (
   <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -48,13 +50,13 @@ const Spinner = () => (
 
 const Login = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
-  const auth = useContext(AuthContext);
-  const { login } = auth || {};
   const [errors, setErrors] = useState({});
   const [shakeFields, setShakeFields] = useState({});
 
@@ -85,7 +87,7 @@ const Login = () => {
 
   const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     clearAllErrors();
     let valid = true;
@@ -100,28 +102,27 @@ const Login = () => {
     if (!password) {
       showError("password", "Password is required");
       valid = false;
-    } else if (password.length < 6) {
-      showError("password", "Password must be at least 6 characters");
-      valid = false;
     }
 
     if (!valid) return;
 
     setLoading(true);
-    setTimeout(() => {
+
+    try {
+      const response = await api.post("/api/auth/login", { email, password });
+      await login(response.data.token);
+
+      toast.success("Signed in successfully!");
+      navigate("/");
+    } catch (error) {
+      const errorMessage =
+        error.response?.data?.message ||
+        "Invalid credentials. Please try again.";
+      showError("email", errorMessage);
+      toast.error(errorMessage);
+    } finally {
       setLoading(false);
-      const u = login ? login({ email }) : null;
-      if (!u) {
-        toast.error("Unable to sign in at the moment.");
-        return;
-      }
-      toast.success("Signed in successfully! Redirecting to dashboard...");
-      if (u.bizType === "seller" || u.bizType === "both") {
-        navigate("/supplier-dashboard");
-      } else {
-        navigate("/dashboard");
-      }
-    }, 1200);
+    }
   };
 
   return (

@@ -246,7 +246,7 @@ const ProductDetails = () => {
           {suppliers.length > 1 && (
             <div className="flex flex-col gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                {suppliers.length} suppliers available — switch vendor
+                {suppliers.length} suppliers available
               </span>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {suppliers.map((s) => {
@@ -430,7 +430,6 @@ const ProductDetails = () => {
             </div>
           </div>
 
-          {/* Action Buttons */}
           {/* Action Buttons */}
           <div className="flex flex-col gap-3 mt-2">
             <div className="grid grid-cols-2 gap-3">

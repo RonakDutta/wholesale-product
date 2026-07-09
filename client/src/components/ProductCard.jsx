@@ -1,4 +1,4 @@
-import { Heart, IndianRupee, Users } from "lucide-react";
+import { Heart, IndianRupee, Users, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useWishlist } from "../context/WishlistContext";
 import { getSortedSuppliers } from "../utils/supplierUtils";
@@ -22,87 +22,90 @@ const ProductCard = ({ product }) => {
   const supplierCount = suppliers.length;
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg sm:rounded-xl overflow-hidden flex flex-col h-full transition-all duration-300 hover:shadow-xl hover:border-sage/50 group">
-      <div className="relative w-full aspect-4/3 bg-slate-100 overflow-hidden shrink-0">
+    <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl overflow-hidden flex flex-col h-full transition-all duration-300 hover:shadow-2xl hover:shadow-slate-200/50 hover:-translate-y-1 hover:border-slate-300 group">
+      {/* Image Section */}
+      <div className="relative w-full aspect-4/3 bg-slate-50 overflow-hidden shrink-0 border-b border-slate-100">
         <img
           src={image}
           alt={name}
-          className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105"
+          className="object-cover w-full h-full transition-transform duration-700 group-hover:scale-105"
         />
 
-        <div className="absolute top-1.5 right-1.5 sm:top-2.5 sm:right-2.5 bg-white/90 backdrop-blur-sm text-slate-700 text-[7px] sm:text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full border border-slate-200 shadow-sm whitespace-nowrap flex items-center gap-1">
-          <Users className="w-2.5 h-2.5" />
-          {supplierCount > 0 ? `${supplierCount} suppliers` : "Direct seller"}
+        {/* Suppliers Badge */}
+        <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-md text-slate-700 text-[10px] sm:text-xs font-bold px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full shadow-sm whitespace-nowrap flex items-center gap-1.5 ring-1 ring-slate-900/5">
+          <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-clay" />
+          {suppliers.length} suppliers
         </div>
 
+        {/* Wishlist Button */}
         <button
           type="button"
-          onClick={() => toggleWishlist(product)}
+          onClick={(e) => {
+            e.preventDefault();
+            toggleWishlist(product);
+          }}
           aria-label={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
-          className={`absolute top-1.5 left-1.5 sm:top-2.5 sm:left-2.5 z-10 p-1.5 sm:p-2 rounded-full border transition-all duration-300 hover:scale-110 hover:shadow-md cursor-pointer ${
+          className={`absolute top-3 left-3 z-10 p-2 sm:p-2.5 rounded-full backdrop-blur-md transition-all duration-300 hover:scale-110 cursor-pointer shadow-sm ring-1 ${
             wishlisted
-              ? "bg-rose-50 border-rose-200 text-rose-500"
-              : "bg-white/90 border-slate-200 text-slate-600 hover:border-rose-200 hover:text-rose-500"
+              ? "bg-rose-50/90 ring-rose-200 text-rose-500"
+              : "bg-white/90 ring-slate-900/5 text-slate-400 hover:ring-rose-200 hover:text-rose-500"
           }`}
         >
           <Heart
-            className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-all duration-300 ${
+            className={`w-4 h-4 sm:w-4.5 sm:h-4.5 transition-all duration-300 ${
               wishlisted ? "fill-current scale-110" : "fill-none"
             }`}
           />
         </button>
       </div>
 
-      <div className="p-2 pt-3 sm:p-3 sm:pt-4 md:p-4 md:pt-5 flex flex-col flex-1 gap-1.5 sm:gap-2">
-        <h3 className="text-[11px] sm:text-xs md:text-sm font-bold text-slate-900 line-clamp-2 leading-snug min-h-[2.75em]">
-          {name}
-        </h3>
-        {(bestSupplier?.company || bestSupplier?.name) && (
-          <p className="text-[8px] sm:text-[10px] md:text-[11px] text-slate-500 uppercase tracking-wide">
-            Supplier: {bestSupplier?.company || bestSupplier?.name}
-          </p>
-        )}
-        {description && (
-          <p className="text-[7px] sm:text-[9px] md:text-[10px] text-slate-500 line-clamp-2">
-            {description}
-          </p>
-        )}
+      {/* Content Section */}
+      <div className="p-4 sm:p-5 flex flex-col flex-1 gap-2 sm:gap-3">
+        <div>
+          <h3 className="text-sm sm:text-base font-bold text-slate-900 line-clamp-2 leading-snug group-hover:text-clay transition-colors">
+            {name}
+          </h3>
+          {description && (
+            <p className="mt-1 text-xs sm:text-sm text-slate-500 line-clamp-1">
+              {description}
+            </p>
+          )}
+        </div>
 
-        <div className="mt-auto flex flex-col gap-1.5 sm:gap-2 pt-1">
-          <div className="flex items-baseline gap-0.5 sm:gap-1 font-mono">
-            <IndianRupee
-              className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-3.5 md:h-3.5 text-clay shrink-0"
-              strokeWidth={2.5}
-            />
-            <span className="text-sm sm:text-base md:text-xl font-bold text-clay">
-              {displayPrice}
-            </span>
-            <span className="text-[8px] sm:text-[10px] md:text-xs text-slate-400">
-              {supplierCount > 0
-                ? "/ unit · lowest price"
-                : "/ unit · contact seller"}
+        <div className="mt-auto flex flex-col pt-2">
+          {/* Price Layout */}
+          <div className="flex items-end gap-1.5 mb-3 sm:mb-4">
+            <div className="flex items-center text-clay">
+              <IndianRupee
+                className="w-4 h-4 sm:w-5 sm:h-5 mb-0.5"
+                strokeWidth={2.5}
+              />
+              <span className="text-xl sm:text-2xl font-black leading-none tracking-tight">
+                {bestSupplier.discountPrice ?? bestSupplier.price}
+              </span>
+            </div>
+            <span className="text-[10px] sm:text-xs font-medium text-slate-400 mb-0.5 uppercase tracking-wider">
+              / unit starts
             </span>
           </div>
 
-          {displayedSuppliers.length > 0 && (
-            <div className="mt-1 sm:mt-1.5 border-t border-slate-100 pt-1.5 sm:pt-2 flex flex-col gap-1 sm:gap-1.5">
-              {displayedSuppliers.map((supplier, idx) => (
-                <SupplierRow
-                  key={supplier.id}
-                  supplier={supplier}
-                  isBest={idx === 0}
-                />
-              ))}
-            </div>
-          )}
+          {/* Suppliers List */}
+          <div className="border-t border-slate-100 pt-3 sm:pt-4 flex flex-col gap-2">
+            {displayedSuppliers.map((supplier, idx) => (
+              <SupplierRow
+                key={supplier.id}
+                supplier={supplier}
+                isBest={idx === 0}
+              />
+            ))}
+          </div>
 
+          {/* Enhanced CTA Button */}
           <Link
             to={`/product/${id}`}
-            className="mt-1 text-center py-1.5 sm:py-2 bg-espresso text-cream text-[8px] sm:text-[10px] md:text-xs font-semibold rounded-md sm:rounded-lg hover:bg-clay transition-all duration-300"
+            className="group/btn mt-4 flex items-center justify-center gap-2 w-full py-3 sm:py-3.5 bg-slate-900 text-white text-[10px] sm:text-sm font-bold rounded-xl hover:bg-clay transition-all duration-300  active:scale-[0.98]"
           >
-            {supplierCount > 0
-              ? `View all ${supplierCount} suppliers & full details`
-              : "View product details"}
+            <span>Compare and Buy</span>
           </Link>
         </div>
       </div>

@@ -126,7 +126,7 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
   ];
 
   return (
-    <section className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+    <section className=" bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
       <div className="p-5 sm:p-6 border-b border-slate-200 bg-slate-50/50">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div>
@@ -307,7 +307,7 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
                   supplier={supplier}
                   isSelected={selectedSupplierIds.includes(supplier.id)}
                   onToggleSelect={toggleSelect}
-                  onContact={handleContact}
+                  productName={product.name}
                   onBuyNow={handleBuyNow}
                   badges={{
                     lowestPrice: metrics.lowestPriceId === supplier.id,
@@ -342,7 +342,7 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
               supplier={supplier}
               isSelected={selectedSupplierIds.includes(supplier.id)}
               onToggleSelect={toggleSelect}
-              onContact={handleContact}
+              productName={product.name}
               onBuyNow={handleBuyNow}
               badges={{
                 lowestPrice: metrics.lowestPriceId === supplier.id,

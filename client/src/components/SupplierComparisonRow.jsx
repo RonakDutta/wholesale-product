@@ -1,18 +1,20 @@
 import PropTypes from "prop-types";
 import { ShieldCheck, Star, MapPin, IndianRupee } from "lucide-react";
 import { getEffectivePrice } from "../utils/supplierUtils";
+import ContactVendorBtn from "./ContactVendorBtn";
+import { getSupplierPhone } from "../utils/supplierUtils";
 
 const SupplierComparisonRow = ({
   supplier,
   isSelected,
   onToggleSelect,
-  onContact,
+  productName,
   onBuyNow,
   badges,
 }) => {
   return (
     <tr
-      className={`group transition-colors duration-150 ${
+      className={`group  transition-colors duration-150 ${
         isSelected ? "bg-clay/3" : "hover:bg-slate-50/80"
       }`}
     >
@@ -113,13 +115,21 @@ const SupplierComparisonRow = ({
       </td>
       <td className="px-4 py-4">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onContact(supplier)}
-            className="rounded-full border border-slate-200 px-3.5 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-600 transition hover:bg-slate-50"
-          >
-            Contact
-          </button>
+          <ContactVendorBtn
+            vendorId={supplier.id}
+            vendorName={supplier.name}
+            productName={productName}
+            vendorPhone={getSupplierPhone(supplier)}
+            trigger={(open) => (
+              <button
+                type="button"
+                onClick={open}
+                className="rounded-full border border-slate-200 px-3.5 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-600 transition hover:bg-slate-50"
+              >
+                Contact
+              </button>
+            )}
+          />
           <button
             type="button"
             onClick={() => onBuyNow(supplier)}
@@ -150,7 +160,6 @@ SupplierComparisonRow.propTypes = {
   }).isRequired,
   isSelected: PropTypes.bool.isRequired,
   onToggleSelect: PropTypes.func.isRequired,
-  onContact: PropTypes.func.isRequired,
   onBuyNow: PropTypes.func.isRequired,
   badges: PropTypes.object.isRequired,
 };

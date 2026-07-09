@@ -132,3 +132,6 @@ export const getSupplyLabel = (stock = 0) => {
   if (stock < 50) return "Low stock";
   return "High supply";
 };
+
+export const getSupplierPhone = (supplier) =>
+  supplier?.phone ?? supplier?.contactNo ?? supplier?.mobile ?? undefined;

@@ -1,12 +1,14 @@
 import PropTypes from "prop-types";
 import { ShieldCheck, Star, MapPin, IndianRupee } from "lucide-react";
 import { getEffectivePrice } from "../utils/supplierUtils";
+import ContactVendorBtn from "./ContactVendorBtn";
+import { getSupplierPhone } from "../utils/supplierUtils";
 
 const SupplierCard = ({
   supplier,
+  productName,
   isSelected,
   onToggleSelect,
-  onContact,
   onBuyNow,
   badges,
 }) => {
@@ -73,7 +75,7 @@ const SupplierCard = ({
           : "border-slate-200 bg-white"
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="font-dmsans flex items-start justify-between gap-3">
         <label className="inline-flex items-center gap-3 cursor-pointer">
           <input
             type="checkbox"
@@ -127,13 +129,21 @@ const SupplierCard = ({
       </div>
 
       <div className="mt-4 flex gap-2">
-        <button
-          type="button"
-          onClick={() => onContact(supplier)}
-          className="flex-1 rounded-full border border-slate-200 bg-white py-2.5 text-xs font-bold uppercase tracking-wider text-slate-700 transition hover:bg-slate-50"
-        >
-          Contact
-        </button>
+        <ContactVendorBtn
+          vendorId={supplier.id}
+          vendorName={supplier.name}
+          productName={productName}
+          vendorPhone={getSupplierPhone(supplier)}
+          trigger={(open) => (
+            <button
+              type="button"
+              onClick={open}
+              className="flex-1 rounded-full border border-slate-200 bg-white py-2.5 text-xs font-bold uppercase tracking-wider text-slate-700 transition hover:bg-slate-50"
+            >
+              Contact
+            </button>
+          )}
+        />
         <button
           type="button"
           onClick={() => onBuyNow(supplier)}
@@ -163,7 +173,6 @@ SupplierCard.propTypes = {
   }).isRequired,
   isSelected: PropTypes.bool.isRequired,
   onToggleSelect: PropTypes.func.isRequired,
-  onContact: PropTypes.func.isRequired,
   onBuyNow: PropTypes.func.isRequired,
   badges: PropTypes.object.isRequired,
 };

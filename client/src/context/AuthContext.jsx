@@ -1,79 +1,65 @@
-import React, { createContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
+import api from "../utils/axios";
 
-export const AuthContext = createContext({
-  user: null,
-  signup: () => {},
-  login: () => null,
-  logout: () => {},
-  updateProfile: () => null,
-});
+const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem("token") || null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchUser = async (currentToken) => {
+    try {
+      const response = await api.get("/api/auth/me");
+      setUser(response.data.user);
+    } catch (error) {
+      console.error("Failed to fetch user", error);
+      logout();
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("currentUser");
-      if (raw) {
-        const u = JSON.parse(raw);
-        setUser(u);
-      }
-    } catch (e) {}
-  }, []);
-
-  const signup = (payload) => {
-    // payload: { email, firstName, lastName, bizType }
-    const all = JSON.parse(localStorage.getItem("users") || "[]");
-    const exists = all.find((u) => u.email === payload.email);
-    if (!exists) {
-      all.push(payload);
-      localStorage.setItem("users", JSON.stringify(all));
+    if (token) {
+      fetchUser(token);
+    } else {
+      setIsLoading(false);
     }
-    localStorage.setItem("currentUser", JSON.stringify(payload));
-    setUser(payload);
+  }, [token]);
+
+  const login = async (newToken) => {
+    localStorage.setItem("token", newToken);
+    setToken(newToken);
+    await fetchUser(newToken);
   };
 
-  const login = ({ email }) => {
-    const all = JSON.parse(localStorage.getItem("users") || "[]");
-    const found = all.find((u) => u.email === email);
-    if (found) {
-      localStorage.setItem("currentUser", JSON.stringify(found));
-      setUser(found);
-      return found;
-    }
-    // fallback: treat as buyer if not registered
-    const guest = { email, bizType: "buyer", firstName: "", lastName: "" };
-    localStorage.setItem("currentUser", JSON.stringify(guest));
-    setUser(guest);
-    return guest;
-  };
-
-  const updateProfile = (updates) => {
-    if (!user) return null;
-    const nextUser = { ...user, ...updates };
-    const all = JSON.parse(localStorage.getItem("users") || "[]");
-    const idx = all.findIndex((u) => u.email === nextUser.email);
-    if (idx > -1) {
-      all[idx] = nextUser;
-      localStorage.setItem("users", JSON.stringify(all));
-    }
-    localStorage.setItem("currentUser", JSON.stringify(nextUser));
-    setUser(nextUser);
-    return nextUser;
+  const register = async (userData) => {
+    const response = await api.post("/api/auth/register", userData);
+    return response.data;
   };
 
   const logout = () => {
-    localStorage.removeItem("currentUser");
+    localStorage.removeItem("token");
+    setToken(null);
     setUser(null);
   };
 
   return (
     <AuthContext.Provider
-      value={{ user, signup, login, logout, updateProfile }}
+      value={{
+        user,
+        token,
+        login,
+        register,
+        logout,
+        isAuthenticated: !!user,
+        isLoading,
+      }}
     >
       {children}
     </AuthContext.Provider>
   );
 };
 
-export default AuthProvider;
+export const useAuth = () => useContext(AuthContext);

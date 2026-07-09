@@ -12,12 +12,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../../utils/axios";
-import mockProducts from "../../utils/mockProducts";
 
 const AddProduct = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [fullCatalog, setFullCatalog] = useState([]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -52,24 +52,40 @@ const AddProduct = () => {
   };
 
   useEffect(() => {
+    const loadCatalog = async () => {
+      try {
+        const res = await api.get("/api/products");
+        setFullCatalog(res.data);
+      } catch (err) {
+        console.error("Failed to load catalog for search", err);
+      }
+    };
+    loadCatalog();
+  }, []);
+
+  useEffect(() => {
     if (catalogChoice !== "undecided") return;
     if (formData.name.trim().length < 3) {
       setMatches([]);
       return;
     }
+
     const timer = setTimeout(() => {
       const query = formData.name.trim().toLowerCase();
-      const found = mockProducts
+      // Filter against our live database state instead of mockProducts
+      const found = fullCatalog
         .filter((p) => p.name.toLowerCase().includes(query))
         .slice(0, 4);
+
       setMatches(found);
 
       if (found.length === 0) {
         setCatalogChoice("new");
       }
     }, 300);
+
     return () => clearTimeout(timer);
-  }, [formData.name, catalogChoice]);
+  }, [formData.name, catalogChoice, fullCatalog]);
 
   // Add this inside your AddProduct component:
   useEffect(() => {
@@ -283,7 +299,9 @@ const AddProduct = () => {
                           {p.name}
                         </p>
                         <p className="text-[11px] text-slate-400">
-                          {p.category} · {p.suppliers.length} suppliers
+                          {p.category} ·{" "}
+                          {p.total_suppliers || p.suppliers?.length || 0}{" "}
+                          suppliers
                         </p>
                       </div>
                     </button>

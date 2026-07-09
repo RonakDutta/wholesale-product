@@ -25,7 +25,6 @@ const Navbar = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navRef = useRef(null);
   const navigate = useNavigate();
-  const { user } = useContext(AuthContext);
   const isSupplier =
     user && (user.bizType === "seller" || user.bizType === "both");
 

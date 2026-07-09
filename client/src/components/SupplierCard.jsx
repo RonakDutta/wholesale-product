@@ -1,8 +1,11 @@
 import PropTypes from "prop-types";
 import { ShieldCheck, Star, MapPin, IndianRupee } from "lucide-react";
-import { getEffectivePrice } from "../utils/supplierUtils";
+import {
+  getEffectivePrice,
+  parseNum,
+  getSupplierPhone,
+} from "../utils/supplierUtils";
 import ContactVendorBtn from "./ContactVendorBtn";
-import { getSupplierPhone } from "../utils/supplierUtils";
 
 const SupplierCard = ({
   supplier,
@@ -12,13 +15,19 @@ const SupplierCard = ({
   onBuyNow,
   badges,
 }) => {
+  const supplierName =
+    supplier.companyName ||
+    supplier.company_name ||
+    supplier.name ||
+    "Verified Supplier";
+
   const metricItems = [
     {
       label: "Price",
       value: (
         <span className="inline-flex items-center gap-0.5">
           <IndianRupee className="w-3 h-3" />
-          {getEffectivePrice(supplier)}
+          {getEffectivePrice(supplier).toFixed(2)}
         </span>
       ),
       badge: badges.lowestPrice,
@@ -27,7 +36,7 @@ const SupplierCard = ({
     },
     {
       label: "MOQ",
-      value: supplier.moq,
+      value: parseNum(supplier.moq),
       badge: badges.lowestMOQ,
       badgeText: "Lowest",
       badgeColor: "text-clay",
@@ -37,7 +46,7 @@ const SupplierCard = ({
       value: (
         <span className="inline-flex items-center gap-0.5">
           <Star className="w-3 h-3 text-amber-500" />
-          {supplier.rating.toFixed(1)}
+          {parseNum(supplier.rating).toFixed(1)}
         </span>
       ),
       badge: badges.highestRating,
@@ -46,21 +55,21 @@ const SupplierCard = ({
     },
     {
       label: "Stock",
-      value: supplier.stock,
+      value: parseNum(supplier.stock),
       badge: badges.highestStock,
       badgeText: "Highest",
       badgeColor: "text-clay",
     },
     {
       label: "Shipping",
-      value: `${supplier.shippingDays}d`,
+      value: `${parseNum(supplier.shippingDays || supplier.shipping_days)}d`,
       badge: badges.fastestShipping,
       badgeText: "Fastest",
       badgeColor: "text-clay",
     },
     {
       label: "Response",
-      value: supplier.responseRate,
+      value: supplier.responseRate || "—",
       badge: badges.bestResponse,
       badgeText: "Best",
       badgeColor: "text-clay",
@@ -85,7 +94,7 @@ const SupplierCard = ({
           />
           <div>
             <span className="font-dmsans text-sm font-bold text-slate-900">
-              {supplier.name}
+              {supplierName}
             </span>
             <span className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500">
               <MapPin className="w-3 h-3" />
@@ -131,7 +140,7 @@ const SupplierCard = ({
       <div className="mt-4 flex gap-2">
         <ContactVendorBtn
           vendorId={supplier.id}
-          vendorName={supplier.name}
+          vendorName={supplierName}
           productName={productName}
           vendorPhone={getSupplierPhone(supplier)}
           trigger={(open) => (
@@ -159,14 +168,15 @@ const SupplierCard = ({
 SupplierCard.propTypes = {
   supplier: PropTypes.shape({
     id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
-    name: PropTypes.string.isRequired,
+    name: PropTypes.string,
+    companyName: PropTypes.string,
     verified: PropTypes.bool,
-    rating: PropTypes.number,
-    reviews: PropTypes.number,
-    price: PropTypes.number,
-    moq: PropTypes.number,
-    stock: PropTypes.number,
-    shippingDays: PropTypes.number,
+    rating: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    reviews: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    price: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    moq: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    stock: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    shippingDays: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     city: PropTypes.string,
     country: PropTypes.string,
     responseRate: PropTypes.string,

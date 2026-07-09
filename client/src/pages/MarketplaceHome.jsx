@@ -7,17 +7,22 @@ import HeroCarousel from "../components/HeroCarousel";
 import CTABanner from "../components/CTABanner";
 import LoadMore from "../components/LoadMore";
 import MarketAlert from "../components/MarketAlert";
-import mockProducts from "../utils/mockProducts";
 import {
   getCheapestSupplier,
   hasVerifiedSupplier,
 } from "../utils/supplierUtils";
+import api from "../utils/axios"; // Added API import
+import { toast } from "sonner";
 
 const PAGE_SIZE = 8;
 
 const MarketplaceHome = () => {
   const containerRef = useRef(null);
   const prevAnimatedIdsRef = useRef([]);
+
+  // --- NEW: Database State ---
+  const [products, setProducts] = useState([]);
+  const [isFetching, setIsFetching] = useState(true);
 
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -26,14 +31,85 @@ const MarketplaceHome = () => {
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [sortBy, setSortBy] = useState("recommended");
 
-  const categories = useMemo(() => {
-    const set = new Set(mockProducts.map((p) => p.category).filter(Boolean));
-    return Array.from(set).sort();
+  // --- NEW: Fetch live products on mount ---
+  useEffect(() => {
+    // Inside MarketplaceHome.jsx -> useEffect
+    const fetchCatalog = async () => {
+      try {
+        const res = await api.get("/api/products");
+
+        const mappedProducts = res.data.map((dbProduct) => ({
+          id: dbProduct.id.toString(),
+          name: dbProduct.name,
+          category: dbProduct.category,
+          image: dbProduct.image,
+          description: dbProduct.description,
+          suppliers: dbProduct.suppliers,
+        }));
+
+        setProducts(mappedProducts);
+      } catch (err) {
+        console.error("Failed to fetch catalog:", err);
+        toast.error("Failed to load live catalog. Using demo data.");
+        
+        // Fallback to mock data when database is not connected
+        setProducts([
+          {
+            id: "1",
+            name: "Cotton T-Shirt",
+            category: "Clothing",
+            image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500",
+            description: "Premium cotton t-shirt for bulk orders",
+            suppliers: [
+              {
+                id: "s1",
+                name: "ABC Textiles",
+                price: 150,
+                discountPrice: 120,
+                moq: 50,
+                verified: true,
+                city: "Mumbai",
+                country: "India",
+                phone: "919876543210",
+              }
+            ]
+          },
+          {
+            id: "2", 
+            name: "Denim Jeans",
+            category: "Clothing",
+            image: "https://images.unsplash.com/photo-1542272604-787c3835535d?w=500",
+            description: "High quality denim jeans in bulk",
+            suppliers: [
+              {
+                id: "s2",
+                name: "XYZ Garments",
+                price: 450,
+                discountPrice: 380,
+                moq: 30,
+                verified: true,
+                city: "Delhi",
+                country: "India",
+                phone: "919876543211",
+              }
+            ]
+          }
+        ]);
+      } finally {
+        setIsFetching(false);
+      }
+    };
+
+    fetchCatalog();
   }, []);
 
-  // replace the filteredSorted useMemo body with:
+  const categories = useMemo(() => {
+    const set = new Set(products.map((p) => p.category).filter(Boolean));
+    return Array.from(set).sort();
+  }, [products]);
+
   const filteredSorted = useMemo(() => {
-    let result = mockProducts.filter((product) => {
+    let result = products.filter((product) => {
       if (verifiedOnly && !hasVerifiedSupplier(product)) return false;
       if (selectedCategory && product.category !== selectedCategory)
         return false;
@@ -78,7 +154,7 @@ const MarketplaceHome = () => {
     }
 
     return result;
-  }, [selectedCategory, verifiedOnly, sortBy]);
+  }, [products, selectedCategory, verifiedOnly, sortBy]);
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
@@ -103,9 +179,12 @@ const MarketplaceHome = () => {
 
   const handleClearFilters = () => {
     setVerifiedOnly(false);
+    setSelectedCategory(null);
   };
 
+  // Initial Page Load Animation
   useEffect(() => {
+    if (isFetching) return; // Wait until data is loaded
     window.scrollTo(0, 0);
 
     let ctx = gsap.context(() => {
@@ -123,23 +202,23 @@ const MarketplaceHome = () => {
       );
     }, containerRef);
     return () => ctx.revert();
-  }, []);
+  }, [isFetching]);
 
-  // Animates product cards whenever the displayed set changes — covers the
-  // first render, "Load More" (only new cards animate), and filter/sort
-  // changes (whole new set animates fresh, tracked by id rather than index).
+  // Animates product cards whenever the displayed set changes
   useEffect(() => {
+    if (isFetching || displayedProducts.length === 0) return;
+
     const ctx = gsap.context(() => {
       const allIds = displayedProducts.map((p) => p.id);
       const newIds = allIds.filter(
         (id) => !prevAnimatedIdsRef.current.includes(id),
       );
+
       if (newIds.length === 0) return;
 
       const isFreshSet =
         prevAnimatedIdsRef.current.length === 0 ||
         newIds.length === allIds.length;
-
       const selector = newIds.map((id) => `[data-card-id="${id}"]`).join(",");
       const targets = gsap.utils.toArray(selector);
 
@@ -152,7 +231,7 @@ const MarketplaceHome = () => {
           duration: 0.5,
           stagger: 0.05,
           ease: "power2.out",
-          delay: isFreshSet ? 0.5 : 0,
+          delay: isFreshSet ? 0.2 : 0,
           willChange: "transform, opacity",
         },
       );
@@ -160,7 +239,15 @@ const MarketplaceHome = () => {
 
     prevAnimatedIdsRef.current = displayedProducts.map((p) => p.id);
     return () => ctx.revert();
-  }, [displayedProducts]);
+  }, [displayedProducts, isFetching]);
+
+  if (isFetching) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="w-8 h-8 border-4 border-clay border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div ref={containerRef} className="flex flex-col gap-4 sm:gap-6 pb-10">
@@ -203,7 +290,7 @@ const MarketplaceHome = () => {
           ))}
         </div>
         {filteredSorted.length === 0 && (
-          <div className="text-center py-12 text-sm text-sage">
+          <div className="text-center py-12 text-sm text-slate-500">
             No products match your filters.
           </div>
         )}

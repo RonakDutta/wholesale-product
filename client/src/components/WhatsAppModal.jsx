@@ -6,19 +6,18 @@ const WhatsAppModal = ({
   vendorName,
   productName,
   vendorPhone,
+  dynamicWhatsappUrl,
   onBack,
   onClose,
 }) => {
   const defaultMessage = `Hi ${vendorName || "seller"}, I'm interested in ${productName || "this product"} and would like to discuss pricing and availability.`;
   const [message, setMessage] = useState(defaultMessage);
 
-  const normalizedPhone = String(vendorPhone || "919999911111").replace(
-    /\D/g,
-    "",
-  );
-  const whatsappUrl = `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(
-    message,
-  )}`;
+  // Use dynamic URL from API if available, otherwise fall back to hardcoded phone
+  const whatsappUrl = dynamicWhatsappUrl || (() => {
+    const normalizedPhone = String(vendorPhone || "919999911111").replace(/\D/g, "");
+    return `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`;
+  })();
 
   const suggestedMessages = [
     {

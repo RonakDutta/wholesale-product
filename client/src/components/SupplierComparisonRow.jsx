@@ -1,8 +1,11 @@
 import PropTypes from "prop-types";
 import { ShieldCheck, Star, MapPin, IndianRupee } from "lucide-react";
-import { getEffectivePrice } from "../utils/supplierUtils";
+import {
+  getEffectivePrice,
+  parseNum,
+  getSupplierPhone,
+} from "../utils/supplierUtils";
 import ContactVendorBtn from "./ContactVendorBtn";
-import { getSupplierPhone } from "../utils/supplierUtils";
 
 const SupplierComparisonRow = ({
   supplier,
@@ -12,6 +15,15 @@ const SupplierComparisonRow = ({
   onBuyNow,
   badges,
 }) => {
+  const supplierName =
+    supplier.companyName ||
+    supplier.company_name ||
+    supplier.name ||
+    "Verified Supplier";
+  const shippingDays = parseNum(
+    supplier.shippingDays || supplier.shipping_days,
+  );
+
   return (
     <tr
       className={`group  transition-colors duration-150 ${
@@ -28,7 +40,7 @@ const SupplierComparisonRow = ({
           />
           <div className="flex flex-col">
             <span className="font-dmsans text-sm font-bold text-slate-900">
-              {supplier.name}
+              {supplierName}
             </span>
             <span className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-400">
               <MapPin className="w-3 h-3" />
@@ -55,12 +67,12 @@ const SupplierComparisonRow = ({
               badges.highestRating ? "text-amber-700" : "text-slate-900"
             }`}
           >
-            {supplier.rating.toFixed(1)}
+            {parseNum(supplier.rating).toFixed(1)}
           </span>
         </span>
       </td>
       <td className="px-4 py-4 font-inter text-sm text-slate-600">
-        {supplier.reviews}
+        {parseNum(supplier.reviews)}
       </td>
       <td className="px-4 py-4">
         <span className="inline-flex items-center gap-0.5">
@@ -69,7 +81,7 @@ const SupplierComparisonRow = ({
               badges.lowestPrice ? "text-emerald-700" : "text-slate-400"
             }`}
           />
-          <span className="font-dmsans text-sm font-bold ...">
+          <span className="font-dmsans text-sm font-bold">
             {getEffectivePrice(supplier)}
           </span>
         </span>
@@ -80,7 +92,7 @@ const SupplierComparisonRow = ({
             badges.lowestMOQ ? "text-emerald-700" : "text-slate-900"
           }`}
         >
-          {supplier.moq}
+          {parseNum(supplier.moq)}
         </span>
       </td>
       <td className="px-4 py-4">
@@ -89,7 +101,7 @@ const SupplierComparisonRow = ({
             badges.highestStock ? "text-emerald-700" : "text-slate-900"
           }`}
         >
-          {supplier.stock}
+          {parseNum(supplier.stock)}
         </span>
       </td>
       <td className="px-4 py-4">
@@ -98,7 +110,7 @@ const SupplierComparisonRow = ({
             badges.fastestShipping ? "text-sky-700" : "text-slate-600"
           }`}
         >
-          {supplier.shippingDays} days
+          {shippingDays} days
         </span>
       </td>
       <td className="px-4 py-4 font-inter text-sm text-slate-600">
@@ -110,14 +122,14 @@ const SupplierComparisonRow = ({
             badges.bestResponse ? "text-violet-700" : "text-slate-900"
           }`}
         >
-          {supplier.responseRate}
+          {supplier.responseRate ?? "—"}
         </span>
       </td>
       <td className="px-4 py-4">
         <div className="flex items-center gap-2">
           <ContactVendorBtn
             vendorId={supplier.id}
-            vendorName={supplier.name}
+            vendorName={supplierName}
             productName={productName}
             vendorPhone={getSupplierPhone(supplier)}
             trigger={(open) => (
@@ -144,20 +156,7 @@ const SupplierComparisonRow = ({
 };
 
 SupplierComparisonRow.propTypes = {
-  supplier: PropTypes.shape({
-    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
-    name: PropTypes.string.isRequired,
-    verified: PropTypes.bool,
-    rating: PropTypes.number,
-    reviews: PropTypes.number,
-    price: PropTypes.number,
-    moq: PropTypes.number,
-    stock: PropTypes.number,
-    shippingDays: PropTypes.number,
-    city: PropTypes.string,
-    country: PropTypes.string,
-    responseRate: PropTypes.string,
-  }).isRequired,
+  supplier: PropTypes.object.isRequired,
   isSelected: PropTypes.bool.isRequired,
   onToggleSelect: PropTypes.func.isRequired,
   onBuyNow: PropTypes.func.isRequired,

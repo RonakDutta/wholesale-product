@@ -9,6 +9,7 @@ const mockProducts = [
       {
         id: "s1-101",
         name: "Apex Traders",
+        image: "https://placehold.co/300x300/e2e8f0/1e293b?text=Apex+Traders",
         verified: true,
         rating: 4.8,
         reviews: 421,
@@ -31,6 +32,7 @@ const mockProducts = [
       {
         id: "s1-102",
         name: "Bharat Packs",
+        image: "https://placehold.co/300x300/e2e8f0/1e293b?text=Bharat+Packs",
         verified: true,
         rating: 4.5,
         reviews: 312,
@@ -53,6 +55,8 @@ const mockProducts = [
       {
         id: "s1-103",
         name: "PackPro Solutions",
+        image:
+          "https://placehold.co/300x300/e2e8f0/1e293b?text=PackPro+Solutions",
         verified: true,
         rating: 4.9,
         reviews: 520,
@@ -85,6 +89,8 @@ const mockProducts = [
       {
         id: "s2-201",
         name: "Bharat Woodworks",
+        image:
+          "https://placehold.co/300x300/d1d5db/1f2937?text=Bharat+Woodworks",
         verified: true,
         rating: 4.6,
         reviews: 315,
@@ -107,6 +113,8 @@ const mockProducts = [
       {
         id: "s2-202",
         name: "LogiPal Solutions",
+        image:
+          "https://placehold.co/300x300/d1d5db/1f2937?text=LogiPal+Solutions",
         verified: false,
         rating: 4.3,
         reviews: 198,
@@ -129,6 +137,7 @@ const mockProducts = [
       {
         id: "s2-203",
         name: "PalletHub",
+        image: "https://placehold.co/300x300/d1d5db/1f2937?text=PalletHub",
         verified: true,
         rating: 4.7,
         reviews: 402,
@@ -161,6 +170,7 @@ const mockProducts = [
       {
         id: "s3-301",
         name: "TechVision Distributors",
+        image: "https://placehold.co/300x300/bfdbfe/1e40af?text=TechVision",
         verified: true,
         rating: 4.8,
         reviews: 520,
@@ -183,6 +193,7 @@ const mockProducts = [
       {
         id: "s3-302",
         name: "ScreenSource",
+        image: "https://placehold.co/300x300/bfdbfe/1e40af?text=ScreenSource",
         verified: true,
         rating: 4.6,
         reviews: 342,
@@ -205,6 +216,8 @@ const mockProducts = [
       {
         id: "s3-303",
         name: "DisplayCrafters",
+        image:
+          "https://placehold.co/300x300/bfdbfe/1e40af?text=DisplayCrafters",
         verified: false,
         rating: 4.4,
         reviews: 210,
@@ -237,6 +250,7 @@ const mockProducts = [
       {
         id: "s4-401",
         name: "EnerGen Solutions",
+        image: "https://placehold.co/300x300/fef08a/854d0e?text=EnerGen",
         verified: false,
         rating: 4.2,
         reviews: 92,
@@ -259,6 +273,7 @@ const mockProducts = [
       {
         id: "s4-402",
         name: "PowerCore Traders",
+        image: "https://placehold.co/300x300/fef08a/854d0e?text=PowerCore",
         verified: true,
         rating: 4.6,
         reviews: 210,
@@ -281,6 +296,7 @@ const mockProducts = [
       {
         id: "s4-403",
         name: "BatteryMart",
+        image: "https://placehold.co/300x300/fef08a/854d0e?text=BatteryMart",
         verified: true,
         rating: 4.1,
         reviews: 142,
@@ -313,6 +329,7 @@ const mockProducts = [
       {
         id: "s5-501",
         name: "MetalEx India",
+        image: "https://placehold.co/300x300/fcd34d/92400e?text=MetalEx+India",
         verified: true,
         rating: 4.7,
         reviews: 210,
@@ -335,6 +352,7 @@ const mockProducts = [
       {
         id: "s5-502",
         name: "Copperline Traders",
+        image: "https://placehold.co/300x300/fcd34d/92400e?text=Copperline",
         verified: true,
         rating: 4.5,
         reviews: 162,
@@ -357,6 +375,7 @@ const mockProducts = [
       {
         id: "s5-503",
         name: "MetalWorks Supply",
+        image: "https://placehold.co/300x300/fcd34d/92400e?text=MetalWorks",
         verified: false,
         rating: 4.2,
         reviews: 108,
@@ -389,6 +408,7 @@ const mockProducts = [
       {
         id: "s6-601",
         name: "PlastWorld Corp",
+        image: "https://placehold.co/300x300/c7d2fe/4338ca?text=PlastWorld",
         verified: true,
         rating: 4.6,
         reviews: 164,
@@ -411,6 +431,7 @@ const mockProducts = [
       {
         id: "s6-602",
         name: "PolyMates",
+        image: "https://placehold.co/300x300/c7d2fe/4338ca?text=PolyMates",
         verified: true,
         rating: 4.3,
         reviews: 138,
@@ -433,6 +454,7 @@ const mockProducts = [
       {
         id: "s6-603",
         name: "ResinHub",
+        image: "https://placehold.co/300x300/c7d2fe/4338ca?text=ResinHub",
         verified: false,
         rating: 4.4,
         reviews: 145,
@@ -465,6 +487,8 @@ const mockProducts = [
       {
         id: "s7-701",
         name: "Precision Fasteners",
+        image:
+          "https://placehold.co/300x300/e5e7eb/374151?text=Precision+Fasteners",
         verified: true,
         rating: 4.9,
         reviews: 418,
@@ -487,6 +511,7 @@ const mockProducts = [
       {
         id: "s7-702",
         name: "ForgeFix",
+        image: "https://placehold.co/300x300/e5e7eb/374151?text=ForgeFix",
         verified: true,
         rating: 4.7,
         reviews: 298,
@@ -509,6 +534,7 @@ const mockProducts = [
       {
         id: "s7-703",
         name: "BoltMasters",
+        image: "https://placehold.co/300x300/e5e7eb/374151?text=BoltMasters",
         verified: false,
         rating: 4.4,
         reviews: 210,
@@ -541,6 +567,8 @@ const mockProducts = [
       {
         id: "s8-801",
         name: "SKF Bearing House",
+        image:
+          "https://placehold.co/300x300/d1d5db/111827?text=SKF+Bearing+House",
         verified: true,
         rating: 4.8,
         reviews: 402,
@@ -563,6 +591,7 @@ const mockProducts = [
       {
         id: "s8-802",
         name: "BearingPlus",
+        image: "https://placehold.co/300x300/d1d5db/111827?text=BearingPlus",
         verified: true,
         rating: 4.6,
         reviews: 290,
@@ -585,6 +614,7 @@ const mockProducts = [
       {
         id: "s8-803",
         name: "MotionTech",
+        image: "https://placehold.co/300x300/d1d5db/111827?text=MotionTech",
         verified: false,
         rating: 4.5,
         reviews: 215,
@@ -617,6 +647,7 @@ const mockProducts = [
       {
         id: "s9-901",
         name: "GreenThread Textiles",
+        image: "https://placehold.co/300x300/f3f4f6/374151?text=GreenThread",
         verified: false,
         rating: 4.3,
         reviews: 74,
@@ -639,6 +670,7 @@ const mockProducts = [
       {
         id: "s9-902",
         name: "EcoFiber Co",
+        image: "https://placehold.co/300x300/f3f4f6/374151?text=EcoFiber+Co",
         verified: true,
         rating: 4.5,
         reviews: 102,
@@ -661,6 +693,7 @@ const mockProducts = [
       {
         id: "s9-903",
         name: "OrganicWeave",
+        image: "https://placehold.co/300x300/f3f4f6/374151?text=OrganicWeave",
         verified: true,
         rating: 4.6,
         reviews: 128,
@@ -692,6 +725,7 @@ const mockProducts = [
       {
         id: "s10-1001",
         name: "ChemCore Industries",
+        image: "https://placehold.co/300x300/fecaca/991b1b?text=ChemCore",
         verified: true,
         rating: 4.1,
         reviews: 56,
@@ -714,6 +748,7 @@ const mockProducts = [
       {
         id: "s10-1002",
         name: "AcidPro Supplies",
+        image: "https://placehold.co/300x300/fecaca/991b1b?text=AcidPro",
         verified: true,
         rating: 4.3,
         reviews: 75,
@@ -736,6 +771,7 @@ const mockProducts = [
       {
         id: "s10-1003",
         name: "Industrial Chemicals Co",
+        image: "https://placehold.co/300x300/fecaca/991b1b?text=IndChem+Co",
         verified: false,
         rating: 4.0,
         reviews: 48,

@@ -9,7 +9,11 @@ import {
 } from "lucide-react";
 import ModalShell from "./ModalShell";
 import ContactVendorBtn from "./ContactVendorBtn";
-import { getEffectivePrice, getSupplierPhone } from "../utils/supplierUtils";
+import {
+  getEffectivePrice,
+  parseNum,
+  getSupplierPhone,
+} from "../utils/supplierUtils";
 
 const STAT_FIELDS = [
   { key: "moq", label: "MOQ", bestKey: "lowestMOQId" },
@@ -68,6 +72,12 @@ const SupplierComparisonModal = ({
         <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-1 px-1">
           {suppliers.map((supplier) => {
             const priceIsBest = metrics.lowestPriceId === supplier.id;
+            const supplierName =
+              supplier.companyName ||
+              supplier.company_name ||
+              supplier.name ||
+              "Verified Supplier";
+
             return (
               <div
                 key={supplier.id}
@@ -76,7 +86,7 @@ const SupplierComparisonModal = ({
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="text-sm font-bold text-slate-900 leading-tight">
-                      {supplier.name}
+                      {supplierName}
                     </p>
                     <p className="mt-1 flex items-center gap-1 text-[11px] text-slate-500">
                       <MapPin className="w-3 h-3 shrink-0" />
@@ -110,7 +120,7 @@ const SupplierComparisonModal = ({
                     }`}
                   >
                     <IndianRupee className="w-5 h-5" strokeWidth={3} />
-                    {getEffectivePrice(supplier)}
+                    {Number(getEffectivePrice(supplier)).toFixed(2)}
                     <span className="text-xs font-medium text-slate-400 mb-1 ml-0.5 self-end">
                       /unit
                     </span>
@@ -120,11 +130,18 @@ const SupplierComparisonModal = ({
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   {STAT_FIELDS.map((field) => {
                     const best = isBestFor(metrics, supplier.id, field.bestKey);
-                    const rawValue = supplier[field.key];
+                    // Use actual shipping_days if shippingDays is missing (DB column name variation)
+                    const rawValue =
+                      field.key === "shippingDays"
+                        ? supplier.shippingDays || supplier.shipping_days
+                        : supplier[field.key];
+                    const parsedNum = Number(rawValue ?? 0);
+
                     const value =
                       field.key === "rating"
-                        ? Number(rawValue ?? 0).toFixed(1)
+                        ? parsedNum.toFixed(1)
                         : `${rawValue ?? "—"}${field.suffix ?? ""}`;
+
                     return (
                       <div
                         key={field.key}
@@ -169,7 +186,7 @@ const SupplierComparisonModal = ({
                 <div className="mt-5 flex gap-2">
                   <ContactVendorBtn
                     vendorId={supplier.id}
-                    vendorName={supplier.name}
+                    vendorName={supplierName}
                     productName={productName}
                     vendorPhone={getSupplierPhone(supplier)}
                     trigger={(triggerOpen) => (
@@ -216,7 +233,10 @@ const SupplierComparisonModal = ({
                     <div className="flex flex-col gap-2.5">
                       <div className="flex items-start justify-between gap-2">
                         <span className="text-base font-bold text-slate-900 leading-tight">
-                          {supplier.name}
+                          {supplier.companyName ||
+                            supplier.company_name ||
+                            supplier.name ||
+                            "Supplier"}
                         </span>
                         {supplier.verified && (
                           <span
@@ -260,7 +280,7 @@ const SupplierComparisonModal = ({
                           }`}
                         >
                           <IndianRupee className="w-4 h-4" strokeWidth={3} />
-                          {getEffectivePrice(supplier)}
+                          {Number(getEffectivePrice(supplier)).toFixed(2)}
                         </span>
                         {best && (
                           <span className="rounded bg-clay px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
@@ -284,7 +304,11 @@ const SupplierComparisonModal = ({
                   </td>
                   {suppliers.map((supplier) => {
                     const best = isBestFor(metrics, supplier.id, field.bestKey);
-                    const rawValue = supplier[field.key];
+                    // Use actual shipping_days if shippingDays is missing
+                    const rawValue =
+                      field.key === "shippingDays"
+                        ? supplier.shippingDays || supplier.shipping_days
+                        : supplier[field.key];
                     return (
                       <td
                         key={`${supplier.id}-${field.key}`}
@@ -370,7 +394,12 @@ const SupplierComparisonModal = ({
                     <div className="flex flex-col xl:flex-row gap-2">
                       <ContactVendorBtn
                         vendorId={supplier.id}
-                        vendorName={supplier.name}
+                        vendorName={
+                          supplier.companyName ||
+                          supplier.company_name ||
+                          supplier.name ||
+                          "Supplier"
+                        }
                         productName={productName}
                         vendorPhone={getSupplierPhone(supplier)}
                         trigger={(triggerOpen) => (

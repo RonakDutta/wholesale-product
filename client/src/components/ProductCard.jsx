@@ -1,4 +1,4 @@
-import { Heart, IndianRupee, Users, ArrowRight } from "lucide-react";
+import { Heart, IndianRupee, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useWishlist } from "../context/WishlistContext";
 import { getSortedSuppliers } from "../utils/supplierUtils";
@@ -19,7 +19,7 @@ const ProductCard = ({ product }) => {
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl overflow-hidden flex flex-col h-full transition-all duration-300 hover:shadow-2xl hover:shadow-slate-200/50 hover:-translate-y-1 hover:border-slate-300 group">
-      {/* Image Section */}
+      {/* Image Section - Uses Global Product Image */}
       <div className="relative w-full aspect-4/3 bg-slate-50 overflow-hidden shrink-0 border-b border-slate-100">
         <img
           src={image}
@@ -87,19 +87,30 @@ const ProductCard = ({ product }) => {
 
           {/* Suppliers List */}
           <div className="border-t border-slate-100 pt-3 sm:pt-4 flex flex-col gap-2">
-            {displayedSuppliers.map((supplier, idx) => (
-              <SupplierRow
-                key={supplier.id}
-                supplier={supplier}
-                isBest={idx === 0}
-              />
-            ))}
+            {displayedSuppliers.map((supplier, idx) => {
+              // Ensure we pass the company name down properly
+              const supplierData = {
+                ...supplier,
+                name:
+                  supplier.companyName ||
+                  supplier.company_name ||
+                  supplier.name ||
+                  "Verified Supplier",
+              };
+              return (
+                <SupplierRow
+                  key={supplierData.id}
+                  supplier={supplierData}
+                  isBest={idx === 0}
+                />
+              );
+            })}
           </div>
 
           {/* Enhanced CTA Button */}
           <Link
             to={`/product/${id}`}
-            className="group/btn mt-4 flex items-center justify-center gap-2 w-full py-3 sm:py-3.5 bg-slate-900 text-white text-[10px] sm:text-sm font-bold rounded-xl hover:bg-clay transition-all duration-300  active:scale-[0.98]"
+            className="group/btn mt-4 flex items-center justify-center gap-2 w-full py-3 sm:py-3.5 bg-slate-900 text-white text-[10px] sm:text-sm font-bold rounded-xl hover:bg-clay transition-all duration-300 active:scale-[0.98]"
           >
             <span>Compare and Buy</span>
           </Link>

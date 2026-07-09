@@ -19,7 +19,8 @@ import {
   Heart,
 } from "lucide-react";
 import { gsap } from "gsap";
-import mockProducts from "../utils/mockProducts";
+import api from "../utils/axios";
+import { toast } from "sonner";
 import ContactVendorBtn from "../components/ContactVendorBtn";
 import SupplierComparison from "../components/SupplierComparison";
 import { useCart } from "../context/CartContext";
@@ -37,52 +38,57 @@ const ProductDetails = () => {
   const addToCartBtnRef = useRef(null);
   const { addToCart } = useCart();
   const { toggleWishlist, isWishlisted } = useWishlist();
+  const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const product = mockProducts.find((p) => p.id === id) || mockProducts[0];
-  const suppliers = product.suppliers ?? [];
-
-  const [selectedSupplierId, setSelectedSupplierId] = useState(
-    () => getCheapestSupplier(product)?.id ?? suppliers[0]?.id ?? null,
-  );
+  const [selectedSupplierId, setSelectedSupplierId] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
 
+  // Fetch product on mount
+  useEffect(() => {
+    const fetchProduct = async () => {
+      try {
+        const response = await api.get(`/api/products/${id}`);
+        const productData = {
+          ...response.data,
+          id: response.data.id.toString(),
+        };
+        setProduct(productData);
+
+        const cheapest =
+          getCheapestSupplier(productData)?.id ?? productData.suppliers[0]?.id;
+        setSelectedSupplierId(cheapest);
+      } catch (error) {
+        console.error("Failed to fetch product", error);
+        toast.error("Product not found");
+        navigate("/");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProduct();
+  }, [id, navigate]);
+
+  const suppliers = product?.suppliers ?? [];
   const selectedSupplier =
     suppliers.find((s) => s.id === selectedSupplierId) ?? suppliers[0] ?? {};
+
+  const currentSupplierName =
+    selectedSupplier.companyName ||
+    selectedSupplier.company_name ||
+    selectedSupplier.name ||
+    "Verified Supplier";
   const baseMoq = selectedSupplier.moq ?? 1;
   const quantityStep = Math.max(1, Math.round(baseMoq / 10));
 
-  // Reset supplier selection whenever the product itself changes
-  useEffect(() => {
-    setSelectedSupplierId(
-      getCheapestSupplier(product)?.id ?? product.suppliers?.[0]?.id ?? null,
-    );
-  }, [id]);
-
-  // Quantity always starts at (and can't go below) the selected supplier's MOQ
   useEffect(() => {
     setQuantity(baseMoq);
   }, [selectedSupplierId, baseMoq]);
 
-  const currentUnitPrice = getEffectivePrice(selectedSupplier);
-  const totalCost = currentUnitPrice * quantity;
-
-  const unitSavings =
-    (selectedSupplier.price ?? 0) - (selectedSupplier.discountPrice ?? 0);
-  const savingsPercent =
-    selectedSupplier.price > 0
-      ? Math.round((unitSavings / selectedSupplier.price) * 100)
-      : 0;
-
-  const wishlisted = isWishlisted(product.id);
-  const location =
-    selectedSupplier.city && selectedSupplier.country
-      ? `${selectedSupplier.city}, ${selectedSupplier.country}`
-      : "India";
-  const supplySignal = getSupplyLabel(selectedSupplier.stock);
-  const responseTimeSpec = selectedSupplier.responseTime || "Standard options";
-
   useEffect(() => {
+    if (loading || !product) return;
     window.scrollTo(0, 0);
     let ctx = gsap.context(() => {
       gsap.fromTo(
@@ -92,7 +98,7 @@ const ProductDetails = () => {
       );
     }, pageRef);
     return () => ctx.revert();
-  }, [id]);
+  }, [loading, product]);
 
   const handleQuantityChange = (val) => {
     if (isNaN(val) || val < baseMoq) {
@@ -108,12 +114,37 @@ const ProductDetails = () => {
     setTimeout(() => setJustAdded(false), 1600);
   };
 
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <div className="w-8 h-8 border-4 border-clay border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!product) return null;
+
+  const currentUnitPrice = getEffectivePrice(selectedSupplier);
+  const totalCost = currentUnitPrice * quantity;
+  const unitSavings =
+    (selectedSupplier.price ?? 0) - (selectedSupplier.discountPrice ?? 0);
+  const savingsPercent =
+    selectedSupplier.price > 0
+      ? Math.round((unitSavings / selectedSupplier.price) * 100)
+      : 0;
+  const wishlisted = isWishlisted(product.id);
+  const location =
+    selectedSupplier.city && selectedSupplier.country
+      ? `${selectedSupplier.city}, ${selectedSupplier.country}`
+      : "India";
+  const supplySignal = getSupplyLabel(selectedSupplier.stock);
+  const responseTimeSpec = selectedSupplier.responseTime || "Standard options";
+
   return (
     <div
       ref={pageRef}
       className="w-full flex flex-col gap-6 pb-16 max-w-7xl mx-auto"
     >
-      {/* Back Navigation Bar */}
       <div className="detail-fade-in flex items-center justify-between py-2 border-b border-slate-200">
         <button
           onClick={() => navigate(-1)}
@@ -127,13 +158,16 @@ const ProductDetails = () => {
         </span>
       </div>
 
-      {/* Main Structural Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-10 items-start">
-        {/* Left Side: Product Image Display Panel */}
         <div className="detail-fade-in flex flex-col gap-4">
           <div className="group relative w-full aspect-4/3 bg-slate-100 border border-slate-200 rounded-lg overflow-hidden shadow-sm">
             <img
-              src={product.image}
+              src={
+                selectedSupplier.image_url ||
+                selectedSupplier.image ||
+                product.global_image_url ||
+                product.image
+              }
               alt={product.name}
               className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105"
             />
@@ -142,7 +176,6 @@ const ProductDetails = () => {
             </div>
           </div>
 
-          {/* Quick Specs Grid */}
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">
               <Scale className="w-5 h-5 text-slate-400 mb-1" />
@@ -176,13 +209,11 @@ const ProductDetails = () => {
           </div>
         </div>
 
-        {/* Right Side: Information & Pricing */}
         <div className="detail-fade-in flex flex-col gap-5">
-          {/* Vendor Details */}
           <div className="flex flex-col gap-2 pb-3 border-b border-slate-200">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-base font-bold text-slate-800">
-                {selectedSupplier.name}
+                {currentSupplierName}
               </span>
               {selectedSupplier.verified && (
                 <div className="flex items-center gap-1 bg-white border border-emerald-600 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full shadow-xs">
@@ -202,7 +233,6 @@ const ProductDetails = () => {
             </div>
           </div>
 
-          {/* Vendor Switcher — the key fix: pick any of the available suppliers */}
           {suppliers.length > 1 && (
             <div className="flex flex-col gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -211,6 +241,8 @@ const ProductDetails = () => {
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {suppliers.map((s) => {
                   const active = s.id === selectedSupplierId;
+                  const btnSupplierName =
+                    s.companyName || s.company_name || s.name || "Supplier";
                   return (
                     <button
                       key={s.id}
@@ -223,7 +255,7 @@ const ProductDetails = () => {
                       }`}
                     >
                       <span className="flex items-center gap-1 text-xs font-bold text-slate-800">
-                        {s.name}
+                        {btnSupplierName}
                         {s.verified && (
                           <ShieldCheck className="w-3 h-3 text-emerald-600" />
                         )}
@@ -241,14 +273,12 @@ const ProductDetails = () => {
             </div>
           )}
 
-          {/* Product Title */}
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight">
               {product.name}
             </h1>
           </div>
 
-          {/* Pricing Box */}
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex flex-col">
             <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">
@@ -316,7 +346,6 @@ const ProductDetails = () => {
             </div>
           </div>
 
-          {/* Quantity Calculator */}
           <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-col gap-4 shadow-xs">
             <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-600 font-mono">
               <Calculator className="w-4 h-4 text-clay" />
@@ -390,16 +419,16 @@ const ProductDetails = () => {
             </div>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex flex-col gap-3 mt-2">
             <div className="grid grid-cols-2 gap-3">
               <ContactVendorBtn
                 vendorId={selectedSupplier.id}
-                vendorName={selectedSupplier.name}
+                vendorName={currentSupplierName}
                 productName={product.name}
                 vendorPhone={
+                  selectedSupplier.contactPhone ??
+                  selectedSupplier.contact_phone ??
                   selectedSupplier.phone ??
-                  selectedSupplier.contactNo ??
                   selectedSupplier.mobile
                 }
               />
@@ -454,7 +483,11 @@ const ProductDetails = () => {
         }}
         onContactSupplier={(supplier) => {
           setSelectedSupplierId(supplier.id);
-          console.log("Contact supplier:", supplier.name, supplier.id);
+          console.log(
+            "Contact supplier:",
+            supplier.companyName || supplier.name,
+            supplier.id,
+          );
         }}
       />
     </div>

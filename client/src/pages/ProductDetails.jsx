@@ -32,8 +32,6 @@ import {
 	getSupplyLabel,
 } from "../utils/supplierUtils";
 
-// ❌ Remove: import mockProducts from "...";
-
 const ProductDetails = () => {
 	const { id } = useParams();
 	const navigate = useNavigate();

@@ -40,7 +40,6 @@ const ProductDetails = () => {
 	const { addToCart } = useCart();
 	const { toggleWishlist, isWishlisted } = useWishlist();
 
-	// --- State ---
 	const [product, setProduct] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
@@ -49,7 +48,6 @@ const ProductDetails = () => {
 	const [quantity, setQuantity] = useState(1);
 	const [justAdded, setJustAdded] = useState(false);
 
-	// --- Fetch product from DB ---
 	useEffect(() => {
 		const fetchProduct = async () => {
 			try {
@@ -90,7 +88,6 @@ const ProductDetails = () => {
 		if (id) fetchProduct();
 	}, [id]);
 
-	// --- Reset supplier selection whenever product changes ---
 	useEffect(() => {
 		if (product?.suppliers?.length) {
 			setSelectedSupplierId(
@@ -99,7 +96,6 @@ const ProductDetails = () => {
 		}
 	}, [product]);
 
-	// --- Derived values ---
 	const suppliers = product?.suppliers ?? [];
 	const selectedSupplier =
 		suppliers.find((s) => s.id === selectedSupplierId) ?? suppliers[0] ?? {};
@@ -217,11 +213,10 @@ const ProductDetails = () => {
 						</div>
 					</div>
 
-					{/* Quick Specs Grid */}
 					<div className="grid grid-cols-3 gap-2 text-center">
 						<div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">
 							<Scale className="w-5 h-5 text-slate-400 mb-1" />
-							<span className="text-xs text-slate-400 uppercase font-bold tracking-wider">
+							<span className="font-raleway text-xs text-slate-400 uppercase font-bold tracking-wider">
 								Min Order
 							</span>
 							<span className="text-sm font-bold text-slate-800 mt-1 truncate max-w-full">
@@ -230,7 +225,7 @@ const ProductDetails = () => {
 						</div>
 						<div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">
 							<Layers className="w-5 h-5 text-slate-400 mb-1" />
-							<span className="text-xs text-slate-400 uppercase font-bold tracking-wider">
+							<span className="font-raleway text-xs text-slate-400 uppercase font-bold tracking-wider">
 								Response Time
 							</span>
 							<span className="text-sm font-bold text-slate-800 mt-1 truncate max-w-full">
@@ -239,7 +234,7 @@ const ProductDetails = () => {
 						</div>
 						<div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">
 							<Truck className="w-5 h-5 text-slate-400 mb-1" />
-							<span className="text-xs text-slate-400 uppercase font-bold tracking-wider">
+							<span className="font-raleway text-xs text-slate-400 uppercase font-bold tracking-wider">
 								Shipping
 							</span>
 							<span className="text-sm font-bold text-slate-800 mt-1 truncate max-w-full">
@@ -255,7 +250,7 @@ const ProductDetails = () => {
 				<div className="detail-fade-in flex flex-col gap-5">
 					{/* Vendor Details */}
 					<div className="flex flex-col gap-2 pb-3 border-b border-slate-200">
-						<div className="flex flex-wrap items-center gap-2">
+						<div className="font-raleway flex flex-wrap items-center gap-2">
 							<span className="text-base font-bold text-slate-800">
 								{selectedSupplier.name}
 							</span>
@@ -266,12 +261,12 @@ const ProductDetails = () => {
 								</div>
 							)}
 						</div>
-						<div className="flex items-center gap-1 text-sm text-slate-500 font-medium">
-							<MapPin className="w-4 h-4 text-slate-400 shrink-0" />
+						<div className="font-dmsans flex items-center gap-1 text-sm text-slate-500 font-medium">
+							<MapPin className="w-4 h-4 text-slate-500 shrink-0" />
 							<span>{location}</span>
-							<span className="text-slate-300 mx-1">•</span>
-							<Building2 className="w-4 h-4 text-slate-400 shrink-0" />
-							<span className="font-mono text-xs text-slate-400">
+							<span className="text-slate-400 mx-1">•</span>
+							<Building2 className="w-4 h-4 text-slate-500 shrink-0" />
+							<span className="font-mono text-xs text-slate-500">
 								{product.category} Industry
 							</span>
 						</div>
@@ -280,8 +275,9 @@ const ProductDetails = () => {
 					{/* Vendor Switcher */}
 					{suppliers.length > 1 && (
 						<div className="flex flex-col gap-2">
-							<span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-								{suppliers.length} suppliers available
+							<span className="font-raleway text-xs font-bold uppercase tracking-wider text-slate-400">
+								<span className="font-dmsans">{suppliers.length}</span>{" "}
+								suppliers available
 							</span>
 							<div className="flex gap-2 overflow-x-auto pb-1">
 								{suppliers.map((s) => {
@@ -339,7 +335,7 @@ const ProductDetails = () => {
 
 						<div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
 							<div className="border border-slate-200 rounded-lg p-3.5 flex flex-col justify-center bg-white shadow-xs relative">
-								<span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+								<span className="font-raleway text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
 									Standard Rate
 								</span>
 								<div className="flex items-baseline gap-0.5 font-mono">
@@ -352,12 +348,11 @@ const ProductDetails = () => {
 									</span>
 									<span className="text-xs text-slate-500 ml-1">/unit</span>
 								</div>
-								<span className="text-xs text-slate-400 mt-1 font-medium">
-									Min. order: {baseMoq}
+								<span className="font-raleway text-xs text-slate-400 mt-1 font-medium">
+									Min. order: <span className="font-dmsans">{baseMoq}</span>
 								</span>
 							</div>
 
-							{/* Bulk Price */}
 							<div
 								className={`rounded-xl p-4 flex flex-col relative transition-all duration-200 ${
 									savingsPercent > 0
@@ -371,7 +366,7 @@ const ProductDetails = () => {
 										Best Value
 									</div>
 								)}
-								<span className="text-[9px] font-bold uppercase tracking-[0.15em] text-clay/70 mb-3">
+								<span className="font-raleway text-[9px] font-bold uppercase tracking-[0.15em] text-clay/70 mb-3">
 									{savingsPercent > 0 ? "Bulk Rate" : "Unit Price"}
 								</span>
 								<div className="flex items-baseline gap-0.5 font-mono">
@@ -410,7 +405,7 @@ const ProductDetails = () => {
 						<div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-5">
 							{/* Quantity input */}
 							<div className="flex flex-col gap-2 flex-1">
-								<label className="text-[12px] font-semibold text-slate-600">
+								<label className="font-raleway text-[12px] font-semibold text-slate-600">
 									Order Quantity
 								</label>
 								<div className="flex items-stretch border border-slate-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-clay/15 focus-within:border-clay/30 transition-all bg-white">
@@ -459,7 +454,7 @@ const ProductDetails = () => {
 							{/* Price summary */}
 							<div className="flex sm:flex-col justify-between sm:justify-center gap-4 sm:gap-3 px-5 sm:px-6 py-4 sm:py-5 rounded-xl bg-slate-50/80 border border-slate-100 shrink-0">
 								<div>
-									<span className="block text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
+									<span className="font-raleway block text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
 										Per Unit
 									</span>
 									<span className="text-[15px] font-bold text-slate-700 font-mono tabular-nums">
@@ -485,6 +480,7 @@ const ProductDetails = () => {
 							<ContactVendorBtn
 								vendorId={selectedSupplier.id}
 								vendorName={selectedSupplier.name}
+								company={location}
 								productName={product.name}
 								vendorPhone={
 									selectedSupplier.phone ??

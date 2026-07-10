@@ -8,7 +8,7 @@ import {
   Layers,
   Scale,
   Truck,
-  Zap,
+  TrendingDown,
   Building2,
   Calculator,
   Minus,
@@ -17,7 +17,6 @@ import {
   Check,
   Tag,
   Heart,
-  Info,
 } from "lucide-react";
 import { gsap } from "gsap";
 import api from "../utils/axios";
@@ -39,99 +38,64 @@ const ProductDetails = () => {
   const addToCartBtnRef = useRef(null);
   const { addToCart } = useCart();
   const { toggleWishlist, isWishlisted } = useWishlist();
-
-  // --- State ---
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+
   const [selectedSupplierId, setSelectedSupplierId] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
 
-  // --- Fetch product from DB ---
+  // Fetch product on mount
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        setLoading(true);
-        setError(null);
-        const res = await api.get(`/api/products/${id}`);
+        const response = await api.get(`/api/products/${id}`);
 
-        // Transform suppliers to match the UI's expected shape
-        const transformed = {
-          ...res.data,
-          id: res.data.id?.toString(),
-          suppliers: res.data.suppliers.map((s) => ({
-            id: s.supplierId, // use actual user ID for contact & keys
-            inventoryId: s.id, // keep original inventory ID if needed
+        const productData = {
+          ...response.data,
+          id: response.data.id.toString(),
+          suppliers: response.data.suppliers.map((s) => ({
+            ...s,
             name:
               s.companyName || s.company_name || s.name || "Verified Supplier",
-            price: s.price,
-            discountPrice: s.discountPrice,
-            moq: s.moq,
-            stock: s.stock,
-            shippingDays: s.shippingDays,
-            city: s.city,
-            country: s.country,
-            verified: s.verified,
-            responseTime: s.responseTime,
-            contactNo: s.contactPhone, // for ContactVendorBtn
           })),
         };
 
-        setProduct(transformed);
-      } catch (err) {
-        console.error("Failed to fetch product:", err);
-        setError(err.response?.data?.message || "Product not found.");
-        toast.error("Could not load product details.");
+        setProduct(productData);
+
+        const cheapest =
+          getCheapestSupplier(productData)?.id ?? productData.suppliers[0]?.id;
+        setSelectedSupplierId(cheapest);
+      } catch (error) {
+        console.error("Failed to fetch product", error);
+        toast.error("Product not found");
+        navigate("/");
       } finally {
         setLoading(false);
       }
     };
 
-    if (id) fetchProduct();
-  }, [id]);
+    fetchProduct();
+  }, [id, navigate]);
 
-  // --- Reset supplier selection whenever product changes ---
-  useEffect(() => {
-    if (product?.suppliers?.length) {
-      setSelectedSupplierId(
-        getCheapestSupplier(product)?.id ?? product.suppliers[0]?.id ?? null,
-      );
-    }
-  }, [product]);
-
-  // --- Derived values ---
   const suppliers = product?.suppliers ?? [];
   const selectedSupplier =
     suppliers.find((s) => s.id === selectedSupplierId) ?? suppliers[0] ?? {};
+
+  const currentSupplierName =
+    selectedSupplier.companyName ||
+    selectedSupplier.company_name ||
+    selectedSupplier.name ||
+    "Verified Supplier";
   const baseMoq = selectedSupplier.moq ?? 1;
   const quantityStep = Math.max(1, Math.round(baseMoq / 10));
 
-  // Quantity always starts at (and can't go below) the selected supplier's MOQ
   useEffect(() => {
-    if (selectedSupplierId) setQuantity(baseMoq);
+    setQuantity(baseMoq);
   }, [selectedSupplierId, baseMoq]);
 
-  const currentUnitPrice = getEffectivePrice(selectedSupplier);
-  const totalCost = currentUnitPrice * quantity;
-
-  const unitSavings =
-    (selectedSupplier.price ?? 0) - (selectedSupplier.discountPrice ?? 0);
-  const savingsPercent =
-    selectedSupplier.price > 0
-      ? Math.round((unitSavings / selectedSupplier.price) * 100)
-      : 0;
-
-  const wishlisted = product ? isWishlisted(product.id) : false;
-  const location =
-    selectedSupplier.city && selectedSupplier.country
-      ? `${selectedSupplier.city}, ${selectedSupplier.country}`
-      : "India";
-  const supplySignal = getSupplyLabel(selectedSupplier.stock);
-  const responseTimeSpec = selectedSupplier.responseTime || "Standard options";
-
-  // --- GSAP animations ---
   useEffect(() => {
+    if (loading || !product) return;
     window.scrollTo(0, 0);
     let ctx = gsap.context(() => {
       gsap.fromTo(
@@ -141,9 +105,8 @@ const ProductDetails = () => {
       );
     }, pageRef);
     return () => ctx.revert();
-  }, [id]);
+  }, [loading, product]);
 
-  // --- Handlers ---
   const handleQuantityChange = (val) => {
     if (isNaN(val) || val < baseMoq) {
       setQuantity(baseMoq);
@@ -158,38 +121,37 @@ const ProductDetails = () => {
     setTimeout(() => setJustAdded(false), 1600);
   };
 
-  // --- Loading & Error states ---
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-clay"></div>
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <div className="w-8 h-8 border-4 border-clay border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
 
-  if (error || !product) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 text-center">
-        <p className="text-red-600 font-medium">
-          {error || "Product not found"}
-        </p>
-        <button
-          onClick={() => navigate(-1)}
-          className="mt-4 px-4 py-2 bg-clay text-white rounded-lg"
-        >
-          Go Back
-        </button>
-      </div>
-    );
-  }
+  if (!product) return null;
 
-  // --- Render (unchanged from original) ---
+  const currentUnitPrice = getEffectivePrice(selectedSupplier);
+  const totalCost = currentUnitPrice * quantity;
+  const unitSavings =
+    (selectedSupplier.price ?? 0) - (selectedSupplier.discountPrice ?? 0);
+  const savingsPercent =
+    selectedSupplier.price > 0
+      ? Math.round((unitSavings / selectedSupplier.price) * 100)
+      : 0;
+  const wishlisted = isWishlisted(product.id);
+  const location =
+    selectedSupplier.city && selectedSupplier.country
+      ? `${selectedSupplier.city}, ${selectedSupplier.country}`
+      : "India";
+  const supplySignal = getSupplyLabel(selectedSupplier.stock);
+  const responseTimeSpec = selectedSupplier.responseTime || "Standard options";
+
   return (
     <div
       ref={pageRef}
       className="w-full flex flex-col gap-6 pb-16 max-w-7xl mx-auto"
     >
-      {/* Back Navigation Bar */}
       <div className="detail-fade-in flex items-center justify-between py-2 border-b border-slate-200">
         <button
           onClick={() => navigate(-1)}
@@ -203,13 +165,16 @@ const ProductDetails = () => {
         </span>
       </div>
 
-      {/* Main Structural Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-10 items-start">
-        {/* Left Side: Product Image Display Panel */}
         <div className="detail-fade-in flex flex-col gap-4">
           <div className="group relative w-full aspect-4/3 bg-slate-100 border border-slate-200 rounded-lg overflow-hidden shadow-sm">
             <img
-              src={product.image}
+              src={
+                selectedSupplier.image_url ||
+                selectedSupplier.image ||
+                product.global_image_url ||
+                product.image
+              }
               alt={product.name}
               className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105"
             />
@@ -218,7 +183,6 @@ const ProductDetails = () => {
             </div>
           </div>
 
-          {/* Quick Specs Grid */}
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">
               <Scale className="w-5 h-5 text-slate-400 mb-1" />
@@ -252,13 +216,11 @@ const ProductDetails = () => {
           </div>
         </div>
 
-        {/* Right Side: Information & Pricing */}
         <div className="detail-fade-in flex flex-col gap-5">
-          {/* Vendor Details */}
           <div className="flex flex-col gap-2 pb-3 border-b border-slate-200">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-base font-bold text-slate-800">
-                {selectedSupplier.name}
+                {currentSupplierName}
               </span>
               {selectedSupplier.verified && (
                 <div className="flex items-center gap-1 bg-white border border-emerald-600 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full shadow-xs">
@@ -278,7 +240,6 @@ const ProductDetails = () => {
             </div>
           </div>
 
-          {/* Vendor Switcher */}
           {suppliers.length > 1 && (
             <div className="flex flex-col gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -287,6 +248,8 @@ const ProductDetails = () => {
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {suppliers.map((s) => {
                   const active = s.id === selectedSupplierId;
+                  const btnSupplierName =
+                    s.companyName || s.company_name || s.name || "Supplier";
                   return (
                     <button
                       key={s.id}
@@ -299,7 +262,7 @@ const ProductDetails = () => {
                       }`}
                     >
                       <span className="flex items-center gap-1 text-xs font-bold text-slate-800">
-                        {s.name}
+                        {btnSupplierName}
                         {s.verified && (
                           <ShieldCheck className="w-3 h-3 text-emerald-600" />
                         )}
@@ -317,14 +280,12 @@ const ProductDetails = () => {
             </div>
           )}
 
-          {/* Product Title */}
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight">
               {product.name}
             </h1>
           </div>
 
-          {/* Pricing Box */}
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex flex-col">
             <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">
@@ -358,73 +319,62 @@ const ProductDetails = () => {
                 </span>
               </div>
 
-              {/* Bulk Price */}
-              <div
-                className={`rounded-xl p-4 flex flex-col relative transition-all duration-200 ${
-                  savingsPercent > 0
-                    ? "border-2 border-clay/30 bg-linear-to-br from-clay/4 to-clay/1 ring-1 ring-inset ring-clay/5"
-                    : "border border-clay/20 bg-clay/3"
-                }`}
-              >
-                {savingsPercent > 0 && (
-                  <div className="absolute -top-2.5 right-3 flex items-center gap-1 bg-clay text-white text-[9px] font-bold px-2 py-0.5 rounded-lg uppercase tracking-wider shadow-sm shadow-clay/20">
-                    <Zap className="w-3 h-3" strokeWidth={3} />
-                    Best Value
-                  </div>
-                )}
-                <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-clay/70 mb-3">
-                  {savingsPercent > 0 ? "Bulk Rate" : "Unit Price"}
+              <div className="border-2 border-clay rounded-lg p-3.5 flex flex-col justify-center bg-clay/5 relative shadow-xs">
+                <div className="absolute -top-2.5 right-3 bg-clay text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1">
+                  <TrendingDown className="w-3 h-3" strokeWidth={3} />
+                  Best Value
+                </div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-clay mb-2">
+                  Bulk Rate
                 </span>
                 <div className="flex items-baseline gap-0.5 font-mono">
                   <IndianRupee
                     className="w-4 h-4 text-clay shrink-0"
                     strokeWidth={3}
                   />
-                  <span className="text-2xl font-black text-clay tabular-nums tracking-tight">
-                    {getEffectivePrice(selectedSupplier)}
+                  <span className="text-2xl font-black text-clay">
+                    {selectedSupplier.discountPrice ??
+                      selectedSupplier.price ??
+                      0}
                   </span>
-                  <span className="text-[11px] text-clay/60 ml-1.5 font-bold">
+                  <span className="text-xs text-clay/70 ml-1 font-bold">
                     /unit
                   </span>
                 </div>
-                {savingsPercent > 0 && (
-                  <div className="flex items-center gap-2 mt-2.5">
-                    <span className="text-[11px] text-slate-400 font-medium line-through decoration-slate-300 tabular-nums">
-                      ₹{selectedSupplier.price ?? 0}
-                    </span>
-                    <span className="text-[11px] text-clay font-bold tabular-nums">
-                      -₹{Math.abs(unitSavings).toFixed(2)} each
-                    </span>
-                  </div>
-                )}
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-xs text-slate-500 font-medium line-through decoration-slate-300">
+                    ₹{selectedSupplier.price ?? 0}
+                  </span>
+                  <span className="text-xs text-clay font-semibold">
+                    ({baseMoq}+ units)
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Quantity Calculator */}
           <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-col gap-4 shadow-xs">
             <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-600 font-mono">
               <Calculator className="w-4 h-4 text-clay" />
               <span>Calculate Total</span>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-5">
-              {/* Quantity input */}
-              <div className="flex flex-col gap-2 flex-1">
-                <label className="text-[12px] font-semibold text-slate-600">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+              <div className="flex flex-col gap-1.5 flex-1">
+                <label className="text-sm font-medium text-slate-600">
                   Order Quantity
                 </label>
-                <div className="flex items-stretch border border-slate-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-clay/15 focus-within:border-clay/30 transition-all bg-white">
+                <div className="flex items-stretch border border-slate-300 rounded-sm overflow-hidden focus-within:ring-1 focus-within:ring-clay focus-within:border-clay">
                   <button
                     type="button"
                     disabled={quantity <= baseMoq}
                     onClick={() =>
                       handleQuantityChange(quantity - quantityStep)
                     }
-                    className={`px-4 flex items-center justify-center bg-slate-50 border-r border-slate-100 shrink-0 transition-all ${
+                    className={`px-3 flex items-center justify-center bg-slate-50 border-r border-slate-200 shrink-0 transition-colors ${
                       quantity <= baseMoq
                         ? "text-slate-300 cursor-not-allowed"
-                        : "text-slate-500 hover:bg-clay/5 hover:text-clay cursor-pointer active:scale-95"
+                        : "text-slate-500 hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
                     }`}
                     aria-label="Decrease quantity"
                   >
@@ -437,42 +387,38 @@ const ProductDetails = () => {
                     onChange={(e) =>
                       handleQuantityChange(parseInt(e.target.value))
                     }
-                    className="w-full min-w-0 text-center py-3 text-lg font-mono font-bold text-slate-900 focus:outline-none bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none tabular-nums"
+                    className="w-full min-w-0 text-center py-2 text-base font-mono font-bold text-slate-900 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                   <button
                     type="button"
                     onClick={() =>
                       handleQuantityChange(quantity + quantityStep)
                     }
-                    className="px-4 flex items-center justify-center text-slate-500 bg-slate-50 hover:bg-clay/5 hover:text-clay transition-all cursor-pointer border-l border-slate-100 shrink-0 active:scale-95"
+                    className="px-3 flex items-center justify-center text-slate-500 bg-slate-50 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer border-l border-slate-200 shrink-0"
                     aria-label="Increase quantity"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
-                <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1">
-                  <Info className="w-3 h-3" />
-                  Steps of {quantityStep} · Minimum{" "}
-                  {baseMoq.toLocaleString("en-IN")}
+                <span className="text-xs font-mono text-slate-400">
+                  Increments of {quantityStep} units · Min {baseMoq}
                 </span>
               </div>
 
-              {/* Price summary */}
-              <div className="flex sm:flex-col justify-between sm:justify-center gap-4 sm:gap-3 px-5 sm:px-6 py-4 sm:py-5 rounded-xl bg-slate-50/80 border border-slate-100 shrink-0">
+              <div className="flex flex-row sm:flex-col justify-between sm:justify-center px-2 sm:px-4 py-2 sm:py-0 border-t sm:border-t-0 sm:border-l border-slate-200 gap-2 font-mono shrink-0">
                 <div>
-                  <span className="block text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
-                    Per Unit
+                  <span className="block text-xs text-slate-400 uppercase font-bold tracking-wide">
+                    Price per unit
                   </span>
-                  <span className="text-[15px] font-bold text-slate-700 font-mono tabular-nums">
+                  <span className="text-sm font-bold text-slate-700">
                     ₹{currentUnitPrice}
                   </span>
                 </div>
-                <div className="w-px h-8 sm:w-full sm:h-px bg-slate-200" />
-                <div>
-                  <span className="block text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
-                    Total
+                <div className="text-right sm:text-left">
+                  <span className="block text-xs text-slate-400 uppercase font-bold tracking-wide">
+                    Total Cost
                   </span>
-                  <span className="text-xl font-black text-clay font-mono tabular-nums tracking-tight">
+                  <span className="text-lg font-black text-clay">
                     ₹{totalCost.toLocaleString("en-IN")}
                   </span>
                 </div>
@@ -480,16 +426,16 @@ const ProductDetails = () => {
             </div>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex flex-col gap-3 mt-2">
             <div className="grid grid-cols-2 gap-3">
               <ContactVendorBtn
                 vendorId={selectedSupplier.id}
-                vendorName={selectedSupplier.name}
+                vendorName={currentSupplierName}
                 productName={product.name}
                 vendorPhone={
+                  selectedSupplier.contactPhone ??
+                  selectedSupplier.contact_phone ??
                   selectedSupplier.phone ??
-                  selectedSupplier.contactNo ??
                   selectedSupplier.mobile
                 }
               />
@@ -514,18 +460,15 @@ const ProductDetails = () => {
             <button
               ref={addToCartBtnRef}
               onClick={handleAddToCart}
-              disabled={justAdded}
-              className={`w-full flex items-center justify-center gap-2.5 py-4 text-[13px] font-bold rounded-xl transition-all duration-300 cursor-pointer active:scale-[0.99] ${
+              className={`w-full flex items-center justify-center gap-2 py-3.5 text-sm font-bold rounded-sm transition-all cursor-pointer shadow-sm active:scale-[0.99] ${
                 justAdded
-                  ? "bg-emerald-600 text-white shadow-lg shadow-emerald-200/50 scale-[1.01]"
-                  : "bg-clay text-white hover:bg-clay/90 hover:shadow-lg hover:shadow-clay/15 shadow-sm shadow-clay/10"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-clay text-white hover:bg-clay/90"
               }`}
             >
               {justAdded ? (
                 <>
-                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-white/20">
-                    <Check className="w-4 h-4 shrink-0" strokeWidth={3} />
-                  </span>
+                  <Check className="w-5 h-5 shrink-0" />
                   <span>Added to Cart</span>
                 </>
               ) : (
@@ -547,7 +490,11 @@ const ProductDetails = () => {
         }}
         onContactSupplier={(supplier) => {
           setSelectedSupplierId(supplier.id);
-          console.log("Contact supplier:", supplier.name, supplier.id);
+          console.log(
+            "Contact supplier:",
+            supplier.companyName || supplier.name,
+            supplier.id,
+          );
         }}
       />
     </div>

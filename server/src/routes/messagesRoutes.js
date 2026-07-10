@@ -12,20 +12,24 @@ router.get("/chats", async (req, res) => {
         u.name AS sender_name,
         u.company,
         (SELECT message_text FROM messages 
-         WHERE (sender_id = u.id AND receiver_id = $1) 
-            OR (sender_id = $1 AND receiver_id = u.id)
-         ORDER BY created_at DESC LIMIT 1) AS lastMessage,
+        WHERE (sender_id=u.id AND receiver_id=$1) 
+            OR (sender_id=$1 AND receiver_id=u.id)
+        ORDER BY created_at DESC LIMIT 1) AS "lastMessage",
         (SELECT created_at FROM messages 
-         WHERE (sender_id = u.id AND receiver_id = $1) 
+        WHERE (sender_id = u.id AND receiver_id = $1) 
             OR (sender_id = $1 AND receiver_id = u.id)
-         ORDER BY created_at DESC LIMIT 1) AS timestamp,
-        COUNT(CASE WHEN receiver_id = $1 AND is_read = false THEN 1 END) AS unread
+        ORDER BY created_at DESC LIMIT 1) AS timestamp,
+        COUNT(m.id) FILTER (WHERE m.receiver_id = $1 AND m.is_read = false) AS unread
       FROM users u
+      LEFT JOIN messages m 
+        ON (m.sender_id = u.id AND m.receiver_id = $1)
+        OR (m.sender_id = $1 AND m.receiver_id = u.id)
       WHERE u.id IN (
         SELECT sender_id FROM messages WHERE receiver_id = $1
         UNION
         SELECT receiver_id FROM messages WHERE sender_id = $1
       )
+      GROUP BY u.id, u.name, u.company
       ORDER BY timestamp DESC NULLS LAST
     `;
 		const { rows } = await pool.query(query, [userId]);

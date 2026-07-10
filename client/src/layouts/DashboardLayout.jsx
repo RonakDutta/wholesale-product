@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   Package,
@@ -6,11 +7,19 @@ import {
   Settings,
   Search,
   Bell,
+  Menu,
+  X,
 } from "lucide-react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 
 const DashboardLayout = () => {
   const location = useLocation();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Close sidebar automatically when route changes on mobile
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [location.pathname]);
 
   const navItems = [
     {
@@ -52,18 +61,41 @@ const DashboardLayout = () => {
   };
 
   return (
-    <div className="font-dmsans min-h-screen bg-slate-50 flex">
-      <aside className="w-64 bg-white border-r border-slate-200 flex-col hidden md:flex shrink-0 sticky top-0 h-screen">
-        <div className="h-16 flex items-center px-6 border-b border-slate-100 shrink-0">
-          <Link
-            to="/"
-            className="text-xl font-black tracking-tighter text-espresso select-none"
+    <div className="font-dmsans min-h-screen bg-slate-50 flex overflow-hidden">
+      {/* Mobile Backdrop Overlay */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden transition-opacity"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar Navigation */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col h-screen transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 shrink-0 ${
+          isSidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
+        }`}
+      >
+        <div className="h-16 flex items-center justify-between px-6 border-b border-slate-100 shrink-0">
+          <div className="flex items-center">
+            <Link
+              to="/"
+              className="text-xl font-black tracking-tighter text-espresso select-none"
+            >
+              market<span className="text-clay">place.</span>
+            </Link>
+            <span className="ml-2 bg-sage/20 text-espresso text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-widest">
+              Seller
+            </span>
+          </div>
+
+          {/* Mobile Close Button */}
+          <button
+            onClick={() => setIsSidebarOpen(false)}
+            className="md:hidden p-1.5 text-slate-400 hover:bg-slate-50 hover:text-slate-700 rounded-lg transition-colors cursor-pointer"
           >
-            market<span className="text-clay">place.</span>
-          </Link>
-          <span className="ml-2 bg-sage/20 text-espresso text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-widest">
-            Seller
-          </span>
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto py-6 px-4 flex flex-col gap-1">
@@ -73,6 +105,7 @@ const DashboardLayout = () => {
               <Link
                 key={item.path}
                 to={item.path}
+                onClick={() => setIsSidebarOpen(false)}
                 className={`flex items-center justify-between w-full px-4 py-3 rounded-xl transition-colors ${
                   isActive
                     ? "bg-clay/10 text-clay font-bold"
@@ -96,18 +129,23 @@ const DashboardLayout = () => {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative">
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-8 shrink-0 sticky top-0 z-10">
-          <div className="flex items-center gap-4 flex-1">
-            <button className="md:hidden p-2 text-slate-500 hover:bg-slate-50 rounded-lg cursor-pointer">
-              <LayoutDashboard className="w-5 h-5" />
+          <div className="flex items-center gap-3 sm:gap-4 flex-1">
+            {/* Hamburger Button */}
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="md:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-50 hover:text-clay rounded-lg cursor-pointer transition-colors"
+            >
+              <Menu className="w-6 h-6" />
             </button>
-            <h1 className="text-lg sm:text-xl font-bold text-espresso hidden sm:block">
+            <h1 className="text-lg sm:text-xl font-bold text-espresso line-clamp-1">
               Supplier Portal
             </h1>
           </div>
 
-          <div className="flex items-center gap-3 sm:gap-5">
+          <div className="flex items-center gap-2 sm:gap-5">
             <div className="relative hidden md:block">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -128,7 +166,7 @@ const DashboardLayout = () => {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <Outlet />
         </div>
       </main>

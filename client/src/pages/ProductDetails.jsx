@@ -50,10 +50,17 @@ const ProductDetails = () => {
     const fetchProduct = async () => {
       try {
         const response = await api.get(`/api/products/${id}`);
+
         const productData = {
           ...response.data,
           id: response.data.id.toString(),
+          suppliers: response.data.suppliers.map((s) => ({
+            ...s,
+            name:
+              s.companyName || s.company_name || s.name || "Verified Supplier",
+          })),
         };
+
         setProduct(productData);
 
         const cheapest =

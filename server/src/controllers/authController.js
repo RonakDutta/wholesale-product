@@ -81,3 +81,39 @@ exports.getMe = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// @desc    Upgrade a buyer to a seller
+// @route   POST /api/auth/upgrade
+exports.upgradeToSeller = async (req, res) => {
+  const userId = req.user.id;
+  const { companyName, gstin, phone, city } = req.body;
+
+  try {
+    const userResult = await pool.query(
+      "SELECT role FROM users WHERE id = $1",
+      [userId],
+    );
+    const currentRole = userResult.rows[0].role;
+
+    if (currentRole === "seller" || currentRole === "both") {
+      return res
+        .status(400)
+        .json({ message: "You are already registered as a seller." });
+    }
+
+    await pool.query("UPDATE users SET role = 'both' WHERE id = $1", [userId]);
+
+    await pool.query(
+      `INSERT INTO wholesaler_profiles (user_id, company_name, gstin, contact_phone, city, is_verified) 
+       VALUES ($1, $2, $3, $4, $5, false)`,
+      [userId, companyName, gstin, phone, city],
+    );
+
+    res
+      .status(200)
+      .json({ message: "Successfully upgraded to a seller account!" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error upgrading account" });
+  }
+};

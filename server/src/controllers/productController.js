@@ -268,8 +268,6 @@ exports.deleteInventoryItem = async (req, res) => {
       .json({ message: "Listing deleted successfully", softDeleted: false });
   } catch (err) {
     console.error(err);
-    // Fallback: FK constraint (ON DELETE RESTRICT) blocked it —
-    // covers any order placed between our check and the DELETE
     if (err.code === "23503") {
       await pool.query(
         `UPDATE supplier_inventory SET status = 'Draft' WHERE id = $1`,

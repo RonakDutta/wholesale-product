@@ -45,6 +45,11 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const upgradeAccount = async (sellerData) => {
+    await api.post("/api/auth/upgrade", sellerData);
+    await fetchUser(token);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -53,6 +58,7 @@ export const AuthProvider = ({ children }) => {
         login,
         register,
         logout,
+        upgradeAccount,
         isAuthenticated: !!user,
         isLoading,
       }}

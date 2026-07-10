@@ -8,12 +8,26 @@ import {
   LogOut,
   LayoutDashboard,
   ChevronDown,
+  Check,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { useAuth } from "../context/AuthContext";
 import CartDrawer from "./CartDrawer";
+
+const CITIES = [
+  "Delhi NCR",
+  "Mumbai",
+  "Bangalore",
+  "Hyderabad",
+  "Chennai",
+  "Kolkata",
+  "Pune",
+  "Ahmedabad",
+  "Surat",
+  "Jaipur",
+];
 
 const Navbar = () => {
   const { uniqueItemCount, setIsCartOpen } = useCart();
@@ -22,10 +36,11 @@ const Navbar = () => {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [selectedCity, setSelectedCity] = useState("Delhi NCR"); // Global city state
   const navRef = useRef(null);
   const navigate = useNavigate();
 
-  // Close dropdown when clicking outside the navbar
+  // Close profile dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (navRef.current && !navRef.current.contains(event.target)) {
@@ -49,7 +64,7 @@ const Navbar = () => {
     navigate("/");
   };
 
-  // Reusable Dropdown Menu for both Mobile and Desktop
+  // Reusable Profile Dropdown Menu
   const ProfileMenu = () => (
     <div className="absolute right-0 mt-2 w-56 sm:w-64 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-50">
       <div className="p-4 border-b border-slate-100 bg-slate-50/50">
@@ -84,13 +99,76 @@ const Navbar = () => {
     </div>
   );
 
+  // Self-contained Location Selector to prevent double-render ref bugs
+  const LocationSelector = () => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropRef = useRef(null);
+
+    useEffect(() => {
+      const handleClickOutside = (e) => {
+        if (dropRef.current && !dropRef.current.contains(e.target)) {
+          setIsOpen(false);
+        }
+      };
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    return (
+      <div className="relative" ref={dropRef}>
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex items-center gap-1 sm:gap-1.5 p-2 text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-colors group cursor-pointer"
+        >
+          <MapPin className="w-5 h-5 group-hover:scale-110 transition-transform text-slate-500" />
+          {/* Text hidden on mobile to save space */}
+          <span className="hidden sm:inline whitespace-nowrap">
+            {selectedCity}
+          </span>
+          <ChevronDown
+            className={`hidden sm:block w-3 h-3 text-slate-400 transition-transform ${
+              isOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+
+        {isOpen && (
+          <div className="absolute right-0 sm:right-auto sm:left-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-50">
+            <div className="p-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-clay" />
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Select Region
+              </span>
+            </div>
+            <div className="max-h-60 overflow-y-auto p-1 hide-scrollbar">
+              {CITIES.map((city) => (
+                <button
+                  key={city}
+                  onClick={() => {
+                    setSelectedCity(city);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full text-left px-3 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer flex items-center justify-between ${
+                    selectedCity === city
+                      ? "bg-clay/10 text-clay"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  }`}
+                >
+                  {city}
+                  {selectedCity === city && <Check className="w-4 h-4" />}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const ActionIcons = () => (
     <>
-      {/* Hidden on extra small screens to save space */}
-      <button className="hidden sm:flex items-center gap-1.5 p-2 text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-colors group cursor-pointer">
-        <MapPin className="w-5 h-5 group-hover:scale-110 transition-transform" />
-        <span className="hidden xl:inline">Delhi NCR</span>
-      </button>
+      <LocationSelector />
 
       <Link
         to="/wishlist"
@@ -134,7 +212,7 @@ const Navbar = () => {
             </Link>
 
             {/* Mobile Icons */}
-            <div className="flex items-center gap-1 md:hidden -mr-2">
+            <div className="flex items-center gap-0.5 sm:gap-1 md:hidden -mr-2">
               <ActionIcons />
               {isAuthenticated ? (
                 <div className="relative">
@@ -192,7 +270,7 @@ const Navbar = () => {
                     onClick={() => setIsProfileOpen(!isProfileOpen)}
                     className="flex items-center gap-2 hover:bg-slate-50 p-1.5 pr-2.5 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-slate-200"
                   >
-                    <div className="w-8 h-8 rounded-full bg-clay/10 text-clay flex items-center justify-center font-bold text-sm">
+                    <div className="w-8 h-8 rounded-full bg-clay/10 text-clay flex items-center justify-center font-bold text-sm uppercase">
                       {user?.firstName?.charAt(0)}
                       {user?.lastName?.charAt(0)}
                     </div>

@@ -226,13 +226,12 @@ const MyProducts = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {/* Edit Button - Redirects to an edit form route */}
+                      <div className="flex items-center justify-end gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() =>
                             navigate(`/dashboard/products/edit/${item.id}`)
                           }
-                          className="p-1.5 text-slate-400 hover:text-clay hover:bg-clay/10 rounded-md transition-colors"
+                          className="p-2 text-slate-500 hover:text-clay hover:bg-clay/10 bg-slate-50 lg:bg-transparent rounded-md transition-colors"
                           title="Edit Product"
                         >
                           <Edit className="w-4 h-4" />
@@ -240,10 +239,10 @@ const MyProducts = () => {
 
                         <button
                           onClick={() => handleDelete(item.id)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                          className="p-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 bg-rose-50/50 lg:bg-transparent rounded-md transition-colors"
                           title="Delete Product"
                         >
-                          <Trash2 className="w-4 h-4" />{" "}
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </td>

@@ -24,78 +24,79 @@ import Messages from "./pages/dashboard/Messages";
 import Settings from "./pages/dashboard/Settings";
 
 const router = createBrowserRouter([
-  {
-    path: "/",
-    element: <MainLayout />,
-    children: [
-      { index: true, element: <MarketplaceHome /> },
-      { path: "product/:id", element: <ProductDetails /> },
-      { path: "search", element: <SearchResults /> },
-      { path: "wishlist", element: <Wishlist /> },
-    ],
-  },
-  {
-    path: "/dashboard",
-    element: <DashboardLayout />,
-    children: [
-      { index: true, element: <DashboardOverview /> },
-      { path: "products", element: <MyProducts /> },
-      { path: "products/new", element: <AddProduct /> },
-      { path: "orders", element: <Orders /> },
-      { path: "messages", element: <Messages /> },
-      { path: "settings", element: <Settings /> },
-    ],
-  },
-  {
-    element: <InfoLayout />,
-    children: [
-      {
-        path: "browse-products",
-        element: <FooterInfoPage page="browse-products" />,
-      },
-      {
-        path: "verified-sellers",
-        element: <FooterInfoPage page="verified-sellers" />,
-      },
-      {
-        path: "dynamic-pricing",
-        element: <FooterInfoPage page="dynamic-pricing" />,
-      },
-      { path: "help-center", element: <FooterInfoPage page="help-center" /> },
-      { path: "upi-guide", element: <FooterInfoPage page="upi-guide" /> },
-      { path: "contact-us", element: <FooterInfoPage page="contact-us" /> },
-      {
-        path: "terms-of-service",
-        element: <FooterInfoPage page="terms-of-service" />,
-      },
-      {
-        path: "privacy-policy",
-        element: <FooterInfoPage page="privacy-policy" />,
-      },
-      {
-        path: "seller-agreement",
-        element: <FooterInfoPage page="seller-agreement" />,
-      },
-    ],
-  },
-  {
-    element: <AuthLayout />,
-    children: [
-      { path: "login", element: <Login /> },
-      { path: "signup", element: <SignUp /> },
-    ],
-  },
+	{
+		path: "/",
+		element: <MainLayout />,
+		children: [
+			{ index: true, element: <MarketplaceHome /> },
+			{ path: "product/:id", element: <ProductDetails /> },
+			{ path: "search", element: <SearchResults /> },
+			{ path: "wishlist", element: <Wishlist /> },
+		],
+	},
+	{
+		path: "/dashboard",
+		element: <DashboardLayout />,
+		children: [
+			{ index: true, element: <DashboardOverview /> },
+			{ path: "products", element: <MyProducts /> },
+			{ path: "products/new", element: <AddProduct /> },
+			{ path: "orders", element: <Orders /> },
+			{ path: "messages", element: <Messages /> },
+			{ path: "messages/:vendorId", element: <Messages /> },
+			{ path: "settings", element: <Settings /> },
+		],
+	},
+	{
+		element: <InfoLayout />,
+		children: [
+			{
+				path: "browse-products",
+				element: <FooterInfoPage page="browse-products" />,
+			},
+			{
+				path: "verified-sellers",
+				element: <FooterInfoPage page="verified-sellers" />,
+			},
+			{
+				path: "dynamic-pricing",
+				element: <FooterInfoPage page="dynamic-pricing" />,
+			},
+			{ path: "help-center", element: <FooterInfoPage page="help-center" /> },
+			{ path: "upi-guide", element: <FooterInfoPage page="upi-guide" /> },
+			{ path: "contact-us", element: <FooterInfoPage page="contact-us" /> },
+			{
+				path: "terms-of-service",
+				element: <FooterInfoPage page="terms-of-service" />,
+			},
+			{
+				path: "privacy-policy",
+				element: <FooterInfoPage page="privacy-policy" />,
+			},
+			{
+				path: "seller-agreement",
+				element: <FooterInfoPage page="seller-agreement" />,
+			},
+		],
+	},
+	{
+		element: <AuthLayout />,
+		children: [
+			{ path: "login", element: <Login /> },
+			{ path: "signup", element: <SignUp /> },
+		],
+	},
 ]);
 
 export default function App() {
-  return (
-    <AuthProvider>
-      <CartProvider>
-        <WishlistProvider>
-          <Toaster richColors position="bottom-right" />
-          <RouterProvider router={router} />
-        </WishlistProvider>
-      </CartProvider>
-    </AuthProvider>
-  );
+	return (
+		<AuthProvider>
+			<CartProvider>
+				<WishlistProvider>
+					<Toaster richColors position="bottom-right" />
+					<RouterProvider router={router} />
+				</WishlistProvider>
+			</CartProvider>
+		</AuthProvider>
+	);
 }

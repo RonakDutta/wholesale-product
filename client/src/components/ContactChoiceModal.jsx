@@ -20,7 +20,7 @@ const ContactChoiceModal = ({
 	const handleSelectChat = () => {
 		console.log("navigating with vendorId:", vendorId);
 		onClose();
-		navigate("/dashboard/messages", {
+		navigate(`/dashboard/messages/${vendorId}`, {
 			state: {
 				openChat: {
 					vendorId,

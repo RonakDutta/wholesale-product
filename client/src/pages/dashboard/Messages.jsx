@@ -302,7 +302,7 @@ import { useChatList } from "../../hooks/useChatList";
 import { useConversation } from "../../hooks/useConversation";
 import MessageBubble from "../../components/MessageBubble";
 import MessageInput from "../../components/MessageInput";
-import { useLocation, useNavigate } from "react-router";
+import { useLocation, useNavigate, useParams } from "react-router";
 
 const timeAgo = (iso) => {
 	const diff = Date.now() - new Date(iso).getTime();
@@ -365,6 +365,7 @@ const Messages = () => {
 	const { user } = useAuth();
 	const location = useLocation();
 	const navigate = useNavigate();
+	const { vendorId } = useParams();
 	const { chats, loading: chatsLoading, clearUnread } = useChatList();
 	const [activeChatId, setActiveChatId] = useState(null);
 	const [pendingChat, setPendingChat] = useState(null);
@@ -375,14 +376,16 @@ const Messages = () => {
 
 	useEffect(() => {
 		const incoming = location.state?.openChat;
-		if (!incoming?.vendorId) return;
+		if (!vendorId) return;
 
-		setActiveChatId(incoming.vendorId);
+		setActiveChatId(vendorId);
 		setPendingChat({
-			user_id: incoming.vendorId,
-			sender_name: incoming.vendorName,
-			company: incoming.company,
-			lastMessage: incoming.productName ? `Re: ${incoming.productName}` : "",
+			user_id: vendorId,
+			sender_name: location.state?.vendorName || "Vendor",
+			company: location.state?.company,
+			lastMessage: location.state?.productName
+				? `Re: ${location.state.productName}`
+				: "",
 			timestamp: null,
 			unread: 0,
 		});
@@ -412,7 +415,9 @@ const Messages = () => {
 
 	const handleSelectChat = (userId) => {
 		setActiveChatId(userId);
+		setPendingChat(null);
 		clearUnread(userId);
+		navigate(`/dashboard/messages/${userId}`, { replace: true });
 	};
 
 	const activeChat =

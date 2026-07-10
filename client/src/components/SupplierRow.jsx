@@ -26,7 +26,7 @@ const SupplierRow = ({ supplier, isBest }) => {
     <div
       className={`relative flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl transition-all duration-200 ${
         isBest
-          ? "bg-gradient-to-r from-sage/20 via-sage/5 to-transparent border border-sage/40 shadow-sm"
+          ? "bg-linear-to-r from-sage/20 via-sage/5 to-transparent border border-sage/40 shadow-sm"
           : "bg-white/70 border border-transparent hover:border-slate-200 hover:bg-slate-50/80"
       }`}
     >

@@ -90,10 +90,16 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
     onContactSupplier(supplier);
   };
 
+  const getSupplierName = (id) => {
+    if (!id) return "—";
+    const supplier = product.suppliers.find((s) => s.id === id);
+    return supplier?.name || `#${id}`;
+  };
+
   const insightCards = [
     {
       label: "Best Price",
-      value: metrics.lowestPriceId ? `#${metrics.lowestPriceId}` : "—",
+      value: getSupplierName(metrics.lowestPriceId),
       color: "text-emerald-700",
       bg: "bg-emerald-50",
       border: "border-emerald-200",
@@ -101,7 +107,7 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
     },
     {
       label: "Fastest Shipping",
-      value: metrics.fastestShippingId ? `#${metrics.fastestShippingId}` : "—",
+      value: getSupplierName(metrics.fastestShippingId),
       color: "text-sky-700",
       bg: "bg-sky-50",
       border: "border-sky-200",
@@ -109,7 +115,7 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
     },
     {
       label: "Top Rated",
-      value: metrics.highestRatingId ? `#${metrics.highestRatingId}` : "—",
+      value: getSupplierName(metrics.highestRatingId),
       color: "text-amber-700",
       bg: "bg-amber-50",
       border: "border-amber-200",
@@ -117,7 +123,7 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
     },
     {
       label: "Lowest MOQ",
-      value: metrics.lowestMOQId ? `#${metrics.lowestMOQId}` : "—",
+      value: getSupplierName(metrics.lowestMOQId),
       color: "text-violet-700",
       bg: "bg-violet-50",
       border: "border-violet-200",
@@ -153,7 +159,7 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
               onClick={handleCompare}
               className="group flex items-center justify-center gap-2 rounded-md bg-clay px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-sm transition-all hover:bg-clay/90 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none disabled:border disabled:border-slate-200"
             >
-              Compare Selected
+              Compare
               {selectedSuppliers.length > 0 && (
                 <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-white/20 text-[10px] group-disabled:bg-slate-200 group-disabled:text-slate-500">
                   {selectedSuppliers.length}
@@ -167,7 +173,7 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
           {insightCards.map((card) => (
             <div
               key={card.label}
-              className={`rounded-lg border ${card.border} ${card.bg} p-3 flex flex-col justify-between`}
+              className={`rounded-lg border ${card.border} ${card.bg} p-3 flex flex-col justify-between overflow-hidden`}
             >
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -175,7 +181,10 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
                 </p>
                 {card.icon}
               </div>
-              <p className={`font-mono text-lg font-black ${card.color}`}>
+              <p
+                className={`font-mono text-base sm:text-lg font-black truncate ${card.color}`}
+                title={card.value !== "—" ? card.value : undefined}
+              >
                 {card.value}
               </p>
             </div>
@@ -376,6 +385,7 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
 
 SupplierComparison.propTypes = {
   product: PropTypes.shape({
+    name: PropTypes.string,
     suppliers: PropTypes.arrayOf(PropTypes.object).isRequired,
   }).isRequired,
   onAddToCart: PropTypes.func.isRequired,

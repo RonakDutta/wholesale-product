@@ -20,7 +20,7 @@ import DashboardOverview from "./pages/dashboard/DashboardOverview";
 import MyProducts from "./pages/dashboard/MyProducts";
 import AddProduct from "./pages/dashboard/AddProduct";
 import Orders from "./pages/dashboard/Orders";
-import Messages from "./pages/dashboard/Messages";
+import Messages from "./pages/Messages";
 import Settings from "./pages/dashboard/Settings";
 import EditProduct from "./pages/dashboard/EditProduct";
 
@@ -33,6 +33,8 @@ const router = createBrowserRouter([
       { path: "product/:id", element: <ProductDetails /> },
       { path: "search", element: <SearchResults /> },
       { path: "wishlist", element: <Wishlist /> },
+      { path: "messages", element: <Messages /> },
+      { path: "messages/:vendorId", element: <Messages /> },
     ],
   },
   {
@@ -44,7 +46,6 @@ const router = createBrowserRouter([
       { path: "products/new", element: <AddProduct /> },
       { path: "products/edit/:id", element: <EditProduct /> },
       { path: "orders", element: <Orders /> },
-      { path: "messages", element: <Messages /> },
       { path: "settings", element: <Settings /> },
     ],
   },

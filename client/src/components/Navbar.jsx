@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   ChevronDown,
   Check,
+  MessageSquare, // <-- Added this import
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
@@ -36,7 +37,7 @@ const Navbar = () => {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [selectedCity, setSelectedCity] = useState("Delhi NCR"); // Global city state
+  const [selectedCity, setSelectedCity] = useState("Delhi NCR");
   const navRef = useRef(null);
   const navigate = useNavigate();
 
@@ -78,6 +79,16 @@ const Navbar = () => {
       </div>
 
       <div className="p-2 flex flex-col gap-1">
+        {/* <-- Added Messages Link Here --> */}
+        <Link
+          to="/messages"
+          onClick={() => setIsProfileOpen(false)}
+          className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-clay/5 hover:text-clay rounded-lg transition-colors cursor-pointer"
+        >
+          <MessageSquare className="w-4 h-4" />
+          Messages
+        </Link>
+
         {(user?.role === "seller" || user?.role === "both") && (
           <Link
             to="/dashboard"
@@ -88,6 +99,7 @@ const Navbar = () => {
             Supplier Dashboard
           </Link>
         )}
+
         <button
           onClick={handleLogout}
           className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors w-full text-left cursor-pointer"

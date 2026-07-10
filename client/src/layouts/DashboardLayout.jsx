@@ -44,7 +44,6 @@ const DashboardLayout = () => {
       path: "/messages",
       label: "Messages",
       icon: MessageSquare,
-      badge: 3,
       exact: false,
     },
     {

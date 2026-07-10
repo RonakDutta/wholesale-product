@@ -3,18 +3,35 @@ import {
 	MessageSquareText,
 	X,
 	ChevronRight,
-	Link,
 } from "lucide-react";
 import ModalShell from "./ModalShell";
-import { useNavigate } from "react-router";
+import { useNavigate } from "react-router-dom";
 
 const ContactChoiceModal = ({
+	vendorId,
 	vendorName,
+	company,
+	productName,
 	onClose,
 	onSelectWhatsApp,
-	onSelectChat,
 }) => {
 	const navigate = useNavigate();
+
+	const handleSelectChat = () => {
+		console.log("navigating with vendorId:", vendorId);
+		onClose();
+		navigate(`/dashboard/messages/${vendorId}`, {
+			state: {
+				openChat: {
+					vendorId,
+					vendorName,
+					company,
+					productName,
+				},
+			},
+		});
+	};
+
 	return (
 		<ModalShell onClose={onClose}>
 			<div className="p-5">
@@ -35,7 +52,6 @@ const ContactChoiceModal = ({
 						<X className="h-4 w-4" />
 					</button>
 				</div>
-
 				<div className="mt-5 flex flex-col gap-3">
 					<button
 						type="button"
@@ -55,13 +71,9 @@ const ContactChoiceModal = ({
 						</span>
 						<ChevronRight className="h-4 w-4 text-slate-300" />
 					</button>
-
 					<button
 						type="button"
-						onClick={() => {
-							onSelectChat();
-							navigate("dashboard/messages");
-						}}
+						onClick={handleSelectChat}
 						className="cursor-pointer flex items-center gap-3 rounded-xl border border-slate-200 p-4 text-left transition hover:border-clay hover:bg-clay/5"
 					>
 						<span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-clay/10 text-clay">

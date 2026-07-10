@@ -302,6 +302,7 @@ import { useChatList } from "../../hooks/useChatList";
 import { useConversation } from "../../hooks/useConversation";
 import MessageBubble from "../../components/MessageBubble";
 import MessageInput from "../../components/MessageInput";
+import { useLocation, useNavigate, useParams } from "react-router";
 
 const timeAgo = (iso) => {
 	const diff = Date.now() - new Date(iso).getTime();
@@ -361,20 +362,52 @@ const ChatListItem = ({ chat, active, onClick }) => (
 );
 
 const Messages = () => {
-	const { user } = useAuth(); // { id, ... }
+	const { user } = useAuth();
+	const location = useLocation();
+	const navigate = useNavigate();
+	const { vendorId } = useParams();
 	const { chats, loading: chatsLoading, clearUnread } = useChatList();
 	const [activeChatId, setActiveChatId] = useState(null);
+	const [pendingChat, setPendingChat] = useState(null);
 	const [search, setSearch] = useState("");
 	const messagesEndRef = useRef(null);
 
 	const { messages, sendMessage } = useConversation(activeChatId, user?.id);
 
+	useEffect(() => {
+		const incoming = location.state?.openChat;
+		if (!vendorId) return;
+
+		setActiveChatId(vendorId);
+		setPendingChat({
+			user_id: vendorId,
+			sender_name: location.state?.vendorName || "Vendor",
+			company: location.state?.company,
+			lastMessage: location.state?.productName
+				? `Re: ${location.state.productName}`
+				: "",
+			timestamp: null,
+			unread: 0,
+		});
+
+		// clear the state so refreshing/back-nav doesn't re-trigger this
+		navigate(location.pathname, { replace: true, state: {} });
+	}, [location.state, navigate, location.pathname]);
+
 	// default to first chat once loaded
 	useEffect(() => {
-		if (!activeChatId && chats.length > 0) {
+		if (!activeChatId && !pendingChat && chats.length > 0) {
 			setActiveChatId(chats[0].user_id);
 		}
-	}, [chats, activeChatId]);
+	}, [chats, activeChatId, pendingChat]);
+
+	// once the vendor shows up in the real chat list (message actually sent),
+	// drop the synthetic pending entry and use the real one
+	useEffect(() => {
+		if (pendingChat && chats.some((c) => c.user_id === pendingChat.user_id)) {
+			setPendingChat(null);
+		}
+	}, [chats, pendingChat]);
 
 	useEffect(() => {
 		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -382,10 +415,14 @@ const Messages = () => {
 
 	const handleSelectChat = (userId) => {
 		setActiveChatId(userId);
+		setPendingChat(null);
 		clearUnread(userId);
+		navigate(`/dashboard/messages/${userId}`, { replace: true });
 	};
 
-	const activeChat = chats.find((c) => c.user_id === activeChatId);
+	const activeChat =
+		chats.find((c) => c.user_id === activeChatId) ??
+		(pendingChat?.user_id === activeChatId ? pendingChat : null);
 
 	const filteredChats = chats.filter((c) =>
 		`${c.sender_name} ${c.company}`
@@ -418,9 +455,17 @@ const Messages = () => {
 						/>
 					</div>
 				</div>
-
 				<div className="flex-1 overflow-y-auto">
-					{filteredChats.length === 0 ? (
+					{/* pending (new, unsaved) chat pinned at top */}
+					{pendingChat && (
+						<ChatListItem
+							chat={pendingChat}
+							active={activeChatId === pendingChat.user_id}
+							onClick={() => handleSelectChat(pendingChat.user_id)}
+						/>
+					)}
+
+					{filteredChats.length === 0 && !pendingChat ? (
 						<div className="p-8 text-center text-xs text-slate-400">
 							{chats.length === 0 ? "No conversations yet" : "No matches found"}
 						</div>

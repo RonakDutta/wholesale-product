@@ -210,7 +210,6 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
               onClick={handleCompare}
               className="cursor-pointer group flex items-center justify-center gap-2 rounded-lg bg-clay px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider text-white shadow-sm shadow-clay/20 transition-all hover:bg-clay/90 hover:shadow-md hover:shadow-clay/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none disabled:border disabled:border-slate-200"
             >
-              <Zap className="w-3.5 h-3.5" />
               Compare
               {selectedSuppliers.length > 0 && (
                 <span className="flex h-4 min-w-4 items-center justify-center rounded-md bg-white/20 px-1 text-[10px] font-bold tabular-nums group-disabled:bg-slate-200 group-disabled:text-slate-500">

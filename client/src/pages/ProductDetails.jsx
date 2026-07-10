@@ -531,9 +531,7 @@ const ProductDetails = () => {
               ) : (
                 <>
                   <ShoppingBag className="w-5 h-5 shrink-0" />
-                  <span>
-                    Add to Cart — ₹{totalCost.toLocaleString("en-IN")}
-                  </span>
+                  <span>Add to Cart</span>
                 </>
               )}
             </button>

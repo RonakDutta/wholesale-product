@@ -275,7 +275,6 @@ const SupplierComparisonModal = ({
 						</thead>
 
 						<tbody className="divide-y divide-slate-100/80">
-							{/* ── Price row (highlighted) ── */}
 							<tr className="bg-slate-50/40">
 								<td className="w-[180px] p-4 text-[12px] font-bold uppercase tracking-wider text-slate-600">
 									Unit Price
@@ -307,7 +306,6 @@ const SupplierComparisonModal = ({
 								})}
 							</tr>
 
-							{/* ── Stat rows ── */}
 							{STAT_FIELDS.map((field, rowIdx) => (
 								<tr
 									key={field.key}

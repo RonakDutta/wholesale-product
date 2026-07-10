@@ -69,6 +69,10 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
 		[filteredSuppliers],
 	);
 
+	const supplierMap = useMemo(() => {
+		return new Map(product.suppliers.map((s) => [s.id, s]));
+	}, [product.suppliers]);
+
 	const selectedSuppliers = useMemo(
 		() => filteredSuppliers.filter((s) => selectedSupplierIds.includes(s.id)),
 		[filteredSuppliers, selectedSupplierIds],
@@ -108,10 +112,8 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
 		onContactSupplier(supplier);
 	};
 
-	const getSupplier = (id) =>
-		id ? product.suppliers.find((s) => s.id === id) : null;
+	const getSupplier = (id) => supplierMap.get(id);
 
-	// ── Insight cards: show supplier NAME + value, not just ID ──
 	const insightCards = [
 		{
 			label: "Best Price",
@@ -140,9 +142,10 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
 		{
 			label: "Top Rated",
 			supplier: getSupplier(metrics.highestRatingId),
-			value: getSupplier(metrics.highestRatingId)
-				? `${getSupplier(metrics.highestRatingId).rating?.toFixed(1)} ★`
-				: "—",
+			value:
+				getSupplier(metrics.highestRatingId)?.rating != null
+					? `${getSupplier(metrics.highestRatingId).rating.toFixed(1)} ★`
+					: "—",
 			color: "text-amber-700",
 			bg: "bg-gradient-to-br from-amber-50/80 to-white",
 			border: "border-amber-200/60",
@@ -406,7 +409,7 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
 							{columns.map((col, idx) => (
 								<th
 									key={idx}
-									className={`whitespace-nowrap px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400 font-mono ${
+									className={`whitespace-nowrap px-8.5 py-2.5 text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400 font-mono ${
 										col.align === "right" ? "text-right" : ""
 									}`}
 								>

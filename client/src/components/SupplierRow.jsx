@@ -20,53 +20,58 @@ const SupplierRow = ({ supplier, isBest }) => {
 
 	return (
 		<div
-			className={`font-inter relative flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 sm:px-2.5 sm:py-2 transition-all duration-200 ${
-				isBest
-					? "bg-gradient-to-r from-sage/15 via-sage/10 to-transparent border border-sage/40 shadow-sm"
-					: "bg-slate-50 border border-transparent hover:border-slate-200 hover:bg-slate-100/70"
-			}`}
+			className={`
+        relative flex items-center justify-between gap-2 
+        px-3 py-2.5 rounded-xl 
+        transition-all duration-200 ease-in-out
+        ${
+					isBest
+						? "bg-gradient-to-r from-sage/20 via-sage/5 to-transparent border border-sage/40 shadow-sm"
+						: "bg-white/70 border border-transparent hover:border-slate-200 hover:bg-slate-50/80"
+				}
+      `}
 		>
 			{isBest && (
-				<span className="absolute -top-2 left-2 flex items-center gap-0.5 rounded-full bg-sage px-1.5 py-[1px] text-[6px] sm:text-[7px] font-bold uppercase tracking-wide text-white shadow-sm">
-					<Crown className="w-2 h-2" strokeWidth={3} />
+				<span className="absolute -top-2 left-3 flex items-center gap-1 rounded-full bg-sage px-2 py-0.5 text-[7px] sm:text-[8px] font-bold uppercase tracking-wider text-white shadow-md">
+					<Crown className="w-2.5 h-2.5" strokeWidth={3} />
 					Best price
 				</span>
 			)}
 
 			<div className="min-w-0 flex-1">
-				<div className="flex items-center gap-1 min-w-0">
-					<span className="text-[8px] sm:text-[10px] md:text-sm font-semibold text-slate-800 truncate">
+				<div className="flex items-center gap-1.5">
+					<span className="text-[9px] sm:text-xs md:text-sm font-semibold text-slate-800 truncate">
 						{name}
 					</span>
 					{verified && (
 						<ShieldCheck
-							className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-emerald-600 shrink-0"
+							className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600 shrink-0"
 							strokeWidth={2.5}
 						/>
 					)}
 				</div>
-				<div className="flex items-center gap-1 text-[7px] sm:text-[8px] text-slate-400 truncate mt-0.5">
-					<span className="flex items-center gap-0.5 truncate">
-						<MapPin className="w-2 h-2 shrink-0" />
+				<div className="flex items-center gap-1.5 mt-0.5 text-[10px] sm:text-[11px] text-slate-500 truncate">
+					<span className="flex items-center gap-1 truncate">
+						<MapPin className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
 						<span className="truncate">{location}</span>
 					</span>
 					<span className="text-slate-300">•</span>
-					<span className="shrink-0">MOQ {moq}</span>
+					<span className="shrink-0 font-medium">MOQ {moq}</span>
 				</div>
 			</div>
 
 			<div className="flex flex-col items-end shrink-0">
 				{hasDiscount && (
-					<span className="text-[7px] sm:text-[8px] font-medium text-slate-400 line-through">
+					<span className="text-[8px] sm:text-[9px] font-medium text-slate-400 line-through">
 						₹{price}
 					</span>
 				)}
-				<div className="flex items-center gap-1">
-					<span className="font-mono text-[9px] sm:text-[11px] md:text-xs font-bold text-clay">
+				<div className="flex items-center gap-1.5">
+					<span className="font-mono text-[10px] sm:text-xs md:text-sm font-bold text-clay">
 						₹{displayPrice}
 					</span>
 					{hasDiscount && (
-						<span className="rounded bg-emerald-50 px-1 py-[1px] text-[6px] sm:text-[7px] font-bold text-emerald-600">
+						<span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[7px] sm:text-[8px] font-extrabold text-emerald-600 border border-emerald-200/30">
 							-{discountPct}%
 						</span>
 					)}

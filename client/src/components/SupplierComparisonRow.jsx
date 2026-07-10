@@ -42,12 +42,11 @@ const SupplierComparisonRow = ({
 
 	return (
 		<tr
-			className={`group transition-all duration-150 ${
+			className={`px-10 group transition-all duration-150 ${
 				isSelected ? "bg-clay/[0.04]" : "hover:bg-slate-50/70"
 			}`}
 		>
-			{/* ── Supplier (name + location + verified) ── */}
-			<td className="whitespace-nowrap px-4 py-3">
+			<td className="whitespace-nowrap px-9.5 py-3">
 				<label className="inline-flex items-center gap-3 cursor-pointer">
 					<input
 						type="checkbox"

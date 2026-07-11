@@ -1,11 +1,14 @@
 import React, { useState, useContext, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
+import api from "../utils/axios";
+import { toast } from "sonner";
 
 const SupplierDashboard = () => {
   const navigate = useNavigate();
   const { user, logout, updateProfile } = useContext(AuthContext);
   const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
     name: "",
     price: "",
@@ -21,32 +24,75 @@ const SupplierDashboard = () => {
     lastName: "",
     company: "",
     phone: "",
+    city: "",
+    country: "",
+    upiId: "",
+    gstin: "",
   });
+  const [profileLoading, setProfileLoading] = useState(false);
 
   const supplierFullName =
     [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Supplier";
   const supplierCompany = user?.company || supplierFullName;
 
   useEffect(() => {
-    if (!user) return;
-    const all = JSON.parse(localStorage.getItem("seller_products") || "{}");
-    const mine = all[user.email] || [];
-    setProducts(mine);
+    const fetchData = async () => {
+      if (!user) return;
+      
+      // Fetch products
+      try {
+        const response = await api.get("/api/dashboard/inventory");
+        setProducts(response.data);
+      } catch (error) {
+        console.error("Failed to fetch products", error);
+        toast.error("Could not load your products.");
+      } finally {
+        setLoading(false);
+      }
 
-    setProfileForm({
-      firstName: user.firstName || "",
-      lastName: user.lastName || "",
-      company: user.company || "",
-      phone: user.phone || "",
-    });
+      // Fetch profile
+      try {
+        setProfileLoading(true);
+        const profileResponse = await api.get("/api/profile");
+        const profile = profileResponse.data;
+        setProfileForm({
+          firstName: profile.first_name || "",
+          lastName: profile.last_name || "",
+          company: profile.company_name || "",
+          phone: profile.contact_phone || "",
+          city: profile.city || "",
+          country: profile.country || "",
+          upiId: profile.upi_id || "",
+          gstin: profile.gstin || "",
+        });
+      } catch (error) {
+        console.error("Failed to fetch profile", error);
+        // If profile doesn't exist, use user data as fallback
+        setProfileForm({
+          firstName: user.firstName || "",
+          lastName: user.lastName || "",
+          company: user.company || "",
+          phone: user.phone || "",
+          city: "",
+          country: "",
+          upiId: "",
+          gstin: "",
+        });
+      } finally {
+        setProfileLoading(false);
+      }
+    };
+    fetchData();
   }, [user]);
 
-  const persist = (next) => {
+  const persist = async (next) => {
     if (!user) return;
-    const all = JSON.parse(localStorage.getItem("seller_products") || "{}");
-    all[user.email] = next;
-    localStorage.setItem("seller_products", JSON.stringify(all));
-    setProducts(next);
+    try {
+      const response = await api.get("/api/dashboard/inventory");
+      setProducts(response.data);
+    } catch (error) {
+      console.error("Failed to refresh products", error);
+    }
   };
 
   const handleImage = (e) => {
@@ -59,29 +105,31 @@ const SupplierDashboard = () => {
     reader.readAsDataURL(file);
   };
 
-  const save = () => {
+  const save = async () => {
     if (!user) return;
     if (!form.name || !form.price) return;
 
-    const supplierInfo = {
-      supplierEmail: user.email,
-      supplierName: supplierFullName,
-      supplierCompany,
-      supplierPhone: user.phone || "",
-      supplierBizType: user.bizType || "seller",
-    };
+    try {
+      const payload = {
+        name: form.name,
+        category: form.category,
+        description: form.description,
+        price: Number(form.price),
+        bulkPrice: null,
+        moq: Number(form.moq),
+        stock: 100,
+        shippingDays: 5,
+        imageUrl: form.image || null,
+      };
 
-    const next = [...products];
-    if (editingId) {
-      const idx = next.findIndex((p) => p.id === editingId);
-      if (idx > -1)
-        next[idx] = { ...next[idx], ...form, ...supplierInfo, visible: true };
-      setEditingId(null);
-    } else {
-      next.unshift({ id: Date.now(), ...form, ...supplierInfo, visible: true });
+      await api.post("/api/products", payload);
+      toast.success("Product added successfully");
+      await persist();
+      setForm({ name: "", price: "", moq: 1, category: "", description: "", image: "" });
+    } catch (error) {
+      console.error("Failed to add product", error);
+      toast.error(error.response?.data?.message || "Failed to add product");
     }
-    persist(next);
-    setForm({ name: "", price: "", moq: 1, category: "", image: "" });
   };
 
   const edit = (p) => {
@@ -95,44 +143,49 @@ const SupplierDashboard = () => {
     });
   };
 
-  const remove = (id) => {
-    const next = products.filter((p) => p.id !== id);
-    persist(next);
+  const remove = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this product?")) return;
+    try {
+      await api.delete(`/api/products/inventory/${id}`);
+      toast.success("Product deleted successfully");
+      await persist();
+    } catch (error) {
+      console.error("Failed to delete product", error);
+      toast.error("Failed to delete product");
+    }
   };
 
-  const saveProfile = () => {
-    if (!user || !updateProfile) return;
+  const saveProfile = async () => {
+    if (!user) return;
 
-    const updatedUser = updateProfile({
-      firstName: profileForm.firstName.trim(),
-      lastName: profileForm.lastName.trim(),
-      company: profileForm.company.trim(),
-      phone: profileForm.phone.trim(),
-    });
-
-    if (!updatedUser) return;
-
-    const updatedFullName =
-      [updatedUser.firstName, updatedUser.lastName].filter(Boolean).join(" ") ||
-      "Supplier";
-    const updatedCompany = updatedUser.company || updatedFullName;
-
-    const next = products.map((p) => ({
-      ...p,
-      supplierName: updatedFullName,
-      supplierCompany: updatedCompany,
-      supplierPhone: updatedUser.phone || "",
-    }));
-
-    persist(next);
-    setIsEditingProfile(false);
+    try {
+      await api.put("/api/profile", {
+        companyName: profileForm.company.trim(),
+        contactPhone: profileForm.phone.trim(),
+        city: profileForm.city.trim(),
+        country: profileForm.country.trim(),
+        upiId: profileForm.upiId.trim(),
+        gstin: profileForm.gstin.trim(),
+      });
+      toast.success("Profile updated successfully");
+      setIsEditingProfile(false);
+    } catch (error) {
+      console.error("Failed to update profile", error);
+      toast.error("Failed to update profile");
+    }
   };
 
-  const toggleVisibility = (id) => {
-    const next = products.map((p) =>
-      p.id === id ? { ...p, visible: !p.visible } : p,
-    );
-    persist(next);
+  const toggleVisibility = async (id) => {
+    const product = products.find((p) => p.id === id);
+    if (!product) return;
+    try {
+      const newStatus = product.status === "Active" ? "Draft" : "Active";
+      await api.put(`/api/products/inventory/${id}`, { status: newStatus });
+      await persist();
+    } catch (error) {
+      console.error("Failed to update status", error);
+      toast.error("Failed to update status");
+    }
   };
 
   return (
@@ -278,14 +331,79 @@ const SupplierDashboard = () => {
                         placeholder="Phone number"
                       />
                     </label>
+                    <label className="block">
+                      <div className="text-slate-500 text-xs uppercase tracking-wide mb-1">
+                        City
+                      </div>
+                      <input
+                        value={profileForm.city}
+                        onChange={(e) =>
+                          setProfileForm((prev) => ({
+                            ...prev,
+                            city: e.target.value,
+                          }))
+                        }
+                        className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
+                        placeholder="City"
+                      />
+                    </label>
+                    <label className="block">
+                      <div className="text-slate-500 text-xs uppercase tracking-wide mb-1">
+                        Country
+                      </div>
+                      <input
+                        value={profileForm.country}
+                        onChange={(e) =>
+                          setProfileForm((prev) => ({
+                            ...prev,
+                            country: e.target.value,
+                          }))
+                        }
+                        className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
+                        placeholder="Country"
+                      />
+                    </label>
+                    <label className="block">
+                      <div className="text-slate-500 text-xs uppercase tracking-wide mb-1">
+                        UPI ID
+                      </div>
+                      <input
+                        value={profileForm.upiId}
+                        onChange={(e) =>
+                          setProfileForm((prev) => ({
+                            ...prev,
+                            upiId: e.target.value,
+                          }))
+                        }
+                        className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
+                        placeholder="UPI ID"
+                      />
+                    </label>
+                    <label className="block">
+                      <div className="text-slate-500 text-xs uppercase tracking-wide mb-1">
+                        GSTIN (optional)
+                      </div>
+                      <input
+                        value={profileForm.gstin}
+                        onChange={(e) =>
+                          setProfileForm((prev) => ({
+                            ...prev,
+                            gstin: e.target.value,
+                          }))
+                        }
+                        className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
+                        placeholder="GSTIN"
+                      />
+                    </label>
                   </div>
                   <div className="flex justify-end">
                     <button
                       type="button"
                       onClick={saveProfile}
-                      className="px-4 py-2 bg-clay text-white rounded font-semibold"
+                      disabled={profileLoading}
+                      className="px-4 py-2 bg-clay text-white rounded font-semibold disabled:opacity-50"
                     >
-                      Save profile
+                      {profileLoading ? "Saving..." : "Save profile"}
                     </button>
                   </div>
                 </div>
@@ -296,7 +414,7 @@ const SupplierDashboard = () => {
                       Company
                     </div>
                     <div className="font-medium">
-                      {supplierCompany || "Add your company name here"}
+                      {profileForm.company || "Add your company name here"}
                     </div>
                   </div>
                   <div>
@@ -316,15 +434,39 @@ const SupplierDashboard = () => {
                       Phone
                     </div>
                     <div className="font-medium">
-                      {user?.phone || "Not provided"}
+                      {profileForm.phone || "Not provided"}
                     </div>
                   </div>
-                  <div className="sm:col-span-2">
+                  <div>
                     <div className="text-slate-500 text-xs uppercase tracking-wide">
-                      Account type
+                      City
                     </div>
-                    <div className="font-medium capitalize">
-                      {user?.bizType || "seller"}
+                    <div className="font-medium">
+                      {profileForm.city || "Not provided"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-slate-500 text-xs uppercase tracking-wide">
+                      Country
+                    </div>
+                    <div className="font-medium">
+                      {profileForm.country || "Not provided"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-slate-500 text-xs uppercase tracking-wide">
+                      UPI ID
+                    </div>
+                    <div className="font-medium">
+                      {profileForm.upiId || "Not provided"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-slate-500 text-xs uppercase tracking-wide">
+                      GSTIN
+                    </div>
+                    <div className="font-medium">
+                      {profileForm.gstin || "Not provided"}
                     </div>
                   </div>
                 </div>
@@ -441,56 +583,53 @@ const SupplierDashboard = () => {
           <section>
             <h3 className="font-semibold mb-3">Your Products</h3>
             <div className="space-y-3">
-              {products.length === 0 && (
+              {loading ? (
+                <p className="text-sm text-slate-500">Loading...</p>
+              ) : products.length === 0 ? (
                 <p className="text-sm text-slate-500">No products yet.</p>
-              )}
-              {products.map((p) => (
-                <div
-                  key={p.id}
-                  className="border rounded p-3 flex items-center justify-between gap-4"
-                >
-                  <div className="flex items-center gap-3">
-                    {p.image ? (
-                      <img
-                        src={p.image}
-                        className="w-20 h-14 object-cover rounded"
-                        alt=""
-                      />
-                    ) : (
-                      <div className="w-20 h-14 bg-slate-100 rounded flex items-center justify-center">
-                        No image
-                      </div>
-                    )}
-                    <div>
-                      <div className="font-semibold">{p.name}</div>
-                      <div className="text-sm text-slate-500">
-                        {p.category} • MOQ: {p.moq}
+              ) : (
+                products.map((p) => (
+                  <div
+                    key={p.id}
+                    className="border rounded p-3 flex items-center justify-between gap-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      {p.image ? (
+                        <img
+                          src={p.image}
+                          className="w-20 h-14 object-cover rounded"
+                          alt=""
+                        />
+                      ) : (
+                        <div className="w-20 h-14 bg-slate-100 rounded flex items-center justify-center">
+                          No image
+                        </div>
+                      )}
+                      <div>
+                        <div className="font-semibold">{p.name}</div>
+                        <div className="text-sm text-slate-500">
+                          {p.category} • MOQ: {p.moq} • Stock: {p.stock}
+                        </div>
                       </div>
                     </div>
+                    <div className="flex items-center gap-3">
+                      <div className="font-mono">₹{p.price}</div>
+                      <button
+                        onClick={() => remove(p.id)}
+                        className="px-3 py-1 bg-red-100 text-red-700 rounded"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => toggleVisibility(p.id)}
+                        className="px-2 py-1 border rounded text-sm"
+                      >
+                        {p.status === "Active" ? "Active" : "Draft"}
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="font-mono">₹{p.price}</div>
-                    <button
-                      onClick={() => edit(p)}
-                      className="px-3 py-1 border rounded"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => remove(p.id)}
-                      className="px-3 py-1 bg-red-100 text-red-700 rounded"
-                    >
-                      Delete
-                    </button>
-                    <button
-                      onClick={() => toggleVisibility(p.id)}
-                      className="px-2 py-1 border rounded text-sm"
-                    >
-                      {p.visible ? "Live" : "Hidden"}
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </section>
         </div>

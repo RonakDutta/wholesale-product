@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { X, Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
 import { useCart } from "../context/CartContext";
 
 const CartDrawer = () => {
+  const navigate = useNavigate();
   const {
     items,
     isCartOpen,
@@ -162,7 +164,13 @@ const CartDrawer = () => {
                 ₹{subtotal.toLocaleString("en-IN")}
               </span>
             </div>
-            <button className="w-full bg-clay text-white text-sm font-bold py-3 rounded-sm hover:bg-clay/90 transition-colors cursor-pointer">
+            <button 
+              onClick={() => {
+                setIsCartOpen(false);
+                navigate("/checkout");
+              }}
+              className="w-full bg-clay text-white text-sm font-bold py-3 rounded-sm hover:bg-clay/90 transition-colors cursor-pointer"
+            >
               Proceed to Checkout
             </button>
           </div>

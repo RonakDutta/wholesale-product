@@ -268,7 +268,7 @@ const FooterInfoPage = ({ page }) => {
   if (!content || !config) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center px-4 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 to-slate-100"></div>
+        <div className="absolute inset-0 bg-linear-to-br from-slate-50 to-slate-100"></div>
         <div className="absolute top-20 left-20 w-72 h-72 bg-slate-200/30 rounded-full blur-3xl"></div>
         <div className="absolute bottom-20 right-20 w-72 h-72 bg-slate-200/30 rounded-full blur-3xl"></div>
 
@@ -432,7 +432,7 @@ const FooterInfoPage = ({ page }) => {
                 to="/browse-products"
                 className="group inline-flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-bold text-white transition-all hover:bg-slate-800 hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.98] relative overflow-hidden"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-slate-800 to-slate-900 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div className="absolute inset-0 bg-linear-to-r from-slate-800 to-slate-900 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 <div className="font-dmsans relative z-10 flex items-center gap-2">
                   <Compass className="w-4 h-4" />
                   Explore Products
@@ -459,7 +459,7 @@ const FooterInfoPage = ({ page }) => {
               className={`relative overflow-hidden rounded-2xl border ${config.borderAccent} bg-white shadow-sm`}
             >
               <div
-                className={`absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r ${config.gradient}`}
+                className={`absolute top-0 left-0 right-0 h-1.5 bg-linear-to-r ${config.gradient}`}
               ></div>
               <div className="p-6">
                 <div className="flex items-center gap-4">

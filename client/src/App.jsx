@@ -23,8 +23,13 @@ import Orders from "./pages/dashboard/Orders";
 import Messages from "./pages/Messages";
 import Settings from "./pages/dashboard/Settings";
 import EditProduct from "./pages/dashboard/EditProduct";
+import NotFound from "./pages/NotFound";
 
 const router = createBrowserRouter([
+  {
+    path: "*",
+    element: <NotFound />,
+  },
   {
     path: "/",
     element: <MainLayout />,

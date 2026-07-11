@@ -138,7 +138,7 @@ const Login = () => {
         </p>
       </div>
 
-      <div
+      {/* <div
         className="flex gap-3 mb-6 form-stagger"
         style={{ opacity: 0, transform: "translateY(20px)" }}
       >
@@ -169,7 +169,7 @@ const Login = () => {
           or
         </span>
         <div className="divider-line flex-1 h-px bg-slate-200" />
-      </div>
+      </div> */}
 
       <form onSubmit={handleSubmit} noValidate>
         <div

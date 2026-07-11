@@ -5,7 +5,7 @@ import {
   Building2,
   MessageSquareText,
 } from "lucide-react";
-import { useAuth } from "../context/AuthContext"; // adjust to your actual auth hook
+import { useAuth } from "../context/AuthContext";
 import { useChatList } from "../hooks/useChatList";
 import { useConversation } from "../hooks/useConversation";
 import MessageBubble from "../components/MessageBubble";

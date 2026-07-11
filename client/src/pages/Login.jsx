@@ -130,7 +130,7 @@ const Login = () => {
         className="mb-7 form-stagger"
         style={{ opacity: 0, transform: "translateY(20px)" }}
       >
-        <h2 className="font-raleway text-2xl font-black text-espresso tracking-tight">
+        <h2 className="font-dmsans text-2xl font-black text-espresso tracking-tight">
           Welcome back
         </h2>
         <p className="text-slate-500 text-sm mt-1 font-dmsans">

@@ -22,6 +22,7 @@ import AddProduct from "./pages/dashboard/AddProduct";
 import Orders from "./pages/dashboard/Orders";
 import Messages from "./pages/dashboard/Messages";
 import Settings from "./pages/dashboard/Settings";
+import Checkout from "./pages/Checkout";
 
 const router = createBrowserRouter([
   {
@@ -32,6 +33,7 @@ const router = createBrowserRouter([
       { path: "product/:id", element: <ProductDetails /> },
       { path: "wishlist", element: <Wishlist /> },
       { path: "search", element: <SearchResults /> },
+      { path: "checkout", element: <Checkout /> },
     ],
   },
   {

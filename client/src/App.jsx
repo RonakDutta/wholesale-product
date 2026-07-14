@@ -16,17 +16,12 @@ import SignUp from "./pages/SignUp";
 import Login from "./pages/Login";
 import SearchResults from "./pages/SearchResults";
 import FooterInfoPage from "./pages/FooterInfoPage";
-import BuyerDashboard from "./pages/BuyerDashboard";
-import SupplierDashboard from "./pages/SupplierDashboard";
 import DashboardOverview from "./pages/dashboard/DashboardOverview";
 import MyProducts from "./pages/dashboard/MyProducts";
 import AddProduct from "./pages/dashboard/AddProduct";
 import Orders from "./pages/dashboard/Orders";
 import Messages from "./pages/dashboard/Messages";
 import Settings from "./pages/dashboard/Settings";
-import Checkout from "./pages/Checkout";
-import Payment from "./pages/Payment";
-import OrderSuccess from "./pages/OrderSuccess";
 
 const router = createBrowserRouter([
   {
@@ -36,13 +31,7 @@ const router = createBrowserRouter([
       { index: true, element: <MarketplaceHome /> },
       { path: "product/:id", element: <ProductDetails /> },
       { path: "wishlist", element: <Wishlist /> },
-      { path: "dashboard", element: <BuyerDashboard /> },
-      { path: "supplier-dashboard", element: <SupplierDashboard /> },
       { path: "search", element: <SearchResults /> },
-      { path: "wishlist", element: <Wishlist /> },
-      { path: "checkout", element: <Checkout /> },
-      { path: "payment/:orderId", element: <Payment /> },
-      { path: "order-success", element: <OrderSuccess /> },
     ],
   },
   {

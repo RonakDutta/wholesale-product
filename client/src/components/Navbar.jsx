@@ -30,7 +30,7 @@ const Navbar = () => {
 
   const dashboardPath = () => {
     if (!user) return "/login";
-    return isSupplier ? "/supplier-dashboard" : "/dashboard";
+    return "/dashboard";
   };
 
   // Close dropdown when clicking outside the navbar

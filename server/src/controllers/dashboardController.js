@@ -17,7 +17,7 @@ exports.getInventory = async (req, res) => {
       FROM supplier_inventory si
       JOIN products p ON p.id = si.product_id
       WHERE si.supplier_id = $1
-      ORDER BY si.updated_at DESC
+      ORDER BY si.id DESC
     `;
     const result = await pool.query(query, [supplierId]);
     res.status(200).json(result.rows);

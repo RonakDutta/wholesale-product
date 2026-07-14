@@ -432,6 +432,7 @@ const ProductDetails = () => {
                 vendorId={selectedSupplier.id}
                 vendorName={currentSupplierName}
                 productName={product.name}
+                productImage={product.image}
                 vendorPhone={
                   selectedSupplier.contactPhone ??
                   selectedSupplier.contact_phone ??

@@ -6,6 +6,7 @@ const WhatsAppModal = ({
   vendorName,
   productName,
   vendorPhone,
+  productImage, // NEW: Accept the image URL
   onBack,
   onClose,
 }) => {
@@ -16,8 +17,14 @@ const WhatsAppModal = ({
     /\D/g,
     "",
   );
+
+  // NEW: Append the image URL to the end of the message if it exists
+  const finalMessage = productImage
+    ? `${message}\n\nProduct Reference: ${productImage}`
+    : message;
+
   const whatsappUrl = `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(
-    message,
+    finalMessage,
   )}`;
 
   const suggestedMessages = [
@@ -46,7 +53,7 @@ const WhatsAppModal = ({
           <button
             type="button"
             onClick={onBack}
-            className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-900 transition-colors"
+            className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
           >
             <ArrowLeft className="h-4 w-4" />
             Back
@@ -62,7 +69,7 @@ const WhatsAppModal = ({
 
         <button
           onClick={onClose}
-          className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+          className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
           aria-label="Close"
         >
           <X className="h-5 w-5" />
@@ -79,6 +86,25 @@ const WhatsAppModal = ({
           </p>
         </div>
 
+        {/* NEW: Show a small preview of what will be linked */}
+        {productImage && (
+          <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 p-2 rounded-lg">
+            <img
+              src={productImage}
+              alt={productName}
+              className="w-10 h-10 object-cover rounded border border-slate-200"
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-slate-700 truncate">
+                {productName}
+              </p>
+              <p className="text-[10px] text-slate-500">
+                Image link will be attached
+              </p>
+            </div>
+          </div>
+        )}
+
         <div>
           <div className="flex items-center gap-1.5 mb-3">
             <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
@@ -93,7 +119,7 @@ const WhatsAppModal = ({
                 key={suggestion.label}
                 type="button"
                 onClick={() => setMessage(suggestion.text)}
-                className={`rounded-full px-4 py-2 text-xs font-semibold transition-all duration-200 border ${
+                className={`rounded-full px-4 py-2 text-xs font-semibold transition-all duration-200 border cursor-pointer ${
                   message === suggestion.text
                     ? "bg-emerald-50 border-emerald-200 text-emerald-700"
                     : "bg-white border-slate-200 text-slate-600 hover:border-emerald-200 hover:bg-emerald-50/50"
@@ -122,7 +148,7 @@ const WhatsAppModal = ({
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 hover:border-slate-300"
+          className="flex-1 rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 hover:border-slate-300 cursor-pointer"
         >
           Cancel
         </button>
@@ -131,7 +157,7 @@ const WhatsAppModal = ({
           target="_blank"
           rel="noreferrer"
           onClick={onClose}
-          className="flex flex-2 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 shadow-sm"
+          className="flex flex-2 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 shadow-sm cursor-pointer"
         >
           <MessageCircle className="h-4 w-4" />
           Send on WhatsApp

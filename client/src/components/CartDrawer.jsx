@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { X, Minus, Plus, Trash2, ShoppingBag, ArrowRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 
 const CartDrawer = () => {
+  const navigate = useNavigate();
   const {
     items,
     isCartOpen,
@@ -159,7 +161,7 @@ const CartDrawer = () => {
                               "en-IN",
                             )}
                           </span>
-                          {/* Optional: Show unit price if multiple items are selected */}
+
                           {item.quantity > 1 && (
                             <span className="text-[10px] text-slate-400 font-medium mt-0.5">
                               ₹{unitPrice.toLocaleString("en-IN")} each
@@ -191,7 +193,13 @@ const CartDrawer = () => {
                 ₹{subtotal.toLocaleString("en-IN")}
               </span>
             </div>
-            <button className="w-full flex items-center justify-center gap-2 bg-clay text-white text-sm font-bold py-3.5 rounded-xl hover:bg-clay/90 hover:shadow-lg hover:shadow-clay/20 transition-all cursor-pointer active:scale-[0.98]">
+            <button
+              onClick={() => {
+                setIsCartOpen(false);
+                navigate("/checkout");
+              }}
+              className="w-full flex items-center justify-center gap-2 bg-clay text-white text-sm font-bold py-3 rounded-sm hover:bg-clay/90 transition-colors cursor-pointer"
+            >
               Proceed to Checkout
               <ArrowRight className="w-4 h-4" />
             </button>

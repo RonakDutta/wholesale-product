@@ -40,7 +40,6 @@ const ProductDetails = () => {
   const { toggleWishlist, isWishlisted } = useWishlist();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
-
   const [selectedSupplierId, setSelectedSupplierId] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
@@ -429,7 +428,7 @@ const ProductDetails = () => {
           <div className="flex flex-col gap-3 mt-2">
             <div className="grid grid-cols-2 gap-3">
               <ContactVendorBtn
-                vendorId={selectedSupplier.id}
+                vendorId={selectedSupplier.supplierId || selectedSupplier.id}
                 vendorName={currentSupplierName}
                 productName={product.name}
                 productImage={product.image}
@@ -489,13 +488,34 @@ const ProductDetails = () => {
           addToCart(productObj, qty, supplier);
           setSelectedSupplierId(supplier.id);
         }}
-        onContactSupplier={(supplier) => {
+        onContactSupplier={async (supplier) => {
           setSelectedSupplierId(supplier.id);
-          console.log(
-            "Contact supplier:",
-            supplier.companyName || supplier.name,
-            supplier.id,
-          );
+
+          try {
+            const response = await api.get(
+              `/api/products/${product.id}/contact`,
+              {
+                params: { supplierId: supplier.supplierId || supplier.id },
+              },
+            );
+
+            if (response.data.success && response.data.whatsappUrl) {
+              window.open(response.data.whatsappUrl, "_blank");
+            } else {
+              toast.error(
+                response.data.message || "Failed to generate WhatsApp link",
+              );
+            }
+          } catch (error) {
+            console.error("Failed to contact supplier:", error);
+            if (error.response?.status === 401) {
+              toast.error("Please login to contact suppliers");
+            } else if (error.response?.status === 403) {
+              toast.error("Only buyers can contact suppliers");
+            } else {
+              toast.error("Failed to connect with supplier");
+            }
+          }
         }}
       />
     </div>

@@ -47,7 +47,51 @@ const MarketplaceHome = () => {
         setProducts(mappedProducts);
       } catch (err) {
         console.error("Failed to fetch catalog:", err);
-        toast.error("Failed to load live catalog.");
+        toast.error("Failed to load live catalog. Using demo data.");
+        
+        // Fallback to mock data when database is not connected
+        setProducts([
+          {
+            id: "1",
+            name: "Cotton T-Shirt",
+            category: "Clothing",
+            image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500",
+            description: "Premium cotton t-shirt for bulk orders",
+            suppliers: [
+              {
+                id: "s1",
+                name: "ABC Textiles",
+                price: 150,
+                discountPrice: 120,
+                moq: 50,
+                verified: true,
+                city: "Mumbai",
+                country: "India",
+                phone: "919876543210",
+              }
+            ]
+          },
+          {
+            id: "2", 
+            name: "Denim Jeans",
+            category: "Clothing",
+            image: "https://images.unsplash.com/photo-1542272604-787c3835535d?w=500",
+            description: "High quality denim jeans in bulk",
+            suppliers: [
+              {
+                id: "s2",
+                name: "XYZ Garments",
+                price: 450,
+                discountPrice: 380,
+                moq: 30,
+                verified: true,
+                city: "Delhi",
+                country: "India",
+                phone: "919876543211",
+              }
+            ]
+          }
+        ]);
       } finally {
         setIsFetching(false);
       }

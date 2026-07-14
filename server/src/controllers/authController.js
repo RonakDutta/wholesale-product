@@ -39,7 +39,7 @@ exports.login = async (req, res) => {
   const { email, password } = req.body;
   try {
     const user = await pool.query(
-      "SELECT id, password_hash, role FROM users WHERE email = $1",
+      "SELECT id, password_hash, role, first_name, last_name, email FROM users WHERE email = $1",
       [email],
     );
     if (user.rows.length === 0) {
@@ -57,7 +57,16 @@ exports.login = async (req, res) => {
       { expiresIn: "7d" },
     );
 
-    res.status(200).json({ token });
+    res.status(200).json({
+      token,
+      user: {
+        id: user.rows[0].id,
+        role: user.rows[0].role,
+        firstName: user.rows[0].first_name,
+        lastName: user.rows[0].last_name,
+        email: user.rows[0].email
+      }
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });

@@ -2,6 +2,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { Toaster } from "sonner";
 import { CartProvider } from "./context/CartContext";
 import { WishlistProvider } from "./context/WishlistContext";
+import { AuthProvider } from "./context/AuthContext";
 
 import MainLayout from "./layouts/MainLayout";
 import AuthLayout from "./layouts/AuthLayout";
@@ -15,7 +16,6 @@ import SignUp from "./pages/SignUp";
 import Login from "./pages/Login";
 import SearchResults from "./pages/SearchResults";
 import FooterInfoPage from "./pages/FooterInfoPage";
-import { AuthProvider } from "./context/AuthContext";
 import DashboardOverview from "./pages/dashboard/DashboardOverview";
 import MyProducts from "./pages/dashboard/MyProducts";
 import AddProduct from "./pages/dashboard/AddProduct";
@@ -24,6 +24,7 @@ import Messages from "./pages/Messages";
 import Settings from "./pages/dashboard/Settings";
 import EditProduct from "./pages/dashboard/EditProduct";
 import NotFound from "./pages/NotFound";
+import Checkout from "./pages/Checkout";
 
 const router = createBrowserRouter([
   {
@@ -36,10 +37,11 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <MarketplaceHome /> },
       { path: "product/:id", element: <ProductDetails /> },
-      { path: "search", element: <SearchResults /> },
       { path: "wishlist", element: <Wishlist /> },
       { path: "messages", element: <Messages /> },
       { path: "messages/:vendorId", element: <Messages /> },
+      { path: "search", element: <SearchResults /> },
+      { path: "checkout", element: <Checkout /> },
     ],
   },
   {

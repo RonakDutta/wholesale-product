@@ -16,6 +16,7 @@ import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { useAuth } from "../context/AuthContext";
 import CartDrawer from "./CartDrawer";
+import UserProfilePopup from "./UserProfilePopup";
 
 const CITIES = [
   "Delhi NCR",
@@ -40,6 +41,13 @@ const Navbar = () => {
   const [selectedCity, setSelectedCity] = useState("Delhi NCR");
   const navRef = useRef(null);
   const navigate = useNavigate();
+  const isSupplier =
+    user && (user.bizType === "seller" || user.bizType === "both");
+
+  const dashboardPath = () => {
+    if (!user) return "/login";
+    return "/dashboard";
+  };
 
   // Close profile dropdown when clicking outside
   useEffect(() => {

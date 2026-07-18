@@ -7,19 +7,24 @@ import {
   Settings,
   Search,
   Bell,
+  LogOut,
   Menu,
   X,
 } from "lucide-react";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useContext } from "react";
+import { AuthContext } from "../context/AuthContext";
 
 const DashboardLayout = () => {
   const location = useLocation();
+  const { user, logout } = useContext(AuthContext);
+  const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Close sidebar automatically when route changes on mobile
-  useEffect(() => {
-    setIsSidebarOpen(false);
-  }, [location.pathname]);
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
 
   const navItems = [
     {
@@ -161,6 +166,17 @@ const DashboardLayout = () => {
 
             <button className="p-2 text-slate-500 hover:bg-sage/20 rounded-full transition-colors cursor-pointer">
               <Bell className="w-5 h-5" />
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 transition-colors cursor-pointer"
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline text-sm font-semibold">
+                Sign Out
+              </span>
             </button>
           </div>
         </header>

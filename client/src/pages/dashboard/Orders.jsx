@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Search, Filter, Eye, Clock, Download } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
 
 const Orders = () => {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("All Orders");
@@ -205,7 +207,10 @@ const Orders = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-lg border border-slate-200 transition-colors cursor-pointer">
+                      <button
+                        onClick={() => navigate(`/orders/${order.id}`)}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                      >
                         <Eye className="w-3.5 h-3.5" />
                         View
                       </button>

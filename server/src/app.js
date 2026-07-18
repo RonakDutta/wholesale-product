@@ -6,7 +6,6 @@ const dashboardRoutes = require("./routes/dashboardRoutes");
 const profileRoutes = require("./routes/profileRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const messagesRoutes = require("./routes/messagesRoutes");
-const authenticateToken = require("./middlewares/authMiddleware");
 
 const app = express();
 
@@ -18,6 +17,6 @@ app.use("/api/products", productRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/orders", orderRoutes);
-app.use("/api/messages", authenticateToken, messagesRoutes);
+app.use("/api/messages", messagesRoutes);
 
 module.exports = app;

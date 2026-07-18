@@ -282,3 +282,99 @@ exports.deleteInventoryItem = async (req, res) => {
     res.status(500).json({ message: "Server error while deleting product" });
   }
 };
+
+// @desc    Get WhatsApp contact link for supplier
+// @route   GET /api/products/:id/contact
+exports.contactSupplier = async (req, res) => {
+  const { id } = req.params;
+  const { supplierId } = req.query;
+  const buyer = req.user;
+
+  console.log("Contact supplier request:", { productId: id, supplierId, buyerRole: buyer.role, buyerId: buyer.id });
+
+  // Check if user is a buyer
+  if (!["buyer", "both"].includes(buyer.role)) {
+    console.log("Unauthorized contact attempt - user role:", buyer.role);
+    return res.status(403).json({
+      success: false,
+      message: "Only buyers can contact suppliers"
+    });
+  }
+
+  try {
+    // Get product details with supplier information
+    let query = `
+      SELECT 
+        p.id as product_id,
+        p.name as product_name,
+        si.supplier_id,
+        wp.contact_phone,
+        wp.company_name,
+        u.phone as user_phone
+      FROM products p
+      JOIN supplier_inventory si ON p.id = si.product_id
+      JOIN wholesaler_profiles wp ON si.supplier_id = wp.user_id
+      JOIN users u ON si.supplier_id = u.id
+      WHERE p.id = $1 AND si.status = 'Active'
+    `;
+
+    let queryParams = [id];
+
+    // If specific supplierId is provided, filter by it
+    if (supplierId) {
+      query += ` AND si.supplier_id = $2`;
+      queryParams.push(supplierId);
+    }
+
+    console.log("Executing query with params:", queryParams);
+    const result = await pool.query(query, queryParams);
+    console.log("Query result rows:", result.rows.length);
+
+    if (result.rows.length === 0) {
+      console.log("No active suppliers found for product:", id);
+      return res.status(404).json({
+        success: false,
+        message: "Product not found or no active suppliers"
+      });
+    }
+
+    const productData = result.rows[0];
+    console.log("Product data:", {
+      productId: productData.product_id,
+      productName: productData.product_name,
+      supplierId: productData.supplier_id,
+      contactPhone: productData.contact_phone,
+      userPhone: productData.user_phone
+    });
+
+    // Check if supplier has contact phone
+    const supplierPhone = productData.contact_phone || productData.user_phone;
+
+    if (!supplierPhone) {
+      console.log("No contact phone found for supplier:", productData.supplier_id);
+      return res.status(404).json({
+        success: false,
+        message: "Supplier contact information not available"
+      });
+    }
+
+    // Generate WhatsApp message with product context
+    const message = `Hello, I am interested in your ${productData.product_name} product. Please share more details.`;
+
+    // Generate WhatsApp URL
+    const whatsappUrl = `https://wa.me/${encodeURIComponent(supplierPhone)}?text=${encodeURIComponent(message)}`;
+
+    console.log("WhatsApp URL generated successfully");
+    return res.json({
+      success: true,
+      whatsappUrl
+    });
+
+  } catch (err) {
+    console.error("Contact supplier error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error while generating contact link"
+    });
+  }
+};

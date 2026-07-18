@@ -1,16 +1,46 @@
 const express = require("express");
 const router = express.Router();
 const pool = require("../config/db");
+const authenticateToken = require("../middlewares/authMiddleware");
+
+router.use(authenticateToken);
+
+const ensureConversationAccess = async (req, res, otherUserId) => {
+	const userId = req.user?.id;
+	if (!userId) {
+		res.status(401).json({ success: false, message: "Unauthorized: Missing user credentials." });
+		return false;
+	}
+	if (!Number.isInteger(otherUserId) || otherUserId === userId) {
+		res.status(400).json({ success: false, message: "Invalid conversation target." });
+		return false;
+	}
+
+	const conversation = await pool.query(
+		"SELECT id FROM messages WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1) LIMIT 1",
+		[userId, otherUserId],
+	);
+
+	if (conversation.rows.length === 0) {
+		res.status(403).json({ success: false, message: "Access Denied: Unauthorized chat access." });
+		return false;
+	}
+
+	return true;
+};
 
 // lists all chats for the logged-in user
 router.get("/chats", async (req, res) => {
-	const userId = req.user.id;
+	const userId = req.user?.id;
+	if (!userId) {
+		return res.status(401).json({ success: false, message: "Unauthorized: Missing user credentials." });
+	}
 	try {
 		const query = `
       SELECT 
         u.id AS user_id,
-        u.name AS sender_name,
-        u.company,
+        u.first_name || ' ' || u.last_name AS sender_name,
+        u.email AS company,
         (SELECT message_text FROM messages 
         WHERE (sender_id=u.id AND receiver_id=$1) 
             OR (sender_id=$1 AND receiver_id=u.id)
@@ -29,7 +59,7 @@ router.get("/chats", async (req, res) => {
         UNION
         SELECT receiver_id FROM messages WHERE sender_id = $1
       )
-      GROUP BY u.id, u.name, u.company
+      GROUP BY u.id, u.first_name, u.last_name, u.email
       ORDER BY timestamp DESC NULLS LAST
     `;
 		const { rows } = await pool.query(query, [userId]);
@@ -40,10 +70,45 @@ router.get("/chats", async (req, res) => {
 	}
 });
 
+router.patch("/:otherUserId/read", async (req, res) => {
+	const userId = req.user?.id;
+	const otherUserId = parseInt(req.params.otherUserId, 10);
+	if (!userId) {
+		return res.status(401).json({ success: false, message: "Unauthorized: Missing user credentials." });
+	}
+	if (Number.isNaN(otherUserId) || otherUserId === userId) {
+		return res.status(400).json({ success: false, message: "Invalid conversation target." });
+	}
+	const canAccess = await ensureConversationAccess(req, res, otherUserId);
+	if (!canAccess) {
+		return;
+	}
+	try {
+		await pool.query(
+			"UPDATE messages SET is_read = true WHERE receiver_id = $1 AND sender_id = $2 AND is_read = false",
+			[userId, otherUserId],
+		);
+		res.json({ success: true, message: "Messages marked as read" });
+	} catch (err) {
+		console.error(err);
+		res.status(500).json({ error: "Server error" });
+	}
+});
+
 // conversation with a specific user
 router.get("/:otherUserId", async (req, res) => {
-	const userId = req.user.id;
-	const { otherUserId } = req.params;
+	const userId = req.user?.id;
+	const otherUserId = parseInt(req.params.otherUserId, 10);
+	if (!userId) {
+		return res.status(401).json({ success: false, message: "Unauthorized: Missing user credentials." });
+	}
+	if (Number.isNaN(otherUserId) || otherUserId === userId) {
+		return res.status(400).json({ success: false, message: "Invalid conversation target." });
+	}
+	const canAccess = await ensureConversationAccess(req, res, otherUserId);
+	if (!canAccess) {
+		return;
+	}
 	try {
 		const query = `
       SELECT * FROM messages

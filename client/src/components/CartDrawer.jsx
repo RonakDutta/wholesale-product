@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
-import { X, Minus, Plus, Trash2, ShoppingBag, ArrowRight } from "lucide-react";
+﻿import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ArrowRight, Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
 import { useCart } from "../context/CartContext";
 
 const CartDrawer = () => {
+  const navigate = useNavigate();
   const {
     items,
     isCartOpen,
@@ -17,8 +19,8 @@ const CartDrawer = () => {
 
   useEffect(() => {
     if (isCartOpen) {
-      const raf = requestAnimationFrame(() => setIsVisible(true));
-      return () => cancelAnimationFrame(raf);
+      const raf = window.requestAnimationFrame(() => setIsVisible(true));
+      return () => window.cancelAnimationFrame(raf);
     }
     setIsVisible(false);
   }, [isCartOpen]);
@@ -27,7 +29,6 @@ const CartDrawer = () => {
 
   return (
     <>
-      {/* Overlay */}
       <div
         className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-all duration-300 ${
           isVisible ? "opacity-100" : "opacity-0"
@@ -35,13 +36,11 @@ const CartDrawer = () => {
         onClick={() => setIsCartOpen(false)}
       />
 
-      {/* Drawer */}
       <div
         className={`fixed top-0 right-0 h-full w-full sm:w-md bg-slate-50/95 shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${
           isVisible ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 bg-white border-b border-slate-200 shrink-0">
           <div className="flex items-center gap-3">
             <div className="bg-clay/10 p-2 rounded-lg text-clay">
@@ -63,7 +62,6 @@ const CartDrawer = () => {
           </button>
         </div>
 
-        {/* Items Area */}
         <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center py-10 gap-4">
@@ -127,12 +125,9 @@ const CartDrawer = () => {
                       </div>
 
                       <div className="flex items-end justify-between mt-auto pt-3">
-                        {/* Quantity Pill */}
                         <div className="flex items-center border border-slate-200 rounded-lg bg-white overflow-hidden shadow-xs">
                           <button
-                            onClick={() =>
-                              updateQuantity(item.id, item.quantity - 1)
-                            }
+                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
                             className="p-1.5 sm:p-2 text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-colors cursor-pointer"
                             aria-label="Decrease quantity"
                           >
@@ -142,9 +137,7 @@ const CartDrawer = () => {
                             {item.quantity}
                           </span>
                           <button
-                            onClick={() =>
-                              updateQuantity(item.id, item.quantity + 1)
-                            }
+                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
                             className="p-1.5 sm:p-2 text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-colors cursor-pointer border-l border-slate-100"
                             aria-label="Increase quantity"
                           >
@@ -154,12 +147,8 @@ const CartDrawer = () => {
 
                         <div className="flex flex-col items-end">
                           <span className="font-mono text-base font-black text-clay tracking-tight">
-                            ₹
-                            {(unitPrice * item.quantity).toLocaleString(
-                              "en-IN",
-                            )}
+                            ₹{(unitPrice * item.quantity).toLocaleString("en-IN")}
                           </span>
-                          {/* Optional: Show unit price if multiple items are selected */}
                           {item.quantity > 1 && (
                             <span className="text-[10px] text-slate-400 font-medium mt-0.5">
                               ₹{unitPrice.toLocaleString("en-IN")} each
@@ -175,7 +164,6 @@ const CartDrawer = () => {
           )}
         </div>
 
-        {/* Footer */}
         {items.length > 0 && (
           <div className="bg-white border-t border-slate-200 p-5 sm:p-6 shrink-0 shadow-[0_-4px_10px_-4px_rgba(0,0,0,0.05)]">
             <div className="flex items-end justify-between mb-4">
@@ -191,7 +179,14 @@ const CartDrawer = () => {
                 ₹{subtotal.toLocaleString("en-IN")}
               </span>
             </div>
-            <button className="w-full flex items-center justify-center gap-2 bg-clay text-white text-sm font-bold py-3.5 rounded-xl hover:bg-clay/90 hover:shadow-lg hover:shadow-clay/20 transition-all cursor-pointer active:scale-[0.98]">
+
+            <button
+              onClick={() => {
+                setIsCartOpen(false);
+                navigate("/checkout");
+              }}
+              className="w-full flex items-center justify-center gap-2 bg-clay text-white text-sm font-bold py-3.5 rounded-xl hover:bg-clay/90 hover:shadow-lg hover:shadow-clay/20 transition-all cursor-pointer active:scale-[0.98]"
+            >
               Proceed to Checkout
               <ArrowRight className="w-4 h-4" />
             </button>

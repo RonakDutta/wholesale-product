@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useContext } from "react";
 import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../context/AuthContext";
 import { toast } from "sonner";
 import { Mail, Lock, Eye, EyeOff, ArrowRight, Smartphone } from "lucide-react";
 import api from "../utils/axios";
@@ -112,7 +113,14 @@ const Login = () => {
       await login(response.data.token);
 
       toast.success("Signed in successfully!");
-      navigate("/");
+      
+      // Redirect based on user role
+      const userRole = response.data.user?.role;
+      if (userRole === "seller" || userRole === "both") {
+        navigate("/dashboard");
+      } else {
+        navigate("/");
+      }
     } catch (error) {
       const errorMessage =
         error.response?.data?.message ||

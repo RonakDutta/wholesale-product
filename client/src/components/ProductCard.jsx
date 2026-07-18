@@ -6,13 +6,11 @@ import SupplierRow from "./SupplierRow";
 
 const ProductCard = ({ product }) => {
   const { id, name = "Untitled Product", image, description = "" } = product;
-
-  const suppliers = product.suppliers ?? [];
-
+  const suppliers = Array.isArray(product?.suppliers) ? product.suppliers : [];
   const { toggleWishlist, isWishlisted } = useWishlist();
   const wishlisted = isWishlisted(id);
 
-  const sortedSuppliers = getSortedSuppliers(product);
+  const sortedSuppliers = getSortedSuppliers({ ...product, suppliers });
 
   const displayedSuppliers = sortedSuppliers
     .map((supplier) => ({
@@ -32,7 +30,7 @@ const ProductCard = ({ product }) => {
     }))
     .slice(0, 6);
 
-  const bestSupplier = displayedSuppliers[0];
+  const bestSupplier = displayedSuppliers[0] ?? null;
 
   if (!bestSupplier) return null;
 

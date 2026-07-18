@@ -27,6 +27,8 @@ import Orders from "./pages/dashboard/Orders";
 import Messages from "./pages/Messages";
 import Settings from "./pages/dashboard/Settings";
 import EditProduct from "./pages/dashboard/EditProduct";
+import Promotions from "./pages/dashboard/Promotions";
+import RetailDashboard from "./pages/RetailDashboard";
 import NotFound from "./pages/NotFound";
 
 const router = createBrowserRouter([
@@ -48,6 +50,7 @@ const router = createBrowserRouter([
       { path: "payment/:orderId", element: <Payment /> },
       { path: "order-success", element: <OrderSuccess /> },
       { path: "orders/:orderId", element: <OrderDetails /> },
+      { path: "retail-dashboard", element: <RetailDashboard /> },
     ],
   },
   {
@@ -59,6 +62,7 @@ const router = createBrowserRouter([
       { path: "products/new", element: <AddProduct /> },
       { path: "products/edit/:id", element: <EditProduct /> },
       { path: "orders", element: <Orders /> },
+      { path: "promotions", element: <Promotions /> },
       { path: "settings", element: <Settings /> },
     ],
   },

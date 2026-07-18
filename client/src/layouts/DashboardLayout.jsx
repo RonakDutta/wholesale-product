@@ -10,6 +10,7 @@ import {
   LogOut,
   Menu,
   X,
+  Sparkles,
 } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useContext } from "react";
@@ -43,6 +44,12 @@ const DashboardLayout = () => {
       path: "/dashboard/orders",
       label: "Orders",
       icon: ShoppingBag,
+      exact: false,
+    },
+    {
+      path: "/dashboard/promotions",
+      label: "Promotions",
+      icon: Sparkles,
       exact: false,
     },
     {

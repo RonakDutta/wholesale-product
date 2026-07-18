@@ -6,6 +6,7 @@ const dashboardRoutes = require("./routes/dashboardRoutes");
 const profileRoutes = require("./routes/profileRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const messagesRoutes = require("./routes/messagesRoutes");
+const promotionRoutes = require("./routes/promotionRoutes");
 
 const app = express();
 
@@ -18,5 +19,6 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/messages", messagesRoutes);
+app.use("/api/promotions", promotionRoutes);
 
 module.exports = app;

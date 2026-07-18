@@ -7,6 +7,7 @@ import HeroCarousel from "../components/HeroCarousel";
 import CTABanner from "../components/CTABanner";
 import LoadMore from "../components/LoadMore";
 import MarketAlert from "../components/MarketAlert";
+import PromotionStrip from "../components/PromotionStrip";
 import {
   getCheapestSupplier,
   hasVerifiedSupplier,
@@ -48,14 +49,15 @@ const MarketplaceHome = () => {
       } catch (err) {
         console.error("Failed to fetch catalog:", err);
         toast.error("Failed to load live catalog. Using demo data.");
-        
+
         // Fallback to mock data when database is not connected
         setProducts([
           {
             id: "1",
             name: "Cotton T-Shirt",
             category: "Clothing",
-            image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500",
+            image:
+              "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500",
             description: "Premium cotton t-shirt for bulk orders",
             suppliers: [
               {
@@ -68,14 +70,15 @@ const MarketplaceHome = () => {
                 city: "Mumbai",
                 country: "India",
                 phone: "919876543210",
-              }
-            ]
+              },
+            ],
           },
           {
-            id: "2", 
+            id: "2",
             name: "Denim Jeans",
             category: "Clothing",
-            image: "https://images.unsplash.com/photo-1542272604-787c3835535d?w=500",
+            image:
+              "https://images.unsplash.com/photo-1542272604-787c3835535d?w=500",
             description: "High quality denim jeans in bulk",
             suppliers: [
               {
@@ -88,9 +91,9 @@ const MarketplaceHome = () => {
                 city: "Delhi",
                 country: "India",
                 phone: "919876543211",
-              }
-            ]
-          }
+              },
+            ],
+          },
         ]);
       } finally {
         setIsFetching(false);
@@ -256,6 +259,9 @@ const MarketplaceHome = () => {
           region="Delhi NCR"
           onActionClick={() => console.log("Navigate to deals")}
         />
+      </div>
+      <div className="page-load-anim">
+        <PromotionStrip />
       </div>
       <div className="page-load-anim">
         <CategorySlider

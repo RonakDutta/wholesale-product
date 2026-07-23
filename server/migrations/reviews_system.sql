@@ -2,11 +2,11 @@
 -- Extends the existing wholesale marketplace schema without altering existing core tables.
 
 CREATE TABLE IF NOT EXISTS product_reviews (
-    id SERIAL PRIMARY KEY,
-    buyer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    seller_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-    order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    buyer_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    seller_id uuid REFERENCES users(id) ON DELETE SET NULL,
+    product_id uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    order_id uuid REFERENCES orders(id) ON DELETE SET NULL,
     rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
     title VARCHAR(150),
     comment TEXT,
@@ -18,10 +18,10 @@ CREATE TABLE IF NOT EXISTS product_reviews (
 );
 
 CREATE TABLE IF NOT EXISTS seller_reviews (
-    id SERIAL PRIMARY KEY,
-    buyer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    seller_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    buyer_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    seller_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    order_id uuid REFERENCES orders(id) ON DELETE SET NULL,
     overall_experience INTEGER NOT NULL CHECK (overall_experience BETWEEN 1 AND 5),
     product_quality INTEGER NOT NULL CHECK (product_quality BETWEEN 1 AND 5),
     delivery_experience INTEGER NOT NULL CHECK (delivery_experience BETWEEN 1 AND 5),
@@ -34,25 +34,25 @@ CREATE TABLE IF NOT EXISTS seller_reviews (
 );
 
 CREATE TABLE IF NOT EXISTS review_images (
-    id SERIAL PRIMARY KEY,
-    review_id INTEGER NOT NULL REFERENCES product_reviews(id) ON DELETE CASCADE,
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    review_id uuid NOT NULL REFERENCES product_reviews(id) ON DELETE CASCADE,
     image_url TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS review_helpful_votes (
-    id SERIAL PRIMARY KEY,
-    review_id INTEGER NOT NULL REFERENCES product_reviews(id) ON DELETE CASCADE,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    review_id uuid NOT NULL REFERENCES product_reviews(id) ON DELETE CASCADE,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (review_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS review_reports (
-    id SERIAL PRIMARY KEY,
-    review_id INTEGER NOT NULL,
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    review_id uuid NOT NULL,
     review_type VARCHAR(20) DEFAULT 'product' CHECK (review_type IN ('product','seller')),
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     reason VARCHAR(40) NOT NULL,
     details TEXT,
     status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','reviewed','dismissed')),
@@ -61,10 +61,10 @@ CREATE TABLE IF NOT EXISTS review_reports (
 );
 
 CREATE TABLE IF NOT EXISTS review_replies (
-    id SERIAL PRIMARY KEY,
-    review_id INTEGER NOT NULL,
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    review_id uuid NOT NULL,
     review_type VARCHAR(20) NOT NULL DEFAULT 'product' CHECK (review_type IN ('product','seller')),
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     message TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

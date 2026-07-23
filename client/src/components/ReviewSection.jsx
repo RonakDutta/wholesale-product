@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Star,
   MessageCircleMore,
@@ -47,6 +47,42 @@ const ReviewSection = ({ productId }) => {
   useEffect(() => {
     if (productId) fetchReviews();
   }, [productId, sort, filter]);
+
+  useEffect(() => {
+    if (productId) fetchMyReview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productId]);
+
+  const fileInputRef = useRef(null);
+
+  const fetchMyReview = async () => {
+    try {
+      const res = await api.get("/api/reviews/my", {
+        params: { type: "product" },
+      });
+      const myProductReviews = res.data.productReviews || [];
+      const found = myProductReviews.find(
+        (r) =>
+          String(r.product_id) === String(productId) ||
+          r.product_id === productId,
+      );
+      if (found) {
+        setExistingReview(found);
+        setForm((f) => ({
+          ...f,
+          rating: found.rating || 5,
+          title: found.title || "",
+          comment: found.comment || "",
+          images: Array.isArray(found.images) ? found.images : [],
+        }));
+      }
+    } catch (err) {
+      console.debug(
+        "fetchMyReview error",
+        err?.response?.data || err.message || err,
+      );
+    }
+  };
 
   const handleHelpfulToggle = async (reviewId) => {
     if (actionLoading) return;
@@ -168,7 +204,14 @@ const ReviewSection = ({ productId }) => {
       await fetchReviews();
       await fetchMyReview();
     } catch (error) {
-      toast.error(error.response?.data?.message || "Unable to submit review");
+      console.error(
+        "Submit review error:",
+        error.response?.data || error.message || error,
+      );
+      const serverMessage =
+        error.response?.data?.message ||
+        (typeof error.response?.data === "string" ? error.response.data : null);
+      toast.error(serverMessage || "Unable to submit review");
     } finally {
       setSubmitting(false);
     }
@@ -183,7 +226,7 @@ const ReviewSection = ({ productId }) => {
     try {
       await api.delete(`/api/reviews/product/${existingReview.id}`);
       toast.success("Review deleted");
-      setForm({ rating: 5, title: "", comment: "", images: [] });
+      setForm({ rating: 5, title: "", comment: "", images: [], files: [] });
       setExistingReview(null);
       await fetchReviews();
     } catch (error) {
@@ -281,18 +324,40 @@ const ReviewSection = ({ productId }) => {
           className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
         />
         <div>
-          <label className="block text-sm font-medium text-slate-700">Upload photos (optional)</label>
+          <label className="block text-sm font-medium text-slate-700">
+            Photos (optional)
+          </label>
+          <div className="mt-1 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="rounded border border-slate-300 px-3 py-1 text-sm bg-white"
+            >
+              Upload photos
+            </button>
+            <span className="text-sm text-slate-500">
+              You can upload up to 5 images
+            </span>
+          </div>
           <input
+            ref={fileInputRef}
+            style={{ display: "none" }}
             type="file"
             accept="image/*"
             multiple
-            onChange={(e) => setForm({ ...form, files: Array.from(e.target.files || []) })}
-            className="mt-1"
+            onChange={(e) =>
+              setForm({ ...form, files: Array.from(e.target.files || []) })
+            }
           />
           {form.files && form.files.length > 0 ? (
             <div className="mt-2 flex gap-2">
               {form.files.map((file, i) => (
-                <img key={i} src={URL.createObjectURL(file)} alt={file.name} className="h-20 w-20 rounded object-cover" />
+                <img
+                  key={i}
+                  src={URL.createObjectURL(file)}
+                  alt={file.name}
+                  className="h-20 w-20 rounded object-cover"
+                />
               ))}
             </div>
           ) : null}

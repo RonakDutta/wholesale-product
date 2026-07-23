@@ -48,7 +48,7 @@ const getEligibleProductOrder = async (buyerId, productId, orderId = null) => {
 
   const values = [buyerId, productId, ELIGIBLE_ORDER_STATUSES, ELIGIBLE_PAYMENT_STATUSES];
   let query = `
-    SELECT o.id AS order_id, COALESCE(o.supplier_id, si.supplier_id) AS supplier_id
+    SELECT o.id AS order_id, COALESCE(CAST(o.supplier_id AS text), CAST(si.supplier_id AS text)) AS supplier_id
     FROM orders o
     JOIN supplier_inventory si ON o.inventory_item_id = si.id
     WHERE o.buyer_id = $1
@@ -72,12 +72,12 @@ const getEligibleSellerOrder = async (buyerId, sellerId, orderId) => {
   if (!buyerId || !sellerId || !orderId) return null;
 
   const result = await pool.query(
-    `SELECT o.id AS order_id, COALESCE(o.supplier_id, si.supplier_id) AS supplier_id
+    `SELECT o.id AS order_id, COALESCE(CAST(o.supplier_id AS text), CAST(si.supplier_id AS text)) AS supplier_id
      FROM orders o
      JOIN supplier_inventory si ON o.inventory_item_id = si.id
      WHERE o.id = $1
        AND o.buyer_id = $2
-       AND COALESCE(o.supplier_id, si.supplier_id) = $3
+      AND COALESCE(CAST(o.supplier_id AS text), CAST(si.supplier_id AS text)) = $3
        AND o.status = ANY($4)
        AND o.payment_status = ANY($5)
        AND COALESCE(o.return_status, 'none') NOT IN ('requested','approved','completed','rejected')
@@ -90,6 +90,13 @@ const getEligibleSellerOrder = async (buyerId, sellerId, orderId) => {
 
 exports.createProductReview = async (req, res) => {
   const userId = req.user?.id;
+  // Debug logging: show incoming body and uploaded files (filenames only)
+  try {
+    console.debug("createProductReview request body:", { body: req.body });
+    if (req.files) console.debug("createProductReview files:", req.files.map((f) => f.filename));
+  } catch (e) {
+    console.debug("createProductReview log error", e);
+  }
   // When multipart/form-data is used, multer places files on req.files and form fields on req.body
   const productId = req.body.productId;
   const rating = Number(req.body.rating);
@@ -157,7 +164,24 @@ exports.createProductReview = async (req, res) => {
       client.release();
     }
   } catch (error) {
-    console.error("Create product review error", error);
+    console.error("Create product review error", error.stack || error);
+    try {
+      console.error("Request body was:", req.body);
+      if (req.files) console.error("Uploaded files:", req.files.map((f) => f.filename));
+    } catch (e) {
+      console.error("Error while logging request details", e);
+    }
+    // also persist error details to a file for easier debugging
+    try {
+      const fs = require("fs");
+      const path = require("path");
+      const logPath = path.join(__dirname, "..", "..", "logs", "review_errors.log");
+      const entry = [`TIME: ${new Date().toISOString()}`, error.stack || String(error), `BODY: ${JSON.stringify(req.body)}`, `FILES: ${req.files ? JSON.stringify(req.files.map(f=>f.filename)) : '[]'}`, '---'].join("\n");
+      fs.appendFileSync(logPath, entry + "\n", "utf8");
+    } catch (e) {
+      console.error('Failed to write review error log', e);
+    }
+
     res.status(500).json({ message: "Server error while submitting review" });
   }
 };

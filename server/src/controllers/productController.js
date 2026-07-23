@@ -140,7 +140,21 @@ exports.getProductById = async (req, res) => {
       return res.status(404).json({ message: "Product not found" });
     }
 
-    res.status(200).json(result.rows[0]);
+    let reviewSummary = { rows: [{ average_rating: 0, total_reviews: 0 }] };
+    try {
+      reviewSummary = await pool.query(
+        `SELECT COALESCE(AVG(rating), 0)::numeric(10,2) AS average_rating,
+                COUNT(*) FILTER (WHERE status = 'active') AS total_reviews
+         FROM product_reviews WHERE product_id = $1`,
+        [id],
+      );
+    } catch (reviewErr) {
+      console.warn('Review summary query failed:', reviewErr.message);
+    }
+
+    const product = result.rows[0];
+    product.reviewSummary = reviewSummary.rows[0];
+    res.status(200).json(product);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error fetching product" });

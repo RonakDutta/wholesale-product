@@ -13,8 +13,8 @@ const authenticateToken = require("../middlewares/authMiddleware");
 const router = express.Router();
 
 router.get("/", getPublicCatalog);
-router.get("/:id", getProductById);
 router.get("/:id/contact", authenticateToken, contactSupplier);
+router.get("/:id", getProductById);
 router.post("/", authenticateToken, addProduct);
 router.get("/inventory/:id", authenticateToken, getInventoryItemById);
 router.put("/inventory/:id", authenticateToken, updateInventoryItem);

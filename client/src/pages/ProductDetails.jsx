@@ -23,6 +23,7 @@ import api from "../utils/axios";
 import { toast } from "sonner";
 import ContactVendorBtn from "../components/ContactVendorBtn";
 import SupplierComparison from "../components/SupplierComparison";
+import ReviewSection from "../components/ReviewSection";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import {
@@ -519,6 +520,8 @@ const ProductDetails = () => {
           }
         }}
       />
+
+      <ReviewSection productId={product.id} />
     </div>
   );
 };

@@ -87,15 +87,15 @@ const Messages = () => {
 
     // FIX: Only trigger the pending chat and clear state IF state actually has data.
     // This stops the infinite loop caused by navigate() constantly generating new empty state objects.
-    if (location.state && Object.keys(location.state).length > 0) {
+    // ContactChoiceModal passes the vendor details nested under `openChat`.
+    const openChat = location.state?.openChat;
+    if (openChat) {
       setActiveChatId(vendorId);
       setPendingChat({
         user_id: vendorId,
-        sender_name: location.state.vendorName || "Vendor",
-        company: location.state.company,
-        lastMessage: location.state.productName
-          ? `Re: ${location.state.productName}`
-          : "",
+        sender_name: openChat.vendorName || "Vendor",
+        company: openChat.company,
+        lastMessage: openChat.productName ? `Re: ${openChat.productName}` : "",
         timestamp: null,
         unread: 0,
       });

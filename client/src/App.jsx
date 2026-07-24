@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 import { CartProvider } from "./context/CartContext";
 import { WishlistProvider } from "./context/WishlistContext";
 import { AuthProvider } from "./context/AuthContext";
+import { SocketProvider } from "./context/SocketContext";
 
 import MainLayout from "./layouts/MainLayout";
 import AuthLayout from "./layouts/AuthLayout";
@@ -110,12 +111,14 @@ const router = createBrowserRouter([
 export default function App() {
   return (
     <AuthProvider>
-      <CartProvider>
-        <WishlistProvider>
-          <Toaster richColors position="bottom-right" />
-          <RouterProvider router={router} />
-        </WishlistProvider>
-      </CartProvider>
+      <SocketProvider>
+        <CartProvider>
+          <WishlistProvider>
+            <Toaster richColors position="bottom-right" />
+            <RouterProvider router={router} />
+          </WishlistProvider>
+        </CartProvider>
+      </SocketProvider>
     </AuthProvider>
   );
 }

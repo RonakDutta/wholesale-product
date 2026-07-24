@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSocket } from "../context/SocketContext";
+import api from "../utils/axios";
 
 export function useConversation(receiverId, currentUserId) {
 	const socket = useSocket();
@@ -15,17 +16,11 @@ export function useConversation(receiverId, currentUserId) {
 		const load = async () => {
 			setLoading(true);
 			try {
-				const res = await fetch(`/api/messages/${receiverId}`, {
-					headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-				});
-				const data = await res.json();
-				if (!cancelled) setMessages(data);
+				const res = await api.get(`/api/messages/${receiverId}`);
+				if (!cancelled) setMessages(Array.isArray(res.data) ? res.data : []);
 
 				// mark as read, fire-and-forget
-				fetch(`/api/messages/${receiverId}/read`, {
-					method: "PATCH",
-					headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-				}).catch(() => {});
+				api.patch(`/api/messages/${receiverId}/read`).catch(() => {});
 			} catch (err) {
 				console.error("Failed to fetch messages", err);
 			} finally {

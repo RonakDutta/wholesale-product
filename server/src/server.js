@@ -8,7 +8,9 @@ const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
 	cors: {
-		origin: process.env.CLIENT_URL,
+		// Restrict to CLIENT_URL when configured; otherwise reflect the request
+		// origin so the browser socket handshake isn't blocked in local dev.
+		origin: process.env.CLIENT_URL || true,
 		credentials: true,
 	},
 });

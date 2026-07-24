@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSocket } from "../context/SocketContext";
+import api from "../utils/axios";
 
 export function useChatList() {
 	const socket = useSocket();
@@ -9,11 +10,8 @@ export function useChatList() {
 	const fetchChats = useCallback(async () => {
 		setLoading(true);
 		try {
-			const res = await fetch(`/api/messages/chats`, {
-				headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-			});
-			const data = await res.json();
-			setChats(data);
+			const res = await api.get(`/api/messages/chats`);
+			setChats(Array.isArray(res.data) ? res.data : []);
 		} catch (err) {
 			console.error("Failed to fetch chats", err);
 		} finally {

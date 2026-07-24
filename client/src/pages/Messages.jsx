@@ -129,7 +129,9 @@ const Messages = () => {
 
   const handleSelectChat = (userId) => {
     setActiveChatId(userId);
-    setPendingChat(null);
+    // Keep the synthetic pending entry if it's the one being opened; only drop
+    // it when switching to a different (real) conversation.
+    setPendingChat((prev) => (prev && prev.user_id === userId ? prev : null));
     clearUnread(userId);
     navigate(`/messages/${userId}`, { replace: true });
   };

@@ -44,10 +44,10 @@ export function useConversation(receiverId, currentUserId) {
 		if (!socket) return;
 
 		const handleNewMessage = (msg) => {
-			if (
-				msg.sender_id === receiverIdRef.current ||
-				msg.receiver_id === receiverIdRef.current
-			) {
+			// receiverId may be a string (from the URL param) or a number
+			// (from the chat list); coerce so the comparison is reliable.
+			const rid = Number(receiverIdRef.current);
+			if (msg.sender_id === rid || msg.receiver_id === rid) {
 				setMessages((prev) => [...prev, msg]);
 			}
 		};
@@ -59,11 +59,19 @@ export function useConversation(receiverId, currentUserId) {
 			);
 		};
 
+		const handleMessageError = ({ tempId }) => {
+			// drop the optimistic message that failed to send
+			if (!tempId) return;
+			setMessages((prev) => prev.filter((m) => m.tempId !== tempId));
+		};
+
 		socket.on("new_message", handleNewMessage);
 		socket.on("message_sent", handleMessageSent);
+		socket.on("message_error", handleMessageError);
 		return () => {
 			socket.off("new_message", handleNewMessage);
 			socket.off("message_sent", handleMessageSent);
+			socket.off("message_error", handleMessageError);
 		};
 	}, [socket]);
 

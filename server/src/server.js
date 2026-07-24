@@ -29,23 +29,36 @@ io.use((socket, next) => {
 
 io.on("connection", (socket) => {
 	socket.join(`user:${socket.userId}`);
-	socket.on("send_message", async ({ receiverId, text }) => {
+	socket.on("send_message", async ({ receiverId, text, tempId }) => {
 		if (!text?.trim()) {
 			return;
 		}
-		const { rows } = await pool.query(
-			`INSERT INTO messages(sender_id,receiver_id,message_text)
+		const targetId = parseInt(receiverId, 10);
+		if (Number.isNaN(targetId) || targetId === socket.userId) {
+			socket.emit("message_error", { tempId, message: "Invalid recipient" });
+			return;
+		}
+		try {
+			const { rows } = await pool.query(
+				`INSERT INTO messages(sender_id,receiver_id,message_text)
         VALUES ($1,$2,$3) RETURNING *`,
-			[socket.userId, receiverId, text.trim()],
-		);
-		const msg = rows[0];
-		io.to(`user:${receiverId}`).emit("new_message", msg);
-		socket.emit("message_sent", msg);
+				[socket.userId, targetId, text.trim()],
+			);
+			const msg = rows[0];
+			io.to(`user:${targetId}`).emit("new_message", msg);
+			// Echo tempId back so the sender can reconcile its optimistic message
+			socket.emit("message_sent", { ...msg, tempId });
+		} catch (err) {
+			console.error("Error saving message:", err);
+			socket.emit("message_error", { tempId, message: "Failed to send message" });
+		}
 	});
 });
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+// NOTE: must listen on the HTTP server that Socket.IO is attached to,
+// otherwise real-time messaging never comes online.
+httpServer.listen(PORT, () => {
 	console.log(`Server running on port ${PORT}`);
 });

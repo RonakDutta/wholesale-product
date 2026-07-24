@@ -131,7 +131,7 @@ const Messages = () => {
     setActiveChatId(userId);
     setPendingChat(null);
     clearUnread(userId);
-    navigate(`/dashboard/messages/${userId}`, { replace: true });
+    navigate(`/messages/${userId}`, { replace: true });
   };
 
   const activeChat =

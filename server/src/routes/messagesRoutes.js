@@ -48,11 +48,11 @@ router.get("/chats", async (req, res) => {
 
 router.patch("/:otherUserId/read", async (req, res) => {
 	const userId = req.user?.id;
-	const otherUserId = parseInt(req.params.otherUserId, 10);
+	const otherUserId = req.params.otherUserId;
 	if (!userId) {
 		return res.status(401).json({ success: false, message: "Unauthorized: Missing user credentials." });
 	}
-	if (Number.isNaN(otherUserId) || otherUserId === userId) {
+	if (!otherUserId || String(otherUserId) === String(userId)) {
 		return res.status(400).json({ success: false, message: "Invalid conversation target." });
 	}
 	try {
@@ -70,11 +70,11 @@ router.patch("/:otherUserId/read", async (req, res) => {
 // conversation with a specific user
 router.get("/:otherUserId", async (req, res) => {
 	const userId = req.user?.id;
-	const otherUserId = parseInt(req.params.otherUserId, 10);
+	const otherUserId = req.params.otherUserId;
 	if (!userId) {
 		return res.status(401).json({ success: false, message: "Unauthorized: Missing user credentials." });
 	}
-	if (Number.isNaN(otherUserId) || otherUserId === userId) {
+	if (!otherUserId || String(otherUserId) === String(userId)) {
 		return res.status(400).json({ success: false, message: "Invalid conversation target." });
 	}
 	try {

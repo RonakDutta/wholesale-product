@@ -44,10 +44,10 @@ export function useConversation(receiverId, currentUserId) {
 		if (!socket) return;
 
 		const handleNewMessage = (msg) => {
-			// receiverId may be a string (from the URL param) or a number
-			// (from the chat list); coerce so the comparison is reliable.
-			const rid = Number(receiverIdRef.current);
-			if (msg.sender_id === rid || msg.receiver_id === rid) {
+			// Compare as strings so it works for both UUID and numeric ids,
+			// regardless of whether receiverId came from the URL or the list.
+			const rid = String(receiverIdRef.current);
+			if (String(msg.sender_id) === rid || String(msg.receiver_id) === rid) {
 				setMessages((prev) => [...prev, msg]);
 			}
 		};

@@ -33,8 +33,9 @@ io.on("connection", (socket) => {
 		if (!text?.trim()) {
 			return;
 		}
-		const targetId = parseInt(receiverId, 10);
-		if (Number.isNaN(targetId) || targetId === socket.userId) {
+		const targetId = receiverId;
+		// ids are UUIDs, so validate as a non-empty value rather than a number
+		if (!targetId || String(targetId) === String(socket.userId)) {
 			socket.emit("message_error", { tempId, message: "Invalid recipient" });
 			return;
 		}

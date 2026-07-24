@@ -121,17 +121,24 @@ const createOrder = async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    const cleanProductId = parseInt(String(targetItem.productId).split("#")[0], 10);
-    const cleanSupplierId = parseInt(String(targetItem.supplierId || targetItem.vendorId).split("#")[0], 10);
+    // ids are UUIDs; keep them as strings (strip any "#..." suffix the client may append)
+    const cleanProductId = String(targetItem.productId || "").split("#")[0].trim();
+    const rawSupplierId = targetItem.supplierId || targetItem.vendorId;
+    const cleanSupplierId = rawSupplierId ? String(rawSupplierId).split("#")[0].trim() : null;
 
-    if (isNaN(cleanProductId)) {
+    if (!cleanProductId) {
       throw new Error("Invalid product ID format.");
     }
 
-    let inventoryQuery = await client.query(
-      "SELECT id, supplier_id, stock, moq, price FROM supplier_inventory WHERE product_id = $1 AND supplier_id = $2 AND status = 'Active' LIMIT 1",
-      [cleanProductId, cleanSupplierId],
-    );
+    // Only constrain by supplier when we actually have one, so we never pass
+    // an invalid value into a UUID column.
+    let inventoryQuery = { rows: [] };
+    if (cleanSupplierId) {
+      inventoryQuery = await client.query(
+        "SELECT id, supplier_id, stock, moq, price FROM supplier_inventory WHERE product_id = $1 AND supplier_id = $2 AND status = 'Active' LIMIT 1",
+        [cleanProductId, cleanSupplierId],
+      );
+    }
 
     if (inventoryQuery.rows.length === 0) {
       inventoryQuery = await client.query(

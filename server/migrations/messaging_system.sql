@@ -5,10 +5,11 @@
 -- and write this table, so it must exist for chat to work.
 -- =====================================================
 
+-- users(id) is UUID in this database, so the participant columns are UUID too.
 CREATE TABLE IF NOT EXISTS messages (
     id SERIAL PRIMARY KEY,
-    sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    receiver_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    receiver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     message_text TEXT NOT NULL,
     is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

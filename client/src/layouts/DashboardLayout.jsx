@@ -6,7 +6,6 @@ import {
   MessageSquare,
   Settings,
   Search,
-  Bell,
   LogOut,
   Menu,
   X,
@@ -15,6 +14,7 @@ import {
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
+import NotificationBell from "../components/NotificationBell";
 
 const DashboardLayout = () => {
   const location = useLocation();
@@ -171,9 +171,7 @@ const DashboardLayout = () => {
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
             </button>
 
-            <button className="p-2 text-slate-500 hover:bg-sage/20 rounded-full transition-colors cursor-pointer">
-              <Bell className="w-5 h-5" />
-            </button>
+            <NotificationBell />
 
             <button
               onClick={handleLogout}

@@ -3,6 +3,7 @@ const { createServer } = require("http");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const pool = require("./config/db");
+const { setSocketServer } = require("./services/socketService");
 
 const httpServer = createServer(app);
 
@@ -12,6 +13,8 @@ const io = new Server(httpServer, {
 		credentials: true,
 	},
 });
+
+setSocketServer(io);
 
 io.use((socket, next) => {
 	const token = socket.handshake.auth?.token;
@@ -44,8 +47,27 @@ io.on("connection", (socket) => {
 	});
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || 5000;
 
-app.listen(PORT, () => {
+httpServer.on("error", (error) => {
+	if (error.syscall !== "listen") {
+		throw error;
+	}
+
+	const bind = typeof PORT === "string" ? `Pipe ${PORT}` : `Port ${PORT}`;
+
+	if (error.code === "EACCES") {
+		console.error(`${bind} requires elevated privileges.`);
+		process.exit(1);
+	} else if (error.code === "EADDRINUSE") {
+		console.error(`${bind} is already in use. Shut down the conflicting process or set a different PORT.`);
+		process.exit(1);
+	}
+
+	console.error("Server error:", error);
+	process.exit(1);
+});
+
+httpServer.listen(PORT, () => {
 	console.log(`Server running on port ${PORT}`);
 });

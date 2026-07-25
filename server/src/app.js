@@ -9,6 +9,7 @@ const orderRoutes = require("./routes/orderRoutes");
 const messagesRoutes = require("./routes/messagesRoutes");
 const promotionRoutes = require("./routes/promotionRoutes");
 const reviewRoutes = require("./routes/reviewRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 
 const app = express();
 
@@ -26,5 +27,6 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/messages", messagesRoutes);
 app.use("/api/promotions", promotionRoutes);
 app.use("/api/reviews", reviewRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 module.exports = app;

@@ -9,12 +9,13 @@ import {
   LayoutDashboard,
   ChevronDown,
   Check,
-  MessageSquare, // <-- Added this import
+  MessageSquare,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { useAuth } from "../context/AuthContext";
+import NotificationBell from "./NotificationBell";
 import CartDrawer from "./CartDrawer";
 import UserProfilePopup from "./UserProfilePopup";
 
@@ -234,6 +235,7 @@ const Navbar = () => {
             {/* Mobile Icons */}
             <div className="flex items-center gap-0.5 sm:gap-1 md:hidden -mr-2">
               <ActionIcons />
+              <NotificationBell />
               {isAuthenticated ? (
                 <div className="relative">
                   <button
@@ -279,6 +281,7 @@ const Navbar = () => {
           <div className="hidden md:flex items-center gap-2 lg:gap-4 shrink-0">
             <div className="flex items-center gap-1">
               <ActionIcons />
+              <NotificationBell />
             </div>
 
             <div className="hidden lg:block w-px h-6 bg-slate-200 mx-1"></div>

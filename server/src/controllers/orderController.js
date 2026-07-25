@@ -1,6 +1,7 @@
 const pool = require("../config/db");
 const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange } = require("../services/orderStatusService");
 const PDFDocument = require("pdfkit");
+const { enqueueNotification, NOTIFICATION_CHANNELS, NOTIFICATION_TYPES } = require("../services/notificationManager");
 
 const ensureOrderAccess = async (req, res, orderId, { requireBuyer = true, requireSupplier = true } = {}) => {
   const userId = req.user?.id;
@@ -160,6 +161,7 @@ const createOrder = async (req, res) => {
       throw new Error("Supplier cannot order their own inventory");
     }
 
+    const orderNumber = `ORD-${Date.now()}-${buyerId}`;
     const orderResult = await client.query(
       `INSERT INTO orders (
         buyer_id,
@@ -192,7 +194,7 @@ const createOrder = async (req, res) => {
         JSON.stringify(billingAddress || deliveryAddress),
         String(deliveryAddress.phone || ""),
         "Order created via enterprise checkout",
-        `ORD-${Date.now()}-${buyerId}`,
+        orderNumber,
         new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
       ],
     );
@@ -217,6 +219,33 @@ const createOrder = async (req, res) => {
     );
 
     await client.query("COMMIT");
+
+    const buyerEmail = req.user.email || null;
+
+    await enqueueNotification({
+      userId: buyerId,
+      title: "Order Placed Successfully",
+      message: `Your order ${orderNumber} has been created and is pending payment.`,
+      notificationType: NOTIFICATION_TYPES.order_update,
+      channels: [NOTIFICATION_CHANNELS.IN_APP, NOTIFICATION_CHANNELS.EMAIL],
+      emailPayload: {
+        to: buyerEmail,
+        subject: "Order Confirmation",
+        templateName: "order_update",
+        variables: {
+          orderNumber,
+          message: "Your new order is being processed.",
+          status: "payment_pending",
+        },
+      },
+      smsPayload: {
+        to: String(deliveryAddress.phone || ""),
+        body: `Your order ${orderNumber} has been placed and is pending payment.`,
+      },
+      referenceId: orderId,
+      referenceType: "order",
+    });
+
     return res.status(201).json({ success: true, orderId });
   } catch (error) {
     await client.query("ROLLBACK");

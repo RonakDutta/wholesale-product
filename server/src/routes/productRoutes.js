@@ -7,12 +7,14 @@ const {
   updateInventoryItem,
   deleteInventoryItem,
   contactSupplier,
+  getWholesalerById,
 } = require("../controllers/productController");
 const authenticateToken = require("../middlewares/authMiddleware");
 
 const router = express.Router();
 
 router.get("/", getPublicCatalog);
+router.get("/wholesaler/:id", getWholesalerById);
 router.get("/:id/contact", authenticateToken, contactSupplier);
 router.get("/:id", getProductById);
 router.post("/", authenticateToken, addProduct);

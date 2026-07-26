@@ -98,18 +98,12 @@ const SearchResults = () => {
             const vName = supplier.companyName || supplier.name || "Supplier";
             const vendorId = supplier.supplierId ?? supplier.id;
             if (!vendorId) return;
-            const existing = vendorMap[vendorId];
             vendorMap[vendorId] = {
               id: vendorId,
               type: "wholesaler",
               name: vName,
               location: supplier.city || "India",
-              // keep every category this seller appears in
-              category: existing?.category
-                ? Array.from(
-                    new Set([...String(existing.category).split(", "), product.category]),
-                  ).join(", ")
-                : product.category,
+              category: product.category,
               verified: supplier.verified || false,
               rating: Number(supplier.rating || 4.5),
               logo: `https://ui-avatars.com/api/?name=${encodeURIComponent(vName)}&background=random`,
@@ -201,25 +195,10 @@ const SearchResults = () => {
     });
   }, [query]);
 
-  // ---- Animate cards on load ----
-  // Keyed on the search/tab, not on `results`: re-running for every filter,
-  // sort or keystroke made the cards fade in and out constantly.
-  useEffect(() => {
-    if (loading || !resultsRef.current) return;
-    const cards = resultsRef.current.querySelectorAll(".result-card");
-    if (cards.length === 0) return;
-    gsap.fromTo(
-      cards,
-      { opacity: 0, y: 30 },
-      {
-        opacity: 1,
-        y: 0,
-        duration: 0.5,
-        stagger: 0.06,
-        ease: "power2.out",
-      },
-    );
-  }, [loading, query, activeTab]);
+  // No entrance animation for result cards. GSAP writes inline opacity on the
+  // nodes, and because React reuses those nodes as the list re-renders while
+  // filtering, cards were left mid-fade (most visibly a few items down the
+  // list). Results now render immediately.
 
   if (!query && initialFetchDone) {
     return (
@@ -598,9 +577,6 @@ const ResultCard = ({ item, viewMode }) => {
                     {item.rating.toFixed(1)}
                   </span>
                 </div>
-                <span className="text-xs text-espresso/40 bg-sage/10 px-2 py-0.5 rounded-full">
-                  {item.category}
-                </span>
               </div>
             </>
           )}
@@ -675,9 +651,6 @@ const ResultCard = ({ item, viewMode }) => {
                   {item.rating.toFixed(1)}
                 </span>
               </div>
-              <span className="text-sm text-espresso/40">
-                • {item.category}
-              </span>
             </div>
           </>
         )}

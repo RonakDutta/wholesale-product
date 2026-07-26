@@ -161,6 +161,109 @@ exports.getProductById = async (req, res) => {
   }
 };
 
+// @desc    Public wholesaler profile with their active listings
+// @route   GET /api/products/wholesaler/:id
+exports.getWholesalerById = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const profileResult = await pool.query(
+      `SELECT
+         u.id,
+         u.first_name || ' ' || u.last_name AS contact_name,
+         u.email,
+         wp.company_name,
+         wp.city,
+         wp.country,
+         wp.is_verified,
+         wp.gst_verified,
+         wp.trust_score,
+         wp.response_rate,
+         wp.response_time,
+         wp.years_in_business,
+         wp.contact_phone,
+         u.created_at AS member_since
+       FROM users u
+       LEFT JOIN wholesaler_profiles wp ON wp.user_id = u.id
+       WHERE u.id = $1`,
+      [id],
+    );
+
+    if (profileResult.rows.length === 0) {
+      return res.status(404).json({ message: "Wholesaler not found" });
+    }
+
+    const listingsResult = await pool.query(
+      `SELECT
+         si.id            AS inventory_id,
+         si.price,
+         si.discount_price,
+         si.moq,
+         si.stock,
+         si.shipping_days,
+         p.id             AS product_id,
+         p.name,
+         p.category,
+         p.description,
+         COALESCE(si.image_url, p.global_image_url) AS image
+       FROM supplier_inventory si
+       JOIN products p ON p.id = si.product_id
+       WHERE si.supplier_id = $1 AND si.status = 'Active'
+       ORDER BY si.created_at DESC`,
+      [id],
+    );
+
+    // Seller rating is best-effort: the table may be empty on a new profile.
+    let ratingRow = { average_rating: 0, total_reviews: 0 };
+    try {
+      const ratingResult = await pool.query(
+        `SELECT COALESCE(AVG(overall_experience), 0)::numeric(10,2) AS average_rating,
+                COUNT(*) FILTER (WHERE status = 'active')          AS total_reviews
+         FROM seller_reviews WHERE seller_id = $1`,
+        [id],
+      );
+      ratingRow = ratingResult.rows[0] || ratingRow;
+    } catch (ratingErr) {
+      console.warn("Seller rating query failed:", ratingErr.message);
+    }
+
+    const profile = profileResult.rows[0];
+    return res.status(200).json({
+      id: profile.id,
+      companyName: profile.company_name || profile.contact_name,
+      contactName: profile.contact_name,
+      city: profile.city,
+      country: profile.country,
+      verified: profile.is_verified ?? false,
+      gstVerified: profile.gst_verified ?? false,
+      trustScore: profile.trust_score,
+      responseRate: profile.response_rate,
+      responseTime: profile.response_time,
+      yearsInBusiness: profile.years_in_business,
+      contactPhone: profile.contact_phone,
+      memberSince: profile.member_since,
+      rating: Number(ratingRow.average_rating) || 0,
+      totalReviews: Number(ratingRow.total_reviews) || 0,
+      productCount: listingsResult.rows.length,
+      products: listingsResult.rows.map((row) => ({
+        id: row.product_id,
+        inventoryId: row.inventory_id,
+        name: row.name,
+        category: row.category,
+        description: row.description,
+        image: row.image,
+        price: Number(row.price) || 0,
+        discountPrice: row.discount_price ? Number(row.discount_price) : null,
+        moq: row.moq,
+        stock: row.stock,
+        shippingDays: row.shipping_days,
+      })),
+    });
+  } catch (err) {
+    console.error("Error fetching wholesaler:", err);
+    res.status(500).json({ message: "Server error fetching wholesaler" });
+  }
+};
+
 /// @desc    Update a supplier's inventory listing (price, stock, MOQ, etc.)
 // @route   PUT /api/products/inventory/:id
 exports.updateInventoryItem = async (req, res) => {

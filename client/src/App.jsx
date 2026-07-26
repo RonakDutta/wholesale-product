@@ -31,6 +31,7 @@ import Settings from "./pages/dashboard/Settings";
 import EditProduct from "./pages/dashboard/EditProduct";
 import Promotions from "./pages/dashboard/Promotions";
 import RetailDashboard from "./pages/RetailDashboard";
+import WholesalerProfile from "./pages/WholesalerProfile";
 import NotFound from "./pages/NotFound";
 
 const router = createBrowserRouter([
@@ -44,6 +45,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <MarketplaceHome /> },
       { path: "product/:id", element: <ProductDetails /> },
+      { path: "wholesaler/:id", element: <WholesalerProfile /> },
       { path: "wishlist", element: <Wishlist /> },
       { path: "search", element: <SearchResults /> },
       { path: "messages", element: <Messages /> },

@@ -3,6 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { Search, Filter, Eye, Clock, Download } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
+import {
+  ORDER_TABS,
+  formatOrderStatus,
+  getOrderStatusStyle,
+  matchesOrderTab,
+} from "../../utils/orderStatus";
 
 const Orders = () => {
   const navigate = useNavigate();
@@ -26,32 +32,13 @@ const Orders = () => {
     fetchOrders();
   }, []);
 
-  const tabs = [
-    "All Orders",
-    "Processing",
-    "Shipped",
-    "Delivered",
-    "Cancelled",
-  ];
+  const tabs = ORDER_TABS.map((t) => t.label);
 
-  const getStatusStyle = (status) => {
-    switch (status) {
-      case "Processing":
-        return "bg-amber-100 text-amber-700 border-amber-200";
-      case "Shipped":
-        return "bg-blue-100 text-blue-700 border-blue-200";
-      case "Delivered":
-        return "bg-emerald-100 text-emerald-700 border-emerald-200";
-      case "Cancelled":
-        return "bg-rose-100 text-rose-700 border-rose-200";
-      default:
-        return "bg-slate-100 text-slate-700 border-slate-200";
-    }
-  };
+  const getStatusStyle = getOrderStatusStyle;
 
   // Filter orders based on Tab and Search Input
   const displayedOrders = orders.filter((order) => {
-    const matchesTab = filter === "All Orders" || order.status === filter;
+    const matchesTab = matchesOrderTab(order.status, filter);
     const matchesSearch =
       searchQuery === "" ||
       order.id.toString().includes(searchQuery) ||
@@ -164,7 +151,7 @@ const Orders = () => {
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1">
                         <span className="font-mono font-bold text-espresso">
-                          ORD-{order.id}
+                          {order.order_number || `ORD-${order.id}`}
                         </span>
                         <span className="text-xs text-slate-500 max-w-50 sm:max-w-50 truncate">
                           {order.product}
@@ -203,7 +190,7 @@ const Orders = () => {
                       <span
                         className={`px-3 py-1.5 rounded border text-xs font-bold uppercase tracking-wider ${getStatusStyle(order.status)}`}
                       >
-                        {order.status}
+                        {formatOrderStatus(order.status)}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">

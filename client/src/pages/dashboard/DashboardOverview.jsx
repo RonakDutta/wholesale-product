@@ -10,6 +10,10 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import api from "../../utils/axios";
+import {
+  formatOrderStatus,
+  getOrderStatusStyle,
+} from "../../utils/orderStatus";
 import { toast } from "sonner";
 
 const DashboardOverview = () => {
@@ -186,7 +190,7 @@ const DashboardOverview = () => {
                     className="hover:bg-slate-50/50 transition-colors"
                   >
                     <td className="px-6 py-4 font-mono font-bold text-espresso">
-                      ORD-{order.id}
+                      {order.order_number || `ORD-${order.id}`}
                     </td>
                     <td className="px-6 py-4">
                       <p className="font-bold text-slate-700 max-w-62.5 truncate">
@@ -201,15 +205,11 @@ const DashboardOverview = () => {
                     </td>
                     <td className="px-6 py-4">
                       <span
-                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          order.status === "Delivered"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : order.status === "Shipped"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-amber-100 text-amber-700"
-                        }`}
+                        className={`px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wider ${getOrderStatusStyle(
+                          order.status,
+                        )}`}
                       >
-                        {order.status}
+                        {formatOrderStatus(order.status)}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right text-xs text-slate-500 flex items-center justify-end gap-1.5 font-medium">

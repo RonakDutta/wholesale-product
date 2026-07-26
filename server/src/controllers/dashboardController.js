@@ -43,20 +43,27 @@ exports.getDashboardStats = async (req, res) => {
     );
 
     // 3. Get Recent Orders
+    //    Mirrors getSupplierOrders (/api/orders/supplier) so the overview and
+    //    the Orders page never disagree. wholesaler_profiles must be LEFT
+    //    JOINed: an inner join silently hid every order from a buyer who has
+    //    no seller profile, which is most buyers.
     const recentOrders = await pool.query(
       `
-      SELECT 
-        o.id, 
-        o.total_amount as amount, 
-        o.quantity as qty, 
-        o.status, 
-        p.name as product, 
-        u.company_name as buyer,
+      SELECT
+        o.id,
+        o.order_number,
+        o.total_amount as amount,
+        o.quantity as qty,
+        o.status,
+        o.payment_status,
+        p.name as product,
+        COALESCE(wp.company_name, u.first_name || ' ' || u.last_name) as buyer,
         o.created_at as date
       FROM orders o
       JOIN supplier_inventory si ON o.inventory_item_id = si.id
       JOIN products p ON si.product_id = p.id
-      JOIN wholesaler_profiles u ON o.buyer_id = u.user_id
+      JOIN users u ON o.buyer_id = u.id
+      LEFT JOIN wholesaler_profiles wp ON u.id = wp.user_id
       WHERE si.supplier_id = $1
       ORDER BY o.created_at DESC
       LIMIT 5
@@ -65,12 +72,14 @@ exports.getDashboardStats = async (req, res) => {
     );
 
     // 4. Count Completed Orders
+    //    Statuses are lowercase in the order lifecycle; 'Delivered' never
+    //    matched, so this always returned 0.
     const completed = await pool.query(
       `
-      SELECT COUNT(o.id) 
+      SELECT COUNT(o.id)
       FROM orders o
       JOIN supplier_inventory si ON o.inventory_item_id = si.id
-      WHERE si.supplier_id = $1 AND o.status = 'Delivered'
+      WHERE si.supplier_id = $1 AND o.status IN ('delivered', 'completed')
     `,
       [supplierId],
     );

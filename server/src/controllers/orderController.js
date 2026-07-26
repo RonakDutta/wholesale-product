@@ -297,7 +297,7 @@ const updatePaymentStatus = async (req, res) => {
     if (!accessCheck) return;
 
     await client.query("BEGIN");
-    const checkOrder = await client.query("SELECT buyer_id, status FROM orders WHERE id = $1", [orderId]);
+    const checkOrder = await client.query("SELECT buyer_id, status, total_amount FROM orders WHERE id = $1", [orderId]);
     if (checkOrder.rows.length === 0) {
       throw new Error("Order metadata mapping context missing.");
     }
@@ -317,10 +317,14 @@ const updatePaymentStatus = async (req, res) => {
       [paymentStatus, nextOrderStatus, orderId],
     );
 
+    // Record the order's actual value. This was hardcoded to 0, which both
+    // misrepresented the payment and violated the amount > 0 check constraint.
+    const transactionAmount = Number(checkOrder.rows[0].total_amount) || 0;
+
     await client.query(
       `INSERT INTO payment_transactions (order_id, amount, payment_method, payment_status, gateway_response, created_at)
        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-      [orderId, 0, paymentMethod, paymentStatus === "paid" ? "completed" : "pending", JSON.stringify({ method: paymentMethod })],
+      [orderId, transactionAmount, paymentMethod, paymentStatus === "paid" ? "completed" : "pending", JSON.stringify({ method: paymentMethod })],
     );
 
     await client.query(

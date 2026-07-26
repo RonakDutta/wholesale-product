@@ -440,7 +440,7 @@ const ProductDetails = () => {
           </div>
 
           <div className="flex flex-col gap-3 mt-2">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <ContactVendorBtn
                 vendorId={selectedSupplier.supplierId || selectedSupplier.id}
                 vendorName={currentSupplierName}
@@ -466,7 +466,10 @@ const ProductDetails = () => {
                 <Heart
                   className={`w-5 h-5 shrink-0 transition-all ${wishlisted ? "fill-current scale-110" : "fill-none"}`}
                 />
-                <span>
+                <span className="sm:hidden">
+                  {wishlisted ? "Saved" : "Wishlist"}
+                </span>
+                <span className="hidden sm:inline">
                   {wishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
                 </span>
               </button>

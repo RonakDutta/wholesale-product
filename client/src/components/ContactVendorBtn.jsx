@@ -66,22 +66,18 @@ const ContactVendorBtn = ({
           type="button"
           onClick={openChoice}
           disabled={loading}
-          className="flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 bg-transparent text-espresso border border-sage/50 rounded-sm hover:bg-sage/10 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-1.5 sm:gap-2 py-3 bg-transparent text-espresso border border-sage/50 rounded-xl hover:bg-sage/10 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           aria-label={`Contact ${vendorName} about ${productName}`}
         >
           {loading ? (
             <>
-              <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 border-2 border-espresso border-t-transparent rounded-full animate-spin" />
-              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wide">
-                Loading...
-              </span>
+              <div className="w-4 h-4 border-2 border-espresso border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm font-bold">Loading...</span>
             </>
           ) : (
             <>
-              <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wide">
-                Message
-              </span>
+              <MessageSquare className="w-5 h-5 shrink-0" />
+              <span className="text-sm font-bold">Message Supplier</span>
             </>
           )}
         </button>

@@ -22,6 +22,7 @@ import Checkout from "./pages/Checkout";
 import Payment from "./pages/Payment";
 import OrderSuccess from "./pages/OrderSuccess";
 import OrderDetails from "./pages/OrderDetails";
+import MyOrders from "./pages/MyOrders";
 import DashboardOverview from "./pages/dashboard/DashboardOverview";
 import MyProducts from "./pages/dashboard/MyProducts";
 import AddProduct from "./pages/dashboard/AddProduct";
@@ -53,6 +54,7 @@ const router = createBrowserRouter([
       { path: "checkout", element: <Checkout /> },
       { path: "payment/:orderId", element: <Payment /> },
       { path: "order-success", element: <OrderSuccess /> },
+      { path: "orders", element: <MyOrders /> },
       { path: "orders/:orderId", element: <OrderDetails /> },
       { path: "retail-dashboard", element: <RetailDashboard /> },
     ],

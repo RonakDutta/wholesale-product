@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, QrCode, IndianRupee, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react"; // Standardized named export to resolve Vite bundler error
@@ -12,6 +12,36 @@ const Payment = () => {
   const [updating, setUpdating] = useState(false);
   const [paymentDetails, setPaymentDetails] = useState(null);
   const [error, setError] = useState(null);
+  // Tracks whether the payment reached a final state, so leaving the screen
+  // after paying does not also mark the order failed.
+  const resolvedRef = useRef(false);
+  const armedRef = useRef(false);
+  const orderIdRef = useRef(orderId);
+  orderIdRef.current = orderId;
+
+  const markPaymentFailed = (remarks) =>
+    api
+      .put(`/api/orders/${orderIdRef.current}/payment-status`, {
+        paymentStatus: "failed",
+        remarks,
+      })
+      .catch(() => {});
+
+  // Abandoning the QR screen (browser back, closing the view) fails the order.
+  // Arming is delayed so React's development double-mount cannot cancel an
+  // order the moment the page opens.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      armedRef.current = true;
+    }, 1500);
+
+    return () => {
+      clearTimeout(timer);
+      if (!armedRef.current || resolvedRef.current) return;
+      markPaymentFailed("Buyer left the payment screen before paying");
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const fetchPaymentDetails = async () => {
@@ -54,6 +84,7 @@ const Payment = () => {
       });
 
       if (response.data.success) {
+        resolvedRef.current = true;
         toast.success("Payment confirmed successfully!");
         navigate("/order-success");
       }
@@ -73,8 +104,9 @@ const Payment = () => {
       });
 
       if (response.data.success) {
+        resolvedRef.current = true;
         toast.info("Payment cancelled");
-        navigate("/");
+        navigate("/orders");
       }
     } catch (err) {
       console.error("Error updating payment status:", err);
@@ -121,7 +153,13 @@ const Payment = () => {
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <button
-            onClick={() => navigate(-1)}
+            onClick={async () => {
+              resolvedRef.current = true;
+              await markPaymentFailed("Buyer went back from the payment screen");
+              toast.info("Payment cancelled");
+              navigate("/orders");
+            }}
+            aria-label="Cancel payment and go back"
             className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-5 h-5" />

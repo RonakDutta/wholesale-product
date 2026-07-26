@@ -317,6 +317,19 @@ const updatePaymentStatus = async (req, res) => {
       [paymentStatus, nextOrderStatus, orderId],
     );
 
+    // Stock is deducted when the order is created. If payment never completes,
+    // hand it back, otherwise abandoned checkouts silently consume inventory.
+    // The lifecycle makes payment_failed terminal, so this cannot double-run.
+    if (nextOrderStatus === "payment_failed") {
+      await client.query(
+        `UPDATE supplier_inventory si
+         SET stock = si.stock + o.quantity
+         FROM orders o
+         WHERE o.id = $1 AND si.id = o.inventory_item_id`,
+        [orderId],
+      );
+    }
+
     // Record the order's actual value. This was hardcoded to 0, which both
     // misrepresented the payment and violated the amount > 0 check constraint.
     const transactionAmount = Number(checkOrder.rows[0].total_amount) || 0;

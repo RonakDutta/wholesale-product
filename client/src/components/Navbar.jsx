@@ -10,6 +10,7 @@ import {
   ChevronDown,
   Check,
   MessageSquare, // <-- Added this import
+  Package,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
@@ -90,6 +91,15 @@ const Navbar = () => {
 
       <div className="p-2 flex flex-col gap-1">
         {/* <-- Added Messages Link Here --> */}
+        <Link
+          to="/orders"
+          onClick={() => setIsProfileOpen(false)}
+          className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-clay/5 hover:text-clay rounded-lg transition-colors cursor-pointer"
+        >
+          <Package className="w-4 h-4" />
+          Your Orders
+        </Link>
+
         <Link
           to="/messages"
           onClick={() => setIsProfileOpen(false)}

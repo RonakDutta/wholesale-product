@@ -53,7 +53,7 @@ const DashboardLayout = () => {
       exact: false,
     },
     {
-      path: "/messages",
+      path: "/dashboard/messages",
       label: "Messages",
       icon: MessageSquare,
       exact: false,

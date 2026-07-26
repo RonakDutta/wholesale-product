@@ -15,6 +15,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { useAuth } from "../context/AuthContext";
+import { useUnread } from "../context/UnreadContext";
 import CartDrawer from "./CartDrawer";
 import UserProfilePopup from "./UserProfilePopup";
 
@@ -35,6 +36,7 @@ const Navbar = () => {
   const { uniqueItemCount, setIsCartOpen } = useCart();
   const { itemCount: wishlistCount } = useWishlist();
   const { isAuthenticated, user, logout } = useAuth();
+  const { unreadCount } = useUnread();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -189,6 +191,25 @@ const Navbar = () => {
   const ActionIcons = () => (
     <>
       <LocationSelector />
+
+      {user && (
+        <Link
+          to="/messages"
+          aria-label={
+            unreadCount > 0
+              ? `Messages, ${unreadCount} unread`
+              : "Messages"
+          }
+          className="relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-colors group cursor-pointer"
+        >
+          <MessageSquare className="w-5 h-5 group-hover:scale-110 transition-transform" />
+          {unreadCount > 0 && (
+            <span className="absolute top-1.5 right-1.5 translate-x-1/2 -translate-y-1/2 bg-rose-500 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full ring-2 ring-white">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </Link>
+      )}
 
       <Link
         to="/wishlist"

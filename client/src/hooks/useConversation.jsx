@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSocket } from "../context/SocketContext";
+import { useUnread } from "../context/UnreadContext";
 import { toast } from "sonner";
 import api from "../utils/axios";
 
 export function useConversation(receiverId, currentUserId) {
 	const socket = useSocket();
+	const { refresh: refreshUnread } = useUnread();
 	const [messages, setMessages] = useState([]);
 	const [loading, setLoading] = useState(false);
 	const receiverIdRef = useRef(receiverId);
@@ -20,8 +22,11 @@ export function useConversation(receiverId, currentUserId) {
 				const res = await api.get(`/api/messages/${receiverId}`);
 				if (!cancelled) setMessages(Array.isArray(res.data) ? res.data : []);
 
-				// mark as read, fire-and-forget
-				api.patch(`/api/messages/${receiverId}/read`).catch(() => {});
+				// mark as read, then resync the navbar unread badge
+				api
+					.patch(`/api/messages/${receiverId}/read`)
+					.then(() => refreshUnread())
+					.catch(() => {});
 			} catch (err) {
 				console.error("Failed to fetch messages", err);
 			} finally {

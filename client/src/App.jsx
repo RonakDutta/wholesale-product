@@ -4,6 +4,7 @@ import { CartProvider } from "./context/CartContext";
 import { WishlistProvider } from "./context/WishlistContext";
 import { AuthProvider } from "./context/AuthContext";
 import { SocketProvider } from "./context/SocketContext";
+import { UnreadProvider } from "./context/UnreadContext";
 
 import MainLayout from "./layouts/MainLayout";
 import AuthLayout from "./layouts/AuthLayout";
@@ -112,12 +113,14 @@ export default function App() {
   return (
     <AuthProvider>
       <SocketProvider>
-        <CartProvider>
-          <WishlistProvider>
-            <Toaster richColors position="bottom-right" />
-            <RouterProvider router={router} />
-          </WishlistProvider>
-        </CartProvider>
+        <UnreadProvider>
+          <CartProvider>
+            <WishlistProvider>
+              <Toaster richColors position="bottom-right" />
+              <RouterProvider router={router} />
+            </WishlistProvider>
+          </CartProvider>
+        </UnreadProvider>
       </SocketProvider>
     </AuthProvider>
   );

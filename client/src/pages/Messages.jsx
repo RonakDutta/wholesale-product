@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   Search,
   MoreVertical,
@@ -118,12 +118,18 @@ const Messages = () => {
   const [activeChatId, setActiveChatId] = useState(null);
   const [pendingChat, setPendingChat] = useState(null);
   const [search, setSearch] = useState("");
-  const messagesContainerRef = useRef(null);
 
   const { messages, sendMessage } = useConversation(activeChatId, user?.id);
 
   useEffect(() => {
-    if (!vendorId) return;
+    // The URL is the source of truth. Without this the conversation stayed
+    // open after the URL dropped the id (browser back), so the first back
+    // press appeared to do nothing and only the second one left the page.
+    if (!vendorId) {
+      setActiveChatId(null);
+      setPendingChat(null);
+      return;
+    }
 
     // FIX: Only trigger the pending chat and clear state IF state actually has data.
     // This stops the infinite loop caused by navigate() constantly generating new empty state objects.
@@ -148,15 +154,8 @@ const Messages = () => {
     }
   }, [vendorId, location.state, location.pathname, navigate, activeChatId]);
 
-  // Default to the first chat once loaded — only on desktop, where the list
-  // and conversation sit side by side. On mobile this would immediately
-  // reopen a conversation the user just backed out of.
-  useEffect(() => {
-    if (activeChatId || pendingChat || chats.length === 0) return;
-    if (window.matchMedia("(min-width: 1024px)").matches) {
-      setActiveChatId(chats[0].user_id);
-    }
-  }, [chats, activeChatId, pendingChat]);
+  // No conversation is opened automatically — the empty state shows until the
+  // user picks one from the list.
 
   // once the vendor shows up in the real chat list (message actually sent),
   // drop the synthetic pending entry and use the real one
@@ -166,13 +165,8 @@ const Messages = () => {
     }
   }, [chats, pendingChat]);
 
-  // Scroll the message list itself rather than calling scrollIntoView, which
-  // also scrolls every ancestor (and therefore the whole page) on send.
-  useEffect(() => {
-    const el = messagesContainerRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+  // Deliberately no auto-scrolling: it fired inconsistently between
+  // conversations and moved the view out from under the reader.
 
   const handleSelectChat = (userId) => {
     setActiveChatId(userId);
@@ -180,7 +174,7 @@ const Messages = () => {
     // it when switching to a different (real) conversation.
     setPendingChat((prev) => (prev && prev.user_id === userId ? prev : null));
     clearUnread(userId);
-    navigate(`${basePath}/${userId}`, { replace: true });
+    navigate(`${basePath}/${userId}`);
   };
 
   // Mobile: return from a conversation to the conversation list
@@ -295,10 +289,7 @@ const Messages = () => {
               </button>
             </div>
 
-            <div
-              ref={messagesContainerRef}
-              className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col"
-            >
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col">
               {messages.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
                   <MessageSquareText className="h-9 w-9 text-slate-200" />

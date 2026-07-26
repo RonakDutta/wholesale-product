@@ -90,15 +90,26 @@ const SearchResults = () => {
                   : "Low stock",
           });
 
-          // Map Unique Wholesalers
+          // Map Unique Wholesalers.
+          // Key on the seller's user id, not supplier.id — that is the
+          // inventory row id, so one seller listing five products produced
+          // five duplicate "wholesalers".
           product.suppliers?.forEach((supplier) => {
             const vName = supplier.companyName || supplier.name || "Supplier";
-            vendorMap[supplier.id] = {
-              id: supplier.id,
+            const vendorId = supplier.supplierId ?? supplier.id;
+            if (!vendorId) return;
+            const existing = vendorMap[vendorId];
+            vendorMap[vendorId] = {
+              id: vendorId,
               type: "wholesaler",
               name: vName,
               location: supplier.city || "India",
-              category: product.category,
+              // keep every category this seller appears in
+              category: existing?.category
+                ? Array.from(
+                    new Set([...String(existing.category).split(", "), product.category]),
+                  ).join(", ")
+                : product.category,
               verified: supplier.verified || false,
               rating: Number(supplier.rating || 4.5),
               logo: `https://ui-avatars.com/api/?name=${encodeURIComponent(vName)}&background=random`,
@@ -191,22 +202,24 @@ const SearchResults = () => {
   }, [query]);
 
   // ---- Animate cards on load ----
+  // Keyed on the search/tab, not on `results`: re-running for every filter,
+  // sort or keystroke made the cards fade in and out constantly.
   useEffect(() => {
-    if (!loading && results.length > 0 && resultsRef.current) {
-      const cards = resultsRef.current.querySelectorAll(".result-card");
-      gsap.fromTo(
-        cards,
-        { opacity: 0, y: 30 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.5,
-          stagger: 0.06,
-          ease: "power2.out",
-        },
-      );
-    }
-  }, [loading, results]);
+    if (loading || !resultsRef.current) return;
+    const cards = resultsRef.current.querySelectorAll(".result-card");
+    if (cards.length === 0) return;
+    gsap.fromTo(
+      cards,
+      { opacity: 0, y: 30 },
+      {
+        opacity: 1,
+        y: 0,
+        duration: 0.5,
+        stagger: 0.06,
+        ease: "power2.out",
+      },
+    );
+  }, [loading, query, activeTab]);
 
   if (!query && initialFetchDone) {
     return (

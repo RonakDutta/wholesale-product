@@ -372,16 +372,23 @@ exports.contactSupplier = async (req, res) => {
       });
     }
 
-    // Generate WhatsApp message with product context
-    const message = `Hello, I am interested in your ${productData.product_name} product. Please share more details.`;
+    // Default message, used only when the client does not supply its own.
+    const message =
+      typeof req.query.message === "string" && req.query.message.trim()
+        ? req.query.message.trim()
+        : `Hello, I am interested in your ${productData.product_name} product. Please share more details.`;
 
-    // Generate WhatsApp URL
-    const whatsappUrl = `https://wa.me/${encodeURIComponent(supplierPhone)}?text=${encodeURIComponent(message)}`;
+    const normalizedPhone = String(supplierPhone).replace(/\D/g, "");
+    const whatsappUrl = `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`;
 
     console.log("WhatsApp URL generated successfully");
     return res.json({
       success: true,
-      whatsappUrl
+      whatsappUrl,
+      // Returned so the client can compose the buyer's chosen message itself
+      phone: normalizedPhone,
+      productName: productData.product_name,
+      companyName: productData.company_name,
     });
 
   } catch (err) {

@@ -14,16 +14,19 @@ const WhatsAppModal = ({
   const defaultMessage = `Hi ${vendorName || "seller"}, I'm interested in ${productName || "this product"} and would like to discuss pricing and availability.`;
   const [message, setMessage] = useState(defaultMessage);
 
-  // Use dynamic URL from API if available, otherwise fall back to hardcoded phone
-  const whatsappUrl =
-    dynamicWhatsappUrl ||
-    (() => {
-      const normalizedPhone = String(vendorPhone || "919999911111").replace(
-        /\D/g,
-        "",
-      );
-      return `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`;
-    })();
+  // Always compose the URL from the buyer's chosen message. Previously the
+  // API URL short-circuited this, so the suggestions and the custom textarea
+  // were silently discarded and everyone sent the same server-side default.
+  const whatsappUrl = (() => {
+    // Prefer an explicit phone; otherwise recover it from the API URL.
+    let phone = String(vendorPhone || "").replace(/\D/g, "");
+    if (!phone && dynamicWhatsappUrl) {
+      const match = String(dynamicWhatsappUrl).match(/wa\.me\/(\d+)/);
+      if (match) phone = match[1];
+    }
+    if (!phone) return dynamicWhatsappUrl || "";
+    return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  })();
 
   const suggestedMessages = [
     {

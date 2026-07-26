@@ -18,6 +18,7 @@ const ContactVendorBtn = ({
   const [view, setView] = useState(null); // null | "choice" | "whatsapp" | "chat"
   const [loading, setLoading] = useState(false);
   const [dynamicWhatsappUrl, setDynamicWhatsappUrl] = useState(null);
+  const [resolvedPhone, setResolvedPhone] = useState(null);
   const openChoice = () => setView("choice");
 
   const handleWhatsAppClick = async () => {
@@ -30,6 +31,8 @@ const ContactVendorBtn = ({
 
         if (response.data.success && response.data.whatsappUrl) {
           setDynamicWhatsappUrl(response.data.whatsappUrl);
+          // The phone lets the modal compose the buyer's own message
+          if (response.data.phone) setResolvedPhone(response.data.phone);
           setView("whatsapp");
         } else {
           toast.error(
@@ -100,7 +103,7 @@ const ContactVendorBtn = ({
         <WhatsAppModal
           vendorName={vendorName}
           productName={productName}
-          vendorPhone={vendorPhone}
+          vendorPhone={resolvedPhone || vendorPhone}
           productImage={undefined}
           dynamicWhatsappUrl={dynamicWhatsappUrl}
           onBack={() => setView("choice")}

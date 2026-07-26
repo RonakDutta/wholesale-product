@@ -161,7 +161,7 @@ const ProductDetails = () => {
           <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
           Back to Marketplace
         </button>
-        <span className="text-xs font-mono text-slate-400 uppercase tracking-wider hidden sm:inline">
+        <span className="text-xs text-slate-400 uppercase tracking-wider hidden sm:inline">
           Product ID: {product.id}
         </span>
       </div>
@@ -235,7 +235,7 @@ const ProductDetails = () => {
               <span>{location}</span>
               <span className="text-slate-300 mx-1">•</span>
               <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
-              <span className="font-mono text-xs text-slate-400">
+              <span className="text-xs text-slate-400">
                 {product.category} Industry
               </span>
             </div>
@@ -268,7 +268,7 @@ const ProductDetails = () => {
                           <ShieldCheck className="w-3 h-3 text-emerald-600" />
                         )}
                       </span>
-                      <span className="font-mono text-xs font-bold text-clay">
+                      <span className="text-xs font-bold text-clay">
                         ₹{getEffectivePrice(s)}
                         <span className="text-slate-400 font-normal">
                           /unit
@@ -289,11 +289,11 @@ const ProductDetails = () => {
 
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex flex-col">
             <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                 Pricing Tiers
               </span>
               {savingsPercent > 0 && (
-                <div className="flex items-center gap-1 bg-emerald-100/80 text-emerald-700 text-[10px] font-extrabold px-2 py-1 rounded-sm uppercase tracking-widest border border-emerald-200">
+                <div className="flex items-center gap-1 bg-emerald-100/80 text-emerald-700 text-[10px] font-extrabold px-2 py-1 rounded-md uppercase tracking-widest border border-emerald-200">
                   <Tag className="w-3 h-3" />
                   <span>Save {savingsPercent}% on Bulk</span>
                 </div>
@@ -355,7 +355,7 @@ const ProductDetails = () => {
           </div>
 
           <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-col gap-4 shadow-xs">
-            <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-600 font-mono">
+            <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-600">
               <Calculator className="w-4 h-4 text-clay" />
               <span>Calculate Total</span>
             </div>
@@ -365,7 +365,7 @@ const ProductDetails = () => {
                 <label className="text-sm font-medium text-slate-600">
                   Order Quantity
                 </label>
-                <div className="flex items-stretch border border-slate-300 rounded-sm overflow-hidden focus-within:ring-1 focus-within:ring-clay focus-within:border-clay">
+                <div className="flex items-stretch border border-slate-300 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-clay focus-within:border-clay">
                   <button
                     type="button"
                     disabled={quantity <= baseMoq}
@@ -401,7 +401,7 @@ const ProductDetails = () => {
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
-                <span className="text-xs font-mono text-slate-400">
+                <span className="text-xs text-slate-400">
                   Increments of {quantityStep} units · Min {baseMoq}
                 </span>
               </div>
@@ -445,7 +445,7 @@ const ProductDetails = () => {
               <button
                 type="button"
                 onClick={() => toggleWishlist(product)}
-                className={`flex items-center justify-center gap-2 py-3 text-sm font-bold rounded-sm transition-all cursor-pointer shadow-sm active:scale-[0.99] border ${
+                className={`flex items-center justify-center gap-2 py-3 text-sm font-bold rounded-xl transition-all cursor-pointer shadow-sm active:scale-[0.99] border ${
                   wishlisted
                     ? "bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100"
                     : "bg-white border-slate-200 text-slate-700 hover:border-rose-200 hover:text-rose-500"
@@ -467,7 +467,7 @@ const ProductDetails = () => {
               title={
                 ownListing ? "This is your own listing" : undefined
               }
-              className={`w-full flex items-center justify-center gap-2 py-3.5 text-sm font-bold rounded-sm transition-all shadow-sm active:scale-[0.99] ${
+              className={`w-full flex items-center justify-center gap-2 py-3.5 text-sm font-bold rounded-xl transition-all shadow-sm active:scale-[0.99] ${
                 ownListing
                   ? "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none"
                   : justAdded

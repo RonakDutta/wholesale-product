@@ -7,23 +7,11 @@ import gsap from "gsap";
 const MainLayout = () => {
 	const location = useLocation();
 	const pageRef = useRef(null);
+	// Only reset scroll here. Pages animate their own content (hero, product
+	// detail, result cards); fading the whole shell as well made every
+	// navigation visibly flash twice.
 	useEffect(() => {
 		gsap.set(window, { scrollTo: 0 });
-
-		gsap.fromTo(
-			pageRef.current,
-			{
-				opacity: 0,
-				y: 16,
-			},
-			{
-				opacity: 1,
-				y: 0,
-				duration: 0.45,
-				ease: "power2.out",
-				clearProps: "all",
-			},
-		);
 	}, [location.pathname]);
 
 	return (

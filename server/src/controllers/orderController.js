@@ -199,7 +199,9 @@ const createOrder = async (req, res) => {
         JSON.stringify(billingAddress || deliveryAddress),
         String(deliveryAddress.phone || ""),
         "Order created via enterprise checkout",
-        `ORD-${Date.now()}-${buyerId}`,
+        // order_number is VARCHAR(50): a full UUID suffix overflows it, so use
+        // a short buyer prefix (timestamp already makes this unique)
+        `ORD-${Date.now()}-${String(buyerId).slice(0, 8)}`,
         new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
       ],
     );

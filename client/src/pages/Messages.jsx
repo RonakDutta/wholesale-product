@@ -104,6 +104,15 @@ const Messages = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { vendorId } = useParams();
+  // Messages renders in both the marketplace shell and the seller dashboard;
+  // keep navigation inside whichever one the user is currently in.
+  const inDashboard = location.pathname.startsWith("/dashboard");
+  const basePath = inDashboard ? "/dashboard/messages" : "/messages";
+  // Fill the available height in each shell: the dashboard subtracts its own
+  // header + content padding, the marketplace its navbar + page padding.
+  const shellHeight = inDashboard
+    ? "h-[calc(100dvh-6rem)] lg:h-[calc(100dvh-8rem)] w-full"
+    : "h-[calc(100dvh-7rem)] max-w-6xl";
   const { chats, loading: chatsLoading, clearUnread } = useChatList();
   const [activeChatId, setActiveChatId] = useState(null);
   const [pendingChat, setPendingChat] = useState(null);
@@ -167,7 +176,7 @@ const Messages = () => {
     // it when switching to a different (real) conversation.
     setPendingChat((prev) => (prev && prev.user_id === userId ? prev : null));
     clearUnread(userId);
-    navigate(`/messages/${userId}`, { replace: true });
+    navigate(`${basePath}/${userId}`, { replace: true });
   };
 
   const activeChat =
@@ -182,14 +191,16 @@ const Messages = () => {
 
   if (chatsLoading) {
     return (
-      <div className="h-[calc(100vh-8rem)] max-w-6xl mx-auto flex items-center justify-center text-sm text-slate-400">
+      <div className={`${shellHeight} mx-auto flex items-center justify-center text-sm text-slate-400`}>
         Loading messages...
       </div>
     );
   }
 
   return (
-    <div className="h-[calc(100vh-8rem)] max-w-6xl mx-auto flex flex-col lg:flex-row bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+    <div
+      className={`${shellHeight} mx-auto flex flex-col lg:flex-row bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden`}
+    >
       {/* Sidebar */}
       <div className="w-full lg:w-80 border-r border-slate-200 flex flex-col shrink-0">
         <div className="p-4 border-b border-slate-100">

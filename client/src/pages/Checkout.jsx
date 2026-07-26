@@ -308,7 +308,9 @@ const Checkout = () => {
 
           {/* Order Summary */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 sticky top-8">
+            {/* top-24 clears the sticky 4rem navbar; a smaller offset makes the
+                card scroll underneath it */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 sticky top-24">
               <div className="flex items-center gap-3 mb-6">
                 <ShoppingBag className="w-5 h-5 text-clay" />
                 <h2 className="text-lg font-bold text-slate-900">Order Summary</h2>

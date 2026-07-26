@@ -38,6 +38,9 @@ io.on("connection", (socket) => {
 		const targetId = receiverId;
 		// ids are UUIDs, so validate as a non-empty value rather than a number
 		if (!targetId || String(targetId) === String(socket.userId)) {
+			console.error(
+				`Rejected message from ${socket.userId} to ${targetId}: invalid recipient`,
+			);
 			socket.emit("message_error", { tempId, message: "Invalid recipient" });
 			return;
 		}

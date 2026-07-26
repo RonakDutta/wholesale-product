@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSocket } from "../context/SocketContext";
+import { toast } from "sonner";
 import api from "../utils/axios";
 
 export function useConversation(receiverId, currentUserId) {
@@ -54,8 +55,9 @@ export function useConversation(receiverId, currentUserId) {
 			);
 		};
 
-		const handleMessageError = ({ tempId }) => {
-			// drop the optimistic message that failed to send
+		const handleMessageError = ({ tempId, message }) => {
+			// Tell the user why the send failed instead of silently dropping it.
+			toast.error(message || "Message could not be sent");
 			if (!tempId) return;
 			setMessages((prev) => prev.filter((m) => m.tempId !== tempId));
 		};
@@ -72,7 +74,11 @@ export function useConversation(receiverId, currentUserId) {
 
 	const sendMessage = useCallback(
 		(text) => {
-			if (!text.trim() || !socket || !receiverId) return;
+			if (!text.trim() || !receiverId) return;
+			if (!socket) {
+				toast.error("Not connected. Please refresh and try again.");
+				return;
+			}
 			const tempId = `temp-${Date.now()}`;
 			const optimisticMsg = {
 				id: tempId,

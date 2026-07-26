@@ -142,3 +142,14 @@ html {
   height: 1px;
   background: linear-gradient(90deg, transparent, #d1d5db, transparent);
 }
+
+/* Used by horizontally scrollable rows (navbar city list, order tabs) so the
+   row can be swiped without showing a scrollbar. Referenced in markup but
+   never previously defined. */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}

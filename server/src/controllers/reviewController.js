@@ -3,7 +3,23 @@ const pool = require("../config/db");
 const ALLOWED_REPORT_REASONS = ["Spam", "Offensive", "Fake Review", "Irrelevant", "Other"];
 const PRODUCT_REVIEW_TYPES = ["product", "seller"];
 const ACTIVE_REVIEW_STATUSES = ["active"];
-const ELIGIBLE_ORDER_STATUSES = ["delivered", "Delivered", "completed", "Completed"];
+// A paid order is proof of purchase. Restricting reviews to "delivered" meant
+// nobody could review in practice: paying leaves an order at payment_completed,
+// and only the seller can walk it through the eight states before delivery.
+const ELIGIBLE_ORDER_STATUSES = [
+  "payment_completed",
+  "supplier_accepted",
+  "processing",
+  "packed",
+  "ready_for_pickup",
+  "shipped",
+  "in_transit",
+  "out_for_delivery",
+  "delivered",
+  "Delivered",
+  "completed",
+  "Completed",
+];
 const ELIGIBLE_PAYMENT_STATUSES = ["paid", "Paid", "completed", "Completed", "payment_completed"];
 const INVALID_ORDER_STATUSES = ["cancelled", "Cancelled"];
 const INVALID_RETURN_STATUSES = ["requested", "approved", "completed", "rejected"];

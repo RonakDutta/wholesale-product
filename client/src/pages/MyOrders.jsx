@@ -187,14 +187,14 @@ const MyOrders = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-sage/20 pb-1">
+      <div className="-mx-4 flex gap-1 overflow-x-auto hide-scrollbar border-b border-sage/20 px-4 pb-1 sm:mx-0 sm:flex-wrap sm:gap-2 sm:px-0">
         {TABS.map((t) => {
           const active = tab === t.key;
           return (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`flex items-center gap-2 rounded-t-lg border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
+              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2.5 text-xs font-semibold transition-colors sm:gap-2 sm:px-4 sm:text-sm ${
                 active
                   ? "border-clay text-clay"
                   : "border-transparent text-espresso/50 hover:text-espresso"

@@ -214,7 +214,7 @@ const OrderDetails = () => {
           What you ordered
         </h2>
 
-        <div className="flex flex-col gap-4 sm:flex-row">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
           <div className="h-28 w-28 shrink-0 overflow-hidden rounded-xl border border-sage/20 bg-sage/10">
             {order.product_image ? (
               <img
@@ -267,7 +267,7 @@ const OrderDetails = () => {
               </p>
             )}
 
-            <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
               <Field label="Quantity">{quantity}</Field>
               <Field label="Unit price">
                 ₹{Number(unitPrice).toLocaleString("en-IN")}
@@ -279,16 +279,18 @@ const OrderDetails = () => {
             </div>
           </div>
 
-          <div className="shrink-0 rounded-xl bg-clay/5 p-4 text-right sm:min-w-40">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-espresso/40">
-              Total paid
-            </p>
-            <p className="mt-1 flex items-center justify-end text-2xl font-black text-clay">
+          <div className="flex shrink-0 items-center justify-between gap-3 rounded-xl bg-clay/5 p-4 sm:min-w-40 sm:flex-col sm:items-end sm:justify-start sm:text-right">
+            <div className="sm:text-right">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-espresso/40">
+                Total paid
+              </p>
+              <p className="mt-0.5 text-[11px] text-espresso/40">
+                {quantity} × ₹{Number(unitPrice).toLocaleString("en-IN")}
+              </p>
+            </div>
+            <p className="flex items-center text-2xl font-black text-clay">
               <IndianRupee className="h-5 w-5" />
               {total.toLocaleString("en-IN")}
-            </p>
-            <p className="mt-1 text-[11px] text-espresso/40">
-              {quantity} × ₹{Number(unitPrice).toLocaleString("en-IN")}
             </p>
           </div>
         </div>

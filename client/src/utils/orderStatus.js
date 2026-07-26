@@ -56,6 +56,13 @@ const GROUPS = {
   ],
 };
 
+// Per-status overrides where the group colour would be misleading — a
+// received payment is a success and should read green, not "still pending".
+const STATUS_STYLES = {
+  payment_completed: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  supplier_accepted: "bg-emerald-100 text-emerald-700 border-emerald-200",
+};
+
 const GROUP_STYLES = {
   awaiting: "bg-amber-100 text-amber-700 border-amber-200",
   processing: "bg-indigo-100 text-indigo-700 border-indigo-200",
@@ -86,7 +93,9 @@ export const formatOrderStatus = (status) => {
 
 /** Tailwind classes for a status badge. */
 export const getOrderStatusStyle = (status) => {
-  const group = getOrderStatusGroup(status);
+  const value = normalize(status);
+  if (STATUS_STYLES[value]) return STATUS_STYLES[value];
+  const group = getOrderStatusGroup(value);
   return GROUP_STYLES[group] || "bg-slate-100 text-slate-700 border-slate-200";
 };
 

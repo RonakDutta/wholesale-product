@@ -362,7 +362,34 @@ const getOrderById = async (req, res) => {
     const accessCheck = await ensureOrderAccess(req, res, req.params.orderId, { requireBuyer: true, requireSupplier: true });
     if (!accessCheck) return;
 
-    const result = await pool.query("SELECT * FROM orders WHERE id = $1", [req.params.orderId]);
+    // Include what was actually ordered — the detail page needs the product,
+    // its image and the supplier, not just the raw order row.
+    const result = await pool.query(
+      `SELECT
+         o.*,
+         p.id            AS product_id,
+         p.name          AS product_name,
+         p.category      AS product_category,
+         COALESCE(si.image_url, p.global_image_url) AS product_image,
+         si.price        AS unit_price,
+         si.discount_price AS unit_discount_price,
+         si.moq,
+         si.shipping_days,
+         su.id           AS supplier_user_id,
+         COALESCE(wp.company_name, su.first_name || ' ' || su.last_name) AS supplier_name,
+         wp.city         AS supplier_city,
+         wp.country      AS supplier_country,
+         wp.contact_phone AS supplier_phone,
+         bu.first_name || ' ' || bu.last_name AS buyer_name
+       FROM orders o
+       LEFT JOIN supplier_inventory si ON o.inventory_item_id = si.id
+       LEFT JOIN products p ON si.product_id = p.id
+       LEFT JOIN users su ON si.supplier_id = su.id
+       LEFT JOIN wholesaler_profiles wp ON wp.user_id = su.id
+       LEFT JOIN users bu ON o.buyer_id = bu.id
+       WHERE o.id = $1`,
+      [req.params.orderId],
+    );
     if (result.rows.length === 0) return res.status(404).json({ message: "Not found" });
     res.json(result.rows[0]);
   } catch (err) {

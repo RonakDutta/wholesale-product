@@ -4,13 +4,14 @@ import {
   MoreVertical,
   Building2,
   MessageSquareText,
+  Store,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useChatList } from "../hooks/useChatList";
 import { useConversation } from "../hooks/useConversation";
 import MessageBubble from "../components/MessageBubble";
 import MessageInput from "../components/MessageInput";
-import { useLocation, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 
 const timeAgo = (iso) => {
   const diff = Date.now() - new Date(iso).getTime();
@@ -69,6 +70,35 @@ const ChatListItem = ({ chat, active, onClick }) => (
   </div>
 );
 
+// Shown in the main panel whenever no conversation is open — either because
+// nothing is selected yet, or because the user has no conversations at all.
+const EmptyConversationState = ({ hasChats }) => (
+  <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8 text-center">
+    <div className="w-16 h-16 rounded-2xl bg-clay/10 flex items-center justify-center">
+      <MessageSquareText className="w-8 h-8 text-clay" />
+    </div>
+    <div className="space-y-1.5">
+      <h3 className="text-base font-black text-espresso">
+        {hasChats ? "Select a conversation" : "No conversations yet"}
+      </h3>
+      <p className="max-w-xs text-xs leading-relaxed text-slate-500">
+        {hasChats
+          ? "Choose a chat from the list to read your messages and reply."
+          : "Message a supplier from any product page and your conversations will show up here."}
+      </p>
+    </div>
+    {!hasChats && (
+      <Link
+        to="/"
+        className="mt-1 inline-flex items-center gap-2 rounded-lg bg-clay px-4 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-espresso"
+      >
+        <Store className="w-3.5 h-3.5" />
+        Browse products
+      </Link>
+    )}
+  </div>
+);
+
 const Messages = () => {
   const { user } = useAuth();
   const location = useLocation();
@@ -78,7 +108,7 @@ const Messages = () => {
   const [activeChatId, setActiveChatId] = useState(null);
   const [pendingChat, setPendingChat] = useState(null);
   const [search, setSearch] = useState("");
-  const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
 
   const { messages, sendMessage } = useConversation(activeChatId, user?.id);
 
@@ -87,15 +117,15 @@ const Messages = () => {
 
     // FIX: Only trigger the pending chat and clear state IF state actually has data.
     // This stops the infinite loop caused by navigate() constantly generating new empty state objects.
-    if (location.state && Object.keys(location.state).length > 0) {
+    // ContactChoiceModal passes the vendor details nested under `openChat`.
+    const openChat = location.state?.openChat;
+    if (openChat) {
       setActiveChatId(vendorId);
       setPendingChat({
         user_id: vendorId,
-        sender_name: location.state.vendorName || "Vendor",
-        company: location.state.company,
-        lastMessage: location.state.productName
-          ? `Re: ${location.state.productName}`
-          : "",
+        sender_name: openChat.vendorName || "Vendor",
+        company: openChat.company,
+        lastMessage: openChat.productName ? `Re: ${openChat.productName}` : "",
         timestamp: null,
         unread: 0,
       });
@@ -123,15 +153,21 @@ const Messages = () => {
     }
   }, [chats, pendingChat]);
 
+  // Scroll the message list itself rather than calling scrollIntoView, which
+  // also scrolls every ancestor (and therefore the whole page) on send.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
   const handleSelectChat = (userId) => {
     setActiveChatId(userId);
-    setPendingChat(null);
+    // Keep the synthetic pending entry if it's the one being opened; only drop
+    // it when switching to a different (real) conversation.
+    setPendingChat((prev) => (prev && prev.user_id === userId ? prev : null));
     clearUnread(userId);
-    navigate(`/dashboard/messages/${userId}`, { replace: true });
+    navigate(`/messages/${userId}`, { replace: true });
   };
 
   const activeChat =
@@ -219,7 +255,10 @@ const Messages = () => {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col">
+            <div
+              ref={messagesContainerRef}
+              className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col"
+            >
               {messages.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
                   <MessageSquareText className="h-9 w-9 text-slate-200" />
@@ -250,7 +289,6 @@ const Messages = () => {
                   );
                 })
               )}
-              <div ref={messagesEndRef} />
             </div>
 
             <div className="p-4 bg-white border-t border-slate-200 shrink-0">
@@ -258,9 +296,7 @@ const Messages = () => {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-sm text-slate-400">
-            Select a conversation to start messaging
-          </div>
+          <EmptyConversationState hasChats={chats.length > 0} />
         )}
       </div>
     </div>

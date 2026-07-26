@@ -1,3 +1,8 @@
+-- Retail / promotions feature tables.
+-- NOTE: users(id), products(id) and orders(id) are UUID in this database, so
+-- every column that references them is declared UUID. Each table's own primary
+-- key stays SERIAL (it is only ever used as an opaque handle by the API).
+
 CREATE TABLE IF NOT EXISTS flash_sales (
   id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
@@ -7,15 +12,15 @@ CREATE TABLE IF NOT EXISTS flash_sales (
   start_date TIMESTAMPTZ NOT NULL,
   end_date TIMESTAMPTZ NOT NULL,
   is_active BOOLEAN DEFAULT true,
-  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS flash_sale_products (
   id SERIAL PRIMARY KEY,
   flash_sale_id INTEGER REFERENCES flash_sales(id) ON DELETE CASCADE,
-  product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
-  supplier_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  product_id UUID REFERENCES products(id) ON DELETE CASCADE,
+  supplier_id UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -36,24 +41,24 @@ CREATE TABLE IF NOT EXISTS coupons (
   first_order_only BOOLEAN DEFAULT false,
   new_customer_only BOOLEAN DEFAULT false,
   loyalty_only BOOLEAN DEFAULT false,
-  product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+  product_id UUID REFERENCES products(id) ON DELETE SET NULL,
   category VARCHAR(100),
-  supplier_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  supplier_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS coupon_usage (
   id SERIAL PRIMARY KEY,
   coupon_id INTEGER REFERENCES coupons(id) ON DELETE CASCADE,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-  order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS loyalty_accounts (
   id SERIAL PRIMARY KEY,
-  user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
   points_balance INTEGER DEFAULT 0,
   lifetime_earned INTEGER DEFAULT 0,
   lifetime_redeemed INTEGER DEFAULT 0,
@@ -74,8 +79,8 @@ CREATE TABLE IF NOT EXISTS loyalty_transactions (
 
 CREATE TABLE IF NOT EXISTS referrals (
   id SERIAL PRIMARY KEY,
-  referrer_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-  referee_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  referrer_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  referee_id UUID REFERENCES users(id) ON DELETE CASCADE,
   referral_code VARCHAR(50) NOT NULL,
   status VARCHAR(30) DEFAULT 'pending',
   reward_status VARCHAR(30) DEFAULT 'pending',
@@ -94,7 +99,7 @@ CREATE TABLE IF NOT EXISTS referral_rewards (
 CREATE TABLE IF NOT EXISTS gift_cards (
   id SERIAL PRIMARY KEY,
   gift_card_code VARCHAR(100) UNIQUE NOT NULL,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   recipient_email VARCHAR(255),
   amount NUMERIC(12,2) NOT NULL,
   balance NUMERIC(12,2) NOT NULL,
@@ -107,7 +112,7 @@ CREATE TABLE IF NOT EXISTS gift_cards (
 CREATE TABLE IF NOT EXISTS gift_card_transactions (
   id SERIAL PRIMARY KEY,
   gift_card_id INTEGER REFERENCES gift_cards(id) ON DELETE CASCADE,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   transaction_type VARCHAR(50) NOT NULL,
   amount NUMERIC(12,2) NOT NULL,
   reference_type VARCHAR(50),
@@ -117,8 +122,8 @@ CREATE TABLE IF NOT EXISTS gift_card_transactions (
 
 CREATE TABLE IF NOT EXISTS wishlist_notifications (
   id SERIAL PRIMARY KEY,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-  product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  product_id UUID REFERENCES products(id) ON DELETE CASCADE,
   notification_type VARCHAR(50) DEFAULT 'price-drop',
   is_read BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW()

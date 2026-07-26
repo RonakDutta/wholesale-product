@@ -4,7 +4,10 @@ import { CartProvider } from "./context/CartContext";
 import { WishlistProvider } from "./context/WishlistContext";
 import { AuthProvider } from "./context/AuthContext";
 import { SocketProvider } from "./context/SocketContext";
+<<<<<<< HEAD
 import { NotificationProvider } from "./context/NotificationContext";
+=======
+>>>>>>> claude/messaging-backend-issues-grphlk
 
 import MainLayout from "./layouts/MainLayout";
 import AuthLayout from "./layouts/AuthLayout";

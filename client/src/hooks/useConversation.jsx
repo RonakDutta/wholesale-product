@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSocket } from "../context/SocketContext";
+import { toast } from "sonner";
+import api from "../utils/axios";
 
 export function useConversation(receiverId, currentUserId) {
 	const socket = useSocket();
@@ -15,17 +17,11 @@ export function useConversation(receiverId, currentUserId) {
 		const load = async () => {
 			setLoading(true);
 			try {
-				const res = await fetch(`/api/messages/${receiverId}`, {
-					headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-				});
-				const data = await res.json();
-				if (!cancelled) setMessages(data);
+				const res = await api.get(`/api/messages/${receiverId}`);
+				if (!cancelled) setMessages(Array.isArray(res.data) ? res.data : []);
 
 				// mark as read, fire-and-forget
-				fetch(`/api/messages/${receiverId}/read`, {
-					method: "PATCH",
-					headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-				}).catch(() => {});
+				api.patch(`/api/messages/${receiverId}/read`).catch(() => {});
 			} catch (err) {
 				console.error("Failed to fetch messages", err);
 			} finally {
@@ -44,10 +40,10 @@ export function useConversation(receiverId, currentUserId) {
 		if (!socket) return;
 
 		const handleNewMessage = (msg) => {
-			if (
-				msg.sender_id === receiverIdRef.current ||
-				msg.receiver_id === receiverIdRef.current
-			) {
+			// Compare as strings so it works for both UUID and numeric ids,
+			// regardless of whether receiverId came from the URL or the list.
+			const rid = String(receiverIdRef.current);
+			if (String(msg.sender_id) === rid || String(msg.receiver_id) === rid) {
 				setMessages((prev) => [...prev, msg]);
 			}
 		};
@@ -59,17 +55,30 @@ export function useConversation(receiverId, currentUserId) {
 			);
 		};
 
+		const handleMessageError = ({ tempId, message }) => {
+			// Tell the user why the send failed instead of silently dropping it.
+			toast.error(message || "Message could not be sent");
+			if (!tempId) return;
+			setMessages((prev) => prev.filter((m) => m.tempId !== tempId));
+		};
+
 		socket.on("new_message", handleNewMessage);
 		socket.on("message_sent", handleMessageSent);
+		socket.on("message_error", handleMessageError);
 		return () => {
 			socket.off("new_message", handleNewMessage);
 			socket.off("message_sent", handleMessageSent);
+			socket.off("message_error", handleMessageError);
 		};
 	}, [socket]);
 
 	const sendMessage = useCallback(
 		(text) => {
-			if (!text.trim() || !socket || !receiverId) return;
+			if (!text.trim() || !receiverId) return;
+			if (!socket) {
+				toast.error("Not connected. Please refresh and try again.");
+				return;
+			}
 			const tempId = `temp-${Date.now()}`;
 			const optimisticMsg = {
 				id: tempId,

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSocket } from "../context/SocketContext";
+import api from "../utils/axios";
 
 export function useChatList() {
 	const socket = useSocket();
@@ -9,11 +10,8 @@ export function useChatList() {
 	const fetchChats = useCallback(async () => {
 		setLoading(true);
 		try {
-			const res = await fetch(`/api/messages/chats`, {
-				headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-			});
-			const data = await res.json();
-			setChats(data);
+			const res = await api.get(`/api/messages/chats`);
+			setChats(Array.isArray(res.data) ? res.data : []);
 		} catch (err) {
 			console.error("Failed to fetch chats", err);
 		} finally {
@@ -55,8 +53,17 @@ export function useChatList() {
 			});
 		};
 
+		// When *we* send a message (especially the first one in a brand-new
+		// conversation), refresh so the chat shows up as a real conversation
+		// instead of only the synthetic pending entry.
+		const handleMessageSent = () => fetchChats();
+
 		socket.on("new_message", handleNewMessage);
-		return () => socket.off("new_message", handleNewMessage);
+		socket.on("message_sent", handleMessageSent);
+		return () => {
+			socket.off("new_message", handleNewMessage);
+			socket.off("message_sent", handleMessageSent);
+		};
 	}, [socket, fetchChats]);
 
 	// call this when the user opens a conversation, to zero out its unread badge locally

@@ -5,30 +5,6 @@ const authenticateToken = require("../middlewares/authMiddleware");
 
 router.use(authenticateToken);
 
-const ensureConversationAccess = async (req, res, otherUserId) => {
-	const userId = req.user?.id;
-	if (!userId) {
-		res.status(401).json({ success: false, message: "Unauthorized: Missing user credentials." });
-		return false;
-	}
-	if (!Number.isInteger(otherUserId) || otherUserId === userId) {
-		res.status(400).json({ success: false, message: "Invalid conversation target." });
-		return false;
-	}
-
-	const conversation = await pool.query(
-		"SELECT id FROM messages WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1) LIMIT 1",
-		[userId, otherUserId],
-	);
-
-	if (conversation.rows.length === 0) {
-		res.status(403).json({ success: false, message: "Access Denied: Unauthorized chat access." });
-		return false;
-	}
-
-	return true;
-};
-
 // lists all chats for the logged-in user
 router.get("/chats", async (req, res) => {
 	const userId = req.user?.id;
@@ -72,16 +48,12 @@ router.get("/chats", async (req, res) => {
 
 router.patch("/:otherUserId/read", async (req, res) => {
 	const userId = req.user?.id;
-	const otherUserId = parseInt(req.params.otherUserId, 10);
+	const otherUserId = req.params.otherUserId;
 	if (!userId) {
 		return res.status(401).json({ success: false, message: "Unauthorized: Missing user credentials." });
 	}
-	if (Number.isNaN(otherUserId) || otherUserId === userId) {
+	if (!otherUserId || String(otherUserId) === String(userId)) {
 		return res.status(400).json({ success: false, message: "Invalid conversation target." });
-	}
-	const canAccess = await ensureConversationAccess(req, res, otherUserId);
-	if (!canAccess) {
-		return;
 	}
 	try {
 		await pool.query(
@@ -98,16 +70,12 @@ router.patch("/:otherUserId/read", async (req, res) => {
 // conversation with a specific user
 router.get("/:otherUserId", async (req, res) => {
 	const userId = req.user?.id;
-	const otherUserId = parseInt(req.params.otherUserId, 10);
+	const otherUserId = req.params.otherUserId;
 	if (!userId) {
 		return res.status(401).json({ success: false, message: "Unauthorized: Missing user credentials." });
 	}
-	if (Number.isNaN(otherUserId) || otherUserId === userId) {
+	if (!otherUserId || String(otherUserId) === String(userId)) {
 		return res.status(400).json({ success: false, message: "Invalid conversation target." });
-	}
-	const canAccess = await ensureConversationAccess(req, res, otherUserId);
-	if (!canAccess) {
-		return;
 	}
 	try {
 		const query = `

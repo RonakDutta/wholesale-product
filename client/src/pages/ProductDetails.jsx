@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -94,14 +94,24 @@ const ProductDetails = () => {
     setQuantity(baseMoq);
   }, [selectedSupplierId, baseMoq]);
 
-  useEffect(() => {
+  // useLayoutEffect, not useEffect: the tween starts the elements at
+  // opacity 0, and in useEffect that happens *after* the browser has already
+  // painted them, so the content appeared, blanked out, then faded back in.
+  useLayoutEffect(() => {
     if (loading || !product) return;
     window.scrollTo(0, 0);
-    let ctx = gsap.context(() => {
+    const ctx = gsap.context(() => {
       gsap.fromTo(
         ".detail-fade-in",
         { y: 15, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.5, stagger: 0.08, ease: "power2.out" },
+        {
+          y: 0,
+          opacity: 1,
+          duration: 0.5,
+          stagger: 0.08,
+          ease: "power2.out",
+          clearProps: "opacity,transform",
+        },
       );
     }, pageRef);
     return () => ctx.revert();
@@ -122,8 +132,10 @@ const ProductDetails = () => {
   };
 
   if (loading) {
+    // Reserve close to the loaded page's height so the footer does not sit
+    // high under the spinner and then get shoved down when content arrives.
     return (
-      <div className="flex justify-center items-center min-h-[60vh]">
+      <div className="flex justify-center items-center min-h-[85vh]">
         <div className="w-8 h-8 border-4 border-clay border-t-transparent rounded-full animate-spin"></div>
       </div>
     );

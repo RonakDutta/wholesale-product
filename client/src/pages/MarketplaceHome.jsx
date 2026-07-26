@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useMemo } from "react";
+import { useRef, useEffect, useState, useMemo, useLayoutEffect } from "react";
 import { gsap } from "gsap";
 import CategorySlider from "../components/CategorySlider";
 import ProductCard from "../components/ProductCard";
@@ -183,11 +183,14 @@ const MarketplaceHome = () => {
   };
 
   // Initial Page Load Animation
-  useEffect(() => {
+  // useLayoutEffect so the opacity-0 start state lands before the browser
+  // paints. In useEffect the hero rendered fully, then blanked out and faded
+  // back in, which read as a flash on every load.
+  useLayoutEffect(() => {
     if (isFetching) return;
     window.scrollTo(0, 0);
 
-    let ctx = gsap.context(() => {
+    const ctx = gsap.context(() => {
       gsap.fromTo(
         ".page-load-anim",
         { y: 20, opacity: 0 },
@@ -197,7 +200,7 @@ const MarketplaceHome = () => {
           duration: 0.6,
           stagger: 0.1,
           ease: "power2.out",
-          willChange: "transform, opacity",
+          clearProps: "opacity,transform,willChange",
         },
       );
     }, containerRef);

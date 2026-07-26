@@ -53,9 +53,15 @@ const HeroCarousel = () => {
               isActive ? "opacity-100 z-10" : "opacity-0 z-0"
             }`}
           >
+            {/* The first slide is the page's largest paint: load it eagerly at
+                high priority so the hero does not show as a bare dark panel
+                while the image is still being fetched. */}
             <img
               src={slide.image}
               alt={slide.title}
+              loading={index === 0 ? "eager" : "lazy"}
+              fetchPriority={index === 0 ? "high" : "low"}
+              decoding="async"
               className="absolute inset-0 w-full h-full object-cover"
             />
 

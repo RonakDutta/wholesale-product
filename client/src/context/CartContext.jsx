@@ -1,10 +1,26 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, useMemo } from "react";
+import { toast } from "sonner";
+import { useAuth } from "./AuthContext";
 
 const CartContext = createContext(null);
 const STORAGE_KEY = "wholesale_cart_v1";
 
+// A listing belongs to the signed-in user when its seller id matches theirs.
+// `supplier.supplierId` is the seller's user id (`supplier.id` is the
+// inventory row id), so check the seller fields in order of specificity.
+const isOwnListing = (userId, product, supplier) => {
+  if (!userId) return false;
+  const sellerId =
+    supplier?.supplierId ??
+    supplier?.vendorId ??
+    product?.supplierId ??
+    product?.vendorId;
+  return sellerId != null && String(sellerId) === String(userId);
+};
+
 export const CartProvider = ({ children }) => {
+  const { user } = useAuth();
   const [items, setItems] = useState(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -24,6 +40,13 @@ export const CartProvider = ({ children }) => {
   }, [items]);
 
   const addToCart = (product, quantity = 1, supplier = null) => {
+    // Sellers cannot buy their own listings (the backend rejects such orders
+    // too); block it here so it never reaches the cart.
+    if (isOwnListing(user?.id, product, supplier)) {
+      toast.error("You can't add your own listing to the cart");
+      return false;
+    }
+
     const itemId = supplier ? `${product.id}#${supplier.id}` : product.id;
     const itemPrice = supplier?.price ?? product.price ?? 0;
     const itemBulkPrice =
@@ -58,6 +81,7 @@ export const CartProvider = ({ children }) => {
       ];
     });
     setIsCartOpen(true);
+    return true;
   };
 
   const removeFromCart = (id) => {
@@ -95,6 +119,9 @@ export const CartProvider = ({ children }) => {
       value={{
         items,
         addToCart,
+        // Lets the UI hide/disable buy actions on the user's own listings
+        isOwnListing: (product, supplier) =>
+          isOwnListing(user?.id, product, supplier),
         removeFromCart,
         updateQuantity,
         clearCart,

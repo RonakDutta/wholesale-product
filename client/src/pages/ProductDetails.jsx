@@ -37,7 +37,7 @@ const ProductDetails = () => {
   const navigate = useNavigate();
   const pageRef = useRef(null);
   const addToCartBtnRef = useRef(null);
-  const { addToCart } = useCart();
+  const { addToCart, isOwnListing } = useCart();
   const { toggleWishlist, isWishlisted } = useWishlist();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -116,7 +116,7 @@ const ProductDetails = () => {
   };
 
   const handleAddToCart = () => {
-    addToCart(product, quantity, selectedSupplier);
+    if (!addToCart(product, quantity, selectedSupplier)) return;
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 1600);
   };
@@ -140,6 +140,7 @@ const ProductDetails = () => {
       ? Math.round((unitSavings / selectedSupplier.price) * 100)
       : 0;
   const wishlisted = isWishlisted(product.id);
+  const ownListing = isOwnListing(product, selectedSupplier);
   const location =
     selectedSupplier.city && selectedSupplier.country
       ? `${selectedSupplier.city}, ${selectedSupplier.country}`
@@ -462,13 +463,21 @@ const ProductDetails = () => {
             <button
               ref={addToCartBtnRef}
               onClick={handleAddToCart}
-              className={`w-full flex items-center justify-center gap-2 py-3.5 text-sm font-bold rounded-sm transition-all cursor-pointer shadow-sm active:scale-[0.99] ${
-                justAdded
-                  ? "bg-emerald-600 text-white"
-                  : "bg-clay text-white hover:bg-clay/90"
+              disabled={ownListing}
+              title={
+                ownListing ? "This is your own listing" : undefined
+              }
+              className={`w-full flex items-center justify-center gap-2 py-3.5 text-sm font-bold rounded-sm transition-all shadow-sm active:scale-[0.99] ${
+                ownListing
+                  ? "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none"
+                  : justAdded
+                    ? "bg-emerald-600 text-white cursor-pointer"
+                    : "bg-clay text-white hover:bg-clay/90 cursor-pointer"
               }`}
             >
-              {justAdded ? (
+              {ownListing ? (
+                <span>This is your own listing</span>
+              ) : justAdded ? (
                 <>
                   <Check className="w-5 h-5 shrink-0" />
                   <span>Added to Cart</span>

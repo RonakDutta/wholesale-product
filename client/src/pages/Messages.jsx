@@ -131,6 +131,15 @@ const Messages = () => {
       return;
     }
 
+    // A conversation with yourself is rejected by the server, so opening one
+    // by URL would just render a permanently broken chat.
+    if (user?.id != null && String(vendorId) === String(user.id)) {
+      setActiveChatId(null);
+      setPendingChat(null);
+      navigate(basePath, { replace: true });
+      return;
+    }
+
     // FIX: Only trigger the pending chat and clear state IF state actually has data.
     // This stops the infinite loop caused by navigate() constantly generating new empty state objects.
     // ContactChoiceModal passes the vendor details nested under `openChat`.
@@ -152,7 +161,7 @@ const Messages = () => {
       // If the user lands on /messages/:vendorId directly via URL without state
       setActiveChatId(vendorId);
     }
-  }, [vendorId, location.state, location.pathname, navigate, activeChatId]);
+  }, [vendorId, location.state, location.pathname, navigate, activeChatId, user?.id, basePath]);
 
   // No conversation is opened automatically — the empty state shows until the
   // user picks one from the list.

@@ -5,6 +5,7 @@ import WhatsAppModal from "./WhatsAppModal";
 import ChatModal from "./ChatModal";
 import api from "../utils/axios";
 import { toast } from "sonner";
+import { useAuth } from "../context/AuthContext";
 
 const ContactVendorBtn = ({
   vendorId,
@@ -15,6 +16,13 @@ const ContactVendorBtn = ({
   productId,
   trigger,
 }) => {
+  const { user } = useAuth();
+  // Nobody should be able to open a conversation with themselves. The server
+  // rejects it on both the socket and the REST routes, so surfacing the entry
+  // point here would only ever lead to an error.
+  const isOwnListing =
+    user?.id != null && vendorId != null && String(user.id) === String(vendorId);
+
   const [view, setView] = useState(null); // null | "choice" | "whatsapp" | "chat"
   const [loading, setLoading] = useState(false);
   const [dynamicWhatsappUrl, setDynamicWhatsappUrl] = useState(null);
@@ -56,6 +64,8 @@ const ContactVendorBtn = ({
       setView("whatsapp");
     }
   };
+
+  if (isOwnListing) return null;
 
   return (
     <>

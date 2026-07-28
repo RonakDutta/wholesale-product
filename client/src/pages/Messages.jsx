@@ -105,14 +105,16 @@ const Messages = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { vendorId } = useParams();
-  // Messages renders in both the marketplace shell and the seller dashboard;
+  // Messages renders in both the marketplace shell and the seller workspace;
   // keep navigation inside whichever one the user is currently in.
-  const inDashboard = location.pathname.startsWith("/dashboard");
-  const basePath = inDashboard ? "/dashboard/messages" : "/messages";
-  // Fill the available height in each shell: the dashboard subtracts its own
-  // header + content padding, the marketplace its navbar + page padding.
-  const shellHeight = inDashboard
-    ? "h-[calc(100dvh-6rem)] lg:h-[calc(100dvh-8rem)] w-full"
+  const inSeller = location.pathname.startsWith("/seller");
+  const basePath = inSeller ? "/seller/messages" : "/messages";
+  // Fill the available height of the surrounding shell. The seller workspace
+  // already owns the viewport (h-dvh, its own scroll container), so the panel
+  // only subtracts that shell's header and padding; the marketplace subtracts
+  // its navbar and page padding instead.
+  const shellHeight = inSeller
+    ? "h-[calc(100dvh-8rem)] sm:h-[calc(100dvh-9rem)] w-full max-w-none"
     : "h-[calc(100dvh-7rem)] max-w-6xl";
   const { chats, loading: chatsLoading, clearUnread } = useChatList();
   const [activeChatId, setActiveChatId] = useState(null);

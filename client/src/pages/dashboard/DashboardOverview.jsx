@@ -75,7 +75,7 @@ const DashboardOverview = () => {
             </div>
           </div>
           <Link
-            to="/dashboard/settings"
+            to="/seller/settings"
             className="bg-clay text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm hover:bg-espresso transition-colors shrink-0 w-full sm:w-auto text-center cursor-pointer"
           >
             Get Verified Now
@@ -146,7 +146,7 @@ const DashboardOverview = () => {
         <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between">
           <h2 className="text-lg font-bold text-espresso">Recent Orders</h2>
           <Link
-            to="/dashboard/orders"
+            to="/seller/orders"
             className="text-sm font-semibold text-clay hover:text-espresso flex items-center gap-1 transition-colors cursor-pointer"
           >
             View All <ArrowRight className="w-4 h-4" />

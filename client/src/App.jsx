@@ -1,4 +1,5 @@
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { lazy, Suspense } from "react";
+import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { CartProvider } from "./context/CartContext";
 import { WishlistProvider } from "./context/WishlistContext";
@@ -9,7 +10,8 @@ import { UnreadProvider } from "./context/UnreadContext";
 import MainLayout from "./layouts/MainLayout";
 import AuthLayout from "./layouts/AuthLayout";
 import InfoLayout from "./layouts/InfoLayout";
-import DashboardLayout from "./layouts/DashboardLayout";
+
+import RequireRole from "./components/RequireRole";
 
 import MarketplaceHome from "./pages/MarketplaceHome";
 import ProductDetails from "./pages/ProductDetails";
@@ -23,17 +25,35 @@ import Payment from "./pages/Payment";
 import OrderSuccess from "./pages/OrderSuccess";
 import OrderDetails from "./pages/OrderDetails";
 import MyOrders from "./pages/MyOrders";
-import DashboardOverview from "./pages/dashboard/DashboardOverview";
-import MyProducts from "./pages/dashboard/MyProducts";
-import AddProduct from "./pages/dashboard/AddProduct";
-import Orders from "./pages/dashboard/Orders";
 import Messages from "./pages/Messages";
-import Settings from "./pages/dashboard/Settings";
-import EditProduct from "./pages/dashboard/EditProduct";
-import Promotions from "./pages/dashboard/Promotions";
 import RetailDashboard from "./pages/RetailDashboard";
 import WholesalerProfile from "./pages/WholesalerProfile";
 import NotFound from "./pages/NotFound";
+
+// Seller workspace is lazy-loaded: retailers never download this bundle.
+const SellerLayout = lazy(() => import("./layouts/SellerLayout"));
+const DashboardOverview = lazy(() => import("./pages/dashboard/DashboardOverview"));
+const MyProducts = lazy(() => import("./pages/dashboard/MyProducts"));
+const AddProduct = lazy(() => import("./pages/dashboard/AddProduct"));
+const EditProduct = lazy(() => import("./pages/dashboard/EditProduct"));
+const Orders = lazy(() => import("./pages/dashboard/Orders"));
+const Promotions = lazy(() => import("./pages/dashboard/Promotions"));
+const Settings = lazy(() => import("./pages/dashboard/Settings"));
+
+const SellerFallback = () => (
+  <div className="flex min-h-dvh items-center justify-center bg-slate-100">
+    <div className="h-8 w-8 animate-spin rounded-full border-4 border-clay border-t-transparent" />
+  </div>
+);
+
+// Wraps the seller shell in its role guard and Suspense boundary.
+const SellerArea = () => (
+  <RequireRole roles={["seller", "both"]}>
+    <Suspense fallback={<SellerFallback />}>
+      <SellerLayout />
+    </Suspense>
+  </RequireRole>
+);
 
 const router = createBrowserRouter([
   {
@@ -60,8 +80,8 @@ const router = createBrowserRouter([
     ],
   },
   {
-    path: "/dashboard",
-    element: <DashboardLayout />,
+    path: "/seller",
+    element: <SellerArea />,
     children: [
       { index: true, element: <DashboardOverview /> },
       { path: "products", element: <MyProducts /> },
@@ -74,6 +94,9 @@ const router = createBrowserRouter([
       { path: "settings", element: <Settings /> },
     ],
   },
+  // Old dashboard links and bookmarks keep working.
+  { path: "/dashboard", element: <Navigate to="/seller" replace /> },
+  { path: "/dashboard/*", element: <Navigate to="/seller" replace /> },
   {
     element: <InfoLayout />,
     children: [

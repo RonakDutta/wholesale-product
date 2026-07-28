@@ -15,7 +15,7 @@ const CTABanner = () => {
     if (!isAuthenticated) {
       navigate("/signup?role=seller");
     } else {
-      navigate("/dashboard/settings");
+      navigate("/seller/settings");
     }
   };
 

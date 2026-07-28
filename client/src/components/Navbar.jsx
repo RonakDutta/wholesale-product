@@ -44,12 +44,11 @@ const Navbar = () => {
   const [selectedCity, setSelectedCity] = useState("Delhi NCR");
   const navRef = useRef(null);
   const navigate = useNavigate();
-  const isSupplier =
-    user && (user.bizType === "seller" || user.bizType === "both");
+  const isSupplier = user?.role === "seller" || user?.role === "both";
 
   const dashboardPath = () => {
     if (!user) return "/login";
-    return "/dashboard";
+    return "/seller";
   };
 
   // Close profile dropdown when clicking outside
@@ -111,7 +110,7 @@ const Navbar = () => {
 
         {(user?.role === "seller" || user?.role === "both") && (
           <Link
-            to="/dashboard"
+            to="/seller"
             onClick={() => setIsProfileOpen(false)}
             className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-clay/5 hover:text-clay rounded-lg transition-colors cursor-pointer"
           >

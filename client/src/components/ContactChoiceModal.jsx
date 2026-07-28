@@ -18,8 +18,8 @@ const ContactChoiceModal = ({
   const navigate = useNavigate();
   const location = useLocation();
   // Stay within the current shell (dashboard vs marketplace)
-  const basePath = location.pathname.startsWith("/dashboard")
-    ? "/dashboard/messages"
+  const basePath = location.pathname.startsWith("/seller")
+    ? "/seller/messages"
     : "/messages";
 
   const handleSelectChat = () => {

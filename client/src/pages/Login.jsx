@@ -117,7 +117,7 @@ const Login = () => {
       // Redirect based on user role
       const userRole = response.data.user?.role;
       if (userRole === "seller" || userRole === "both") {
-        navigate("/dashboard");
+        navigate("/seller");
       } else {
         navigate("/");
       }

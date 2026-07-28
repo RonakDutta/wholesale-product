@@ -107,7 +107,7 @@ const AddProduct = () => {
               duration: 5000,
             },
           );
-          navigate("/dashboard/settings");
+          navigate("/seller/settings");
         }
       } catch (err) {
         console.error("Error checking profile:", err);
@@ -225,7 +225,7 @@ const AddProduct = () => {
           ? "Listing added to existing product"
           : "Product added successfully",
       );
-      navigate("/dashboard/products");
+      navigate("/seller/products");
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.message || "Failed to add product");
@@ -238,7 +238,7 @@ const AddProduct = () => {
     <div className="max-w-4xl mx-auto">
       <div className="flex items-center gap-4 mb-6">
         <button
-          onClick={() => navigate("/dashboard/products")}
+          onClick={() => navigate("/seller/products")}
           className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -577,7 +577,7 @@ const AddProduct = () => {
         <div className="flex justify-end gap-3 pt-4">
           <button
             type="button"
-            onClick={() => navigate("/dashboard/products")}
+            onClick={() => navigate("/seller/products")}
             className="px-6 py-2.5 rounded-lg text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
           >
             Cancel

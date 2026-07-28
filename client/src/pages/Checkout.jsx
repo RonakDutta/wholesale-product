@@ -82,18 +82,17 @@ const Checkout = () => {
 
     setLoading(true);
     try {
-      // Map products using unified naming schema
-      const products = items.map(item => ({
+      // Send every line. Prices are recomputed server-side from live
+      // inventory, so nothing money-related is trusted from here.
+      const products = items.map((item) => ({
         productId: item.productId,
-        supplierId: item.supplierId || item.vendorId,
+        inventoryId: item.inventoryId,
         quantity: item.quantity,
-        price: item.bulkQuantity && item.quantity >= item.bulkQuantity ? item.bulkPrice : item.price
       }));
 
       const response = await api.post("/api/orders/create", {
         products,
         deliveryAddress: addressForm,
-        totalAmount: subtotal
       });
 
       if (response.data.success && response.data.orderId) {

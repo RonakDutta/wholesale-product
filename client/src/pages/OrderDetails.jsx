@@ -130,6 +130,26 @@ const OrderDetails = () => {
     );
   }
 
+  // Multi-item orders carry `items`; older single-item orders only have the
+  // flattened product columns, so synthesise one line from those.
+  const lineItems =
+    Array.isArray(order.items) && order.items.length > 0
+      ? order.items
+      : [
+          {
+            id: "legacy",
+            product_id: order.product_id,
+            product_name: order.product_name,
+            category: order.product_category,
+            image: order.product_image,
+            quantity: order.quantity,
+            unit_price: order.unit_discount_price || order.unit_price,
+            total_price: order.total_amount,
+            moq: order.moq,
+            shipping_days: order.shipping_days,
+          },
+        ];
+
   const quantity = Number(order.quantity) || 1;
   const total = Number(order.total_amount) || 0;
   const unitPrice =
@@ -209,90 +229,113 @@ const OrderDetails = () => {
 
       {/* What was ordered */}
       <section className="rounded-2xl border border-sage/20 bg-white/80 p-5 shadow-sm sm:p-6">
-        <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-espresso">
-          <Package className="h-5 w-5 text-clay" />
-          What you ordered
-        </h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-lg font-bold text-espresso">
+            <Package className="h-5 w-5 text-clay" />
+            What you ordered
+          </h2>
+          <span className="text-xs font-semibold text-espresso/40">
+            {lineItems.length} item{lineItems.length === 1 ? "" : "s"}
+          </span>
+        </div>
 
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-          <div className="h-28 w-28 shrink-0 overflow-hidden rounded-xl border border-sage/20 bg-sage/10">
-            {order.product_image ? (
-              <img
-                src={order.product_image}
-                alt={order.product_name || "Product"}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center">
-                <Package className="h-8 w-8 text-espresso/15" />
-              </div>
-            )}
-          </div>
-
-          <div className="min-w-0 flex-1">
-            {order.product_category && (
-              <span className="text-[10px] font-bold uppercase tracking-wider text-espresso/40">
-                {order.product_category}
-              </span>
-            )}
-            {order.product_id ? (
+        {order.supplier_name && (
+          <p className="mb-4 flex flex-wrap items-center gap-1.5 text-sm text-espresso/60">
+            <Building2 className="h-3.5 w-3.5 shrink-0" />
+            Sold by
+            {order.supplier_user_id ? (
               <Link
-                to={`/product/${order.product_id}`}
-                className="block text-lg font-bold text-espresso transition-colors hover:text-clay"
+                to={`/wholesaler/${order.supplier_user_id}`}
+                className="font-semibold text-espresso hover:text-clay hover:underline"
               >
-                {order.product_name || "Product"}
+                {order.supplier_name}
               </Link>
             ) : (
-              <p className="text-lg font-bold text-espresso">
-                {order.product_name || "Product"}
-              </p>
+              <span className="font-semibold text-espresso">
+                {order.supplier_name}
+              </span>
             )}
-
-            {order.supplier_name && (
-              <p className="mt-1 flex items-center gap-1.5 text-sm text-espresso/60">
-                <Building2 className="h-3.5 w-3.5" />
-                {order.supplier_user_id ? (
-                  <Link
-                    to={`/wholesaler/${order.supplier_user_id}`}
-                    className="hover:text-clay hover:underline"
-                  >
-                    {order.supplier_name}
-                  </Link>
-                ) : (
-                  order.supplier_name
-                )}
-                {supplierLocation && (
-                  <span className="text-espresso/40">· {supplierLocation}</span>
-                )}
-              </p>
+            {supplierLocation && (
+              <span className="text-espresso/40">· {supplierLocation}</span>
             )}
+          </p>
+        )}
 
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-              <Field label="Quantity">{quantity}</Field>
-              <Field label="Unit price">
-                ₹{Number(unitPrice).toLocaleString("en-IN")}
-              </Field>
-              {order.moq != null && <Field label="MOQ">{order.moq}</Field>}
-              {order.shipping_days != null && (
-                <Field label="Ships in">{order.shipping_days} days</Field>
-              )}
-            </div>
-          </div>
+        <div className="divide-y divide-sage/15">
+          {lineItems.map((item) => {
+            const lineQty = Number(item.quantity) || 1;
+            const lineUnit =
+              Number(item.unit_price) ||
+              (Number(item.total_price) || 0) / lineQty;
+            return (
+              <div
+                key={item.id}
+                className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center"
+              >
+                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-sage/20 bg-sage/10">
+                  {item.image ? (
+                    <img
+                      src={item.image}
+                      alt={item.product_name || "Product"}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <Package className="h-6 w-6 text-espresso/15" />
+                    </div>
+                  )}
+                </div>
 
-          <div className="flex shrink-0 items-center justify-between gap-3 rounded-xl bg-clay/5 p-4 sm:min-w-40 sm:flex-col sm:items-end sm:justify-start sm:text-right">
-            <div className="sm:text-right">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-espresso/40">
-                Total paid
-              </p>
-              <p className="mt-0.5 text-[11px] text-espresso/40">
-                {quantity} × ₹{Number(unitPrice).toLocaleString("en-IN")}
-              </p>
-            </div>
-            <p className="flex items-center text-2xl font-black text-clay">
-              <IndianRupee className="h-5 w-5" />
-              {total.toLocaleString("en-IN")}
+                <div className="min-w-0 flex-1">
+                  {item.category && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-espresso/40">
+                      {item.category}
+                    </span>
+                  )}
+                  {item.product_id ? (
+                    <Link
+                      to={`/product/${item.product_id}`}
+                      className="block truncate font-bold text-espresso transition-colors hover:text-clay"
+                    >
+                      {item.product_name || "Product"}
+                    </Link>
+                  ) : (
+                    <p className="truncate font-bold text-espresso">
+                      {item.product_name || "Product"}
+                    </p>
+                  )}
+                  <p className="mt-0.5 text-xs text-espresso/50">
+                    {lineQty} × ₹{Number(lineUnit).toLocaleString("en-IN")}
+                    {item.moq != null && ` · MOQ ${item.moq}`}
+                    {item.shipping_days != null &&
+                      ` · ships in ${item.shipping_days}d`}
+                  </p>
+                </div>
+
+                <p className="shrink-0 text-right font-bold text-espresso">
+                  ₹
+                  {Number(
+                    item.total_price || lineUnit * lineQty,
+                  ).toLocaleString("en-IN")}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 flex items-center justify-between border-t border-sage/20 pt-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-espresso/40">
+              Order total
+            </p>
+            <p className="mt-0.5 text-[11px] text-espresso/40">
+              {quantity} unit{quantity === 1 ? "" : "s"} in total
             </p>
           </div>
+          <p className="flex items-center text-2xl font-black text-clay">
+            <IndianRupee className="h-5 w-5" />
+            {total.toLocaleString("en-IN")}
+          </p>
         </div>
       </section>
 

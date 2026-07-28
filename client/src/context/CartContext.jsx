@@ -2,20 +2,25 @@
 import { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { useAuth } from "./AuthContext";
+import CartConflictModal from "../components/CartConflictModal";
 
 const CartContext = createContext(null);
-const STORAGE_KEY = "wholesale_cart_v1";
+// v2: items now carry the seller's user id so an order can be tied to one
+// wholesaler. Bumping the key discards v1 carts rather than mixing shapes.
+const STORAGE_KEY = "wholesale_cart_v2";
 
-// A listing belongs to the signed-in user when its seller id matches theirs.
-// `supplier.supplierId` is the seller's user id (`supplier.id` is the
-// inventory row id), so check the seller fields in order of specificity.
+// `supplier.supplierId` is the seller's user id; `supplier.id` is the
+// inventory row id. Both matter, so resolve them explicitly.
+const resolveSellerId = (product, supplier) =>
+  supplier?.supplierId ??
+  supplier?.vendorId ??
+  product?.supplierId ??
+  product?.vendorId ??
+  null;
+
 const isOwnListing = (userId, product, supplier) => {
   if (!userId) return false;
-  const sellerId =
-    supplier?.supplierId ??
-    supplier?.vendorId ??
-    product?.supplierId ??
-    product?.vendorId;
+  const sellerId = resolveSellerId(product, supplier);
   return sellerId != null && String(sellerId) === String(userId);
 };
 
@@ -30,6 +35,9 @@ export const CartProvider = ({ children }) => {
     }
   });
   const [isCartOpen, setIsCartOpen] = useState(false);
+  // Set when the buyer tries to add a product from a different wholesaler.
+  // Held here so the prompt works from every call site without plumbing.
+  const [conflict, setConflict] = useState(null);
 
   useEffect(() => {
     try {
@@ -39,49 +47,74 @@ export const CartProvider = ({ children }) => {
     }
   }, [items]);
 
+  // An order ships from a single wholesaler, so the cart belongs to one.
+  const cartSeller = items.length
+    ? { id: items[0].sellerId, name: items[0].sellerName }
+    : null;
+
+  const buildItem = (product, quantity, supplier) => {
+    const sellerId = resolveSellerId(product, supplier);
+    const price = supplier?.price ?? product.price ?? 0;
+    return {
+      // one line per inventory listing
+      id: supplier ? `${product.id}#${supplier.id}` : String(product.id),
+      productId: product.id,
+      inventoryId: supplier?.id ?? null,
+      sellerId: sellerId != null ? String(sellerId) : null,
+      sellerName:
+        supplier?.companyName ??
+        supplier?.name ??
+        product.vendorName ??
+        "Wholesaler",
+      name: product.name,
+      image: supplier?.image ?? product.image,
+      price,
+      bulkPrice: supplier?.discountPrice ?? product.bulkPrice ?? price,
+      bulkQuantity: supplier?.moq ?? product.bulkQuantity ?? 1,
+      quantity,
+    };
+  };
+
+  const commitItem = (nextItem) => {
+    setItems((prev) => {
+      const existing = prev.find((i) => i.id === nextItem.id);
+      if (existing) {
+        return prev.map((i) =>
+          i.id === nextItem.id
+            ? { ...i, quantity: i.quantity + nextItem.quantity }
+            : i,
+        );
+      }
+      return [...prev, nextItem];
+    });
+    setIsCartOpen(true);
+  };
+
   const addToCart = (product, quantity = 1, supplier = null) => {
-    // Sellers cannot buy their own listings (the backend rejects such orders
-    // too); block it here so it never reaches the cart.
     if (isOwnListing(user?.id, product, supplier)) {
       toast.error("You can't add your own listing to the cart");
       return false;
     }
 
-    const itemId = supplier ? `${product.id}#${supplier.id}` : product.id;
-    const itemPrice = supplier?.price ?? product.price ?? 0;
-    const itemBulkPrice =
-      supplier?.discountPrice ?? product.bulkPrice ?? itemPrice;
-    const itemBulkQuantity = supplier?.moq ?? product.bulkQuantity ?? 1;
-    const itemVendorName =
-      supplier?.name ?? product.vendorName ?? "Unknown Vendor";
-    const itemVendorId = supplier?.id ?? product.vendorId ?? "";
+    const nextItem = buildItem(product, quantity, supplier);
 
-    setItems((prev) => {
-      const existing = prev.find((i) => i.id === itemId);
-      if (existing) {
-        return prev.map((i) =>
-          i.id === itemId ? { ...i, quantity: i.quantity + quantity } : i,
-        );
-      }
-      return [
-        ...prev,
-        {
-          id: itemId,
-          productId: product.id,
-          supplierId: supplier?.id ?? null,
-          name: product.name,
-          image: product.image,
-          vendorName: itemVendorName,
-          vendorId: itemVendorId,
-          price: itemPrice,
-          bulkPrice: itemBulkPrice,
-          bulkQuantity: itemBulkQuantity,
-          quantity,
-        },
-      ];
-    });
-    setIsCartOpen(true);
+    // Orders cannot span wholesalers: ask before discarding the current one.
+    if (cartSeller && nextItem.sellerId && cartSeller.id !== nextItem.sellerId) {
+      setConflict({ nextItem, currentSeller: cartSeller });
+      return false;
+    }
+
+    commitItem(nextItem);
     return true;
+  };
+
+  const resolveConflict = (replace) => {
+    if (replace && conflict) {
+      setItems([]);
+      // commitItem reads no stale state, so this is safe immediately after
+      setTimeout(() => commitItem(conflict.nextItem), 0);
+    }
+    setConflict(null);
   };
 
   const removeFromCart = (id) => {
@@ -106,9 +139,7 @@ export const CartProvider = ({ children }) => {
     () =>
       items.reduce((sum, i) => {
         const unitPrice =
-          i.bulkQuantity && i.quantity >= i.bulkQuantity
-            ? i.bulkPrice
-            : i.price;
+          i.bulkQuantity && i.quantity >= i.bulkQuantity ? i.bulkPrice : i.price;
         return sum + unitPrice * i.quantity;
       }, 0),
     [items],
@@ -118,8 +149,8 @@ export const CartProvider = ({ children }) => {
     <CartContext.Provider
       value={{
         items,
+        cartSeller,
         addToCart,
-        // Lets the UI hide/disable buy actions on the user's own listings
         isOwnListing: (product, supplier) =>
           isOwnListing(user?.id, product, supplier),
         removeFromCart,
@@ -133,6 +164,18 @@ export const CartProvider = ({ children }) => {
       }}
     >
       {children}
+      {conflict && (
+        <CartConflictModal
+          currentSeller={conflict.currentSeller}
+          incomingSeller={{
+            id: conflict.nextItem.sellerId,
+            name: conflict.nextItem.sellerName,
+          }}
+          productName={conflict.nextItem.name}
+          onKeep={() => resolveConflict(false)}
+          onReplace={() => resolveConflict(true)}
+        />
+      )}
     </CartContext.Provider>
   );
 };

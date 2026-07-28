@@ -103,115 +103,175 @@ const getBuyerOrders = async (req, res) => {
 };
 
 const createOrder = async (req, res) => {
-  const { products, deliveryAddress, totalAmount, billingAddress, paymentMethod = "upi" } = req.body;
+  const { products, deliveryAddress, billingAddress, paymentMethod = "upi" } = req.body;
   const buyerId = req.user?.id;
 
   if (!buyerId) {
     return res.status(401).json({ success: false, message: "Unauthorized: Missing user credentials." });
   }
 
-  if (!products || products.length === 0 || !deliveryAddress || !totalAmount) {
+  if (!Array.isArray(products) || products.length === 0 || !deliveryAddress) {
     return res.status(400).json({ success: false, message: "Missing required order checkout fields." });
   }
-
-  const targetItem = products[0];
 
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
 
-    // ids are UUIDs; keep them as strings (strip any "#..." suffix the client may append)
-    const cleanProductId = String(targetItem.productId || "").split("#")[0].trim();
-    const rawSupplierId = targetItem.supplierId || targetItem.vendorId;
-    const cleanSupplierId = rawSupplierId ? String(rawSupplierId).split("#")[0].trim() : null;
+    // Resolve every requested line against live inventory. Prices, MOQ and
+    // stock all come from the database — amounts sent by the client are
+    // ignored, otherwise a crafted request could set its own price.
+    const lines = [];
+    for (const entry of products) {
+      const productId = String(entry.productId || "").split("#")[0].trim();
+      const inventoryId = entry.inventoryId
+        ? String(entry.inventoryId).split("#")[0].trim()
+        : null;
+      const quantity = parseInt(entry.quantity, 10) || 0;
 
-    if (!cleanProductId) {
-      throw new Error("Invalid product ID format.");
-    }
+      if (!productId) throw new Error("Invalid product reference in order.");
+      if (quantity <= 0) throw new Error("Every item needs a quantity of at least 1.");
 
-    // Only constrain by supplier when we actually have one, so we never pass
-    // an invalid value into a UUID column.
-    let inventoryQuery = { rows: [] };
-    if (cleanSupplierId) {
-      inventoryQuery = await client.query(
-        "SELECT id, supplier_id, stock, moq, price FROM supplier_inventory WHERE product_id = $1 AND supplier_id = $2 AND status = 'Active' LIMIT 1",
-        [cleanProductId, cleanSupplierId],
+      // Prefer the exact listing the buyer chose; fall back to any active
+      // listing of that product.
+      let lookup = { rows: [] };
+      if (inventoryId) {
+        lookup = await client.query(
+          `SELECT si.id, si.supplier_id, si.product_id, si.stock, si.moq,
+                  si.price, si.discount_price, si.shipping_days, p.name AS product_name
+           FROM supplier_inventory si
+           JOIN products p ON p.id = si.product_id
+           WHERE si.id = $1 AND si.status = 'Active'`,
+          [inventoryId],
+        );
+      }
+      if (lookup.rows.length === 0) {
+        lookup = await client.query(
+          `SELECT si.id, si.supplier_id, si.product_id, si.stock, si.moq,
+                  si.price, si.discount_price, si.shipping_days, p.name AS product_name
+           FROM supplier_inventory si
+           JOIN products p ON p.id = si.product_id
+           WHERE si.product_id = $1 AND si.status = 'Active'
+           ORDER BY si.price ASC
+           LIMIT 1`,
+          [productId],
+        );
+      }
+      if (lookup.rows.length === 0) {
+        throw new Error("A product in your order is no longer available.");
+      }
+
+      const inv = lookup.rows[0];
+
+      if (String(inv.supplier_id) === String(buyerId)) {
+        throw new Error("You cannot order your own inventory.");
+      }
+      if (quantity < inv.moq) {
+        throw new Error(`${inv.product_name} has a minimum order quantity of ${inv.moq}.`);
+      }
+      if (inv.stock < quantity) {
+        throw new Error(`${inv.product_name} only has ${inv.stock} left in stock.`);
+      }
+
+      // Bulk price applies once the MOQ threshold is met.
+      const unitPrice = Number(
+        inv.discount_price && quantity >= inv.moq ? inv.discount_price : inv.price,
       );
+
+      lines.push({
+        inventoryId: inv.id,
+        productId: inv.product_id,
+        supplierId: inv.supplier_id,
+        productName: inv.product_name,
+        quantity,
+        unitPrice,
+        listPrice: Number(inv.price),
+        discountPrice: inv.discount_price ? Number(inv.discount_price) : null,
+        moq: inv.moq,
+        shippingDays: inv.shipping_days,
+        lineTotal: Number((unitPrice * quantity).toFixed(2)),
+      });
     }
 
-    if (inventoryQuery.rows.length === 0) {
-      inventoryQuery = await client.query(
-        "SELECT id, supplier_id, stock, moq, price FROM supplier_inventory WHERE product_id = $1 AND status = 'Active' LIMIT 1",
-        [cleanProductId],
-      );
+    // One order ships from one wholesaler on one truck.
+    const supplierIds = new Set(lines.map((l) => String(l.supplierId)));
+    if (supplierIds.size > 1) {
+      throw new Error("An order can only contain items from a single wholesaler.");
     }
 
-    if (inventoryQuery.rows.length === 0) {
-      throw new Error("Specified supplier product not found in active inventory catalogs.");
-    }
-
-    const inventoryItem = inventoryQuery.rows[0];
-    const cleanQuantity = parseInt(targetItem.quantity, 10) || 1;
-    const cleanTotal = parseFloat(totalAmount);
-
-    if (cleanQuantity < inventoryItem.moq) {
-      throw new Error(`Quantity must meet MOQ of ${inventoryItem.moq}`);
-    }
-
-    if (inventoryItem.stock < cleanQuantity) {
-      throw new Error("Insufficient stock for requested quantity");
-    }
-
-    if (inventoryItem.supplier_id === buyerId) {
-      throw new Error("Supplier cannot order their own inventory");
-    }
+    const supplierId = lines[0].supplierId;
+    const subtotal = Number(lines.reduce((sum, l) => sum + l.lineTotal, 0).toFixed(2));
+    const totalQuantity = lines.reduce((sum, l) => sum + l.quantity, 0);
+    const maxShippingDays = Math.max(...lines.map((l) => Number(l.shippingDays) || 7));
 
     const orderResult = await client.query(
       `INSERT INTO orders (
-        buyer_id,
-        supplier_id,
-        inventory_item_id,
-        quantity,
-        total_amount,
-        subtotal,
-        status,
-        payment_status,
-        delivery_address,
-        billing_address,
-        contact_phone,
-        notes,
-        order_number,
-        expected_delivery_date,
-        updated_at
+        buyer_id, supplier_id, inventory_item_id, quantity,
+        total_amount, subtotal, status, payment_status,
+        delivery_address, billing_address, contact_phone, notes,
+        order_number, expected_delivery_date, updated_at
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP) RETURNING id`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP)
+       RETURNING id`,
       [
         buyerId,
-        inventoryItem.supplier_id,
-        inventoryItem.id,
-        cleanQuantity,
-        cleanTotal,
-        cleanTotal,
+        supplierId,
+        // kept for backwards compatibility with single-item readers
+        lines[0].inventoryId,
+        totalQuantity,
+        subtotal,
+        subtotal,
         "payment_pending",
         "pending",
         JSON.stringify(deliveryAddress),
         JSON.stringify(billingAddress || deliveryAddress),
         String(deliveryAddress.phone || ""),
-        "Order created via enterprise checkout",
-        // order_number is VARCHAR(50): a full UUID suffix overflows it, so use
-        // a short buyer prefix (timestamp already makes this unique)
+        `Order with ${lines.length} item${lines.length === 1 ? "" : "s"}`,
+        // order_number is VARCHAR(50): a full UUID suffix overflows it
         `ORD-${Date.now()}-${String(buyerId).slice(0, 8)}`,
-        new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+        new Date(Date.now() + maxShippingDays * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10),
       ],
     );
 
     const orderId = orderResult.rows[0].id;
 
-    await client.query(
-      `UPDATE supplier_inventory SET stock = stock - $1 WHERE id = $2`,
-      [cleanQuantity, inventoryItem.id],
-    );
+    for (const line of lines) {
+      await client.query(
+        `INSERT INTO order_items (
+           order_id, inventory_item_id, product_id, supplier_id, product_name,
+           quantity, unit_price, discount_price, total_price, moq, shipping_days, status
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [
+          orderId,
+          line.inventoryId,
+          line.productId,
+          line.supplierId,
+          line.productName,
+          line.quantity,
+          line.listPrice,
+          line.discountPrice,
+          line.lineTotal,
+          line.moq,
+          line.shippingDays,
+          "pending",
+        ],
+      );
+
+      // Guarded so two concurrent checkouts cannot oversell the same listing.
+      const stockUpdate = await client.query(
+        `UPDATE supplier_inventory
+         SET stock = stock - $1
+         WHERE id = $2 AND stock >= $1
+         RETURNING id`,
+        [line.quantity, line.inventoryId],
+      );
+      if (stockUpdate.rows.length === 0) {
+        throw new Error(`${line.productName} went out of stock while checking out.`);
+      }
+    }
 
     await client.query(
       `INSERT INTO order_status_history (order_id, status, previous_status, updated_by, updated_by_role, remarks)
@@ -222,15 +282,15 @@ const createOrder = async (req, res) => {
     await client.query(
       `INSERT INTO payment_transactions (order_id, amount, payment_method, payment_status, gateway_response)
        VALUES ($1, $2, $3, $4, $5)`,
-      [orderId, cleanTotal, paymentMethod, "pending", JSON.stringify({ method: paymentMethod })],
+      [orderId, subtotal, paymentMethod, "pending", JSON.stringify({ method: paymentMethod })],
     );
 
     await client.query("COMMIT");
-    return res.status(201).json({ success: true, orderId });
+    return res.status(201).json({ success: true, orderId, subtotal, itemCount: lines.length });
   } catch (error) {
     await client.query("ROLLBACK");
-    console.error("CRITICAL DATABASE REJECTION:", error);
-    return res.status(400).json({ success: false, message: error.message || "Database Error" });
+    console.error("Order creation failed:", error);
+    return res.status(400).json({ success: false, message: error.message || "Could not create order" });
   } finally {
     client.release();
   }
@@ -391,7 +451,24 @@ const getOrderById = async (req, res) => {
       [req.params.orderId],
     );
     if (result.rows.length === 0) return res.status(404).json({ message: "Not found" });
-    res.json(result.rows[0]);
+
+    // Line items for multi-product orders. Older single-item orders have no
+    // rows here, so the caller falls back to the flattened product columns.
+    const itemsResult = await pool.query(
+      `SELECT oi.id, oi.product_id, oi.product_name, oi.quantity,
+              oi.unit_price, oi.discount_price, oi.total_price, oi.moq,
+              oi.shipping_days,
+              COALESCE(si.image_url, p.global_image_url) AS image,
+              p.category
+       FROM order_items oi
+       LEFT JOIN supplier_inventory si ON si.id = oi.inventory_item_id
+       LEFT JOIN products p ON p.id = oi.product_id
+       WHERE oi.order_id = $1
+       ORDER BY oi.created_at ASC`,
+      [req.params.orderId],
+    );
+
+    res.json({ ...result.rows[0], items: itemsResult.rows });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

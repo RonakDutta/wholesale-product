@@ -15,6 +15,9 @@ const io = new Server(httpServer, {
 	},
 });
 
+// Controllers reach the socket server through the app to push live updates.
+app.set("io", io);
+
 io.use((socket, next) => {
 	const token = socket.handshake.auth?.token;
 	if (!token) {

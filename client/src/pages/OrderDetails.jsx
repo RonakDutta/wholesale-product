@@ -14,6 +14,7 @@ import {
 import api from "../utils/axios";
 import { toast } from "sonner";
 import { formatOrderStatus, getOrderStatusStyle } from "../utils/orderStatus";
+import OrderTracking from "../components/OrderTracking";
 
 const PAYMENT_STYLES = {
   paid: "bg-emerald-100 text-emerald-700 border-emerald-200",
@@ -388,6 +389,8 @@ const OrderDetails = () => {
           </div>
         </section>
       </div>
+
+      <OrderTracking orderId={orderId} />
 
       {/* Timeline */}
       <section className="rounded-2xl border border-sage/20 bg-white/80 p-5 shadow-sm sm:p-6">

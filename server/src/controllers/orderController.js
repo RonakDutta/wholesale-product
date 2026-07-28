@@ -1,6 +1,7 @@
 const pool = require("../config/db");
 const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange } = require("../services/orderStatusService");
 const PDFDocument = require("pdfkit");
+const { geocodeOrderDestination } = require("../services/geocodingService");
 
 const ensureOrderAccess = async (req, res, orderId, { requireBuyer = true, requireSupplier = true } = {}) => {
   const userId = req.user?.id;
@@ -286,6 +287,12 @@ const createOrder = async (req, res) => {
     );
 
     await client.query("COMMIT");
+
+    // Resolve delivery coordinates for the tracking map. Deliberately not
+    // awaited: geocoding is rate limited and must never delay or fail
+    // checkout, and the map falls back gracefully until it lands.
+    geocodeOrderDestination(orderId, deliveryAddress).catch(() => {});
+
     return res.status(201).json({ success: true, orderId, subtotal, itemCount: lines.length });
   } catch (error) {
     await client.query("ROLLBACK");

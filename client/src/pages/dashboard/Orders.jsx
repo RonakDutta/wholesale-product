@@ -155,6 +155,11 @@ const Orders = () => {
                         </span>
                         <span className="text-xs text-slate-500 max-w-50 sm:max-w-50 truncate">
                           {order.product}
+                          {order.item_count > 1 && (
+                            <span className="font-normal text-slate-400">
+                              {" "}+ {order.item_count - 1} more
+                            </span>
+                          )}
                         </span>
                         <span className="text-xs font-semibold text-slate-400 flex items-center gap-1 mt-0.5">
                           <Clock className="w-3 h-3" />

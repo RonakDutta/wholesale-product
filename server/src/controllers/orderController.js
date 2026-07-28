@@ -60,18 +60,23 @@ const getSupplierOrders = async (req, res) => {
         o.order_number,
         COALESCE(wp.company_name, u.first_name || ' ' || u.last_name) as buyer,
         u.first_name || ' ' || u.last_name as contact,
-        p.name as product,
+        COALESCE(items.first_product, p.name) as product,
+        COALESCE(items.item_count, 1) as item_count,
         o.quantity as qty,
         o.total_amount as amount,
         o.status,
         o.payment_status,
         o.created_at as date
       FROM orders o
-      JOIN supplier_inventory si ON o.inventory_item_id = si.id
-      JOIN products p ON si.product_id = p.id
+      LEFT JOIN supplier_inventory si ON o.inventory_item_id = si.id
+      LEFT JOIN products p ON si.product_id = p.id
       JOIN users u ON o.buyer_id = u.id
       LEFT JOIN wholesaler_profiles wp ON u.id = wp.user_id
-      WHERE si.supplier_id = $1
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS item_count, MIN(oi.product_name) AS first_product
+        FROM order_items oi WHERE oi.order_id = o.id
+      ) items ON TRUE
+      WHERE o.supplier_id = $1 OR si.supplier_id = $1
       ORDER BY o.created_at DESC
     `;
     const result = await pool.query(query, [supplierId]);
@@ -85,13 +90,29 @@ const getSupplierOrders = async (req, res) => {
 const getBuyerOrders = async (req, res) => {
   const buyerId = req.user.id;
   try {
+    // An order can hold several products from one wholesaler, so describe it
+    // by its lines rather than naming whichever product happened to be first.
     const result = await pool.query(
-      `SELECT o.id, o.order_number, o.status, o.payment_status, o.total_amount, o.created_at,
-              p.name as product, u.first_name || ' ' || u.last_name as supplier_name
+      `SELECT o.id, o.order_number, o.status, o.payment_status,
+              o.total_amount, o.created_at, o.quantity,
+              COALESCE(wp.company_name, u.first_name || ' ' || u.last_name) AS supplier_name,
+              COALESCE(items.item_count, 1) AS item_count,
+              COALESCE(items.first_product, p.name) AS product,
+              COALESCE(items.image, si.image_url, p.global_image_url) AS image
        FROM orders o
-       JOIN supplier_inventory si ON o.inventory_item_id = si.id
-       JOIN products p ON si.product_id = p.id
-       JOIN users u ON si.supplier_id = u.id
+       LEFT JOIN supplier_inventory si ON o.inventory_item_id = si.id
+       LEFT JOIN products p ON si.product_id = p.id
+       LEFT JOIN users u ON u.id = o.supplier_id
+       LEFT JOIN wholesaler_profiles wp ON wp.user_id = o.supplier_id
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int AS item_count,
+                MIN(oi.product_name) AS first_product,
+                MIN(COALESCE(isi.image_url, ip.global_image_url)) AS image
+         FROM order_items oi
+         LEFT JOIN supplier_inventory isi ON isi.id = oi.inventory_item_id
+         LEFT JOIN products ip ON ip.id = oi.product_id
+         WHERE oi.order_id = o.id
+       ) items ON TRUE
        WHERE o.buyer_id = $1
        ORDER BY o.created_at DESC`,
       [buyerId],
@@ -288,10 +309,23 @@ const createOrder = async (req, res) => {
 
     await client.query("COMMIT");
 
-    // Resolve delivery coordinates for the tracking map. Deliberately not
-    // awaited: geocoding is rate limited and must never delay or fail
-    // checkout, and the map falls back gracefully until it lands.
-    geocodeOrderDestination(orderId, deliveryAddress).catch(() => {});
+    // A pin dropped at checkout is authoritative — only fall back to
+    // geocoding the typed address when the buyer did not place one. Geocoding
+    // is rate limited, so it is never awaited: it must not delay checkout,
+    // and the map degrades gracefully until it lands.
+    const pinnedLat = Number(deliveryAddress?.lat);
+    const pinnedLng = Number(deliveryAddress?.lng);
+    if (Number.isFinite(pinnedLat) && Number.isFinite(pinnedLng)) {
+      pool
+        .query("UPDATE orders SET delivery_lat = $1, delivery_lng = $2 WHERE id = $3", [
+          pinnedLat,
+          pinnedLng,
+          orderId,
+        ])
+        .catch(() => {});
+    } else {
+      geocodeOrderDestination(orderId, deliveryAddress).catch(() => {});
+    }
 
     return res.status(201).json({ success: true, orderId, subtotal, itemCount: lines.length });
   } catch (error) {

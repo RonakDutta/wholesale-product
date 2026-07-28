@@ -84,6 +84,12 @@ const OrderRow = ({ order }) => {
 
         <h3 className="mt-1.5 truncate text-base font-bold text-espresso">
           {order.product}
+          {order.item_count > 1 && (
+            <span className="font-semibold text-espresso/50">
+              {" "}
+              + {order.item_count - 1} more
+            </span>
+          )}
         </h3>
         <p className="mt-0.5 truncate text-sm text-espresso/60">
           {order.supplier_name} · Placed {placed}

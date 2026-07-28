@@ -4,6 +4,7 @@ import { ArrowLeft, MapPin, Phone, User, ShoppingBag, IndianRupee } from "lucide
 import { useCart } from "../context/CartContext";
 import { toast } from "sonner";
 import api from "../utils/axios";
+import LocationPicker from "../components/LocationPicker";
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -23,6 +24,9 @@ const Checkout = () => {
   });
 
   const [errors, setErrors] = useState({});
+  // Exact delivery point. Optional, but far more reliable than geocoding a
+  // typed Indian address, so it wins when present.
+  const [pin, setPin] = useState(null);
 
   if (items.length === 0) {
     return (
@@ -92,7 +96,7 @@ const Checkout = () => {
 
       const response = await api.post("/api/orders/create", {
         products,
-        deliveryAddress: addressForm,
+        deliveryAddress: pin ? { ...addressForm, ...pin } : addressForm,
       });
 
       if (response.data.success && response.data.orderId) {
@@ -300,6 +304,17 @@ const Checkout = () => {
                     />
                     {errors.pincode && <p className="text-xs text-rose-500 mt-1">{errors.pincode}</p>}
                   </div>
+                </div>
+
+                <div className="border-t border-slate-100 pt-5">
+                  <h3 className="mb-1 text-sm font-bold text-slate-900">
+                    Pin your exact location
+                  </h3>
+                  <p className="mb-3 text-xs text-slate-500">
+                    Helps the wholesaler's driver find you. Optional, but far
+                    more precise than matching a typed address.
+                  </p>
+                  <LocationPicker value={pin} onChange={setPin} />
                 </div>
               </div>
             </div>

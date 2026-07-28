@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { MapPin, Navigation, Plus, Truck, X } from "lucide-react";
+import { Copy, Link2, MapPin, Navigation, Plus, Radio, Truck, X } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/axios";
 import { useSocket } from "../context/SocketContext";
@@ -127,27 +127,19 @@ const CheckpointForm = ({ orderId, onAdded, onClose }) => {
         className="mb-2 w-full rounded-lg border border-sage/30 bg-white px-3 py-2 text-sm outline-none focus:border-clay"
       />
 
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row">
-        <input
-          value={coords.lat}
-          onChange={(e) => setCoords((c) => ({ ...c, lat: e.target.value }))}
-          placeholder="Latitude (optional)"
-          className="w-full rounded-lg border border-sage/30 bg-white px-3 py-2 text-sm outline-none focus:border-clay"
-        />
-        <input
-          value={coords.lng}
-          onChange={(e) => setCoords((c) => ({ ...c, lng: e.target.value }))}
-          placeholder="Longitude (optional)"
-          className="w-full rounded-lg border border-sage/30 bg-white px-3 py-2 text-sm outline-none focus:border-clay"
-        />
+      <div className="mb-3">
         <button
           type="button"
           onClick={useMyLocation}
           disabled={locating}
-          className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-sage/30 bg-white px-3 py-2 text-xs font-bold text-espresso transition-colors hover:bg-sage/10 disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-sage/30 bg-white px-3 py-2 text-xs font-bold text-espresso transition-colors hover:bg-sage/10 disabled:opacity-60"
         >
           <Navigation className="h-3.5 w-3.5" />
-          {locating ? "Locating…" : "Use my location"}
+          {coords.lat
+            ? `Pinned at ${Number(coords.lat).toFixed(4)}, ${Number(coords.lng).toFixed(4)}`
+            : locating
+              ? "Locating…"
+              : "Attach my current location (optional)"}
         </button>
       </div>
 
@@ -159,6 +151,130 @@ const CheckpointForm = ({ orderId, onAdded, onClose }) => {
         {saving ? "Saving…" : "Add checkpoint"}
       </button>
     </form>
+  );
+};
+
+
+/**
+ * Live location without the wholesaler typing coordinates: generate a link,
+ * send it to whoever is driving, and their taps become checkpoints.
+ */
+const DriverLinkPanel = ({ orderId }) => {
+  const [link, setLink] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [driverName, setDriverName] = useState("");
+  const [vehicle, setVehicle] = useState("");
+
+  useEffect(() => {
+    api
+      .get(`/api/orders/${orderId}/driver-link`)
+      .then((res) => setLink(res.data.link))
+      .catch(() => {});
+  }, [orderId]);
+
+  const fullUrl = link ? `${window.location.origin}${link.path}` : "";
+
+  const create = async () => {
+    setCreating(true);
+    try {
+      const res = await api.post(`/api/orders/${orderId}/driver-link`, {
+        driverName: driverName.trim() || undefined,
+        vehicleNumber: vehicle.trim() || undefined,
+      });
+      setLink({ ...res.data, driver_name: driverName, vehicle_number: vehicle });
+      toast.success("Driver link ready");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Could not create link");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(fullUrl);
+      toast.success("Link copied");
+    } catch {
+      toast.error("Could not copy — select the link manually");
+    }
+  };
+
+  return (
+    <div className="mb-4 rounded-xl border border-sage/30 bg-white p-4">
+      <p className="mb-1 flex items-center gap-2 text-sm font-bold text-espresso">
+        <Radio className="h-4 w-4 text-clay" />
+        Live location from the driver
+      </p>
+      <p className="mb-3 text-xs leading-relaxed text-espresso/50">
+        Send this link to whoever is driving. They tap once to share location —
+        no app, no account. Their position becomes checkpoints automatically.
+      </p>
+
+      {link ? (
+        <>
+          <div className="flex items-center gap-2">
+            <input
+              readOnly
+              value={fullUrl}
+              onFocus={(e) => e.target.select()}
+              className="min-w-0 flex-1 rounded-lg border border-sage/30 bg-sage/5 px-3 py-2 text-xs text-espresso/70"
+            />
+            <button
+              onClick={copy}
+              className="shrink-0 rounded-lg border border-sage/30 p-2 text-espresso/60 transition-colors hover:bg-sage/10"
+              aria-label="Copy link"
+            >
+              <Copy className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(
+                `Delivery tracking — tap to share your location: ${fullUrl}`,
+              )}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs font-bold text-emerald-700 hover:underline"
+            >
+              Send on WhatsApp
+            </a>
+            <button onClick={create} className="text-xs font-semibold text-espresso/50 hover:underline">
+              Regenerate
+            </button>
+            {link.last_ping_at && (
+              <span className="text-xs text-espresso/40">
+                Last ping {formatWhen(link.last_ping_at)}
+              </span>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mb-2 flex flex-col gap-2 sm:flex-row">
+            <input
+              value={driverName}
+              onChange={(e) => setDriverName(e.target.value)}
+              placeholder="Driver name (optional)"
+              className="w-full rounded-lg border border-sage/30 px-3 py-2 text-sm outline-none focus:border-clay"
+            />
+            <input
+              value={vehicle}
+              onChange={(e) => setVehicle(e.target.value)}
+              placeholder="Vehicle number (optional)"
+              className="w-full rounded-lg border border-sage/30 px-3 py-2 text-sm outline-none focus:border-clay"
+            />
+          </div>
+          <button
+            onClick={create}
+            disabled={creating}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-espresso py-2.5 text-sm font-bold text-cream transition-colors hover:bg-clay disabled:opacity-60"
+          >
+            <Link2 className="h-4 w-4" />
+            {creating ? "Creating…" : "Create driver link"}
+          </button>
+        </>
+      )}
+    </div>
   );
 };
 
@@ -238,6 +354,8 @@ const OrderTracking = ({ orderId }) => {
           </div>
         </div>
       )}
+
+      {canRecord && <DriverLinkPanel orderId={orderId} />}
 
       {showForm && (
         <div className="mb-4">

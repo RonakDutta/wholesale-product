@@ -28,6 +28,7 @@ import MyOrders from "./pages/MyOrders";
 import Messages from "./pages/Messages";
 import RetailDashboard from "./pages/RetailDashboard";
 import WholesalerProfile from "./pages/WholesalerProfile";
+import DriverTracking from "./pages/DriverTracking";
 import NotFound from "./pages/NotFound";
 
 // Seller workspace is lazy-loaded: retailers never download this bundle.
@@ -60,6 +61,8 @@ const router = createBrowserRouter([
     path: "*",
     element: <NotFound />,
   },
+  // Driver tracking link: standalone, unauthenticated, no marketplace shell.
+  { path: "/track/:token", element: <DriverTracking /> },
   {
     path: "/",
     element: <MainLayout />,

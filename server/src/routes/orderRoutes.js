@@ -15,6 +15,7 @@ const {
 const authenticateToken = require("../middlewares/authMiddleware");
 const authorizeRoles = require("../middlewares/roleMiddleware");
 const { getTracking, addCheckpoint } = require("../controllers/trackingController");
+const { createLink, getOrderLink } = require("../controllers/driverLinkController");
 
 const router = express.Router();
 
@@ -27,6 +28,8 @@ router.patch("/:orderId/status", authenticateToken, authorizeRoles("seller", "bo
 router.get("/:orderId/timeline", authenticateToken, getOrderTimelineHandler);
 router.get("/:orderId/tracking", authenticateToken, getTracking);
 router.post("/:orderId/checkpoints", authenticateToken, authorizeRoles("seller", "both"), addCheckpoint);
+router.get("/:orderId/driver-link", authenticateToken, authorizeRoles("seller", "both"), getOrderLink);
+router.post("/:orderId/driver-link", authenticateToken, authorizeRoles("seller", "both"), createLink);
 router.post("/:orderId/return", authenticateToken, authorizeRoles("buyer", "both"), requestReturn);
 router.get("/:orderId/invoice", authenticateToken, generateInvoice);
 router.get("/:orderId/packing-slip", authenticateToken, generatePackingSlip);

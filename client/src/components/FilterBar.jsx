@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { SlidersHorizontal, ChevronDown, Check, X } from "lucide-react";
 
 export const SORT_OPTIONS = [

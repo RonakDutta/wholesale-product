@@ -183,7 +183,7 @@ const AddProduct = () => {
       return json.secure_url;
     } catch (err) {
       console.error(err);
-      toast.error("Image upload failed — you can add one later");
+      toast.error("Image upload failed - you can add one later");
       return null;
     } finally {
       setUploading(false);
@@ -276,11 +276,11 @@ const AddProduct = () => {
                 />
               </div>
 
-              {/* Match suggestions — now includes an explicit escape hatch */}
+              {/* Match suggestions - now includes an explicit escape hatch */}
               {catalogChoice === "undecided" && matches.length > 0 && (
                 <div className="absolute z-10 mt-1.5 w-full bg-white border border-amber-200 rounded-lg shadow-lg p-2">
                   <p className="text-xs font-semibold text-amber-700 px-2 pb-2">
-                    Found similar products — are you listing one of these?
+                    Found similar products - are you listing one of these?
                   </p>
                   {matches.map((p) => (
                     <button
@@ -314,7 +314,7 @@ const AddProduct = () => {
                     >
                       <X className="w-4 h-4 text-slate-400 shrink-0" />
                       <span className="text-sm font-semibold text-slate-600">
-                        None of these — list as a new product
+                        None of these - list as a new product
                       </span>
                     </button>
                   </div>
@@ -347,7 +347,7 @@ const AddProduct = () => {
                 </div>
               )}
 
-              {/* Confirmed-new banner — so they can still change their mind */}
+              {/* Confirmed-new banner - so they can still change their mind */}
               {catalogChoice === "new" && (
                 <div className="mt-2 flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg p-3">
                   <div className="flex items-center gap-2 min-w-0">

@@ -56,7 +56,7 @@ const GROUPS = {
   ],
 };
 
-// Per-status overrides where the group colour would be misleading — a
+// Per-status overrides where the group colour would be misleading - a
 // received payment is a success and should read green, not "still pending".
 const STATUS_STYLES = {
   payment_completed: "bg-emerald-100 text-emerald-700 border-emerald-200",

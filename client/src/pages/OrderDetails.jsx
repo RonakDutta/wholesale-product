@@ -165,7 +165,7 @@ const OrderDetails = () => {
         hour: "2-digit",
         minute: "2-digit",
       })
-    : "—";
+    : "-";
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 pb-16">

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-// maplibre-gl v6 ships named exports only — there is no default export.
+// maplibre-gl v6 ships named exports only - there is no default export.
 import {
   Map as MapLibreMap,
   Marker,
@@ -13,7 +13,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
  * Delivery map: warehouse at one end, drop-off at the other, and the
  * consignment's last known position between them.
  *
- * Built on MapLibre with OpenStreetMap raster tiles — no API key, no billing.
+ * Built on MapLibre with OpenStreetMap raster tiles - no API key, no billing.
  * The path is drawn as two segments: the ground already covered is solid, the
  * remainder dashed, so progress reads at a glance without pretending to know
  * the exact road route.
@@ -127,7 +127,7 @@ const DeliveryMap = ({ origin, destination, checkpoints = [] }) => {
       const all = [];
 
       if (origin) {
-        add(endpointEl(COLOURS.origin, "▲"), origin.lng, origin.lat, "Warehouse — start");
+        add(endpointEl(COLOURS.origin, "▲"), origin.lng, origin.lat, "Warehouse - start");
         all.push([origin.lng, origin.lat]);
       }
 
@@ -141,7 +141,7 @@ const DeliveryMap = ({ origin, destination, checkpoints = [] }) => {
           truckEl(),
           current.lng,
           current.lat,
-          `${current.label} — last known position`,
+          `${current.label} - last known position`,
         );
         all.push([current.lng, current.lat]);
       }
@@ -151,7 +151,7 @@ const DeliveryMap = ({ origin, destination, checkpoints = [] }) => {
           endpointEl(COLOURS.destination, "■"),
           destination.lng,
           destination.lat,
-          "Delivery address — destination",
+          "Delivery address - destination",
         );
         all.push([destination.lng, destination.lat]);
       }

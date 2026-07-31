@@ -7,7 +7,7 @@ import { useEffect, useRef } from "react";
  * Route guard. Renders `children` only when the signed-in user holds one of
  * `roles`; "both" satisfies either "buyer" or "seller".
  *
- * This is a convenience layer, not the security boundary — every protected API
+ * This is a convenience layer, not the security boundary - every protected API
  * route carries its own authorizeRoles check. It exists so a retailer sees a
  * clear redirect instead of an empty dashboard full of 403s.
  */

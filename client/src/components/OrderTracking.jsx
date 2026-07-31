@@ -138,7 +138,7 @@ const CheckpointForm = ({ orderId, onAdded, onClose }) => {
           {coords.lat
             ? `Pinned at ${Number(coords.lat).toFixed(4)}, ${Number(coords.lng).toFixed(4)}`
             : locating
-              ? "Locating…"
+              ? "Locating..."
               : "Attach my current location (optional)"}
         </button>
       </div>
@@ -148,7 +148,7 @@ const CheckpointForm = ({ orderId, onAdded, onClose }) => {
         disabled={saving}
         className="w-full rounded-lg bg-clay py-2.5 text-sm font-bold text-white transition-colors hover:bg-espresso disabled:opacity-60"
       >
-        {saving ? "Saving…" : "Add checkpoint"}
+        {saving ? "Saving..." : "Add checkpoint"}
       </button>
     </form>
   );
@@ -195,7 +195,7 @@ const DriverLinkPanel = ({ orderId }) => {
       await navigator.clipboard.writeText(fullUrl);
       toast.success("Link copied");
     } catch {
-      toast.error("Could not copy — select the link manually");
+      toast.error("Could not copy - select the link manually");
     }
   };
 
@@ -206,7 +206,7 @@ const DriverLinkPanel = ({ orderId }) => {
         Live location from the driver
       </p>
       <p className="mb-3 text-xs leading-relaxed text-espresso/50">
-        Send this link to whoever is driving. They tap once to share location —
+        Send this link to whoever is driving. They tap once to share location -
         no app, no account. Their position becomes checkpoints automatically.
       </p>
 
@@ -230,7 +230,7 @@ const DriverLinkPanel = ({ orderId }) => {
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <a
               href={`https://wa.me/?text=${encodeURIComponent(
-                `Delivery tracking — tap to share your location: ${fullUrl}`,
+                `Delivery tracking - tap to share your location: ${fullUrl}`,
               )}`}
               target="_blank"
               rel="noreferrer"
@@ -270,7 +270,7 @@ const DriverLinkPanel = ({ orderId }) => {
             className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-espresso py-2.5 text-sm font-bold text-cream transition-colors hover:bg-clay disabled:opacity-60"
           >
             <Link2 className="h-4 w-4" />
-            {creating ? "Creating…" : "Create driver link"}
+            {creating ? "Creating..." : "Create driver link"}
           </button>
         </>
       )}
@@ -384,7 +384,7 @@ const OrderTracking = ({ orderId }) => {
         {checkpoints.length === 0 ? (
           <p className="text-sm text-espresso/50">
             {canRecord
-              ? "No checkpoints yet — add one when the consignment moves."
+              ? "No checkpoints yet - add one when the consignment moves."
               : "The wholesaler has not posted an update yet."}
           </p>
         ) : (

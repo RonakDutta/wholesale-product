@@ -406,7 +406,7 @@ const ReviewSection = ({ productId }) => {
 
       <div className="mt-6 space-y-4">
         {loading ? (
-          <div className="text-sm text-slate-500">Loading reviews…</div>
+          <div className="text-sm text-slate-500">Loading reviews...</div>
         ) : reviews.length === 0 ? (
           <div className="text-sm text-slate-500">
             No reviews yet for this product.

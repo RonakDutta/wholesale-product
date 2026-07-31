@@ -11,8 +11,8 @@ import { toast } from "sonner";
 /**
  * Pin drop for a delivery address.
  *
- * Geocoding a typed address is unreliable for Indian addresses — lanes and
- * building names often do not resolve — so the buyer confirms the exact point
+ * Geocoding a typed address is unreliable for Indian addresses - lanes and
+ * building names often do not resolve - so the buyer confirms the exact point
  * themselves. Coordinates captured here are authoritative and skip geocoding
  * entirely.
  */
@@ -122,7 +122,7 @@ const LocationPicker = ({ value, onChange }) => {
       },
       () => {
         setLocating(false);
-        toast.error("Could not read your location — drop the pin manually");
+        toast.error("Could not read your location - drop the pin manually");
       },
       { enableHighAccuracy: true, timeout: 10000 },
     );
@@ -142,7 +142,7 @@ const LocationPicker = ({ value, onChange }) => {
           className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60"
         >
           <Crosshair className="h-3.5 w-3.5" />
-          {locating ? "Locating…" : "Use my location"}
+          {locating ? "Locating..." : "Use my location"}
         </button>
       </div>
 
@@ -157,7 +157,7 @@ const LocationPicker = ({ value, onChange }) => {
         </p>
       ) : (
         <p className="mt-2 text-xs text-slate-400">
-          No pin yet — we'll estimate from your address, which is less accurate.
+          No pin yet - we'll estimate from your address, which is less accurate.
         </p>
       )}
     </div>

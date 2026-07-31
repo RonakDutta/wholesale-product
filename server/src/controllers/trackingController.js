@@ -5,7 +5,7 @@ const { ensureSupplierCoordinates } = require("../services/geocodingService");
  * Delivery tracking for an order.
  *
  * The wholesaler records checkpoints; the retailer reads them. There is no
- * dependence on a driver device, which is what makes this workable — drivers
+ * dependence on a driver device, which is what makes this workable - drivers
  * are rarely platform users and background location on a phone browser is not
  * reliable enough to build on.
  */

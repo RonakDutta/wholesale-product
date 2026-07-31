@@ -88,7 +88,7 @@ const SearchResults = () => {
           });
 
           // Map Unique Wholesalers.
-          // Key on the seller's user id, not supplier.id — that is the
+          // Key on the seller's user id, not supplier.id - that is the
           // inventory row id, so one seller listing five products produced
           // five duplicate "wholesalers".
           product.suppliers?.forEach((supplier) => {
@@ -232,7 +232,7 @@ const SearchResults = () => {
       <div className="min-h-screen py-6 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            {/* Left side – result count */}
+            {/* Left side - result count */}
             <div className="flex items-center gap-3">
               <h1 className="text-xl sm:text-2xl font-bold text-espresso tracking-tight">
                 {loading ? (
@@ -244,7 +244,7 @@ const SearchResults = () => {
                     </span>{" "}
                     result{results.length !== 1 ? "s" : ""} for{" "}
                     <span className="bg-clay/10 px-2 py-0.5 rounded-md text-clay">
-                      “{query}”
+                      "{query}"
                     </span>
                   </>
                 )}
@@ -254,7 +254,7 @@ const SearchResults = () => {
               )}
             </div>
 
-            {/* Right side – controls */}
+            {/* Right side - controls */}
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
               {/* View toggle */}
               <div className="flex bg-white/60 backdrop-blur-sm rounded-lg border border-sage/30 p-0.5 shadow-sm">
@@ -295,7 +295,7 @@ const SearchResults = () => {
                 <ArrowUpDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-espresso/40 pointer-events-none" />
               </div>
 
-              {/* Filter button (mobile) – opens drawer */}
+              {/* Filter button (mobile) - opens drawer */}
               <button
                 onClick={() => setIsFilterDrawerOpen(true)}
                 className="flex items-center gap-1.5 bg-white/60 backdrop-blur-sm border border-sage/30 rounded-lg px-3 py-1.5 text-sm text-espresso shadow-sm sm:hidden"
@@ -440,7 +440,7 @@ const SearchResults = () => {
                     No results found
                   </h3>
                   <p className="text-espresso/60 mt-2 max-w-md mx-auto">
-                    We couldn't find anything matching “{query}”. Try adjusting
+                    We couldn't find anything matching "{query}". Try adjusting
                     your filters or search for something else.
                   </p>
                   <button

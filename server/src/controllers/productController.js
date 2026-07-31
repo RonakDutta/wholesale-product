@@ -310,7 +310,7 @@ exports.updateInventoryItem = async (req, res) => {
     if (err.code === "23514") {
       return res.status(400).json({
         message:
-          "Invalid values — check that bulk price isn't higher than base price, and stock/MOQ aren't negative.",
+          "Invalid values - check that bulk price isn't higher than base price, and stock/MOQ aren't negative.",
       });
     }
     res.status(500).json({ message: "Server error while updating product" });
@@ -374,7 +374,7 @@ exports.deleteInventoryItem = async (req, res) => {
       );
       return res.status(200).json({
         message:
-          "Listing has active orders — marked as Draft instead of deleted",
+          "Listing has active orders - marked as Draft instead of deleted",
         softDeleted: true,
       });
     }
@@ -392,7 +392,7 @@ exports.deleteInventoryItem = async (req, res) => {
       );
       return res.status(200).json({
         message:
-          "Listing has order history — marked as Draft instead of deleted",
+          "Listing has order history - marked as Draft instead of deleted",
         softDeleted: true,
       });
     }

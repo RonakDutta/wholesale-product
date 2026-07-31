@@ -45,7 +45,7 @@ const FilterBar = ({
       </div>
 
       <div className="flex items-center gap-3 w-full sm:w-auto">
-        {/* Filters — non-category attributes only; category lives in the CategorySlider above */}
+        {/* Filters - non-category attributes only; category lives in the CategorySlider above */}
         <div className="relative flex-1 sm:flex-none">
           <button
             onClick={() =>
@@ -102,7 +102,7 @@ const FilterBar = ({
                 </span>
               </label>
 
-              {/* Room to grow: price range, MOQ, etc. — anything that isn't category,
+              {/* Room to grow: price range, MOQ, etc. - anything that isn't category,
                   since category selection is owned by the CategorySlider. */}
             </div>
           )}

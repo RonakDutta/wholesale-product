@@ -213,7 +213,7 @@ const WholesalerProfile = () => {
           <Stat
             icon={BadgeCheck}
             label="Response Rate"
-            value={wholesaler.responseRate || "—"}
+            value={wholesaler.responseRate || "-"}
           />
           <Stat
             icon={ShieldCheck}
@@ -221,7 +221,7 @@ const WholesalerProfile = () => {
             value={
               wholesaler.yearsInBusiness
                 ? `${wholesaler.yearsInBusiness} yr`
-                : "—"
+                : "-"
             }
           />
         </div>

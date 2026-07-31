@@ -180,7 +180,7 @@ const pageContent = {
     highlights: [
       "Email: support@marketplace.in",
       "Phone: +91 99999 11111",
-      "Business hours: Mon–Sat, 9:00 AM to 7:00 PM",
+      "Business hours: Mon-Sat, 9:00 AM to 7:00 PM",
     ],
     extra: [
       "Prefer email? We typically respond within one business day.",
@@ -525,7 +525,7 @@ const FooterInfoPage = ({ page }) => {
                   <div className="mt-3 pt-3 border-t border-slate-100">
                     <div className="flex items-center gap-2 text-sm text-slate-600">
                       <Clock className="w-4 h-4 text-slate-400" />
-                      <span>Mon–Sat 9 AM – 7 PM</span>
+                      <span>Mon-Sat 9 AM - 7 PM</span>
                     </div>
                   </div>
                 )}

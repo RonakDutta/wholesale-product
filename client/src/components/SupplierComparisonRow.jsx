@@ -56,7 +56,7 @@ const SupplierComparisonRow = ({
             Verified
           </span>
         ) : (
-          <span className="text-[11px] text-slate-400">—</span>
+          <span className="text-[11px] text-slate-400">-</span>
         )}
       </td>
       <td className="px-4 py-4">
@@ -122,7 +122,7 @@ const SupplierComparisonRow = ({
             badges.bestResponse ? "text-violet-700" : "text-slate-900"
           }`}
         >
-          {supplier.responseRate ?? "—"}
+          {supplier.responseRate ?? "-"}
         </span>
       </td>
       <td className="px-4 py-4">

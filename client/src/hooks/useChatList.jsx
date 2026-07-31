@@ -8,7 +8,7 @@ export function useChatList() {
 	const [loading, setLoading] = useState(true);
 
 	// `background` refreshes (after sending/receiving) must not flip the loading
-	// flag — the page swaps to a full-screen loader and visibly flashes.
+	// flag - the page swaps to a full-screen loader and visibly flashes.
 	const fetchChats = useCallback(async ({ background = false } = {}) => {
 		if (!background) setLoading(true);
 		try {

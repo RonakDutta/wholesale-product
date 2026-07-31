@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 
 const AUTOPLAY_MS = 6000;
 
-// Each slide points somewhere real — a hero button that does nothing is worse
+// Each slide points somewhere real - a hero button that does nothing is worse
 // than no button. Copy describes features the product actually has.
 const SLIDES = [
   {

@@ -6,7 +6,7 @@ const pool = require("../config/db");
  * Chosen to match the MapLibre/OSM stack on the client: no API key, no
  * billing. In return it is rate limited (roughly one request per second) and
  * requires an identifying User-Agent, so every caller here treats geocoding
- * as best-effort — an order must never fail because a lookup did.
+ * as best-effort - an order must never fail because a lookup did.
  */
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";

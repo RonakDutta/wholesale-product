@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import LocationPicker from "../../components/LocationPicker";
 import {
   Building2,
   ShieldCheck,
@@ -24,7 +25,14 @@ const Settings = () => {
     city: "",
     country: "India",
     isVerified: false,
+    warehouseAddress: "",
+    warehouseCity: "",
+    warehouseState: "",
+    warehousePincode: "",
   });
+  // Exact dispatch point. Set once here rather than per product, because the
+  // warehouse belongs to the business, not to any single listing.
+  const [warehousePin, setWarehousePin] = useState(null);
 
   // Fetch current profile on load
   useEffect(() => {
@@ -41,7 +49,14 @@ const Settings = () => {
           city: data.city || "",
           country: data.country || "India",
           isVerified: data.is_verified || false,
+          warehouseAddress: data.warehouse_address || "",
+          warehouseCity: data.warehouse_city || "",
+          warehouseState: data.warehouse_state || "",
+          warehousePincode: data.warehouse_pincode || "",
         });
+        if (data.lat != null && data.lng != null) {
+          setWarehousePin({ lat: Number(data.lat), lng: Number(data.lng) });
+        }
       } catch (err) {
         console.error(err);
         toast.error("Failed to load profile data");
@@ -59,7 +74,11 @@ const Settings = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.put("/api/profile", formData);
+      await api.put("/api/profile", {
+        ...formData,
+        warehouseLat: warehousePin?.lat,
+        warehouseLng: warehousePin?.lng,
+      });
       toast.success("Profile saved successfully! You are ready to sell.");
     } catch (err) {
       console.error(err);
@@ -230,6 +249,83 @@ const Settings = () => {
                 placeholder="merchant@upi"
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-slate-900 focus:border-clay focus:bg-white outline-none transition-colors"
               />
+            </div>
+          </div>
+        </div>
+
+
+        {/* Warehouse / dispatch point */}
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-slate-100 bg-slate-50/60">
+            <h3 className="font-bold text-espresso">Warehouse</h3>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Where your consignments are dispatched from. This is the starting
+              point buyers see on the delivery map.
+            </p>
+          </div>
+
+          <div className="p-5 space-y-4">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                Street address
+              </label>
+              <input
+                type="text"
+                name="warehouseAddress"
+                value={formData.warehouseAddress}
+                onChange={handleChange}
+                placeholder="Godown / building, street"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-slate-900 focus:border-clay focus:bg-white outline-none transition-colors"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                  City
+                </label>
+                <input
+                  type="text"
+                  name="warehouseCity"
+                  value={formData.warehouseCity}
+                  onChange={handleChange}
+                  placeholder="Nashik"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-slate-900 focus:border-clay focus:bg-white outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                  State
+                </label>
+                <input
+                  type="text"
+                  name="warehouseState"
+                  value={formData.warehouseState}
+                  onChange={handleChange}
+                  placeholder="Maharashtra"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-slate-900 focus:border-clay focus:bg-white outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                  Pincode
+                </label>
+                <input
+                  type="text"
+                  name="warehousePincode"
+                  value={formData.warehousePincode}
+                  onChange={handleChange}
+                  placeholder="422001"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-slate-900 focus:border-clay focus:bg-white outline-none transition-colors"
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-4">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+                Pin the exact yard
+              </p>
+              <LocationPicker value={warehousePin} onChange={setWarehousePin} />
             </div>
           </div>
         </div>

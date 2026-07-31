@@ -71,7 +71,7 @@ const ChatListItem = ({ chat, active, onClick }) => (
   </div>
 );
 
-// Shown in the main panel whenever no conversation is open — either because
+// Shown in the main panel whenever no conversation is open - either because
 // nothing is selected yet, or because the user has no conversations at all.
 const EmptyConversationState = ({ hasChats }) => (
   <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8 text-center">
@@ -165,7 +165,7 @@ const Messages = () => {
     }
   }, [vendorId, location.state, location.pathname, navigate, activeChatId, user?.id, basePath]);
 
-  // No conversation is opened automatically — the empty state shows until the
+  // No conversation is opened automatically - the empty state shows until the
   // user picks one from the list.
 
   // once the vendor shows up in the real chat list (message actually sent),
@@ -217,7 +217,7 @@ const Messages = () => {
     <div
       className={`${shellHeight} mx-auto flex flex-col lg:flex-row bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden`}
     >
-      {/* Sidebar — on mobile this and the conversation are alternating views,
+      {/* Sidebar - on mobile this and the conversation are alternating views,
           otherwise both share the fixed height and the composer is pushed
           off-screen. */}
       <div

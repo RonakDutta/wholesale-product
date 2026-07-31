@@ -8,7 +8,7 @@ import api from "../utils/axios";
  *
  * No account and no app install: the token in the URL is the credential. It
  * only reports while the page is open and the screen is awake, which is a
- * deliberate trade — background location in a mobile browser is not reliable
+ * deliberate trade - background location in a mobile browser is not reliable
  * enough to promise, so this promises less and actually works.
  */
 
@@ -158,7 +158,7 @@ const DriverTracking = () => {
             <p className="mt-1 text-sm text-cream/60">
               {pingCount > 0
                 ? `${pingCount} update${pingCount === 1 ? "" : "s"} sent`
-                : "Waiting for your first position…"}
+                : "Waiting for your first position..."}
             </p>
             {lastSent && (
               <p className="mt-1 text-xs text-cream/40">
@@ -166,7 +166,7 @@ const DriverTracking = () => {
               </p>
             )}
             <p className="mt-4 text-xs leading-relaxed text-cream/50">
-              Keep this page open while you drive. You can lock nothing else —
+              Keep this page open while you drive. You can lock nothing else -
               closing the tab stops sharing.
             </p>
             <button

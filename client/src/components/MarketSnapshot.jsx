@@ -5,7 +5,7 @@ import { Boxes, MapPin, Store } from "lucide-react";
  *
  * Replaces the old "market alert", which announced rising demand in a
  * category and region. That banner both carried hardcoded figures and told
- * buyers exactly where demand was climbing — the one signal a demand-based
+ * buyers exactly where demand was climbing - the one signal a demand-based
  * pricing strategy should not broadcast. These figures are counted from the
  * live catalogue and say nothing about price direction.
  */

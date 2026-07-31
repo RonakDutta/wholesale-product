@@ -5,6 +5,7 @@ import {
   MessageSquare,
   TrendingUp,
   ShieldAlert,
+  MapPin,
   ArrowRight,
   Clock,
 } from "lucide-react";
@@ -27,12 +28,19 @@ const DashboardOverview = () => {
     },
     recentOrders: [],
   });
+  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         const response = await api.get("/api/dashboard/stats");
+        // Warehouse completeness drives the prompt below; a failure here must
+        // not take the dashboard down with it.
+        api
+          .get("/api/profile")
+          .then((res) => setProfile(res.data))
+          .catch(() => {});
         setData(response.data);
       } catch (error) {
         console.error("Failed to fetch dashboard stats:", error);
@@ -48,6 +56,24 @@ const DashboardOverview = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-[60vh]">
+      {profile && !profile.warehouse_city && !profile.city && (
+        <Link
+          to="/seller/settings"
+          className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 transition-colors hover:bg-amber-100/70"
+        >
+          <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <div>
+            <p className="text-sm font-bold text-amber-900">
+              Add your warehouse address
+            </p>
+            <p className="mt-0.5 text-xs text-amber-800/80">
+              Buyers cannot see where their delivery starts from until you set
+              it. Takes a minute in Settings.
+            </p>
+          </div>
+        </Link>
+      )}
+
         <div className="w-8 h-8 border-4 border-clay border-t-transparent rounded-full animate-spin"></div>
       </div>
     );

@@ -142,7 +142,7 @@ const createOrder = async (req, res) => {
     await client.query("BEGIN");
 
     // Resolve every requested line against live inventory. Prices, MOQ and
-    // stock all come from the database — amounts sent by the client are
+    // stock all come from the database - amounts sent by the client are
     // ignored, otherwise a crafted request could set its own price.
     const lines = [];
     for (const entry of products) {
@@ -309,7 +309,7 @@ const createOrder = async (req, res) => {
 
     await client.query("COMMIT");
 
-    // A pin dropped at checkout is authoritative — only fall back to
+    // A pin dropped at checkout is authoritative - only fall back to
     // geocoding the typed address when the buyer did not place one. Geocoding
     // is rate limited, so it is never awaited: it must not delay checkout,
     // and the map degrades gracefully until it lands.
@@ -463,7 +463,7 @@ const getOrderById = async (req, res) => {
     const accessCheck = await ensureOrderAccess(req, res, req.params.orderId, { requireBuyer: true, requireSupplier: true });
     if (!accessCheck) return;
 
-    // Include what was actually ordered — the detail page needs the product,
+    // Include what was actually ordered - the detail page needs the product,
     // its image and the supplier, not just the raw order row.
     const result = await pool.query(
       `SELECT

@@ -140,7 +140,7 @@ const SupplierComparisonModal = ({
                     const value =
                       field.key === "rating"
                         ? parsedNum.toFixed(1)
-                        : `${rawValue ?? "—"}${field.suffix ?? ""}`;
+                        : `${rawValue ?? "-"}${field.suffix ?? ""}`;
 
                     return (
                       <div
@@ -343,7 +343,7 @@ const SupplierComparisonModal = ({
                                 : "font-medium text-slate-700"
                             }
                           >
-                            {rawValue ?? "—"}
+                            {rawValue ?? "-"}
                             {field.suffix ?? ""}
                             {best && (
                               <span className="w-1.5 h-1.5 rounded-full bg-clay"></span>

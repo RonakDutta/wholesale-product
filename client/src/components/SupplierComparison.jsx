@@ -91,7 +91,7 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
   };
 
   const getSupplierName = (id) => {
-    if (!id) return "—";
+    if (!id) return "-";
     const supplier = product.suppliers.find((s) => s.id === id);
     return supplier?.name || `#${id}`;
   };
@@ -183,7 +183,7 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
               </div>
               <p
                 className={`font-mono text-base sm:text-lg font-black truncate ${card.color}`}
-                title={card.value !== "—" ? card.value : undefined}
+                title={card.value !== "-" ? card.value : undefined}
               >
                 {card.value}
               </p>

@@ -64,7 +64,7 @@ const OrderRow = ({ order }) => {
         month: "short",
         year: "numeric",
       })
-    : "—";
+    : "-";
 
   return (
     <div className="flex flex-col gap-4 rounded-2xl border border-sage/20 bg-white/80 p-4 shadow-sm transition-shadow hover:shadow-md sm:flex-row sm:items-center sm:justify-between sm:p-5">

@@ -6,8 +6,8 @@ const MAX_LENGTH = 2000;
 /**
  * props:
  * - onSend: (text: string) => void
- * - disabled: boolean — e.g. no active chat selected
- * - sending: boolean — briefly true right after send, for button feedback
+ * - disabled: boolean - e.g. no active chat selected
+ * - sending: boolean - briefly true right after send, for button feedback
  * - onAttach: optional (file: File) => void
  */
 const MessageInput = ({

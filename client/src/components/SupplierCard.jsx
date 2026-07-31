@@ -69,7 +69,7 @@ const SupplierCard = ({
     },
     {
       label: "Response",
-      value: supplier.responseRate || "—",
+      value: supplier.responseRate || "-",
       badge: badges.bestResponse,
       badgeText: "Best",
       badgeColor: "text-clay",

@@ -21,6 +21,9 @@ export default defineConfig({
       "gsap",
       "gsap/all",
       "lucide-react",
+      // Loaded only inside the order pages, so the scanner would otherwise
+      // discover it mid-session and rewrite the dep cache while serving.
+      "maplibre-gl",
       "prop-types",
       "qrcode.react",
       "react",

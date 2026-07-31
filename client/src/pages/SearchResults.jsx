@@ -3,7 +3,6 @@ import { useSearchParams, Link } from "react-router-dom";
 import {
   Search,
   SlidersHorizontal,
-  X,
   Star,
   Package,
   Store,
@@ -24,7 +23,6 @@ const SearchResults = () => {
   const query = searchParams.get("q") || "";
 
   const [activeTab, setActiveTab] = useState("product");
-  const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState("grid");
   const [sortBy, setSortBy] = useState("relevance");
   const [filters, setFilters] = useState({
@@ -33,7 +31,6 @@ const SearchResults = () => {
     maxPrice: "",
     minRating: "",
   });
-  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
 
   // Live Database State
   const [fullData, setFullData] = useState({

@@ -1,4 +1,4 @@
-import { TrendingUp, ArrowRight } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 
 const MarketAlert = ({
   category = "Packaging Materials",

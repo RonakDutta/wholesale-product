@@ -153,8 +153,6 @@ const OrderDetails = () => {
 
   const quantity = Number(order.quantity) || 1;
   const total = Number(order.total_amount) || 0;
-  const unitPrice =
-    Number(order.unit_discount_price) || Number(order.unit_price) || total / quantity;
   const address = formatAddress(order.delivery_address);
   const supplierLocation = [order.supplier_city, order.supplier_country]
     .filter(Boolean)

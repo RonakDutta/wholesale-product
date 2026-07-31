@@ -3,8 +3,6 @@ import {
   Plus,
   Search,
   Edit,
-  MoreVertical,
-  AlertCircle,
   Trash2,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";

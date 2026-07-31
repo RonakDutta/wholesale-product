@@ -1,8 +1,8 @@
-import { useState, useCallback, useContext } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Mail, Lock, Eye, EyeOff, ArrowRight, Smartphone } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
 import api from "../utils/axios";
 import { useAuth } from "../context/AuthContext";
 

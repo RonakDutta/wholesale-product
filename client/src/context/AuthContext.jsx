@@ -8,7 +8,7 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem("token") || null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchUser = async (currentToken) => {
+  const fetchUser = async () => {
     try {
       const response = await api.get("/api/auth/me");
       setUser(response.data.user);
@@ -22,7 +22,7 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (token) {
-      fetchUser(token);
+      fetchUser();
     } else {
       setIsLoading(false);
     }
@@ -31,7 +31,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (newToken) => {
     localStorage.setItem("token", newToken);
     setToken(newToken);
-    await fetchUser(newToken);
+    await fetchUser();
   };
 
   const register = async (userData) => {
@@ -47,7 +47,7 @@ export const AuthProvider = ({ children }) => {
 
   const upgradeAccount = async (sellerData) => {
     await api.post("/api/auth/upgrade", sellerData);
-    await fetchUser(token);
+    await fetchUser();
   };
 
   return (

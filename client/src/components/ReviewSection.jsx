@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Star,
-  MessageCircleMore,
-  Camera,
   ShieldCheck,
   ThumbsUp,
   Flag,
@@ -379,13 +377,31 @@ const ReviewSection = ({ productId }) => {
             />
           </div>
         </div>
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded bg-clay px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-        >
-          {submitting ? "Submitting..." : "Submit review"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="rounded bg-clay px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {submitting
+              ? "Saving..."
+              : existingReview
+                ? "Update review"
+                : "Submit review"}
+          </button>
+          {/* handleDelete existed with no control wired to it, so a review
+              could be written and edited but never removed. */}
+          {existingReview && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={submitting}
+              className="rounded border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-50 disabled:opacity-60"
+            >
+              Delete review
+            </button>
+          )}
+        </div>
       </form>
 
       <div className="mt-6 space-y-4">

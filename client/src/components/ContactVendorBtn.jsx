@@ -2,7 +2,6 @@ import { useState } from "react";
 import { MessageSquare } from "lucide-react";
 import ContactChoiceModal from "./ContactChoiceModal";
 import WhatsAppModal from "./WhatsAppModal";
-import ChatModal from "./ChatModal";
 import api from "../utils/axios";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
@@ -23,7 +22,7 @@ const ContactVendorBtn = ({
   const isOwnListing =
     user?.id != null && vendorId != null && String(user.id) === String(vendorId);
 
-  const [view, setView] = useState(null); // null | "choice" | "whatsapp" | "chat"
+  const [view, setView] = useState(null); // null | "choice" | "whatsapp"
   const [loading, setLoading] = useState(false);
   const [dynamicWhatsappUrl, setDynamicWhatsappUrl] = useState(null);
   const [resolvedPhone, setResolvedPhone] = useState(null);
@@ -101,7 +100,6 @@ const ContactVendorBtn = ({
           productName={productName}
           onClose={() => setView(null)}
           onSelectWhatsApp={handleWhatsAppClick}
-          onSelectChat={() => setView("chat")}
         />
       )}
 
@@ -112,16 +110,6 @@ const ContactVendorBtn = ({
           vendorPhone={resolvedPhone || vendorPhone}
           productImage={undefined}
           dynamicWhatsappUrl={dynamicWhatsappUrl}
-          onBack={() => setView("choice")}
-          onClose={() => setView(null)}
-        />
-      )}
-      {view === "chat" && (
-        <ChatModal
-          vendorId={vendorId}
-          vendorName={vendorName}
-          productName={productName}
-          vendorPhone={vendorPhone}
           onBack={() => setView("choice")}
           onClose={() => setView(null)}
         />

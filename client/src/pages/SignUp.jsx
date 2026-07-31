@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo, useEffect, useContext } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useState, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { toast } from "sonner";
 import {
@@ -8,7 +8,6 @@ import {
   Eye,
   EyeOff,
   ArrowRight,
-  Smartphone,
   User,
   Building2,
   Phone,

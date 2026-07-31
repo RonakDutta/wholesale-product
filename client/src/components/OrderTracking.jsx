@@ -371,12 +371,10 @@ const OrderTracking = ({ orderId }) => {
         origin={data.origin}
         destination={data.destination}
         checkpoints={checkpoints}
-        lastKnown={data.lastKnown}
       />
 
       <p className="mt-2 text-[11px] text-espresso/40">
-        The line marks the delivery corridor between the warehouse and the
-        drop-off, not the exact road route.
+        Lines show the corridor between stops, not the exact road route.
       </p>
 
       <div className="mt-5">

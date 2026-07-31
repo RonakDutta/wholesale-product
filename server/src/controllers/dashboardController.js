@@ -29,68 +29,135 @@ exports.getInventory = async (req, res) => {
 
 exports.getDashboardStats = async (req, res) => {
   const supplierId = req.user.id;
+
+  // Orders reach a supplier through the inventory item; newer ones also carry
+  // supplier_id directly. Match either so nothing is missed.
+  const OWNED = `(o.supplier_id = $1 OR si.supplier_id = $1)`;
+
   try {
-    // 1. Get Profile Stats
     const profile = await pool.query(
-      "SELECT is_verified, response_rate, trust_score FROM wholesaler_profiles WHERE user_id = $1",
+      `SELECT is_verified, company_name, city, warehouse_city, lat
+       FROM wholesaler_profiles WHERE user_id = $1`,
       [supplierId],
     );
 
-    // 2. Count Total Active Products
-    const products = await pool.query(
-      "SELECT COUNT(*) FROM supplier_inventory WHERE supplier_id = $1 AND status = 'Active'",
+    // Inventory health: what is listed, and what is about to run out.
+    const inventory = await pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE status = 'Active')                      AS active_listings,
+         COUNT(*) FILTER (WHERE status = 'Active' AND stock <= 0)       AS out_of_stock,
+         COUNT(*) FILTER (WHERE status = 'Active' AND stock > 0
+                          AND stock < GREATEST(moq, 1))                 AS low_stock,
+         COALESCE(SUM(stock * price) FILTER (WHERE status = 'Active'), 0) AS stock_value
+       FROM supplier_inventory WHERE supplier_id = $1`,
       [supplierId],
     );
 
-    // 3. Get Recent Orders
-    //    Mirrors getSupplierOrders (/api/orders/supplier) so the overview and
-    //    the Orders page never disagree. wholesaler_profiles must be LEFT
-    //    JOINed: an inner join silently hid every order from a buyer who has
-    //    no seller profile, which is most buyers.
+    // Money and volume. Revenue counts confirmed payments only, so the figure
+    // means "received", not "ordered".
+    const money = await pool.query(
+      `SELECT
+         COALESCE(SUM(o.total_amount) FILTER (
+           WHERE o.payment_status = 'paid'
+             AND o.created_at >= NOW() - INTERVAL '30 days'), 0)        AS revenue_30,
+         COALESCE(SUM(o.total_amount) FILTER (
+           WHERE o.payment_status = 'paid'
+             AND o.created_at >= NOW() - INTERVAL '60 days'
+             AND o.created_at <  NOW() - INTERVAL '30 days'), 0)        AS revenue_prev_30,
+         COALESCE(SUM(o.total_amount) FILTER (
+           WHERE o.payment_status NOT IN ('paid', 'failed')
+             AND o.status <> 'cancelled'), 0)                           AS awaiting_payment_value,
+         COUNT(*) FILTER (WHERE o.payment_status = 'paid')              AS paid_orders,
+         COALESCE(AVG(o.total_amount) FILTER (WHERE o.payment_status = 'paid'), 0) AS avg_order_value,
+         COUNT(DISTINCT o.buyer_id)                                     AS customers
+       FROM orders o
+       LEFT JOIN supplier_inventory si ON si.id = o.inventory_item_id
+       WHERE ${OWNED}`,
+      [supplierId],
+    );
+
+    // What the seller has to do something about right now.
+    const pipeline = await pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE o.status IN ('payment_completed', 'supplier_accepted')) AS needs_action,
+         COUNT(*) FILTER (WHERE o.status IN ('processing', 'packed', 'ready_for_pickup')) AS preparing,
+         COUNT(*) FILTER (WHERE o.status IN ('shipped', 'in_transit', 'out_for_delivery')) AS in_transit,
+         COUNT(*) FILTER (WHERE o.status IN ('delivered', 'completed'))  AS delivered
+       FROM orders o
+       LEFT JOIN supplier_inventory si ON si.id = o.inventory_item_id
+       WHERE ${OWNED}`,
+      [supplierId],
+    );
+
+    // Rating is real review data, unlike the trust score it replaces.
+    let rating = { average: 0, total: 0 };
+    try {
+      const r = await pool.query(
+        `SELECT COALESCE(AVG(overall_experience), 0)::numeric(10,2) AS average,
+                COUNT(*) FILTER (WHERE status = 'active') AS total
+         FROM seller_reviews WHERE seller_id = $1`,
+        [supplierId],
+      );
+      rating = { average: Number(r.rows[0].average) || 0, total: Number(r.rows[0].total) || 0 };
+    } catch {
+      // reviews are optional; a missing table must not break the dashboard
+    }
+
     const recentOrders = await pool.query(
-      `
-      SELECT
-        o.id,
-        o.order_number,
-        o.total_amount as amount,
-        o.quantity as qty,
-        o.status,
-        o.payment_status,
-        p.name as product,
-        COALESCE(wp.company_name, u.first_name || ' ' || u.last_name) as buyer,
-        o.created_at as date
-      FROM orders o
-      JOIN supplier_inventory si ON o.inventory_item_id = si.id
-      JOIN products p ON si.product_id = p.id
-      JOIN users u ON o.buyer_id = u.id
-      LEFT JOIN wholesaler_profiles wp ON u.id = wp.user_id
-      WHERE si.supplier_id = $1
-      ORDER BY o.created_at DESC
-      LIMIT 5
-    `,
+      `SELECT
+         o.id, o.order_number, o.total_amount AS amount, o.quantity AS qty,
+         o.status, o.payment_status, o.created_at AS date,
+         COALESCE(items.first_product, p.name) AS product,
+         COALESCE(items.item_count, 1) AS item_count,
+         COALESCE(wp.company_name, u.first_name || ' ' || u.last_name) AS buyer
+       FROM orders o
+       LEFT JOIN supplier_inventory si ON si.id = o.inventory_item_id
+       LEFT JOIN products p ON p.id = si.product_id
+       JOIN users u ON u.id = o.buyer_id
+       LEFT JOIN wholesaler_profiles wp ON wp.user_id = u.id
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int AS item_count, MIN(oi.product_name) AS first_product
+         FROM order_items oi WHERE oi.order_id = o.id
+       ) items ON TRUE
+       WHERE ${OWNED}
+       ORDER BY o.created_at DESC
+       LIMIT 5`,
       [supplierId],
     );
 
-    // 4. Count Completed Orders
-    //    Statuses are lowercase in the order lifecycle; 'Delivered' never
-    //    matched, so this always returned 0.
-    const completed = await pool.query(
-      `
-      SELECT COUNT(o.id)
-      FROM orders o
-      JOIN supplier_inventory si ON o.inventory_item_id = si.id
-      WHERE si.supplier_id = $1 AND o.status IN ('delivered', 'completed')
-    `,
-      [supplierId],
-    );
+    const inv = inventory.rows[0];
+    const m = money.rows[0];
+    const pl = pipeline.rows[0];
+    const revenue30 = Number(m.revenue_30);
+    const revenuePrev = Number(m.revenue_prev_30);
 
     res.status(200).json({
       stats: {
         verified: profile.rows[0]?.is_verified || false,
-        responseRate: profile.rows[0]?.response_rate || "0%",
-        trustScore: profile.rows[0]?.trust_score || "0%",
-        totalProducts: parseInt(products.rows[0].count),
-        completedOrders: parseInt(completed.rows[0].count),
+        // Prompts the seller to finish setup rather than showing a fake score.
+        warehouseSet: Boolean(
+          profile.rows[0]?.warehouse_city || profile.rows[0]?.lat,
+        ),
+        revenue30,
+        // null rather than a misleading 0% when there is no prior period
+        revenueTrendPct:
+          revenuePrev > 0
+            ? Math.round(((revenue30 - revenuePrev) / revenuePrev) * 100)
+            : null,
+        awaitingPaymentValue: Number(m.awaiting_payment_value),
+        avgOrderValue: Number(m.avg_order_value),
+        paidOrders: Number(m.paid_orders),
+        customers: Number(m.customers),
+        activeListings: Number(inv.active_listings),
+        lowStock: Number(inv.low_stock),
+        outOfStock: Number(inv.out_of_stock),
+        stockValue: Number(inv.stock_value),
+        needsAction: Number(pl.needs_action),
+        preparing: Number(pl.preparing),
+        inTransit: Number(pl.in_transit),
+        delivered: Number(pl.delivered),
+        rating: rating.average,
+        reviewCount: rating.total,
       },
       recentOrders: recentOrders.rows,
     });

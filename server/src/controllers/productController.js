@@ -123,8 +123,7 @@ exports.getProductById = async (req, res) => {
             'shippingDays', si.shipping_days,
             'city', wp.city,
             'country', wp.country,
-            'responseRate', wp.response_rate,
-            'responseTime', wp.response_time,
+            'gstVerified', (wp.gstin IS NOT NULL AND wp.gstin <> ''),
             'contactPhone', wp.contact_phone
           )
         ) as suppliers
@@ -154,6 +153,74 @@ exports.getProductById = async (req, res) => {
 
     const product = result.rows[0];
     product.reviewSummary = reviewSummary.rows[0];
+
+    // Per-supplier track record. These are counted from real orders and
+    // reviews, so a new seller honestly shows zero instead of a stock figure.
+    const supplierIds = [
+      ...new Set((product.suppliers || []).map((s) => s.supplierId)),
+    ].filter(Boolean);
+
+    if (supplierIds.length > 0) {
+      const statsById = new Map();
+
+      const fulfilment = await pool.query(
+        `SELECT COALESCE(o.supplier_id, si.supplier_id) AS supplier_id,
+                COUNT(*) FILTER (WHERE o.status IN ('delivered', 'completed')) AS fulfilled_orders
+         FROM orders o
+         LEFT JOIN supplier_inventory si ON si.id = o.inventory_item_id
+         WHERE COALESCE(o.supplier_id, si.supplier_id) = ANY($1::uuid[])
+         GROUP BY 1`,
+        [supplierIds],
+      );
+      fulfilment.rows.forEach((row) => {
+        statsById.set(row.supplier_id, {
+          fulfilledOrders: Number(row.fulfilled_orders) || 0,
+        });
+      });
+
+      const catalog = await pool.query(
+        `SELECT supplier_id, COUNT(*) AS catalog_size
+         FROM supplier_inventory
+         WHERE supplier_id = ANY($1::uuid[]) AND status = 'Active'
+         GROUP BY supplier_id`,
+        [supplierIds],
+      );
+      catalog.rows.forEach((row) => {
+        const entry = statsById.get(row.supplier_id) || {};
+        entry.catalogSize = Number(row.catalog_size) || 0;
+        statsById.set(row.supplier_id, entry);
+      });
+
+      try {
+        const sellerRatings = await pool.query(
+          `SELECT seller_id,
+                  COALESCE(AVG(overall_experience), 0)::numeric(10,2) AS rating,
+                  COUNT(*) FILTER (WHERE status = 'active') AS reviews
+           FROM seller_reviews
+           WHERE seller_id = ANY($1::uuid[])
+           GROUP BY seller_id`,
+          [supplierIds],
+        );
+        sellerRatings.rows.forEach((row) => {
+          const entry = statsById.get(row.seller_id) || {};
+          entry.rating = Number(row.rating) || 0;
+          entry.reviews = Number(row.reviews) || 0;
+          statsById.set(row.seller_id, entry);
+        });
+      } catch (ratingErr) {
+        console.warn("Supplier rating query failed:", ratingErr.message);
+      }
+
+      product.suppliers = product.suppliers.map((supplier) => ({
+        fulfilledOrders: 0,
+        catalogSize: 0,
+        rating: 0,
+        reviews: 0,
+        ...supplier,
+        ...(statsById.get(supplier.supplierId) || {}),
+      }));
+    }
+
     res.status(200).json(product);
   } catch (err) {
     console.error(err);
@@ -176,9 +243,6 @@ exports.getWholesalerById = async (req, res) => {
          wp.country,
          wp.is_verified,
          wp.gst_verified,
-         wp.trust_score,
-         wp.response_rate,
-         wp.response_time,
          wp.years_in_business,
          wp.contact_phone,
          u.created_at AS member_since
@@ -212,6 +276,22 @@ exports.getWholesalerById = async (req, res) => {
       [id],
     );
 
+    // Orders actually fulfilled: a fact, unlike the trust score it replaces.
+    let fulfilledOrders = 0;
+    try {
+      const fulfilled = await pool.query(
+        `SELECT COUNT(*)::int AS count
+         FROM orders o
+         LEFT JOIN supplier_inventory si ON si.id = o.inventory_item_id
+         WHERE (o.supplier_id = $1 OR si.supplier_id = $1)
+           AND o.status IN ('delivered', 'completed')`,
+        [id],
+      );
+      fulfilledOrders = fulfilled.rows[0]?.count || 0;
+    } catch (err) {
+      console.warn("Fulfilled order count failed:", err.message);
+    }
+
     // Seller rating is best-effort: the table may be empty on a new profile.
     let ratingRow = { average_rating: 0, total_reviews: 0 };
     try {
@@ -235,15 +315,13 @@ exports.getWholesalerById = async (req, res) => {
       country: profile.country,
       verified: profile.is_verified ?? false,
       gstVerified: profile.gst_verified ?? false,
-      trustScore: profile.trust_score,
-      responseRate: profile.response_rate,
-      responseTime: profile.response_time,
       yearsInBusiness: profile.years_in_business,
       contactPhone: profile.contact_phone,
       memberSince: profile.member_since,
       rating: Number(ratingRow.average_rating) || 0,
       totalReviews: Number(ratingRow.total_reviews) || 0,
       productCount: listingsResult.rows.length,
+      fulfilledOrders,
       products: listingsResult.rows.map((row) => ({
         id: row.product_id,
         inventoryId: row.inventory_id,

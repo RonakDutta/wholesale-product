@@ -9,11 +9,7 @@ import {
 } from "lucide-react";
 import ModalShell from "./ModalShell";
 import ContactVendorBtn from "./ContactVendorBtn";
-import {
-  getEffectivePrice,
-  parseNum,
-  getSupplierPhone,
-} from "../utils/supplierUtils";
+import { getEffectivePrice, getSupplierPhone } from "../utils/supplierUtils";
 
 const STAT_FIELDS = [
   { key: "moq", label: "MOQ", bestKey: "lowestMOQId" },
@@ -25,11 +21,13 @@ const STAT_FIELDS = [
     suffix: "d",
   },
   { key: "rating", label: "Rating", bestKey: "highestRatingId" },
-  { key: "responseRate", label: "Response", bestKey: "bestResponseId" },
-  { key: "trustScore", label: "Trust Score" },
-  { key: "yearsInBusiness", label: "Years Active" },
-  { key: "completedOrders", label: "Orders Done" },
-  { key: "totalProducts", label: "Catalog Size" },
+  { key: "reviews", label: "Reviews" },
+  {
+    key: "fulfilledOrders",
+    label: "Orders Delivered",
+    bestKey: "mostDeliveredId",
+  },
+  { key: "catalogSize", label: "Catalog Size" },
 ];
 
 const isBestFor = (metrics, supplierId, bestKey) =>

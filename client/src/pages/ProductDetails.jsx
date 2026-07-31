@@ -158,7 +158,6 @@ const ProductDetails = () => {
       ? `${selectedSupplier.city}, ${selectedSupplier.country}`
       : "India";
   const supplySignal = getSupplyLabel(selectedSupplier.stock);
-  const responseTimeSpec = selectedSupplier.responseTime || "Standard options";
 
   return (
     <div
@@ -209,10 +208,10 @@ const ProductDetails = () => {
             <div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">
               <Layers className="w-5 h-5 text-slate-400 mb-1" />
               <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">
-                Response Time
+                In stock
               </span>
               <span className="text-sm font-bold text-slate-800 mt-1 truncate max-w-full">
-                {responseTimeSpec}
+                {selectedSupplier.stock ?? 0}
               </span>
             </div>
             <div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">

@@ -5,7 +5,7 @@ import {
   BadgeCheck,
   Building2,
   CalendarDays,
-  Clock,
+  Truck,
   MapPin,
   Package,
   ShieldCheck,
@@ -206,14 +206,18 @@ const WholesalerProfile = () => {
             value={wholesaler.productCount}
           />
           <Stat
-            icon={Clock}
-            label="Response"
-            value={wholesaler.responseTime || "Standard"}
+            icon={Truck}
+            label="Orders delivered"
+            value={wholesaler.fulfilledOrders ?? 0}
           />
           <Stat
-            icon={BadgeCheck}
-            label="Response Rate"
-            value={wholesaler.responseRate || "-"}
+            icon={Star}
+            label="Rating"
+            value={
+              wholesaler.totalReviews > 0
+                ? Number(wholesaler.rating).toFixed(1)
+                : "-"
+            }
           />
           <Stat
             icon={ShieldCheck}

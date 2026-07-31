@@ -9,11 +9,6 @@ export const getEffectivePrice = (supplier) =>
     supplier?.discountPrice ?? supplier?.discount_price ?? supplier?.price ?? 0,
   );
 
-export const parsePercentage = (value) => {
-  const parsed = Number(String(value).replace(/[^0-9.]/g, ""));
-  return Number.isNaN(parsed) ? 0 : parsed;
-};
-
 export const getCheapestSupplier = (product) => {
   const suppliers = product?.suppliers ?? [];
   if (suppliers.length === 0) return null;
@@ -53,10 +48,9 @@ export const sortSuppliers = (suppliers, sortBy) => {
       );
     case "highest-stock":
       return list.sort((a, b) => parseNum(b.stock) - parseNum(a.stock));
-    case "best-response":
+    case "most-delivered":
       return list.sort(
-        (a, b) =>
-          parsePercentage(b.responseRate) - parsePercentage(a.responseRate),
+        (a, b) => parseNum(b.fulfilledOrders) - parseNum(a.fulfilledOrders),
       );
     default:
       return list;
@@ -102,7 +96,7 @@ export const getBestSupplierMetrics = (suppliers) => {
     lowestMOQId: null,
     highestRatingId: null,
     fastestShippingId: null,
-    bestResponseId: null,
+    mostDeliveredId: null,
     highestStockId: null,
   };
 
@@ -110,7 +104,7 @@ export const getBestSupplierMetrics = (suppliers) => {
     bestMOQ = Infinity,
     bestRating = -Infinity;
   let bestShipping = Infinity,
-    bestResponse = -Infinity,
+    bestDelivered = -Infinity,
     bestStock = -Infinity;
 
   suppliers.forEach((supplier) => {
@@ -138,10 +132,10 @@ export const getBestSupplierMetrics = (suppliers) => {
       metrics.fastestShippingId = supplier.id;
     }
 
-    const response = parsePercentage(supplier.responseRate);
-    if (response > bestResponse) {
-      bestResponse = response;
-      metrics.bestResponseId = supplier.id;
+    const delivered = parseNum(supplier.fulfilledOrders);
+    if (delivered > bestDelivered) {
+      bestDelivered = delivered;
+      metrics.mostDeliveredId = supplier.id;
     }
 
     const stock = parseNum(supplier.stock);

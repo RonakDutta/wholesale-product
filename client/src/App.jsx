@@ -111,10 +111,6 @@ const router = createBrowserRouter([
         path: "verified-sellers",
         element: <FooterInfoPage page="verified-sellers" />,
       },
-      {
-        path: "dynamic-pricing",
-        element: <FooterInfoPage page="dynamic-pricing" />,
-      },
       { path: "help-center", element: <FooterInfoPage page="help-center" /> },
       { path: "upi-guide", element: <FooterInfoPage page="upi-guide" /> },
       { path: "contact-us", element: <FooterInfoPage page="contact-us" /> },

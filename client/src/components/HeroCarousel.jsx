@@ -1,56 +1,117 @@
-import { useState, useEffect } from "react";
-import { ArrowRight } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { Link } from "react-router-dom";
+
+const AUTOPLAY_MS = 6000;
+
+// Each slide points somewhere real — a hero button that does nothing is worse
+// than no button. Copy describes features the product actually has.
+const SLIDES = [
+  {
+    badge: "B2B Marketplace",
+    title: "Source Wholesale Products Instantly",
+    description:
+      "Buy in bulk from verified wholesalers, with clear minimum order quantities and live stock on every listing.",
+    buttonText: "Browse catalogue",
+    to: "/search?q=",
+    image:
+      "https://images.pexels.com/photos/2199293/pexels-photo-2199293.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
+  },
+  {
+    badge: "Live Delivery Tracking",
+    title: "Follow Your Order To The Door",
+    description:
+      "See the consignment leave the warehouse and watch it move on the map until it reaches you.",
+    buttonText: "View your orders",
+    to: "/orders",
+    image:
+      "https://images.pexels.com/photos/1214259/pexels-photo-1214259.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
+  },
+  {
+    badge: "Direct Payments",
+    title: "Zero Friction UPI Checkout",
+    description:
+      "Settle invoices instantly with UPI payments straight to your wholesaler's account.",
+    buttonText: "See how it works",
+    to: "/upi-guide",
+    image:
+      "https://images.pexels.com/photos/6169668/pexels-photo-6169668.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
+  },
+];
 
 const HeroCarousel = () => {
-  const [currentSlide, setCurrentSlide] = useState(0);
+  const [current, setCurrent] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const containerRef = useRef(null);
+  const touchStartX = useRef(null);
 
-  const slides = [
-    {
-      badge: "B2B Marketplace",
-      title: "Source Wholesale Products Instantly",
-      description:
-        "Connect directly with verified suppliers. Get real-time dynamic pricing based on your location and market demand.",
-      buttonText: "Explore Catalog",
-      image:
-        "https://images.pexels.com/photos/2199293/pexels-photo-2199293.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
-    },
-    {
-      badge: "Dynamic Pricing",
-      title: "Maximize Your Profit Margins",
-      description:
-        "Our localized supply and demand algorithm ensures you get the most competitive rates in your region.",
-      buttonText: "View Live Rates",
-      image:
-        "https://images.pexels.com/photos/1214259/pexels-photo-1214259.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
-    },
-    {
-      badge: "Direct Payments",
-      title: "Zero Friction UPI Checkout",
-      description:
-        "Settle invoices instantly with integrated UPI payments directly to your suppliers' accounts.",
-      buttonText: "Setup Payment",
-      image:
-        "https://images.pexels.com/photos/6169668/pexels-photo-6169668.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
-    },
-  ];
+  const go = useCallback((index) => {
+    setCurrent((index + SLIDES.length) % SLIDES.length);
+  }, []);
+  const next = useCallback(() => go(current + 1), [current, go]);
+  const prev = useCallback(() => go(current - 1), [current, go]);
 
+  // Autoplay, suspended while the user is interacting or the tab is hidden,
+  // and disabled entirely when reduced motion is preferred.
   useEffect(() => {
+    const reduced = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    )?.matches;
+    if (paused || reduced) return;
+
     const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 6000);
+      if (document.visibilityState === "visible") {
+        setCurrent((c) => (c + 1) % SLIDES.length);
+      }
+    }, AUTOPLAY_MS);
     return () => clearInterval(timer);
-  }, [slides.length]);
+  }, [paused]);
+
+  // Arrow keys work once the carousel has focus.
+  const onKeyDown = (e) => {
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      next();
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      prev();
+    }
+  };
+
+  const onTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+  const onTouchEnd = (e) => {
+    if (touchStartX.current == null) return;
+    const delta = e.changedTouches[0].clientX - touchStartX.current;
+    if (Math.abs(delta) > 50) (delta < 0 ? next : prev)();
+    touchStartX.current = null;
+  };
 
   return (
-    <div className="w-full rounded-2xl mb-2 relative overflow-hidden shadow-xl h-112.5 sm:h-125 bg-espresso">
-      {slides.map((slide, index) => {
-        const isActive = index === currentSlide;
-
+    <div
+      ref={containerRef}
+      role="region"
+      aria-roledescription="carousel"
+      aria-label="Marketplace highlights"
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+      className="group relative mb-2 h-112.5 w-full overflow-hidden rounded-2xl bg-espresso shadow-xl outline-none focus-visible:ring-2 focus-visible:ring-clay sm:h-125"
+    >
+      {SLIDES.map((slide, index) => {
+        const isActive = index === current;
         return (
           <div
-            key={index}
+            key={slide.title}
+            aria-hidden={!isActive}
             className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
-              isActive ? "opacity-100 z-10" : "opacity-0 z-0"
+              isActive ? "z-10 opacity-100" : "z-0 opacity-0"
             }`}
           >
             {/* The first slide is the page's largest paint: load it eagerly at
@@ -58,75 +119,86 @@ const HeroCarousel = () => {
                 while the image is still being fetched. */}
             <img
               src={slide.image}
-              alt={slide.title}
+              alt=""
               loading={index === 0 ? "eager" : "lazy"}
               fetchPriority={index === 0 ? "high" : "low"}
               decoding="async"
-              className="absolute inset-0 w-full h-full object-cover"
+              className="absolute inset-0 h-full w-full object-cover"
             />
+            <div className="absolute inset-0 bg-linear-to-t from-espresso via-espresso/80 to-espresso/20" />
 
-            {/* Overlay */}
-            <div className="absolute inset-0 bg-linear-to-t from-espresso via-espresso/80 to-espresso/20"></div>
-
-            <div className="relative z-20 h-full flex flex-col justify-center px-6 sm:px-12 max-w-2xl">
+            <div className="relative z-20 flex h-full max-w-2xl flex-col justify-center px-6 sm:px-12">
               <span
-                className={`inline-block w-fit text-clay font-bold text-xs sm:text-sm uppercase tracking-[0.2em] mb-3 border border-clay/30 px-3 py-1 rounded-full bg-espresso/30 backdrop-blur-sm transition-all duration-700 ease-out delay-100 ${
-                  isActive
-                    ? "opacity-100 translate-y-0"
-                    : "opacity-0 translate-y-4"
+                className={`mb-3 inline-block w-fit rounded-full border border-clay/30 bg-espresso/30 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-clay backdrop-blur-sm transition-all delay-100 duration-700 ease-out sm:text-sm ${
+                  isActive ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
                 }`}
               >
                 {slide.badge}
               </span>
 
-              <h1
-                className={`text-3xl sm:text-5xl font-black leading-tight mb-4 text-cream tracking-tight transition-all duration-700 ease-out delay-200 ${
-                  isActive
-                    ? "opacity-100 translate-y-0"
-                    : "opacity-0 translate-y-4"
+              <h2
+                className={`mb-4 text-3xl font-black leading-tight tracking-tight text-cream transition-all delay-200 duration-700 ease-out sm:text-5xl ${
+                  isActive ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
                 }`}
               >
                 {slide.title}
-              </h1>
+              </h2>
 
               <p
-                className={`text-sm sm:text-lg text-cream/80 mb-8 max-w-lg leading-relaxed transition-all duration-700 ease-out delay-300 ${
-                  isActive
-                    ? "opacity-100 translate-y-0"
-                    : "opacity-0 translate-y-4"
+                className={`mb-8 max-w-lg text-sm leading-relaxed text-cream/80 transition-all delay-300 duration-700 ease-out sm:text-lg ${
+                  isActive ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
                 }`}
               >
                 {slide.description}
               </p>
 
               <div
-                className={`transition-all duration-700 ease-out delay-400 ${
-                  isActive
-                    ? "opacity-100 translate-y-0"
-                    : "opacity-0 translate-y-4"
+                className={`transition-all delay-400 duration-700 ease-out ${
+                  isActive ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
                 }`}
               >
-                <button className="group flex items-center gap-2 bg-clay text-cream px-6 py-3 rounded-lg font-semibold text-sm hover:bg-cream hover:text-espresso transition-colors duration-300 w-fit cursor-pointer">
+                <Link
+                  to={slide.to}
+                  tabIndex={isActive ? 0 : -1}
+                  className="group/btn flex w-fit items-center gap-2 rounded-lg bg-clay px-6 py-3 text-sm font-semibold text-cream transition-colors duration-300 hover:bg-cream hover:text-espresso"
+                >
                   {slide.buttonText}
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </button>
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover/btn:translate-x-1" />
+                </Link>
               </div>
             </div>
           </div>
         );
       })}
 
+      {/* Arrows: always reachable by keyboard, revealed on hover on desktop */}
+      <button
+        onClick={prev}
+        aria-label="Previous slide"
+        className="absolute left-3 top-1/2 z-30 -translate-y-1/2 rounded-full bg-espresso/40 p-2 text-cream opacity-0 backdrop-blur-sm transition-all hover:bg-espresso/70 focus-visible:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
+      >
+        <ChevronLeft className="h-5 w-5" />
+      </button>
+      <button
+        onClick={next}
+        aria-label="Next slide"
+        className="absolute right-3 top-1/2 z-30 -translate-y-1/2 rounded-full bg-espresso/40 p-2 text-cream opacity-0 backdrop-blur-sm transition-all hover:bg-espresso/70 focus-visible:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
+      >
+        <ChevronRight className="h-5 w-5" />
+      </button>
+
       <div className="absolute bottom-6 left-0 right-0 z-30 flex justify-center gap-2">
-        {slides.map((_, index) => (
+        {SLIDES.map((slide, index) => (
           <button
-            key={index}
-            onClick={() => setCurrentSlide(index)}
-            className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
-              index === currentSlide
-                ? "bg-clay w-10"
-                : "bg-cream/30 hover:bg-cream/60 w-3"
+            key={slide.title}
+            onClick={() => go(index)}
+            aria-label={`Go to slide ${index + 1}: ${slide.title}`}
+            aria-current={index === current}
+            className={`h-1.5 cursor-pointer rounded-full transition-all duration-300 ${
+              index === current
+                ? "w-10 bg-clay"
+                : "w-3 bg-cream/30 hover:bg-cream/60"
             }`}
-            aria-label={`Go to slide ${index + 1}`}
           />
         ))}
       </div>

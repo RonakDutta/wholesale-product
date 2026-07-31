@@ -6,7 +6,7 @@ import FilterBar from "../components/FilterBar";
 import HeroCarousel from "../components/HeroCarousel";
 import CTABanner from "../components/CTABanner";
 import LoadMore from "../components/LoadMore";
-import MarketAlert from "../components/MarketAlert";
+import MarketSnapshot from "../components/MarketSnapshot";
 import PromotionStrip from "../components/PromotionStrip";
 import {
   getCheapestSupplier,
@@ -257,11 +257,7 @@ const MarketplaceHome = () => {
         <HeroCarousel />
       </div>
       <div className="page-load-anim">
-        <MarketAlert
-          category="Packaging Materials"
-          region="Delhi NCR"
-          onActionClick={() => console.log("Navigate to deals")}
-        />
+        <MarketSnapshot products={products} />
       </div>
       <div className="page-load-anim">
         <PromotionStrip />

@@ -2,7 +2,6 @@ import { Link } from "react-router-dom";
 import {
   ShoppingBag,
   ShieldCheck,
-  TrendingDown,
   HelpCircle,
   Smartphone,
   MessageSquare,
@@ -43,17 +42,6 @@ const PAGE_CONFIG = {
     bgAccent: "bg-emerald-50/50",
     gradientBg: "bg-gradient-to-br from-emerald-50 to-green-50",
     lightGradient: "bg-gradient-to-r from-emerald-100/80 to-green-100/80",
-  },
-  "dynamic-pricing": {
-    icon: TrendingDown,
-    gradient: "from-sky-500 to-blue-600",
-    accent: "sky",
-    iconBg: "bg-sky-50",
-    iconColor: "text-sky-600",
-    borderAccent: "border-sky-200",
-    bgAccent: "bg-sky-50/50",
-    gradientBg: "bg-gradient-to-br from-sky-50 to-blue-50",
-    lightGradient: "bg-gradient-to-r from-sky-100/80 to-blue-100/80",
   },
   "help-center": {
     icon: HelpCircle,
@@ -152,21 +140,6 @@ const pageContent = {
     extra: [
       "Every seller profile includes business readiness and compliance signals.",
       "High-trust suppliers receive faster approvals for repeat orders.",
-    ],
-  },
-  "dynamic-pricing": {
-    tag: "Pricing Engine",
-    title: "See dynamic pricing that updates with demand",
-    description:
-      "Our pricing engine adjusts live market quotes based on demand, stock levels, and supplier activity so buyers can spot opportunities before they disappear and plan their margin more effectively.",
-    highlights: [
-      "Track price movement across suppliers",
-      "Understand discount eligibility and MOQ impact",
-      "Plan orders around the best available rates",
-    ],
-    extra: [
-      "Monitor price shifts to avoid overpaying during peak demand.",
-      "Compare offers across multiple suppliers to find the best trade-off.",
     ],
   },
   "help-center": {

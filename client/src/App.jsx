@@ -4,10 +4,7 @@ import { CartProvider } from "./context/CartContext";
 import { WishlistProvider } from "./context/WishlistContext";
 import { AuthProvider } from "./context/AuthContext";
 import { SocketProvider } from "./context/SocketContext";
-<<<<<<< HEAD
 import { NotificationProvider } from "./context/NotificationContext";
-=======
->>>>>>> claude/messaging-backend-issues-grphlk
 
 import MainLayout from "./layouts/MainLayout";
 import AuthLayout from "./layouts/AuthLayout";
@@ -34,6 +31,11 @@ import Settings from "./pages/dashboard/Settings";
 import EditProduct from "./pages/dashboard/EditProduct";
 import Promotions from "./pages/dashboard/Promotions";
 import RetailDashboard from "./pages/RetailDashboard";
+import Invoices from "./pages/dashboard/Invoices";
+import CreateInvoice from "./pages/dashboard/CreateInvoice";
+import InvoiceDetails from "./pages/dashboard/InvoiceDetails";
+import InvoiceReports from "./pages/dashboard/InvoiceReports";
+import InvoiceSettings from "./pages/dashboard/InvoiceSettings";
 import NotFound from "./pages/NotFound";
 
 const router = createBrowserRouter([
@@ -67,6 +69,11 @@ const router = createBrowserRouter([
       { path: "products/new", element: <AddProduct /> },
       { path: "products/edit/:id", element: <EditProduct /> },
       { path: "orders", element: <Orders /> },
+      { path: "invoices", element: <Invoices /> },
+      { path: "invoices/create", element: <CreateInvoice /> },
+      { path: "invoices/reports", element: <InvoiceReports /> },
+      { path: "invoices/settings", element: <InvoiceSettings /> },
+      { path: "invoices/:id", element: <InvoiceDetails /> },
       { path: "promotions", element: <Promotions /> },
       { path: "settings", element: <Settings /> },
     ],

@@ -65,8 +65,10 @@ if (redis) {
   });
 
   redis.on("error", (error) => {
-    console.error("Redis connection error for notifications:", error?.message || error);
-    redisReady = false;
+    if (redisReady) {
+      console.error("Redis connection error for notifications:", error?.message || error);
+      redisReady = false;
+    }
   });
 
   if (redis.status === "ready") {

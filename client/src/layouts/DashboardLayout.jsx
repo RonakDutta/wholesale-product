@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Package,
   ShoppingBag,
+  FileText,
   MessageSquare,
   Settings,
   Search,
@@ -44,6 +45,12 @@ const DashboardLayout = () => {
       path: "/dashboard/orders",
       label: "Orders",
       icon: ShoppingBag,
+      exact: false,
+    },
+    {
+      path: "/dashboard/invoices",
+      label: "Invoices",
+      icon: FileText,
       exact: false,
     },
     {

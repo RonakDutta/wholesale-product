@@ -1,13 +1,31 @@
 const PDFDocument = require("pdfkit");
+const QRCode = require("qrcode");
+const fs = require("fs");
+const path = require("path");
+const invoiceRepository = require("../repositories/invoiceRepository");
 
 class PDFService {
   /**
-   * Generates a professional A4 PDF Tax Invoice and streams it to an Express response or Buffer.
+   * Generates a professional A4 PDF Tax Invoice and streams it to an Express response or returns a Buffer.
    */
-  generateInvoicePDF(invoice, res = null) {
+  async generateInvoicePDF(invoice, res = null) {
+    // Generate UPI QR code data URL asynchronously
+    let qrDataUrl = null;
+    try {
+      const upiId = invoice.supplier_upi_id || "merchant@upi";
+      const qrPayload = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(
+        invoice.supplier_company || invoice.supplier_name || "Merchant"
+      )}&am=${invoice.grand_total}&cu=INR&tn=${encodeURIComponent(
+        `Invoice ${invoice.invoice_number}`
+      )}`;
+      qrDataUrl = await QRCode.toDataURL(qrPayload, { margin: 1, width: 100 });
+    } catch (qrErr) {
+      console.warn("QR code generation skipped:", qrErr.message);
+    }
+
     return new Promise((resolve, reject) => {
       try {
-        const doc = new PDFDocument({ size: "A4", margin: 36 });
+        const doc = new PDFDocument({ size: "A4", margin: 36, bufferPages: true });
         const buffers = [];
 
         if (res) {
@@ -140,14 +158,24 @@ class PDFService {
         // ----------------------------------------------------
         const summaryY = y;
 
-        // Left Box: Terms & Signature
+        // Left Box: Terms, Signature & QR Code
         doc.fontSize(8).font("Helvetica-Bold").fillColor("#334155").text("TERMS & CONDITIONS", 36, summaryY);
         doc.fontSize(7).font("Helvetica").fillColor("#64748b");
-        doc.text(invoice.terms_conditions || "1. Goods once sold will not be taken back.\n2. Interest @ 18% p.a. will be charged on overdue payments.", 36, summaryY + 12, { width: 280 });
+        doc.text(invoice.terms_conditions || "1. Goods once sold will not be taken back.\n2. Interest @ 18% p.a. will be charged on overdue payments.", 36, summaryY + 12, { width: 200 });
 
         if (invoice.notes) {
           doc.fontSize(8).font("Helvetica-Bold").fillColor("#334155").text("NOTES", 36, summaryY + 55);
-          doc.fontSize(7).font("Helvetica").fillColor("#64748b").text(invoice.notes, 36, summaryY + 67, { width: 280 });
+          doc.fontSize(7).font("Helvetica").fillColor("#64748b").text(invoice.notes, 36, summaryY + 67, { width: 200 });
+        }
+
+        // Embed QR Code if available
+        if (qrDataUrl) {
+          try {
+            doc.image(qrDataUrl, 250, summaryY, { width: 65, height: 65 });
+            doc.fontSize(6).font("Helvetica").fillColor("#64748b").text("Scan to Pay via UPI", 245, summaryY + 68, { width: 75, align: "center" });
+          } catch (qrEmbedErr) {
+            console.warn("Could not embed QR code image into PDF", qrEmbedErr.message);
+          }
         }
 
         // Right Box: Totals Table
@@ -179,19 +207,26 @@ class PDFService {
         addTotalRow("GRAND TOTAL:", invoice.grand_total || 0, true, true);
 
         // ----------------------------------------------------
-        // SIGNATURE & FOOTER
+        // SIGNATURE & FOOTER & PAGE NUMBERS
         // ----------------------------------------------------
-        const footerY = 740;
-        doc.rect(36, footerY, 523, 1).fill("#e2e8f0");
+        const range = doc.bufferedPageRange();
+        for (let i = range.start; i < range.start + range.count; i++) {
+          doc.switchToPage(i);
+          const footerY = 740;
+          doc.rect(36, footerY, 523, 1).fill("#e2e8f0");
 
-        doc.fontSize(8).font("Helvetica").fillColor("#64748b");
-        doc.text("Thank you for your business!", 36, footerY + 10);
-        doc.text("This is a computer-generated tax invoice. No signature required.", 36, footerY + 22);
+          doc.fontSize(8).font("Helvetica").fillColor("#64748b");
+          doc.text("Thank you for your business!", 36, footerY + 10);
+          doc.text("This is a computer-generated tax invoice. No signature required.", 36, footerY + 22);
 
-        doc.fontSize(8).font("Helvetica-Bold").fillColor("#1e293b");
-        doc.text("For " + (invoice.supplier_company || invoice.supplier_name || "Supplier"), 360, footerY + 10, { align: "right", width: 199 });
-        doc.fontSize(7).font("Helvetica").fillColor("#94a3b8");
-        doc.text("Authorized Signatory", 360, footerY + 32, { align: "right", width: 199 });
+          doc.fontSize(8).font("Helvetica-Bold").fillColor("#1e293b");
+          doc.text("For " + (invoice.supplier_company || invoice.supplier_name || "Supplier"), 360, footerY + 10, { align: "right", width: 199 });
+          doc.fontSize(7).font("Helvetica").fillColor("#94a3b8");
+          doc.text("Authorized Signatory", 360, footerY + 32, { align: "right", width: 199 });
+
+          // Page X of Y
+          doc.fontSize(7).font("Helvetica").fillColor("#94a3b8").text(`Page ${i + 1} of ${range.count}`, 36, footerY + 32);
+        }
 
         doc.end();
       } catch (err) {
@@ -200,6 +235,32 @@ class PDFService {
         else reject(err);
       }
     });
+  }
+
+  /**
+   * Generates PDF and persists to disk under /uploads/invoices/
+   */
+  async generateAndSaveInvoicePDF(invoice) {
+    const pdfBuffer = await this.generateInvoicePDF(invoice);
+
+    const uploadsDir = path.join(__dirname, "..", "..", "uploads", "invoices");
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const filename = `${invoice.invoice_number || invoice.id}.pdf`;
+    const relativePath = `/uploads/invoices/${filename}`;
+    const absolutePath = path.join(uploadsDir, filename);
+
+    fs.writeFileSync(absolutePath, pdfBuffer);
+
+    // Update database record with pdf_path & pdf_url
+    await invoiceRepository.updateInvoice(invoice.id, {
+      pdf_path: relativePath,
+      pdf_url: relativePath,
+    });
+
+    return { pdfBuffer, relativePath, absolutePath };
   }
 }
 

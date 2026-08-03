@@ -28,6 +28,7 @@ router.get("/buyers", (req, res) => invoiceController.getBuyers(req, res));
 router.get("/", (req, res) => invoiceController.getInvoices(req, res));
 router.get("/:id", (req, res) => invoiceController.getInvoiceById(req, res));
 router.get("/:id/pdf", (req, res) => invoiceController.getInvoicePDF(req, res));
+router.get("/:id/download", (req, res) => invoiceController.getInvoicePDF(req, res));
 
 // Invoice Mutation & Lifecycle Actions
 router.post("/", validateManualInvoicePayload, (req, res) => invoiceController.createInvoice(req, res));
@@ -36,6 +37,8 @@ router.delete("/:id", (req, res) => invoiceController.deleteInvoice(req, res));
 
 // Communications & Payments
 router.post("/:id/send", (req, res) => invoiceController.sendInvoice(req, res));
+router.post("/:id/send-email", (req, res) => invoiceController.sendInvoice(req, res));
+router.post("/:id/resend-email", (req, res) => invoiceController.sendInvoice(req, res));
 router.post("/:id/reminder", (req, res) => invoiceController.sendReminder(req, res));
 router.post("/:id/payment", validatePaymentPayload, (req, res) => invoiceController.recordPayment(req, res));
 

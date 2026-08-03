@@ -2,6 +2,8 @@ const pool = require("../config/db");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const invoiceNumberService = require("./invoiceNumberService");
 const gstService = require("./gstService");
+const pdfService = require("./pdfService");
+const emailService = require("./emailService");
 
 class InvoiceService {
   /**
@@ -149,6 +151,9 @@ class InvoiceService {
 
       if (shouldManageTransaction) await client.query("COMMIT");
 
+      // Generate & Cache PDF on disk, then send invoice email asynchronously
+      this.generateAndSendInvoiceEmailAsync(createdInvoice.id, order.buyer_email);
+
       return createdInvoice;
     } catch (error) {
       if (shouldManageTransaction) await client.query("ROLLBACK");
@@ -156,6 +161,36 @@ class InvoiceService {
       throw error;
     } finally {
       if (shouldManageTransaction) client.release();
+    }
+  }
+
+  /**
+   * Helper to generate PDF and dispatch email in background without blocking API response.
+   */
+  async generateAndSendInvoiceEmailAsync(invoiceId, targetEmail = null) {
+    try {
+      const fullInvoice = await invoiceRepository.findInvoiceById(invoiceId);
+      if (!fullInvoice) return;
+
+      const { pdfBuffer } = await pdfService.generateAndSaveInvoicePDF(fullInvoice);
+      await invoiceRepository.addLog({
+        invoiceId,
+        action: "PDF Generated",
+        performedBy: fullInvoice.buyer_id,
+        details: `PDF generated and cached at ${fullInvoice.pdf_path || `/uploads/invoices/${fullInvoice.invoice_number}.pdf`}`,
+      });
+
+      const recipient = targetEmail || fullInvoice.buyer_email;
+      if (recipient) {
+        await emailService.sendInvoiceEmailWithRetry({
+          invoice: fullInvoice,
+          pdfBuffer,
+          recipientEmail: recipient,
+          performedBy: fullInvoice.buyer_id,
+        });
+      }
+    } catch (err) {
+      console.error("Background PDF/Email generation failed for invoice:", invoiceId, err.message);
     }
   }
 
@@ -173,10 +208,11 @@ class InvoiceService {
       }
 
       const buyerQuery = await client.query(
-        `SELECT u.id, wp.city FROM users u LEFT JOIN wholesaler_profiles wp ON u.id = wp.user_id WHERE u.id = $1`,
+        `SELECT u.id, u.email, wp.city FROM users u LEFT JOIN wholesaler_profiles wp ON u.id = wp.user_id WHERE u.id = $1`,
         [buyerId]
       );
       if (buyerQuery.rows.length === 0) throw new Error("Buyer user not found.");
+      const buyerUser = buyerQuery.rows[0];
 
       const supplierQuery = await client.query(
         `SELECT wp.city FROM wholesaler_profiles wp WHERE wp.user_id = $1`,
@@ -184,7 +220,7 @@ class InvoiceService {
       );
 
       const supplierCity = supplierQuery.rows[0]?.city || "Delhi";
-      const buyerCity = buyerQuery.rows[0]?.city || "Delhi";
+      const buyerCity = buyerUser.city || "Delhi";
 
       const gstCalculation = gstService.calculateGST({
         items,
@@ -231,6 +267,10 @@ class InvoiceService {
       );
 
       await client.query("COMMIT");
+
+      // Generate PDF & Dispatch email in background
+      this.generateAndSendInvoiceEmailAsync(invoice.id, buyerUser.email);
+
       return invoice;
     } catch (err) {
       await client.query("ROLLBACK");
@@ -341,6 +381,10 @@ class InvoiceService {
       );
 
       await client.query("COMMIT");
+
+      // Re-generate PDF on disk to reflect PAID watermark & status
+      this.generateAndSendInvoiceEmailAsync(invoiceId, null);
+
       return { invoice: updatedInvoice, payment, newPaymentStatus, newInvoiceStatus, totalPaid: newTotalPaid };
     } catch (err) {
       await client.query("ROLLBACK");
@@ -351,17 +395,21 @@ class InvoiceService {
   }
 
   /**
-   * Logs email notification sending.
+   * Dispatches invoice PDF via email manually upon request.
    */
-  async sendInvoiceEmail(invoiceId, userId, role) {
+  async sendInvoiceEmail(invoiceId, userId, role, recipientEmail = null) {
     const invoice = await this.getInvoiceById(invoiceId, userId, role);
-    await invoiceRepository.addLog({
-      invoiceId,
-      action: "Sent",
+    const { pdfBuffer } = await pdfService.generateAndSaveInvoicePDF(invoice);
+
+    const targetEmail = recipientEmail || invoice.buyer_email;
+    const result = await emailService.sendInvoiceEmailWithRetry({
+      invoice,
+      pdfBuffer,
+      recipientEmail: targetEmail,
       performedBy: userId,
-      details: `Invoice email sent to buyer (${invoice.buyer_email})`,
     });
-    return { success: true, message: `Invoice email sent to ${invoice.buyer_email}` };
+
+    return { success: true, message: `Invoice email sent to ${targetEmail}`, result };
   }
 
   /**
@@ -369,12 +417,22 @@ class InvoiceService {
    */
   async sendPaymentReminder(invoiceId, userId, role) {
     const invoice = await this.getInvoiceById(invoiceId, userId, role);
+    const { pdfBuffer } = await pdfService.generateAndSaveInvoicePDF(invoice);
+
+    await emailService.sendInvoiceEmailWithRetry({
+      invoice,
+      pdfBuffer,
+      recipientEmail: invoice.buyer_email,
+      performedBy: userId,
+    });
+
     await invoiceRepository.addLog({
       invoiceId,
-      action: "Sent",
+      action: "Reminder Sent",
       performedBy: userId,
       details: `Payment reminder sent to buyer (${invoice.buyer_email}) for due date ${invoice.due_date}`,
     });
+
     return { success: true, message: `Payment reminder sent to ${invoice.buyer_email}` };
   }
 

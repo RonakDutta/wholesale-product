@@ -11,7 +11,7 @@ ADD COLUMN IF NOT EXISTS order_number VARCHAR(50) UNIQUE;
 
 -- Add direct supplier reference for easier queries
 ALTER TABLE orders 
-ADD COLUMN IF NOT EXISTS supplier_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+ADD COLUMN IF NOT EXISTS supplier_id UUID REFERENCES users(id) ON DELETE SET NULL;
 
 -- Add billing address (separate from delivery address)
 ALTER TABLE orders 
@@ -86,10 +86,10 @@ COMMENT ON COLUMN orders.updated_at IS 'Last update timestamp';
 
 CREATE TABLE IF NOT EXISTS order_status_history (
     id SERIAL PRIMARY KEY,
-    order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
     status VARCHAR(50) NOT NULL,
     previous_status VARCHAR(50),
-    updated_by INTEGER NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+    updated_by UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
     updated_by_role VARCHAR(20) NOT NULL, -- 'buyer', 'supplier', 'admin'
     remarks TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -111,9 +111,9 @@ COMMENT ON COLUMN order_status_history.remarks IS 'Optional remarks about the st
 
 CREATE TABLE IF NOT EXISTS order_items (
     id SERIAL PRIMARY KEY,
-    order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-    supplier_id INTEGER NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+    order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    supplier_id UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
     product_name VARCHAR(255) NOT NULL,
     quantity INTEGER NOT NULL CHECK (quantity > 0),
     unit_price DECIMAL(10,2) NOT NULL,
@@ -138,7 +138,7 @@ COMMENT ON COLUMN order_items.total_price IS 'Total price for this line item (qu
 
 CREATE TABLE IF NOT EXISTS payment_transactions (
     id SERIAL PRIMARY KEY,
-    order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
     transaction_id VARCHAR(100) UNIQUE, -- Razorpay transaction ID
     amount DECIMAL(12,2) NOT NULL,
     payment_method VARCHAR(50) NOT NULL, -- 'razorpay', 'upi', 'cod', 'bank_transfer'
@@ -165,7 +165,7 @@ COMMENT ON COLUMN payment_transactions.gateway_response IS 'Raw gateway response
 
 CREATE TABLE IF NOT EXISTS shipments (
     id SERIAL PRIMARY KEY,
-    order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
     tracking_number VARCHAR(100) UNIQUE NOT NULL,
     carrier VARCHAR(100), -- 'delhivery', 'bluedart', 'fedex', etc.
     shipping_address JSONB NOT NULL,
@@ -191,16 +191,17 @@ COMMENT ON COLUMN shipments.delivery_status IS 'Current delivery status';
 
 CREATE TABLE IF NOT EXISTS return_requests (
     id SERIAL PRIMARY KEY,
-    order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    -- order_items.id is SERIAL, so this reference stays INTEGER
     order_item_id INTEGER REFERENCES order_items(id) ON DELETE SET NULL,
-    requested_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    requested_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     return_type VARCHAR(50) NOT NULL, -- 'return', 'replacement', 'refund'
     reason TEXT NOT NULL,
     status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'approved', 'rejected', 'completed'
-    processed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    processed_by UUID REFERENCES users(id) ON DELETE SET NULL,
     processed_at TIMESTAMP,
     refund_amount DECIMAL(12,2),
-    replacement_order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+    replacement_order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
     admin_notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -221,7 +222,7 @@ COMMENT ON COLUMN return_requests.replacement_order_id IS 'New order ID if repla
 
 CREATE TABLE IF NOT EXISTS invoices (
     id SERIAL PRIMARY KEY,
-    order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
     invoice_number VARCHAR(50) UNIQUE NOT NULL,
     invoice_data JSONB NOT NULL, -- Complete invoice data as JSON
     generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -241,7 +242,7 @@ COMMENT ON COLUMN invoices.invoice_data IS 'Complete invoice data including buye
 
 CREATE TABLE IF NOT EXISTS order_analytics (
     idSERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     role VARCHAR(20) NOT NULL, -- 'buyer', 'supplier'
     period VARCHAR(20) NOT NULL, -- 'daily', 'weekly', 'monthly'
     period_start DATE NOT NULL,
@@ -271,7 +272,7 @@ COMMENT ON COLUMN order_analytics.top_products IS 'Top products as JSON array';
 
 CREATE TABLE IF NOT EXISTS notifications (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     notification_type VARCHAR(50) NOT NULL, -- 'order_created', 'order_accepted', 'order_cancelled', etc.
     title VARCHAR(255) NOT NULL,
     message TEXT NOT NULL,
@@ -295,9 +296,9 @@ COMMENT ON COLUMN notifications.data IS 'Additional context data (order_id, prod
 
 CREATE TABLE IF NOT EXISTS inventory_log (
     id SERIAL PRIMARY KEY,
-    inventory_id INTEGER NOT NULL REFERENCES supplier_inventory(id) ON DELETE CASCADE,
-    order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
-    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    inventory_id UUID NOT NULL REFERENCES supplier_inventory(id) ON DELETE CASCADE,
+    order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     action VARCHAR(50) NOT NULL, -- 'deducted', 'restored', 'added', 'adjusted'
     quantity_change INTEGER NOT NULL, -- Positive for addition, negative for deduction
     previous_stock INTEGER,

@@ -17,6 +17,8 @@ const io = new Server(httpServer, {
 });
 
 setSocketServer(io);
+// Controllers reach the socket server through the app to push live updates.
+app.set("io", io);
 
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
@@ -70,5 +72,5 @@ io.on("connection", (socket) => {
 const PORT = Number(process.env.PORT) || 5000;
 
 httpServer.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT} with Enterprise Invoice System initialized`);
 });

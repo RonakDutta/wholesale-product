@@ -68,10 +68,10 @@ const SupplierCard = ({
       badgeColor: "text-clay",
     },
     {
-      label: "Response",
-      value: supplier.responseRate || "—",
-      badge: badges.bestResponse,
-      badgeText: "Best",
+      label: "Delivered",
+      value: parseNum(supplier.fulfilledOrders),
+      badge: badges.mostDelivered,
+      badgeText: "Most",
       badgeColor: "text-clay",
     },
   ];
@@ -179,7 +179,7 @@ SupplierCard.propTypes = {
     shippingDays: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     city: PropTypes.string,
     country: PropTypes.string,
-    responseRate: PropTypes.string,
+    fulfilledOrders: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   }).isRequired,
   isSelected: PropTypes.bool.isRequired,
   onToggleSelect: PropTypes.func.isRequired,

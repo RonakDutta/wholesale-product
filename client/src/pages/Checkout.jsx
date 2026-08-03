@@ -4,6 +4,7 @@ import { ArrowLeft, MapPin, Phone, User, ShoppingBag, IndianRupee } from "lucide
 import { useCart } from "../context/CartContext";
 import { toast } from "sonner";
 import api from "../utils/axios";
+import LocationPicker from "../components/LocationPicker";
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -23,6 +24,9 @@ const Checkout = () => {
   });
 
   const [errors, setErrors] = useState({});
+  // Exact delivery point. Optional, but far more reliable than geocoding a
+  // typed Indian address, so it wins when present.
+  const [pin, setPin] = useState(null);
 
   if (items.length === 0) {
     return (
@@ -82,18 +86,17 @@ const Checkout = () => {
 
     setLoading(true);
     try {
-      // Map products using unified naming schema
-      const products = items.map(item => ({
+      // Send every line. Prices are recomputed server-side from live
+      // inventory, so nothing money-related is trusted from here.
+      const products = items.map((item) => ({
         productId: item.productId,
-        supplierId: item.supplierId || item.vendorId,
+        inventoryId: item.inventoryId,
         quantity: item.quantity,
-        price: item.bulkQuantity && item.quantity >= item.bulkQuantity ? item.bulkPrice : item.price
       }));
 
       const response = await api.post("/api/orders/create", {
         products,
-        deliveryAddress: addressForm,
-        totalAmount: subtotal
+        deliveryAddress: pin ? { ...addressForm, ...pin } : addressForm,
       });
 
       if (response.data.success && response.data.orderId) {
@@ -302,13 +305,26 @@ const Checkout = () => {
                     {errors.pincode && <p className="text-xs text-rose-500 mt-1">{errors.pincode}</p>}
                   </div>
                 </div>
+
+                <div className="border-t border-slate-100 pt-5">
+                  <h3 className="mb-1 text-sm font-bold text-slate-900">
+                    Pin your exact location
+                  </h3>
+                  <p className="mb-3 text-xs text-slate-500">
+                    Helps the wholesaler's driver find you. Optional, but far
+                    more precise than matching a typed address.
+                  </p>
+                  <LocationPicker value={pin} onChange={setPin} />
+                </div>
               </div>
             </div>
           </div>
 
           {/* Order Summary */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 sticky top-8">
+            {/* top-24 clears the sticky 4rem navbar; a smaller offset makes the
+                card scroll underneath it */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 sticky top-24">
               <div className="flex items-center gap-3 mb-6">
                 <ShoppingBag className="w-5 h-5 text-clay" />
                 <h2 className="text-lg font-bold text-slate-900">Order Summary</h2>

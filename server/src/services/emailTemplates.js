@@ -22,6 +22,36 @@ const renderEmailTemplate = (templateName, variables) => {
     low_stock_alert: `<h2 style="font-size: 20px; margin-bottom: 16px;">Low stock alert</h2><p style="margin-bottom: 16px;">Your product ${variables.productName} is low in stock with only ${variables.stockLeft} units remaining.</p>`,
     review_request: `<h2 style="font-size: 20px; margin-bottom: 16px;">Review your purchase</h2><p style="margin-bottom: 16px;">Thank you for ordering ${variables.productName}. Please share your feedback and help the supplier improve.</p>`,
     coupon_received: `<h2 style="font-size: 20px; margin-bottom: 16px;">You have a new coupon</h2><p style="margin-bottom: 16px;">Use code <strong>${variables.couponCode}</strong> to get savings on your next purchase.</p>`,
+    invoice_notification: `
+      <h2 style="font-size: 20px; color: #0f172a; margin-bottom: 12px;">Tax Invoice ${variables.invoiceNumber}</h2>
+      <p style="margin-bottom: 16px; color: #475569;">Dear <strong>${variables.buyerName}</strong>,</p>
+      <p style="margin-bottom: 16px; color: #475569;">Thank you for your order with <strong>${variables.supplierName}</strong>. Your official GST tax invoice is attached to this email as a PDF document.</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <tr>
+            <td style="padding: 6px 0; color: #64748b;">Invoice Number:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #0f172a; text-align: right;">${variables.invoiceNumber}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #64748b;">Order Number:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #0f172a; text-align: right;">${variables.orderNumber}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #64748b;">Amount Paid/Total:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #0d9488; text-align: right;">${variables.grandTotal}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #64748b;">Payment Status:</td>
+            <td style="padding: 6px 0; font-weight: bold; color: #0f172a; text-align: right;">${variables.paymentStatus}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #64748b;">Issue Date:</td>
+            <td style="padding: 6px 0; color: #0f172a; text-align: right;">${variables.issueDate}</td>
+          </tr>
+        </table>
+      </div>
+      <p style="margin-bottom: 16px; color: #475569; font-size: 13px;">You can view and download all your invoices anytime from your Buyer Dashboard.</p>
+    `,
   };
 
   const body = templates[templateName] || `<p>Notification from Marketplace.</p>`;

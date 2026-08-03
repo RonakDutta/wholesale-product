@@ -13,9 +13,9 @@ const formatTime = (iso) =>
 /**
  * props:
  * - message: { id, message_text, created_at, sender_id, status? }
- * - isOwn: boolean — sent by current user
- * - isFirstInGroup / isLastInGroup: boolean — controls corner rounding & tail
- * - showAvatar: boolean — only true on last message of a received group
+ * - isOwn: boolean - sent by current user
+ * - isFirstInGroup / isLastInGroup: boolean - controls corner rounding & tail
+ * - showAvatar: boolean - only true on last message of a received group
  * - avatarLabel: string (initial)
  */
 const MessageBubble = ({
@@ -39,7 +39,7 @@ const MessageBubble = ({
 		<div
 			className={`flex items-end gap-2 ${spacing} ${isOwn ? "justify-end" : "justify-start"}`}
 		>
-			{/* avatar column — only rendered for received messages, reserved space always */}
+			{/* avatar column - only rendered for received messages, reserved space always */}
 			{!isOwn && (
 				<div className="w-7 shrink-0">
 					{showAvatar && (

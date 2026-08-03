@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
+import { ArrowRight, Minus, Plus, ShoppingBag, Store, Trash2, X } from "lucide-react";
 import { useCart } from "../context/CartContext";
 
 const CartDrawer = () => {
@@ -13,6 +13,7 @@ const CartDrawer = () => {
     updateQuantity,
     subtotal,
     uniqueItemCount,
+    cartSeller,
   } = useCart();
 
   const [isVisible, setIsVisible] = useState(false);
@@ -61,6 +62,19 @@ const CartDrawer = () => {
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* An order ships from one wholesaler, so name them up front. */}
+        {cartSeller && (
+          <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-6 py-3 shrink-0">
+            <Store className="h-4 w-4 shrink-0 text-clay" />
+            <p className="min-w-0 text-xs text-slate-500">
+              Ordering from{" "}
+              <span className="font-bold text-slate-800">
+                {cartSeller.name}
+              </span>
+            </p>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
           {items.length === 0 ? (
@@ -112,7 +126,7 @@ const CartDrawer = () => {
                             {item.name}
                           </h3>
                           <p className="text-[11px] font-medium text-slate-500 uppercase tracking-wider mt-1">
-                            {item.vendorName}
+                            {item.sellerName}
                           </p>
                         </div>
                         <button

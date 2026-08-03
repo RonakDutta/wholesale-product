@@ -7,15 +7,17 @@ export function useChatList() {
 	const [chats, setChats] = useState([]);
 	const [loading, setLoading] = useState(true);
 
-	const fetchChats = useCallback(async () => {
-		setLoading(true);
+	// `background` refreshes (after sending/receiving) must not flip the loading
+	// flag - the page swaps to a full-screen loader and visibly flashes.
+	const fetchChats = useCallback(async ({ background = false } = {}) => {
+		if (!background) setLoading(true);
 		try {
 			const res = await api.get(`/api/messages/chats`);
 			setChats(Array.isArray(res.data) ? res.data : []);
 		} catch (err) {
 			console.error("Failed to fetch chats", err);
 		} finally {
-			setLoading(false);
+			if (!background) setLoading(false);
 		}
 	}, []);
 
@@ -34,7 +36,7 @@ export function useChatList() {
 				);
 				// message from/ to someone not yet in the list (new conversation) -> refetch
 				if (!exists) {
-					fetchChats();
+					fetchChats({ background: true });
 					return prev;
 				}
 				const updated = prev.map((chat) =>
@@ -56,7 +58,7 @@ export function useChatList() {
 		// When *we* send a message (especially the first one in a brand-new
 		// conversation), refresh so the chat shows up as a real conversation
 		// instead of only the synthetic pending entry.
-		const handleMessageSent = () => fetchChats();
+		const handleMessageSent = () => fetchChats({ background: true });
 
 		socket.on("new_message", handleNewMessage);
 		socket.on("message_sent", handleMessageSent);

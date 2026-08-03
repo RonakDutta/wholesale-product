@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -37,7 +37,7 @@ const ProductDetails = () => {
   const navigate = useNavigate();
   const pageRef = useRef(null);
   const addToCartBtnRef = useRef(null);
-  const { addToCart } = useCart();
+  const { addToCart, isOwnListing } = useCart();
   const { toggleWishlist, isWishlisted } = useWishlist();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -94,14 +94,24 @@ const ProductDetails = () => {
     setQuantity(baseMoq);
   }, [selectedSupplierId, baseMoq]);
 
-  useEffect(() => {
+  // useLayoutEffect, not useEffect: the tween starts the elements at
+  // opacity 0, and in useEffect that happens *after* the browser has already
+  // painted them, so the content appeared, blanked out, then faded back in.
+  useLayoutEffect(() => {
     if (loading || !product) return;
     window.scrollTo(0, 0);
-    let ctx = gsap.context(() => {
+    const ctx = gsap.context(() => {
       gsap.fromTo(
         ".detail-fade-in",
         { y: 15, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.5, stagger: 0.08, ease: "power2.out" },
+        {
+          y: 0,
+          opacity: 1,
+          duration: 0.5,
+          stagger: 0.08,
+          ease: "power2.out",
+          clearProps: "opacity,transform",
+        },
       );
     }, pageRef);
     return () => ctx.revert();
@@ -116,14 +126,16 @@ const ProductDetails = () => {
   };
 
   const handleAddToCart = () => {
-    addToCart(product, quantity, selectedSupplier);
+    if (!addToCart(product, quantity, selectedSupplier)) return;
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 1600);
   };
 
   if (loading) {
+    // Reserve close to the loaded page's height so the footer does not sit
+    // high under the spinner and then get shoved down when content arrives.
     return (
-      <div className="flex justify-center items-center min-h-[60vh]">
+      <div className="flex justify-center items-center min-h-[85vh]">
         <div className="w-8 h-8 border-4 border-clay border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
@@ -140,12 +152,12 @@ const ProductDetails = () => {
       ? Math.round((unitSavings / selectedSupplier.price) * 100)
       : 0;
   const wishlisted = isWishlisted(product.id);
+  const ownListing = isOwnListing(product, selectedSupplier);
   const location =
     selectedSupplier.city && selectedSupplier.country
       ? `${selectedSupplier.city}, ${selectedSupplier.country}`
       : "India";
   const supplySignal = getSupplyLabel(selectedSupplier.stock);
-  const responseTimeSpec = selectedSupplier.responseTime || "Standard options";
 
   return (
     <div
@@ -160,7 +172,7 @@ const ProductDetails = () => {
           <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
           Back to Marketplace
         </button>
-        <span className="text-xs font-mono text-slate-400 uppercase tracking-wider hidden sm:inline">
+        <span className="text-xs text-slate-400 uppercase tracking-wider hidden sm:inline">
           Product ID: {product.id}
         </span>
       </div>
@@ -196,10 +208,10 @@ const ProductDetails = () => {
             <div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">
               <Layers className="w-5 h-5 text-slate-400 mb-1" />
               <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">
-                Response Time
+                In stock
               </span>
               <span className="text-sm font-bold text-slate-800 mt-1 truncate max-w-full">
-                {responseTimeSpec}
+                {selectedSupplier.stock ?? 0}
               </span>
             </div>
             <div className="bg-white border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center shadow-xs">
@@ -234,7 +246,7 @@ const ProductDetails = () => {
               <span>{location}</span>
               <span className="text-slate-300 mx-1">•</span>
               <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
-              <span className="font-mono text-xs text-slate-400">
+              <span className="text-xs text-slate-400">
                 {product.category} Industry
               </span>
             </div>
@@ -267,7 +279,7 @@ const ProductDetails = () => {
                           <ShieldCheck className="w-3 h-3 text-emerald-600" />
                         )}
                       </span>
-                      <span className="font-mono text-xs font-bold text-clay">
+                      <span className="text-xs font-bold text-clay">
                         ₹{getEffectivePrice(s)}
                         <span className="text-slate-400 font-normal">
                           /unit
@@ -288,11 +300,11 @@ const ProductDetails = () => {
 
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex flex-col">
             <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                 Pricing Tiers
               </span>
               {savingsPercent > 0 && (
-                <div className="flex items-center gap-1 bg-emerald-100/80 text-emerald-700 text-[10px] font-extrabold px-2 py-1 rounded-sm uppercase tracking-widest border border-emerald-200">
+                <div className="flex items-center gap-1 bg-emerald-100/80 text-emerald-700 text-[10px] font-extrabold px-2 py-1 rounded-md uppercase tracking-widest border border-emerald-200">
                   <Tag className="w-3 h-3" />
                   <span>Save {savingsPercent}% on Bulk</span>
                 </div>
@@ -354,7 +366,7 @@ const ProductDetails = () => {
           </div>
 
           <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-col gap-4 shadow-xs">
-            <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-600 font-mono">
+            <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-600">
               <Calculator className="w-4 h-4 text-clay" />
               <span>Calculate Total</span>
             </div>
@@ -364,7 +376,7 @@ const ProductDetails = () => {
                 <label className="text-sm font-medium text-slate-600">
                   Order Quantity
                 </label>
-                <div className="flex items-stretch border border-slate-300 rounded-sm overflow-hidden focus-within:ring-1 focus-within:ring-clay focus-within:border-clay">
+                <div className="flex items-stretch border border-slate-300 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-clay focus-within:border-clay">
                   <button
                     type="button"
                     disabled={quantity <= baseMoq}
@@ -400,7 +412,7 @@ const ProductDetails = () => {
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
-                <span className="text-xs font-mono text-slate-400">
+                <span className="text-xs text-slate-400">
                   Increments of {quantityStep} units · Min {baseMoq}
                 </span>
               </div>
@@ -427,7 +439,7 @@ const ProductDetails = () => {
           </div>
 
           <div className="flex flex-col gap-3 mt-2">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <ContactVendorBtn
                 vendorId={selectedSupplier.supplierId || selectedSupplier.id}
                 vendorName={currentSupplierName}
@@ -444,7 +456,7 @@ const ProductDetails = () => {
               <button
                 type="button"
                 onClick={() => toggleWishlist(product)}
-                className={`flex items-center justify-center gap-2 py-3 text-sm font-bold rounded-sm transition-all cursor-pointer shadow-sm active:scale-[0.99] border ${
+                className={`flex items-center justify-center gap-2 py-3 text-sm font-bold rounded-xl transition-all cursor-pointer shadow-sm active:scale-[0.99] border ${
                   wishlisted
                     ? "bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100"
                     : "bg-white border-slate-200 text-slate-700 hover:border-rose-200 hover:text-rose-500"
@@ -453,7 +465,10 @@ const ProductDetails = () => {
                 <Heart
                   className={`w-5 h-5 shrink-0 transition-all ${wishlisted ? "fill-current scale-110" : "fill-none"}`}
                 />
-                <span>
+                <span className="sm:hidden">
+                  {wishlisted ? "Saved" : "Wishlist"}
+                </span>
+                <span className="hidden sm:inline">
                   {wishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
                 </span>
               </button>
@@ -462,13 +477,21 @@ const ProductDetails = () => {
             <button
               ref={addToCartBtnRef}
               onClick={handleAddToCart}
-              className={`w-full flex items-center justify-center gap-2 py-3.5 text-sm font-bold rounded-sm transition-all cursor-pointer shadow-sm active:scale-[0.99] ${
-                justAdded
-                  ? "bg-emerald-600 text-white"
-                  : "bg-clay text-white hover:bg-clay/90"
+              disabled={ownListing}
+              title={
+                ownListing ? "This is your own listing" : undefined
+              }
+              className={`w-full flex items-center justify-center gap-2 py-3.5 text-sm font-bold rounded-xl transition-all shadow-sm active:scale-[0.99] ${
+                ownListing
+                  ? "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none"
+                  : justAdded
+                    ? "bg-emerald-600 text-white cursor-pointer"
+                    : "bg-clay text-white hover:bg-clay/90 cursor-pointer"
               }`}
             >
-              {justAdded ? (
+              {ownListing ? (
+                <span>This is your own listing</span>
+              ) : justAdded ? (
                 <>
                   <Check className="w-5 h-5 shrink-0" />
                   <span>Added to Cart</span>

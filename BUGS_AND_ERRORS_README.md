@@ -16,6 +16,7 @@ fixed.
 | C | Socket `send_message` handler drops `tempId`, breaking optimistic reconciliation | **Fixed** |
 | D | `messagesRoutes` blocked brand-new conversations with a 403 | **Fixed** |
 | E | Client dropped live messages on chats opened via URL (string/number id mismatch) | **Fixed** |
+| F | Vite dev server crashes: `maplibre-gl-worker.mjs` missing from the optimize deps directory | **Fixed** |
 | 1 | Messaging routes not mounted | Already fixed (mounted in `app.js`) |
 | 2 | Invalid payment lifecycle transition | Already fixed (order created as `payment_pending`) |
 | 3 | Order endpoints missing ownership checks | Already fixed (`ensureOrderAccess`) |
@@ -129,6 +130,84 @@ chats opened from a URL.
 ### Fix
 
 Coerce the id with `Number(...)` before comparing.
+
+---
+
+## F) Vite dep-optimizer error for `maplibre-gl-worker.mjs`
+
+### Symptom
+
+```
+The file does not exist at "…/client/node_modules/.vite/deps/maplibre-gl-worker.mjs"
+which is in the optimize deps directory. The dependency might be incompatible with
+the dep optimizer. Try adding it to `optimizeDeps.exclude`.
+```
+
+### Affected files
+
+- [client/vite.config.js](client/vite.config.js)
+- [client/package.json](client/package.json)
+- [client/package-lock.json](client/package-lock.json)
+
+### Problem
+
+`maplibre-gl` is **not a dependency of this project**. It appears nowhere in
+`client/src`, nowhere in `client/package.json`, and has zero entries in either
+`package-lock.json`. So Vite's own suggestion — adding it to
+`optimizeDeps.exclude` — is the wrong fix: there is no such dependency to
+exclude. The error is a *stale dep-optimizer cache*: `client/node_modules/.vite/deps/`
+still carries a metadata entry for a package whose bundled output is no longer on
+disk, and Vite fails hard when it serves an entry it cannot read.
+
+Two things in the repo made that stale-cache state easy to hit:
+
+1. **`"wholesale-product": "file:.."` in `client/package.json`** — the client
+   declared a dependency on the repository root, which *contains* `client`. npm
+   materialised this as the symlink `client/node_modules/wholesale-product → ..`,
+   creating an unbounded cycle
+   (`client/node_modules/wholesale-product/client/node_modules/…`). Vite's dependency
+   scanner crawls `node_modules`, so it could walk out of the client package, back
+   through the repo root, and into unrelated trees — including whatever else lives on
+   disk beside the project. This self-link served no purpose; the client imports
+   nothing from the root package.
+
+2. **Lazily discovered dependencies.** `optimizeDeps.include` was unset, so the
+   optimizer only learned about a dependency when a module importing it was first
+   requested. Subpath imports behind lazy routes (`gsap/all`) trigger a re-optimize
+   and rewrite of `.vite/deps` *while the dev server is already serving from it* —
+   the window in which "file does not exist in the optimize deps directory" appears.
+
+### Fix
+
+- Removed the `file:..` self-dependency from `client/package.json` and both of its
+  `package-lock.json` entries (`".."` and `node_modules/wholesale-product`).
+- Added `optimizeDeps.include` to `client/vite.config.js` listing every bare import
+  the app uses, `gsap/all` included, so the dep cache is written once at startup
+  rather than rewritten mid-session.
+
+### Recovering a machine that already hit this
+
+The cache must be cleared once; config changes do not repair an already-corrupt one.
+
+```powershell
+# from client/, with the dev server stopped
+Remove-Item -Recurse -Force node_modules\.vite
+npm install
+npm run dev -- --force
+```
+
+### Note for Windows/OneDrive checkouts
+
+This project is commonly checked out under `C:\Users\<user>\OneDrive\Desktop\…`.
+OneDrive syncs and dehydrates files underneath `node_modules/.vite/` while Vite is
+reading them, which reproduces this same class of error on its own. Either exclude
+the project from OneDrive sync, or keep the working copy on a non-synced path such
+as `C:\dev\wholesale-product`. As a last resort, point the cache outside the synced
+tree in `vite.config.js`:
+
+```js
+cacheDir: path.join(os.tmpdir(), "vite-wholesale-product"),
+```
 
 ---
 

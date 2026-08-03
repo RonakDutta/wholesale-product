@@ -1,4 +1,3 @@
-import React from "react";
 import { Link } from "react-router-dom";
 
 const footerSections = [
@@ -7,7 +6,6 @@ const footerSections = [
     links: [
       { label: "Browse Products", to: "/browse-products" },
       { label: "Verified Sellers", to: "/verified-sellers" },
-      { label: "Dynamic Pricing", to: "/dynamic-pricing" },
     ],
   },
   {
@@ -39,7 +37,7 @@ const Footer = () => {
             </div>
             <p className="text-xs leading-relaxed text-espresso/70">
               The premier B2B unified marketplace for seamless wholesale
-              trading, powered by dynamic pricing and direct UPI payments.
+              trading, with live delivery tracking and direct UPI payments.
             </p>
           </div>
 

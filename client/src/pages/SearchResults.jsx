@@ -3,7 +3,6 @@ import { useSearchParams, Link } from "react-router-dom";
 import {
   Search,
   SlidersHorizontal,
-  X,
   Star,
   Package,
   Store,
@@ -24,7 +23,6 @@ const SearchResults = () => {
   const query = searchParams.get("q") || "";
 
   const [activeTab, setActiveTab] = useState("product");
-  const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState("grid");
   const [sortBy, setSortBy] = useState("relevance");
   const [filters, setFilters] = useState({
@@ -33,7 +31,6 @@ const SearchResults = () => {
     maxPrice: "",
     minRating: "",
   });
-  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
 
   // Live Database State
   const [fullData, setFullData] = useState({
@@ -90,11 +87,16 @@ const SearchResults = () => {
                   : "Low stock",
           });
 
-          // Map Unique Wholesalers
+          // Map Unique Wholesalers.
+          // Key on the seller's user id, not supplier.id - that is the
+          // inventory row id, so one seller listing five products produced
+          // five duplicate "wholesalers".
           product.suppliers?.forEach((supplier) => {
             const vName = supplier.companyName || supplier.name || "Supplier";
-            vendorMap[supplier.id] = {
-              id: supplier.id,
+            const vendorId = supplier.supplierId ?? supplier.id;
+            if (!vendorId) return;
+            vendorMap[vendorId] = {
+              id: vendorId,
               type: "wholesaler",
               name: vName,
               location: supplier.city || "India",
@@ -190,23 +192,10 @@ const SearchResults = () => {
     });
   }, [query]);
 
-  // ---- Animate cards on load ----
-  useEffect(() => {
-    if (!loading && results.length > 0 && resultsRef.current) {
-      const cards = resultsRef.current.querySelectorAll(".result-card");
-      gsap.fromTo(
-        cards,
-        { opacity: 0, y: 30 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.5,
-          stagger: 0.06,
-          ease: "power2.out",
-        },
-      );
-    }
-  }, [loading, results]);
+  // No entrance animation for result cards. GSAP writes inline opacity on the
+  // nodes, and because React reuses those nodes as the list re-renders while
+  // filtering, cards were left mid-fade (most visibly a few items down the
+  // list). Results now render immediately.
 
   if (!query && initialFetchDone) {
     return (
@@ -243,7 +232,7 @@ const SearchResults = () => {
       <div className="min-h-screen py-6 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            {/* Left side – result count */}
+            {/* Left side - result count */}
             <div className="flex items-center gap-3">
               <h1 className="text-xl sm:text-2xl font-bold text-espresso tracking-tight">
                 {loading ? (
@@ -255,7 +244,7 @@ const SearchResults = () => {
                     </span>{" "}
                     result{results.length !== 1 ? "s" : ""} for{" "}
                     <span className="bg-clay/10 px-2 py-0.5 rounded-md text-clay">
-                      “{query}”
+                      "{query}"
                     </span>
                   </>
                 )}
@@ -265,7 +254,7 @@ const SearchResults = () => {
               )}
             </div>
 
-            {/* Right side – controls */}
+            {/* Right side - controls */}
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
               {/* View toggle */}
               <div className="flex bg-white/60 backdrop-blur-sm rounded-lg border border-sage/30 p-0.5 shadow-sm">
@@ -306,7 +295,7 @@ const SearchResults = () => {
                 <ArrowUpDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-espresso/40 pointer-events-none" />
               </div>
 
-              {/* Filter button (mobile) – opens drawer */}
+              {/* Filter button (mobile) - opens drawer */}
               <button
                 onClick={() => setIsFilterDrawerOpen(true)}
                 className="flex items-center gap-1.5 bg-white/60 backdrop-blur-sm border border-sage/30 rounded-lg px-3 py-1.5 text-sm text-espresso shadow-sm sm:hidden"
@@ -451,7 +440,7 @@ const SearchResults = () => {
                     No results found
                   </h3>
                   <p className="text-espresso/60 mt-2 max-w-md mx-auto">
-                    We couldn't find anything matching “{query}”. Try adjusting
+                    We couldn't find anything matching "{query}". Try adjusting
                     your filters or search for something else.
                   </p>
                   <button
@@ -585,9 +574,6 @@ const ResultCard = ({ item, viewMode }) => {
                     {item.rating.toFixed(1)}
                   </span>
                 </div>
-                <span className="text-xs text-espresso/40 bg-sage/10 px-2 py-0.5 rounded-full">
-                  {item.category}
-                </span>
               </div>
             </>
           )}
@@ -662,9 +648,6 @@ const ResultCard = ({ item, viewMode }) => {
                   {item.rating.toFixed(1)}
                 </span>
               </div>
-              <span className="text-sm text-espresso/40">
-                • {item.category}
-              </span>
             </div>
           </>
         )}

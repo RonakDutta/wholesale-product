@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   Search,
   MoreVertical,
   Building2,
   MessageSquareText,
   Store,
+  ArrowLeft,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useChatList } from "../hooks/useChatList";
@@ -70,7 +71,7 @@ const ChatListItem = ({ chat, active, onClick }) => (
   </div>
 );
 
-// Shown in the main panel whenever no conversation is open — either because
+// Shown in the main panel whenever no conversation is open - either because
 // nothing is selected yet, or because the user has no conversations at all.
 const EmptyConversationState = ({ hasChats }) => (
   <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8 text-center">
@@ -104,16 +105,42 @@ const Messages = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { vendorId } = useParams();
+  // Messages renders in both the marketplace shell and the seller workspace;
+  // keep navigation inside whichever one the user is currently in.
+  const inSeller = location.pathname.startsWith("/seller");
+  const basePath = inSeller ? "/seller/messages" : "/messages";
+  // Fill the available height of the surrounding shell. The seller workspace
+  // already owns the viewport (h-dvh, its own scroll container), so the panel
+  // only subtracts that shell's header and padding; the marketplace subtracts
+  // its navbar and page padding instead.
+  const shellHeight = inSeller
+    ? "h-[calc(100dvh-8rem)] sm:h-[calc(100dvh-9rem)] w-full max-w-none"
+    : "h-[calc(100dvh-7rem)] max-w-6xl";
   const { chats, loading: chatsLoading, clearUnread } = useChatList();
   const [activeChatId, setActiveChatId] = useState(null);
   const [pendingChat, setPendingChat] = useState(null);
   const [search, setSearch] = useState("");
-  const messagesContainerRef = useRef(null);
 
   const { messages, sendMessage } = useConversation(activeChatId, user?.id);
 
   useEffect(() => {
-    if (!vendorId) return;
+    // The URL is the source of truth. Without this the conversation stayed
+    // open after the URL dropped the id (browser back), so the first back
+    // press appeared to do nothing and only the second one left the page.
+    if (!vendorId) {
+      setActiveChatId(null);
+      setPendingChat(null);
+      return;
+    }
+
+    // A conversation with yourself is rejected by the server, so opening one
+    // by URL would just render a permanently broken chat.
+    if (user?.id != null && String(vendorId) === String(user.id)) {
+      setActiveChatId(null);
+      setPendingChat(null);
+      navigate(basePath, { replace: true });
+      return;
+    }
 
     // FIX: Only trigger the pending chat and clear state IF state actually has data.
     // This stops the infinite loop caused by navigate() constantly generating new empty state objects.
@@ -136,14 +163,10 @@ const Messages = () => {
       // If the user lands on /messages/:vendorId directly via URL without state
       setActiveChatId(vendorId);
     }
-  }, [vendorId, location.state, location.pathname, navigate, activeChatId]);
+  }, [vendorId, location.state, location.pathname, navigate, activeChatId, user?.id, basePath]);
 
-  // default to first chat once loaded
-  useEffect(() => {
-    if (!activeChatId && !pendingChat && chats.length > 0) {
-      setActiveChatId(chats[0].user_id);
-    }
-  }, [chats, activeChatId, pendingChat]);
+  // No conversation is opened automatically - the empty state shows until the
+  // user picks one from the list.
 
   // once the vendor shows up in the real chat list (message actually sent),
   // drop the synthetic pending entry and use the real one
@@ -153,13 +176,8 @@ const Messages = () => {
     }
   }, [chats, pendingChat]);
 
-  // Scroll the message list itself rather than calling scrollIntoView, which
-  // also scrolls every ancestor (and therefore the whole page) on send.
-  useEffect(() => {
-    const el = messagesContainerRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+  // Deliberately no auto-scrolling: it fired inconsistently between
+  // conversations and moved the view out from under the reader.
 
   const handleSelectChat = (userId) => {
     setActiveChatId(userId);
@@ -167,7 +185,14 @@ const Messages = () => {
     // it when switching to a different (real) conversation.
     setPendingChat((prev) => (prev && prev.user_id === userId ? prev : null));
     clearUnread(userId);
-    navigate(`/messages/${userId}`, { replace: true });
+    navigate(`${basePath}/${userId}`);
+  };
+
+  // Mobile: return from a conversation to the conversation list
+  const handleBackToList = () => {
+    setActiveChatId(null);
+    setPendingChat(null);
+    navigate(basePath, { replace: true });
   };
 
   const activeChat =
@@ -182,16 +207,24 @@ const Messages = () => {
 
   if (chatsLoading) {
     return (
-      <div className="h-[calc(100vh-8rem)] max-w-6xl mx-auto flex items-center justify-center text-sm text-slate-400">
+      <div className={`${shellHeight} mx-auto flex items-center justify-center text-sm text-slate-400`}>
         Loading messages...
       </div>
     );
   }
 
   return (
-    <div className="h-[calc(100vh-8rem)] max-w-6xl mx-auto flex flex-col lg:flex-row bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-      {/* Sidebar */}
-      <div className="w-full lg:w-80 border-r border-slate-200 flex flex-col shrink-0">
+    <div
+      className={`${shellHeight} mx-auto flex flex-col lg:flex-row bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden`}
+    >
+      {/* Sidebar - on mobile this and the conversation are alternating views,
+          otherwise both share the fixed height and the composer is pushed
+          off-screen. */}
+      <div
+        className={`${
+          activeChat ? "hidden lg:flex" : "flex"
+        } w-full lg:w-80 border-r border-slate-200 flex-col shrink-0 min-h-0`}
+      >
         <div className="p-4 border-b border-slate-100">
           <h2 className="text-xl font-black text-espresso mb-4">Messages</h2>
           <div className="relative">
@@ -233,20 +266,32 @@ const Messages = () => {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-slate-50/30">
+      <div
+        className={`${
+          activeChat ? "flex" : "hidden lg:flex"
+        } flex-1 flex-col min-w-0 min-h-0 bg-slate-50/30`}
+      >
         {activeChat ? (
           <>
             <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-sm z-10">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-600 font-bold text-sm border border-slate-200">
+              <div className="flex items-center gap-3 min-w-0">
+                <button
+                  onClick={handleBackToList}
+                  aria-label="Back to conversations"
+                  className="lg:hidden -ml-1 p-1.5 text-slate-500 hover:text-espresso hover:bg-slate-100 rounded-lg transition-colors shrink-0"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-600 font-bold text-sm border border-slate-200 shrink-0">
                   {activeChat.sender_name?.[0] || "?"}
                 </div>
-                <div>
-                  <h3 className="font-black text-espresso text-base">
+                <div className="min-w-0">
+                  <h3 className="font-black text-espresso text-base truncate">
                     {activeChat.sender_name}
                   </h3>
-                  <p className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
-                    <Building2 className="w-3 h-3" /> {activeChat.company}
+                  <p className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 truncate">
+                    <Building2 className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{activeChat.company}</span>
                   </p>
                 </div>
               </div>
@@ -255,10 +300,7 @@ const Messages = () => {
               </button>
             </div>
 
-            <div
-              ref={messagesContainerRef}
-              className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col"
-            >
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col">
               {messages.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
                   <MessageSquareText className="h-9 w-9 text-slate-200" />

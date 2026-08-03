@@ -53,7 +53,7 @@ const EditProduct = () => {
       } catch (err) {
         console.error(err);
         toast.error("Could not load product details.");
-        navigate("/dashboard/products");
+        navigate("/seller/products");
       } finally {
         setLoading(false);
       }
@@ -129,7 +129,7 @@ const EditProduct = () => {
 
       await api.put(`/api/products/inventory/${id}`, payload);
       toast.success("Listing updated successfully");
-      navigate("/dashboard/products");
+      navigate("/seller/products");
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.message || "Failed to update product");
@@ -150,7 +150,7 @@ const EditProduct = () => {
     <div className="max-w-4xl mx-auto pb-10">
       <div className="flex items-center gap-4 mb-6">
         <button
-          onClick={() => navigate("/dashboard/products")}
+          onClick={() => navigate("/seller/products")}
           className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -322,7 +322,7 @@ const EditProduct = () => {
         <div className="flex justify-end gap-3 pt-4">
           <button
             type="button"
-            onClick={() => navigate("/dashboard/products")}
+            onClick={() => navigate("/seller/products")}
             className="px-6 py-2.5 rounded-lg text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
           >
             Cancel

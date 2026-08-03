@@ -2,9 +2,9 @@ import { useState } from "react";
 import { MessageSquare } from "lucide-react";
 import ContactChoiceModal from "./ContactChoiceModal";
 import WhatsAppModal from "./WhatsAppModal";
-import ChatModal from "./ChatModal";
 import api from "../utils/axios";
 import { toast } from "sonner";
+import { useAuth } from "../context/AuthContext";
 
 const ContactVendorBtn = ({
   vendorId,
@@ -15,9 +15,17 @@ const ContactVendorBtn = ({
   productId,
   trigger,
 }) => {
-  const [view, setView] = useState(null); // null | "choice" | "whatsapp" | "chat"
+  const { user } = useAuth();
+  // Nobody should be able to open a conversation with themselves. The server
+  // rejects it on both the socket and the REST routes, so surfacing the entry
+  // point here would only ever lead to an error.
+  const isOwnListing =
+    user?.id != null && vendorId != null && String(user.id) === String(vendorId);
+
+  const [view, setView] = useState(null); // null | "choice" | "whatsapp"
   const [loading, setLoading] = useState(false);
   const [dynamicWhatsappUrl, setDynamicWhatsappUrl] = useState(null);
+  const [resolvedPhone, setResolvedPhone] = useState(null);
   const openChoice = () => setView("choice");
 
   const handleWhatsAppClick = async () => {
@@ -30,6 +38,8 @@ const ContactVendorBtn = ({
 
         if (response.data.success && response.data.whatsappUrl) {
           setDynamicWhatsappUrl(response.data.whatsappUrl);
+          // The phone lets the modal compose the buyer's own message
+          if (response.data.phone) setResolvedPhone(response.data.phone);
           setView("whatsapp");
         } else {
           toast.error(
@@ -54,6 +64,8 @@ const ContactVendorBtn = ({
     }
   };
 
+  if (isOwnListing) return null;
+
   return (
     <>
       {trigger ? (
@@ -63,22 +75,18 @@ const ContactVendorBtn = ({
           type="button"
           onClick={openChoice}
           disabled={loading}
-          className="flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 bg-transparent text-espresso border border-sage/50 rounded-sm hover:bg-sage/10 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-1.5 sm:gap-2 py-3 bg-transparent text-espresso border border-sage/50 rounded-xl hover:bg-sage/10 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           aria-label={`Contact ${vendorName} about ${productName}`}
         >
           {loading ? (
             <>
-              <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 border-2 border-espresso border-t-transparent rounded-full animate-spin" />
-              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wide">
-                Loading...
-              </span>
+              <div className="w-4 h-4 border-2 border-espresso border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm font-bold">Loading...</span>
             </>
           ) : (
             <>
-              <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wide">
-                Message
-              </span>
+              <MessageSquare className="w-5 h-5 shrink-0" />
+              <span className="text-sm font-bold">Message Supplier</span>
             </>
           )}
         </button>
@@ -92,7 +100,6 @@ const ContactVendorBtn = ({
           productName={productName}
           onClose={() => setView(null)}
           onSelectWhatsApp={handleWhatsAppClick}
-          onSelectChat={() => setView("chat")}
         />
       )}
 
@@ -100,19 +107,9 @@ const ContactVendorBtn = ({
         <WhatsAppModal
           vendorName={vendorName}
           productName={productName}
-          vendorPhone={vendorPhone}
+          vendorPhone={resolvedPhone || vendorPhone}
           productImage={undefined}
           dynamicWhatsappUrl={dynamicWhatsappUrl}
-          onBack={() => setView("choice")}
-          onClose={() => setView(null)}
-        />
-      )}
-      {view === "chat" && (
-        <ChatModal
-          vendorId={vendorId}
-          vendorName={vendorName}
-          productName={productName}
-          vendorPhone={vendorPhone}
           onBack={() => setView("choice")}
           onClose={() => setView(null)}
         />

@@ -1,4 +1,4 @@
-import React, {
+import {
   createContext,
   useContext,
   useEffect,
@@ -27,7 +27,7 @@ export const WishlistProvider = ({ children }) => {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
     } catch {
-      // localStorage unavailable (private browsing, etc.) — fail silently
+      // localStorage unavailable (private browsing, etc.) - fail silently
     }
   }, [items]);
 

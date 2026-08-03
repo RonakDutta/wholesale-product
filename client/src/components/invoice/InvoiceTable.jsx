@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Eye, Download, CreditCard, Send, Bell, ArrowUpDown, ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import InvoiceStatusBadge from "./InvoiceStatusBadge";
+import axios from "../../utils/axios";
 
 export default function InvoiceTable({
   invoices = [],
@@ -17,6 +18,26 @@ export default function InvoiceTable({
   const getSortIcon = (field) => {
     if (sortBy !== field) return <ArrowUpDown className="w-3.5 h-3.5 opacity-40" />;
     return <ArrowUpDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />;
+  };
+
+  const handleDownloadPDF = async (invoiceId, invoiceNumber) => {
+    try {
+      const res = await axios.get(`/api/invoices/${invoiceId}/pdf`, {
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `${invoiceNumber || "Invoice"}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Download PDF error:", err);
+      alert("Failed to download PDF invoice.");
+    }
   };
 
   return (
@@ -75,7 +96,7 @@ export default function InvoiceTable({
                     {/* Invoice Number */}
                     <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
                       <Link
-                        to={`/dashboard/invoices/${invoice.id}`}
+                        to={`/seller/invoices/${invoice.id}`}
                         className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1.5"
                       >
                         {invoice.invoice_number}
@@ -119,7 +140,7 @@ export default function InvoiceTable({
                       <div className="flex items-center justify-end gap-1.5">
                         {/* View Details */}
                         <Link
-                          to={`/dashboard/invoices/${invoice.id}`}
+                          to={`/seller/invoices/${invoice.id}`}
                           className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 dark:text-slate-400 transition-colors"
                           title="View Invoice"
                         >
@@ -127,21 +148,21 @@ export default function InvoiceTable({
                         </Link>
 
                         {/* PDF Stream Download */}
-                        <a
-                          href={`/api/invoices/${invoice.id}/pdf?token=${localStorage.getItem("token") || ""}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 dark:text-slate-400 transition-colors"
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadPDF(invoice.id, invoice.invoice_number)}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 dark:text-slate-400 transition-colors cursor-pointer"
                           title="Download PDF"
                         >
                           <Download className="w-4 h-4" />
-                        </a>
+                        </button>
 
                         {/* Record Payment */}
                         {!isPaid && onRecordPayment && (
                           <button
+                            type="button"
                             onClick={() => onRecordPayment(invoice)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/50 dark:text-slate-400 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/50 dark:text-slate-400 transition-colors cursor-pointer"
                             title="Record Payment"
                           >
                             <CreditCard className="w-4 h-4" />
@@ -151,8 +172,9 @@ export default function InvoiceTable({
                         {/* Send Email */}
                         {onSendEmail && (
                           <button
+                            type="button"
                             onClick={() => onSendEmail(invoice.id)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 dark:text-slate-400 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 dark:text-slate-400 transition-colors cursor-pointer"
                             title="Send Invoice Email"
                           >
                             <Send className="w-4 h-4" />
@@ -162,8 +184,9 @@ export default function InvoiceTable({
                         {/* Send Reminder */}
                         {!isPaid && onSendReminder && (
                           <button
+                            type="button"
                             onClick={() => onSendReminder(invoice.id)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 dark:text-slate-400 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 dark:text-slate-400 transition-colors cursor-pointer"
                             title="Send Payment Reminder"
                           >
                             <Bell className="w-4 h-4" />

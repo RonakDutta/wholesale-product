@@ -1,9 +1,8 @@
--- Enterprise Invoice Management System Tables (Corrected for UUID Keys)
+-- Enterprise Invoice Management System Tables
 
--- Enable UUID extension if not enabled
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- Table 1: Invoices Sequence Table for invoice number generator (INV-YYYY-XXXXXX)
+-- Table 1: Invoices Sequence Table for atomic unique invoice numbering (INV-YYYY-XXXXXX)
 CREATE TABLE IF NOT EXISTS invoice_sequences (
     year INTEGER PRIMARY KEY,
     last_number INTEGER DEFAULT 0
@@ -31,10 +30,18 @@ CREATE TABLE IF NOT EXISTS invoices (
     due_date DATE,
     notes TEXT,
     terms_conditions TEXT,
+    pdf_path TEXT,
     pdf_url TEXT,
+    email_sent BOOLEAN DEFAULT FALSE,
+    email_sent_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Schema Migrations if table pre-exists
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS pdf_path TEXT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS email_sent BOOLEAN DEFAULT FALSE;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS email_sent_at TIMESTAMP;
 
 -- Table 3: Invoice Line Items Table
 CREATE TABLE IF NOT EXISTS invoice_items (
@@ -68,11 +75,14 @@ CREATE TABLE IF NOT EXISTS invoice_logs (
     invoice_id UUID REFERENCES invoices(id) ON DELETE CASCADE,
     action VARCHAR(50) NOT NULL,
     performed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    recipient_email VARCHAR(255),
+    smtp_response TEXT,
+    error_logs TEXT,
     details TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Indexes for performance optimization
+-- Performance Indexes
 CREATE INDEX IF NOT EXISTS idx_invoices_order_id ON invoices(order_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_buyer_id ON invoices(buyer_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_supplier_id ON invoices(supplier_id);

@@ -1,15 +1,18 @@
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { lazy, Suspense } from "react";
+import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { CartProvider } from "./context/CartContext";
 import { WishlistProvider } from "./context/WishlistContext";
 import { AuthProvider } from "./context/AuthContext";
 import { SocketProvider } from "./context/SocketContext";
 import { NotificationProvider } from "./context/NotificationContext";
+import { UnreadProvider } from "./context/UnreadContext";
 
 import MainLayout from "./layouts/MainLayout";
 import AuthLayout from "./layouts/AuthLayout";
 import InfoLayout from "./layouts/InfoLayout";
-import DashboardLayout from "./layouts/DashboardLayout";
+
+import RequireRole from "./components/RequireRole";
 
 import MarketplaceHome from "./pages/MarketplaceHome";
 import ProductDetails from "./pages/ProductDetails";
@@ -22,33 +25,57 @@ import Checkout from "./pages/Checkout";
 import Payment from "./pages/Payment";
 import OrderSuccess from "./pages/OrderSuccess";
 import OrderDetails from "./pages/OrderDetails";
-import DashboardOverview from "./pages/dashboard/DashboardOverview";
-import MyProducts from "./pages/dashboard/MyProducts";
-import AddProduct from "./pages/dashboard/AddProduct";
-import Orders from "./pages/dashboard/Orders";
+import MyOrders from "./pages/MyOrders";
 import Messages from "./pages/Messages";
-import Settings from "./pages/dashboard/Settings";
-import EditProduct from "./pages/dashboard/EditProduct";
-import Promotions from "./pages/dashboard/Promotions";
 import RetailDashboard from "./pages/RetailDashboard";
 import Invoices from "./pages/dashboard/Invoices";
 import CreateInvoice from "./pages/dashboard/CreateInvoice";
 import InvoiceDetails from "./pages/dashboard/InvoiceDetails";
 import InvoiceReports from "./pages/dashboard/InvoiceReports";
 import InvoiceSettings from "./pages/dashboard/InvoiceSettings";
+import WholesalerProfile from "./pages/WholesalerProfile";
+import DriverTracking from "./pages/DriverTracking";
 import NotFound from "./pages/NotFound";
+
+// Seller workspace is lazy-loaded: retailers never download this bundle.
+const SellerLayout = lazy(() => import("./layouts/SellerLayout"));
+const DashboardOverview = lazy(() => import("./pages/dashboard/DashboardOverview"));
+const MyProducts = lazy(() => import("./pages/dashboard/MyProducts"));
+const AddProduct = lazy(() => import("./pages/dashboard/AddProduct"));
+const EditProduct = lazy(() => import("./pages/dashboard/EditProduct"));
+const Orders = lazy(() => import("./pages/dashboard/Orders"));
+const Promotions = lazy(() => import("./pages/dashboard/Promotions"));
+const Settings = lazy(() => import("./pages/dashboard/Settings"));
+
+const SellerFallback = () => (
+  <div className="flex min-h-dvh items-center justify-center bg-slate-100">
+    <div className="h-8 w-8 animate-spin rounded-full border-4 border-clay border-t-transparent" />
+  </div>
+);
+
+// Wraps the seller shell in its role guard and Suspense boundary.
+const SellerArea = () => (
+  <RequireRole roles={["seller", "both"]}>
+    <Suspense fallback={<SellerFallback />}>
+      <SellerLayout />
+    </Suspense>
+  </RequireRole>
+);
 
 const router = createBrowserRouter([
   {
     path: "*",
     element: <NotFound />,
   },
+  // Driver tracking link: standalone, unauthenticated, no marketplace shell.
+  { path: "/track/:token", element: <DriverTracking /> },
   {
     path: "/",
     element: <MainLayout />,
     children: [
       { index: true, element: <MarketplaceHome /> },
       { path: "product/:id", element: <ProductDetails /> },
+      { path: "wholesaler/:id", element: <WholesalerProfile /> },
       { path: "wishlist", element: <Wishlist /> },
       { path: "search", element: <SearchResults /> },
       { path: "messages", element: <Messages /> },
@@ -56,13 +83,14 @@ const router = createBrowserRouter([
       { path: "checkout", element: <Checkout /> },
       { path: "payment/:orderId", element: <Payment /> },
       { path: "order-success", element: <OrderSuccess /> },
+      { path: "orders", element: <MyOrders /> },
       { path: "orders/:orderId", element: <OrderDetails /> },
       { path: "retail-dashboard", element: <RetailDashboard /> },
     ],
   },
   {
-    path: "/dashboard",
-    element: <DashboardLayout />,
+    path: "/seller",
+    element: <SellerArea />,
     children: [
       { index: true, element: <DashboardOverview /> },
       { path: "products", element: <MyProducts /> },
@@ -75,9 +103,14 @@ const router = createBrowserRouter([
       { path: "invoices/settings", element: <InvoiceSettings /> },
       { path: "invoices/:id", element: <InvoiceDetails /> },
       { path: "promotions", element: <Promotions /> },
+      { path: "messages", element: <Messages /> },
+      { path: "messages/:vendorId", element: <Messages /> },
       { path: "settings", element: <Settings /> },
     ],
   },
+  // Old dashboard links and bookmarks keep working.
+  { path: "/dashboard", element: <Navigate to="/seller" replace /> },
+  { path: "/dashboard/*", element: <Navigate to="/seller" replace /> },
   {
     element: <InfoLayout />,
     children: [
@@ -88,10 +121,6 @@ const router = createBrowserRouter([
       {
         path: "verified-sellers",
         element: <FooterInfoPage page="verified-sellers" />,
-      },
-      {
-        path: "dynamic-pricing",
-        element: <FooterInfoPage page="dynamic-pricing" />,
       },
       { path: "help-center", element: <FooterInfoPage page="help-center" /> },
       { path: "upi-guide", element: <FooterInfoPage page="upi-guide" /> },
@@ -124,12 +153,14 @@ export default function App() {
     <AuthProvider>
       <SocketProvider>
         <NotificationProvider>
-          <CartProvider>
-            <WishlistProvider>
-              <Toaster richColors position="bottom-right" />
-              <RouterProvider router={router} />
-            </WishlistProvider>
-          </CartProvider>
+          <UnreadProvider>
+            <CartProvider>
+              <WishlistProvider>
+                <Toaster richColors position="bottom-right" />
+                <RouterProvider router={router} />
+              </WishlistProvider>
+            </CartProvider>
+          </UnreadProvider>
         </NotificationProvider>
       </SocketProvider>
     </AuthProvider>

@@ -5,7 +5,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import ModalShell from "./ModalShell";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const ContactChoiceModal = ({
   vendorId,
@@ -16,11 +16,15 @@ const ContactChoiceModal = ({
   onSelectWhatsApp,
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  // Stay within the current shell (dashboard vs marketplace)
+  const basePath = location.pathname.startsWith("/seller")
+    ? "/seller/messages"
+    : "/messages";
 
   const handleSelectChat = () => {
-    console.log("navigating with vendorId:", vendorId);
     onClose();
-    navigate(`/messages/${vendorId}`, {
+    navigate(`${basePath}/${vendorId}`, {
       state: {
         openChat: {
           vendorId,

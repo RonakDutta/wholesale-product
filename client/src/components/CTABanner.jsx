@@ -1,4 +1,3 @@
-import React from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Store } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
@@ -15,7 +14,7 @@ const CTABanner = () => {
     if (!isAuthenticated) {
       navigate("/signup?role=seller");
     } else {
-      navigate("/dashboard/settings");
+      navigate("/seller/settings");
     }
   };
 

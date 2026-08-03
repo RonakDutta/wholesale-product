@@ -26,7 +26,7 @@ const SORT_OPTIONS = [
   { value: "lowest-moq", label: "Lowest MOQ" },
   { value: "fastest-shipping", label: "Fastest Shipping" },
   { value: "highest-stock", label: "Highest Stock" },
-  { value: "best-response", label: "Best Response" },
+  { value: "most-delivered", label: "Most Orders Delivered" },
 ];
 
 const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
@@ -91,9 +91,12 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
   };
 
   const getSupplierName = (id) => {
-    if (!id) return "—";
+    if (!id) return "-";
     const supplier = product.suppliers.find((s) => s.id === id);
-    return supplier?.name || `#${id}`;
+    if (!supplier) return "-";
+    return (
+      supplier.companyName || supplier.company_name || supplier.name || "-"
+    );
   };
 
   const insightCards = [
@@ -183,7 +186,7 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
               </div>
               <p
                 className={`font-mono text-base sm:text-lg font-black truncate ${card.color}`}
-                title={card.value !== "—" ? card.value : undefined}
+                title={card.value !== "-" ? card.value : undefined}
               >
                 {card.value}
               </p>
@@ -278,6 +281,22 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
                 className="w-16 px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
             </div>
+
+            <div className="flex items-center border border-slate-300 rounded-md bg-white overflow-hidden focus-within:border-clay focus-within:ring-1 focus-within:ring-clay transition-all">
+              <span className="px-2.5 py-2 text-xs font-bold uppercase tracking-wider text-slate-500 bg-slate-50 border-r border-slate-200 select-none">
+                Min Rating
+              </span>
+              <select
+                value={minRating}
+                onChange={(e) => setMinRating(Number(e.target.value))}
+                className="cursor-pointer bg-white px-2 py-2 text-sm text-slate-900 outline-none"
+              >
+                <option value={0}>Any</option>
+                <option value={3}>3+</option>
+                <option value={4}>4+</option>
+                <option value={4.5}>4.5+</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -296,7 +315,7 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
                 "Stock",
                 "Shipping",
                 "Location",
-                "Response",
+                "Delivered",
                 "",
               ].map((heading, idx) => (
                 <th
@@ -323,7 +342,7 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
                     lowestMOQ: metrics.lowestMOQId === supplier.id,
                     highestRating: metrics.highestRatingId === supplier.id,
                     fastestShipping: metrics.fastestShippingId === supplier.id,
-                    bestResponse: metrics.bestResponseId === supplier.id,
+                    mostDelivered: metrics.mostDeliveredId === supplier.id,
                     highestStock: metrics.highestStockId === supplier.id,
                   }}
                 />
@@ -358,7 +377,7 @@ const SupplierComparison = ({ product, onAddToCart, onContactSupplier }) => {
                 lowestMOQ: metrics.lowestMOQId === supplier.id,
                 highestRating: metrics.highestRatingId === supplier.id,
                 fastestShipping: metrics.fastestShippingId === supplier.id,
-                bestResponse: metrics.bestResponseId === supplier.id,
+                mostDelivered: metrics.mostDeliveredId === supplier.id,
                 highestStock: metrics.highestStockId === supplier.id,
               }}
             />

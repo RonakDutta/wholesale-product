@@ -1,7 +1,8 @@
 const pool = require("../config/db");
 const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange } = require("../services/orderStatusService");
 const PDFDocument = require("pdfkit");
-const { enqueueNotification, NOTIFICATION_CHANNELS, NOTIFICATION_TYPES } = require("../services/notificationManager");
+const { geocodeOrderDestination } = require("../services/geocodingService");
+const invoiceService = require("../services/invoiceService");
 
 const ensureOrderAccess = async (req, res, orderId, { requireBuyer = true, requireSupplier = true } = {}) => {
   const userId = req.user?.id;
@@ -60,18 +61,23 @@ const getSupplierOrders = async (req, res) => {
         o.order_number,
         COALESCE(wp.company_name, u.first_name || ' ' || u.last_name) as buyer,
         u.first_name || ' ' || u.last_name as contact,
-        p.name as product,
+        COALESCE(items.first_product, p.name) as product,
+        COALESCE(items.item_count, 1) as item_count,
         o.quantity as qty,
         o.total_amount as amount,
         o.status,
         o.payment_status,
         o.created_at as date
       FROM orders o
-      JOIN supplier_inventory si ON o.inventory_item_id = si.id
-      JOIN products p ON si.product_id = p.id
+      LEFT JOIN supplier_inventory si ON o.inventory_item_id = si.id
+      LEFT JOIN products p ON si.product_id = p.id
       JOIN users u ON o.buyer_id = u.id
       LEFT JOIN wholesaler_profiles wp ON u.id = wp.user_id
-      WHERE si.supplier_id = $1
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS item_count, MIN(oi.product_name) AS first_product
+        FROM order_items oi WHERE oi.order_id = o.id
+      ) items ON TRUE
+      WHERE o.supplier_id = $1 OR si.supplier_id = $1
       ORDER BY o.created_at DESC
     `;
     const result = await pool.query(query, [supplierId]);
@@ -85,13 +91,29 @@ const getSupplierOrders = async (req, res) => {
 const getBuyerOrders = async (req, res) => {
   const buyerId = req.user.id;
   try {
+    // An order can hold several products from one wholesaler, so describe it
+    // by its lines rather than naming whichever product happened to be first.
     const result = await pool.query(
-      `SELECT o.id, o.order_number, o.status, o.payment_status, o.total_amount, o.created_at,
-              p.name as product, u.first_name || ' ' || u.last_name as supplier_name
+      `SELECT o.id, o.order_number, o.status, o.payment_status,
+              o.total_amount, o.created_at, o.quantity,
+              COALESCE(wp.company_name, u.first_name || ' ' || u.last_name) AS supplier_name,
+              COALESCE(items.item_count, 1) AS item_count,
+              COALESCE(items.first_product, p.name) AS product,
+              COALESCE(items.image, si.image_url, p.global_image_url) AS image
        FROM orders o
-       JOIN supplier_inventory si ON o.inventory_item_id = si.id
-       JOIN products p ON si.product_id = p.id
-       JOIN users u ON si.supplier_id = u.id
+       LEFT JOIN supplier_inventory si ON o.inventory_item_id = si.id
+       LEFT JOIN products p ON si.product_id = p.id
+       LEFT JOIN users u ON u.id = o.supplier_id
+       LEFT JOIN wholesaler_profiles wp ON wp.user_id = o.supplier_id
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int AS item_count,
+                MIN(oi.product_name) AS first_product,
+                MIN(COALESCE(isi.image_url, ip.global_image_url)) AS image
+         FROM order_items oi
+         LEFT JOIN supplier_inventory isi ON isi.id = oi.inventory_item_id
+         LEFT JOIN products ip ON ip.id = oi.product_id
+         WHERE oi.order_id = o.id
+       ) items ON TRUE
        WHERE o.buyer_id = $1
        ORDER BY o.created_at DESC`,
       [buyerId],
@@ -104,114 +126,176 @@ const getBuyerOrders = async (req, res) => {
 };
 
 const createOrder = async (req, res) => {
-  const { products, deliveryAddress, totalAmount, billingAddress, paymentMethod = "upi" } = req.body;
+  const { products, deliveryAddress, billingAddress, paymentMethod = "upi" } = req.body;
   const buyerId = req.user?.id;
 
   if (!buyerId) {
     return res.status(401).json({ success: false, message: "Unauthorized: Missing user credentials." });
   }
 
-  if (!products || products.length === 0 || !deliveryAddress || !totalAmount) {
+  if (!Array.isArray(products) || products.length === 0 || !deliveryAddress) {
     return res.status(400).json({ success: false, message: "Missing required order checkout fields." });
   }
-
-  const targetItem = products[0];
 
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
 
-    // ids are UUIDs; keep them as strings (strip any "#..." suffix the client may append)
-    const cleanProductId = String(targetItem.productId || "").split("#")[0].trim();
-    const rawSupplierId = targetItem.supplierId || targetItem.vendorId;
-    const cleanSupplierId = rawSupplierId ? String(rawSupplierId).split("#")[0].trim() : null;
+    // Resolve every requested line against live inventory. Prices, MOQ and
+    // stock all come from the database - amounts sent by the client are
+    // ignored, otherwise a crafted request could set its own price.
+    const lines = [];
+    for (const entry of products) {
+      const productId = String(entry.productId || "").split("#")[0].trim();
+      const inventoryId = entry.inventoryId
+        ? String(entry.inventoryId).split("#")[0].trim()
+        : null;
+      const quantity = parseInt(entry.quantity, 10) || 0;
 
-    if (!cleanProductId) {
-      throw new Error("Invalid product ID format.");
-    }
+      if (!productId) throw new Error("Invalid product reference in order.");
+      if (quantity <= 0) throw new Error("Every item needs a quantity of at least 1.");
 
-    // Only constrain by supplier when we actually have one, so we never pass
-    // an invalid value into a UUID column.
-    let inventoryQuery = { rows: [] };
-    if (cleanSupplierId) {
-      inventoryQuery = await client.query(
-        "SELECT id, supplier_id, stock, moq, price FROM supplier_inventory WHERE product_id = $1 AND supplier_id = $2 AND status = 'Active' LIMIT 1",
-        [cleanProductId, cleanSupplierId],
+      // Prefer the exact listing the buyer chose; fall back to any active
+      // listing of that product.
+      let lookup = { rows: [] };
+      if (inventoryId) {
+        lookup = await client.query(
+          `SELECT si.id, si.supplier_id, si.product_id, si.stock, si.moq,
+                  si.price, si.discount_price, si.shipping_days, p.name AS product_name
+           FROM supplier_inventory si
+           JOIN products p ON p.id = si.product_id
+           WHERE si.id = $1 AND si.status = 'Active'`,
+          [inventoryId],
+        );
+      }
+      if (lookup.rows.length === 0) {
+        lookup = await client.query(
+          `SELECT si.id, si.supplier_id, si.product_id, si.stock, si.moq,
+                  si.price, si.discount_price, si.shipping_days, p.name AS product_name
+           FROM supplier_inventory si
+           JOIN products p ON p.id = si.product_id
+           WHERE si.product_id = $1 AND si.status = 'Active'
+           ORDER BY si.price ASC
+           LIMIT 1`,
+          [productId],
+        );
+      }
+      if (lookup.rows.length === 0) {
+        throw new Error("A product in your order is no longer available.");
+      }
+
+      const inv = lookup.rows[0];
+
+      if (String(inv.supplier_id) === String(buyerId)) {
+        throw new Error("You cannot order your own inventory.");
+      }
+      if (quantity < inv.moq) {
+        throw new Error(`${inv.product_name} has a minimum order quantity of ${inv.moq}.`);
+      }
+      if (inv.stock < quantity) {
+        throw new Error(`${inv.product_name} only has ${inv.stock} left in stock.`);
+      }
+
+      // Bulk price applies once the MOQ threshold is met.
+      const unitPrice = Number(
+        inv.discount_price && quantity >= inv.moq ? inv.discount_price : inv.price,
       );
+
+      lines.push({
+        inventoryId: inv.id,
+        productId: inv.product_id,
+        supplierId: inv.supplier_id,
+        productName: inv.product_name,
+        quantity,
+        unitPrice,
+        listPrice: Number(inv.price),
+        discountPrice: inv.discount_price ? Number(inv.discount_price) : null,
+        moq: inv.moq,
+        shippingDays: inv.shipping_days,
+        lineTotal: Number((unitPrice * quantity).toFixed(2)),
+      });
     }
 
-    if (inventoryQuery.rows.length === 0) {
-      inventoryQuery = await client.query(
-        "SELECT id, supplier_id, stock, moq, price FROM supplier_inventory WHERE product_id = $1 AND status = 'Active' LIMIT 1",
-        [cleanProductId],
-      );
+    // One order ships from one wholesaler on one truck.
+    const supplierIds = new Set(lines.map((l) => String(l.supplierId)));
+    if (supplierIds.size > 1) {
+      throw new Error("An order can only contain items from a single wholesaler.");
     }
 
-    if (inventoryQuery.rows.length === 0) {
-      throw new Error("Specified supplier product not found in active inventory catalogs.");
-    }
-
-    const inventoryItem = inventoryQuery.rows[0];
-    const cleanQuantity = parseInt(targetItem.quantity, 10) || 1;
-    const cleanTotal = parseFloat(totalAmount);
-
-    if (cleanQuantity < inventoryItem.moq) {
-      throw new Error(`Quantity must meet MOQ of ${inventoryItem.moq}`);
-    }
-
-    if (inventoryItem.stock < cleanQuantity) {
-      throw new Error("Insufficient stock for requested quantity");
-    }
-
-    if (inventoryItem.supplier_id === buyerId) {
-      throw new Error("Supplier cannot order their own inventory");
-    }
+    const supplierId = lines[0].supplierId;
+    const subtotal = Number(lines.reduce((sum, l) => sum + l.lineTotal, 0).toFixed(2));
+    const totalQuantity = lines.reduce((sum, l) => sum + l.quantity, 0);
+    const maxShippingDays = Math.max(...lines.map((l) => Number(l.shippingDays) || 7));
 
     const orderNumber = `ORD-${Date.now()}-${buyerId}`;
     const orderResult = await client.query(
       `INSERT INTO orders (
-        buyer_id,
-        supplier_id,
-        inventory_item_id,
-        quantity,
-        total_amount,
-        subtotal,
-        status,
-        payment_status,
-        delivery_address,
-        billing_address,
-        contact_phone,
-        notes,
-        order_number,
-        expected_delivery_date,
-        updated_at
+        buyer_id, supplier_id, inventory_item_id, quantity,
+        total_amount, subtotal, status, payment_status,
+        delivery_address, billing_address, contact_phone, notes,
+        order_number, expected_delivery_date, updated_at
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP) RETURNING id`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP)
+       RETURNING id`,
       [
         buyerId,
-        inventoryItem.supplier_id,
-        inventoryItem.id,
-        cleanQuantity,
-        cleanTotal,
-        cleanTotal,
+        supplierId,
+        // kept for backwards compatibility with single-item readers
+        lines[0].inventoryId,
+        totalQuantity,
+        subtotal,
+        subtotal,
         "payment_pending",
         "pending",
         JSON.stringify(deliveryAddress),
         JSON.stringify(billingAddress || deliveryAddress),
         String(deliveryAddress.phone || ""),
-        "Order created via enterprise checkout",
-        orderNumber,
-        new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+        `Order with ${lines.length} item${lines.length === 1 ? "" : "s"}`,
+        // order_number is VARCHAR(50): a full UUID suffix overflows it
+        `ORD-${Date.now()}-${String(buyerId).slice(0, 8)}`,
+        new Date(Date.now() + maxShippingDays * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10),
       ],
     );
 
     const orderId = orderResult.rows[0].id;
 
-    await client.query(
-      `UPDATE supplier_inventory SET stock = stock - $1 WHERE id = $2`,
-      [cleanQuantity, inventoryItem.id],
-    );
+    for (const line of lines) {
+      await client.query(
+        `INSERT INTO order_items (
+           order_id, inventory_item_id, product_id, supplier_id, product_name,
+           quantity, unit_price, discount_price, total_price, moq, shipping_days, status
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [
+          orderId,
+          line.inventoryId,
+          line.productId,
+          line.supplierId,
+          line.productName,
+          line.quantity,
+          line.listPrice,
+          line.discountPrice,
+          line.lineTotal,
+          line.moq,
+          line.shippingDays,
+          "pending",
+        ],
+      );
+
+      // Guarded so two concurrent checkouts cannot oversell the same listing.
+      const stockUpdate = await client.query(
+        `UPDATE supplier_inventory
+         SET stock = stock - $1
+         WHERE id = $2 AND stock >= $1
+         RETURNING id`,
+        [line.quantity, line.inventoryId],
+      );
+      if (stockUpdate.rows.length === 0) {
+        throw new Error(`${line.productName} went out of stock while checking out.`);
+      }
+    }
 
     await client.query(
       `INSERT INTO order_status_history (order_id, status, previous_status, updated_by, updated_by_role, remarks)
@@ -222,42 +306,39 @@ const createOrder = async (req, res) => {
     await client.query(
       `INSERT INTO payment_transactions (order_id, amount, payment_method, payment_status, gateway_response)
        VALUES ($1, $2, $3, $4, $5)`,
-      [orderId, cleanTotal, paymentMethod, "pending", JSON.stringify({ method: paymentMethod })],
+      [orderId, subtotal, paymentMethod, "pending", JSON.stringify({ method: paymentMethod })],
     );
 
     await client.query("COMMIT");
 
-    const buyerEmail = req.user.email || null;
+    // A pin dropped at checkout is authoritative - only fall back to
+    // geocoding the typed address when the buyer did not place one. Geocoding
+    // is rate limited, so it is never awaited: it must not delay checkout,
+    // and the map degrades gracefully until it lands.
+    const pinnedLat = Number(deliveryAddress?.lat);
+    const pinnedLng = Number(deliveryAddress?.lng);
+    if (Number.isFinite(pinnedLat) && Number.isFinite(pinnedLng)) {
+      pool
+        .query("UPDATE orders SET delivery_lat = $1, delivery_lng = $2 WHERE id = $3", [
+          pinnedLat,
+          pinnedLng,
+          orderId,
+        ])
+        .catch(() => { });
+    } else {
+      geocodeOrderDestination(orderId, deliveryAddress).catch(() => { });
+    }
 
-    await enqueueNotification({
-      userId: buyerId,
-      title: "Order Placed Successfully",
-      message: `Your order ${orderNumber} has been created and is pending payment.`,
-      notificationType: NOTIFICATION_TYPES.order_update,
-      channels: [NOTIFICATION_CHANNELS.IN_APP, NOTIFICATION_CHANNELS.EMAIL],
-      emailPayload: {
-        to: buyerEmail,
-        subject: "Order Confirmation",
-        templateName: "order_update",
-        variables: {
-          orderNumber,
-          message: "Your new order is being processed.",
-          status: "payment_pending",
-        },
-      },
-      smsPayload: {
-        to: String(deliveryAddress.phone || ""),
-        body: `Your order ${orderNumber} has been placed and is pending payment.`,
-      },
-      referenceId: orderId,
-      referenceType: "order",
+    // Trigger automatic invoice creation in background
+    invoiceService.createInvoiceFromOrder(orderId).catch((invErr) => {
+      console.warn("Background invoice creation notice:", invErr.message);
     });
 
-    return res.status(201).json({ success: true, orderId });
+    return res.status(201).json({ success: true, orderId, subtotal, itemCount: lines.length });
   } catch (error) {
     await client.query("ROLLBACK");
-    console.error("CRITICAL DATABASE REJECTION:", error);
-    return res.status(400).json({ success: false, message: error.message || "Database Error" });
+    console.error("Order creation failed:", error);
+    return res.status(400).json({ success: false, message: error.message || "Could not create order" });
   } finally {
     client.release();
   }
@@ -324,7 +405,7 @@ const updatePaymentStatus = async (req, res) => {
     if (!accessCheck) return;
 
     await client.query("BEGIN");
-    const checkOrder = await client.query("SELECT buyer_id, status FROM orders WHERE id = $1", [orderId]);
+    const checkOrder = await client.query("SELECT buyer_id, status, total_amount FROM orders WHERE id = $1", [orderId]);
     if (checkOrder.rows.length === 0) {
       throw new Error("Order metadata mapping context missing.");
     }
@@ -344,10 +425,27 @@ const updatePaymentStatus = async (req, res) => {
       [paymentStatus, nextOrderStatus, orderId],
     );
 
+    // Stock is deducted when the order is created. If payment never completes,
+    // hand it back, otherwise abandoned checkouts silently consume inventory.
+    // The lifecycle makes payment_failed terminal, so this cannot double-run.
+    if (nextOrderStatus === "payment_failed") {
+      await client.query(
+        `UPDATE supplier_inventory si
+         SET stock = si.stock + o.quantity
+         FROM orders o
+         WHERE o.id = $1 AND si.id = o.inventory_item_id`,
+        [orderId],
+      );
+    }
+
+    // Record the order's actual value. This was hardcoded to 0, which both
+    // misrepresented the payment and violated the amount > 0 check constraint.
+    const transactionAmount = Number(checkOrder.rows[0].total_amount) || 0;
+
     await client.query(
       `INSERT INTO payment_transactions (order_id, amount, payment_method, payment_status, gateway_response, created_at)
        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-      [orderId, 0, paymentMethod, paymentStatus === "paid" ? "completed" : "pending", JSON.stringify({ method: paymentMethod })],
+      [orderId, transactionAmount, paymentMethod, paymentStatus === "paid" ? "completed" : "pending", JSON.stringify({ method: paymentMethod })],
     );
 
     await client.query(
@@ -357,6 +455,14 @@ const updatePaymentStatus = async (req, res) => {
     );
 
     await client.query("COMMIT");
+
+    // Automatically trigger invoice generation & PDF dispatch if payment is marked paid
+    if (paymentStatus === "paid") {
+      invoiceService.createInvoiceFromOrder(orderId).catch((invErr) => {
+        console.warn("Background invoice creation notice:", invErr.message);
+      });
+    }
+
     res.json({ success: true, message: `Payment state mapped successfully to active parameter: ${paymentStatus}.` });
   } catch (error) {
     await client.query("ROLLBACK");
@@ -372,9 +478,53 @@ const getOrderById = async (req, res) => {
     const accessCheck = await ensureOrderAccess(req, res, req.params.orderId, { requireBuyer: true, requireSupplier: true });
     if (!accessCheck) return;
 
-    const result = await pool.query("SELECT * FROM orders WHERE id = $1", [req.params.orderId]);
+    // Include what was actually ordered - the detail page needs the product,
+    // its image and the supplier, not just the raw order row.
+    const result = await pool.query(
+      `SELECT
+         o.*,
+         p.id            AS product_id,
+         p.name          AS product_name,
+         p.category      AS product_category,
+         COALESCE(si.image_url, p.global_image_url) AS product_image,
+         si.price        AS unit_price,
+         si.discount_price AS unit_discount_price,
+         si.moq,
+         si.shipping_days,
+         su.id           AS supplier_user_id,
+         COALESCE(wp.company_name, su.first_name || ' ' || su.last_name) AS supplier_name,
+         wp.city         AS supplier_city,
+         wp.country      AS supplier_country,
+         wp.contact_phone AS supplier_phone,
+         bu.first_name || ' ' || bu.last_name AS buyer_name
+       FROM orders o
+       LEFT JOIN supplier_inventory si ON o.inventory_item_id = si.id
+       LEFT JOIN products p ON si.product_id = p.id
+       LEFT JOIN users su ON si.supplier_id = su.id
+       LEFT JOIN wholesaler_profiles wp ON wp.user_id = su.id
+       LEFT JOIN users bu ON o.buyer_id = bu.id
+       WHERE o.id = $1`,
+      [req.params.orderId],
+    );
     if (result.rows.length === 0) return res.status(404).json({ message: "Not found" });
-    res.json(result.rows[0]);
+
+    // Line items for multi-product orders. Older single-item orders have no
+    // rows here, so the caller falls back to the flattened product columns.
+    const itemsResult = await pool.query(
+      `SELECT oi.id, oi.product_id, oi.product_name, oi.quantity,
+              oi.unit_price, oi.discount_price, oi.total_price, oi.moq,
+              oi.shipping_days,
+              COALESCE(si.image_url, p.global_image_url) AS image,
+              p.category
+       FROM order_items oi
+       LEFT JOIN supplier_inventory si ON si.id = oi.inventory_item_id
+       LEFT JOIN products p ON p.id = oi.product_id
+       WHERE oi.order_id = $1
+       ORDER BY oi.created_at ASC`,
+      [req.params.orderId],
+    );
+
+    res.json({ ...result.rows[0], items: itemsResult.rows });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

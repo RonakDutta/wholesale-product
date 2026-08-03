@@ -123,8 +123,7 @@ exports.getProductById = async (req, res) => {
             'shippingDays', si.shipping_days,
             'city', wp.city,
             'country', wp.country,
-            'responseRate', wp.response_rate,
-            'responseTime', wp.response_time,
+            'gstVerified', (wp.gstin IS NOT NULL AND wp.gstin <> ''),
             'contactPhone', wp.contact_phone
           )
         ) as suppliers
@@ -154,10 +153,192 @@ exports.getProductById = async (req, res) => {
 
     const product = result.rows[0];
     product.reviewSummary = reviewSummary.rows[0];
+
+    // Per-supplier track record. These are counted from real orders and
+    // reviews, so a new seller honestly shows zero instead of a stock figure.
+    const supplierIds = [
+      ...new Set((product.suppliers || []).map((s) => s.supplierId)),
+    ].filter(Boolean);
+
+    if (supplierIds.length > 0) {
+      const statsById = new Map();
+
+      const fulfilment = await pool.query(
+        `SELECT COALESCE(o.supplier_id, si.supplier_id) AS supplier_id,
+                COUNT(*) FILTER (WHERE o.status IN ('delivered', 'completed')) AS fulfilled_orders
+         FROM orders o
+         LEFT JOIN supplier_inventory si ON si.id = o.inventory_item_id
+         WHERE COALESCE(o.supplier_id, si.supplier_id) = ANY($1::uuid[])
+         GROUP BY 1`,
+        [supplierIds],
+      );
+      fulfilment.rows.forEach((row) => {
+        statsById.set(row.supplier_id, {
+          fulfilledOrders: Number(row.fulfilled_orders) || 0,
+        });
+      });
+
+      const catalog = await pool.query(
+        `SELECT supplier_id, COUNT(*) AS catalog_size
+         FROM supplier_inventory
+         WHERE supplier_id = ANY($1::uuid[]) AND status = 'Active'
+         GROUP BY supplier_id`,
+        [supplierIds],
+      );
+      catalog.rows.forEach((row) => {
+        const entry = statsById.get(row.supplier_id) || {};
+        entry.catalogSize = Number(row.catalog_size) || 0;
+        statsById.set(row.supplier_id, entry);
+      });
+
+      try {
+        const sellerRatings = await pool.query(
+          `SELECT seller_id,
+                  COALESCE(AVG(overall_experience), 0)::numeric(10,2) AS rating,
+                  COUNT(*) FILTER (WHERE status = 'active') AS reviews
+           FROM seller_reviews
+           WHERE seller_id = ANY($1::uuid[])
+           GROUP BY seller_id`,
+          [supplierIds],
+        );
+        sellerRatings.rows.forEach((row) => {
+          const entry = statsById.get(row.seller_id) || {};
+          entry.rating = Number(row.rating) || 0;
+          entry.reviews = Number(row.reviews) || 0;
+          statsById.set(row.seller_id, entry);
+        });
+      } catch (ratingErr) {
+        console.warn("Supplier rating query failed:", ratingErr.message);
+      }
+
+      product.suppliers = product.suppliers.map((supplier) => ({
+        fulfilledOrders: 0,
+        catalogSize: 0,
+        rating: 0,
+        reviews: 0,
+        ...supplier,
+        ...(statsById.get(supplier.supplierId) || {}),
+      }));
+    }
+
     res.status(200).json(product);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error fetching product" });
+  }
+};
+
+// @desc    Public wholesaler profile with their active listings
+// @route   GET /api/products/wholesaler/:id
+exports.getWholesalerById = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const profileResult = await pool.query(
+      `SELECT
+         u.id,
+         u.first_name || ' ' || u.last_name AS contact_name,
+         u.email,
+         wp.company_name,
+         wp.city,
+         wp.country,
+         wp.is_verified,
+         wp.gst_verified,
+         wp.years_in_business,
+         wp.contact_phone,
+         u.created_at AS member_since
+       FROM users u
+       LEFT JOIN wholesaler_profiles wp ON wp.user_id = u.id
+       WHERE u.id = $1`,
+      [id],
+    );
+
+    if (profileResult.rows.length === 0) {
+      return res.status(404).json({ message: "Wholesaler not found" });
+    }
+
+    const listingsResult = await pool.query(
+      `SELECT
+         si.id            AS inventory_id,
+         si.price,
+         si.discount_price,
+         si.moq,
+         si.stock,
+         si.shipping_days,
+         p.id             AS product_id,
+         p.name,
+         p.category,
+         p.description,
+         COALESCE(si.image_url, p.global_image_url) AS image
+       FROM supplier_inventory si
+       JOIN products p ON p.id = si.product_id
+       WHERE si.supplier_id = $1 AND si.status = 'Active'
+       ORDER BY si.created_at DESC`,
+      [id],
+    );
+
+    // Orders actually fulfilled: a fact, unlike the trust score it replaces.
+    let fulfilledOrders = 0;
+    try {
+      const fulfilled = await pool.query(
+        `SELECT COUNT(*)::int AS count
+         FROM orders o
+         LEFT JOIN supplier_inventory si ON si.id = o.inventory_item_id
+         WHERE (o.supplier_id = $1 OR si.supplier_id = $1)
+           AND o.status IN ('delivered', 'completed')`,
+        [id],
+      );
+      fulfilledOrders = fulfilled.rows[0]?.count || 0;
+    } catch (err) {
+      console.warn("Fulfilled order count failed:", err.message);
+    }
+
+    // Seller rating is best-effort: the table may be empty on a new profile.
+    let ratingRow = { average_rating: 0, total_reviews: 0 };
+    try {
+      const ratingResult = await pool.query(
+        `SELECT COALESCE(AVG(overall_experience), 0)::numeric(10,2) AS average_rating,
+                COUNT(*) FILTER (WHERE status = 'active')          AS total_reviews
+         FROM seller_reviews WHERE seller_id = $1`,
+        [id],
+      );
+      ratingRow = ratingResult.rows[0] || ratingRow;
+    } catch (ratingErr) {
+      console.warn("Seller rating query failed:", ratingErr.message);
+    }
+
+    const profile = profileResult.rows[0];
+    return res.status(200).json({
+      id: profile.id,
+      companyName: profile.company_name || profile.contact_name,
+      contactName: profile.contact_name,
+      city: profile.city,
+      country: profile.country,
+      verified: profile.is_verified ?? false,
+      gstVerified: profile.gst_verified ?? false,
+      yearsInBusiness: profile.years_in_business,
+      contactPhone: profile.contact_phone,
+      memberSince: profile.member_since,
+      rating: Number(ratingRow.average_rating) || 0,
+      totalReviews: Number(ratingRow.total_reviews) || 0,
+      productCount: listingsResult.rows.length,
+      fulfilledOrders,
+      products: listingsResult.rows.map((row) => ({
+        id: row.product_id,
+        inventoryId: row.inventory_id,
+        name: row.name,
+        category: row.category,
+        description: row.description,
+        image: row.image,
+        price: Number(row.price) || 0,
+        discountPrice: row.discount_price ? Number(row.discount_price) : null,
+        moq: row.moq,
+        stock: row.stock,
+        shippingDays: row.shipping_days,
+      })),
+    });
+  } catch (err) {
+    console.error("Error fetching wholesaler:", err);
+    res.status(500).json({ message: "Server error fetching wholesaler" });
   }
 };
 
@@ -207,7 +388,7 @@ exports.updateInventoryItem = async (req, res) => {
     if (err.code === "23514") {
       return res.status(400).json({
         message:
-          "Invalid values — check that bulk price isn't higher than base price, and stock/MOQ aren't negative.",
+          "Invalid values - check that bulk price isn't higher than base price, and stock/MOQ aren't negative.",
       });
     }
     res.status(500).json({ message: "Server error while updating product" });
@@ -271,7 +452,7 @@ exports.deleteInventoryItem = async (req, res) => {
       );
       return res.status(200).json({
         message:
-          "Listing has active orders — marked as Draft instead of deleted",
+          "Listing has active orders - marked as Draft instead of deleted",
         softDeleted: true,
       });
     }
@@ -289,7 +470,7 @@ exports.deleteInventoryItem = async (req, res) => {
       );
       return res.status(200).json({
         message:
-          "Listing has order history — marked as Draft instead of deleted",
+          "Listing has order history - marked as Draft instead of deleted",
         softDeleted: true,
       });
     }
@@ -372,16 +553,23 @@ exports.contactSupplier = async (req, res) => {
       });
     }
 
-    // Generate WhatsApp message with product context
-    const message = `Hello, I am interested in your ${productData.product_name} product. Please share more details.`;
+    // Default message, used only when the client does not supply its own.
+    const message =
+      typeof req.query.message === "string" && req.query.message.trim()
+        ? req.query.message.trim()
+        : `Hello, I am interested in your ${productData.product_name} product. Please share more details.`;
 
-    // Generate WhatsApp URL
-    const whatsappUrl = `https://wa.me/${encodeURIComponent(supplierPhone)}?text=${encodeURIComponent(message)}`;
+    const normalizedPhone = String(supplierPhone).replace(/\D/g, "");
+    const whatsappUrl = `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`;
 
     console.log("WhatsApp URL generated successfully");
     return res.json({
       success: true,
-      whatsappUrl
+      whatsappUrl,
+      // Returned so the client can compose the buyer's chosen message itself
+      phone: normalizedPhone,
+      productName: productData.product_name,
+      companyName: productData.company_name,
     });
 
   } catch (err) {

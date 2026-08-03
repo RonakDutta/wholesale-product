@@ -379,6 +379,17 @@ class InvoiceRepository {
         params.push(invoiceStatus);
       }
 
+      // Cancelled invoices stay in the ledger - the numbering sequence has to
+      // stay honest and a voided document is part of the audit trail - but
+      // they are out of the way unless you ask for them by status.
+      if (String(invoiceStatus || "").toLowerCase() !== "cancelled") {
+        whereClauses.push(`i.invoice_status <> 'Cancelled'`);
+      }
+
+      // Both parties being the same account is never a real tax invoice; those
+      // rows only exist from before self-ordering was blocked.
+      whereClauses.push(`i.buyer_id IS DISTINCT FROM i.supplier_id`);
+
       if (paymentStatus) {
         whereClauses.push(`i.payment_status = $${paramIndex++}`);
         params.push(paymentStatus);
@@ -540,13 +551,19 @@ class InvoiceRepository {
     try {
       const normRole = String(role || "").toLowerCase();
       const normSide = String(side || "").toLowerCase();
-      const userClause = normRole === "admin"
+      const scopeClause = normRole === "admin"
         ? "1=1"
         : normSide === "sales"
         ? "supplier_id = $1"
         : normSide === "purchases"
         ? "buyer_id = $1"
         : "(supplier_id = $1 OR buyer_id = $1)";
+
+      // Cancelled and self-dealing invoices are excluded everywhere here.
+      // Counting a voided document towards revenue is what made the totals
+      // look wrong after cleaning old rows up.
+      const LIVE = `invoice_status <> 'Cancelled' AND buyer_id IS DISTINCT FROM supplier_id`;
+      const userClause = `${scopeClause} AND ${LIVE}`;
 
       const params = normRole === "admin" ? [] : [userId];
 
@@ -607,6 +624,8 @@ class InvoiceRepository {
           LEFT JOIN users su ON i.supplier_id = su.id
           LEFT JOIN wholesaler_profiles swp ON su.id = swp.user_id
           WHERE i.buyer_id = $1
+            AND i.invoice_status <> 'Cancelled'
+            AND i.buyer_id IS DISTINCT FROM i.supplier_id
           GROUP BY swp.company_name
           ORDER BY total_amount DESC
           LIMIT 5
@@ -620,6 +639,8 @@ class InvoiceRepository {
           LEFT JOIN users bu ON i.buyer_id = bu.id
           LEFT JOIN wholesaler_profiles bwp ON bu.id = bwp.user_id
           WHERE ${normRole === "admin" ? "1=1" : "i.supplier_id = $1"}
+            AND i.invoice_status <> 'Cancelled'
+            AND i.buyer_id IS DISTINCT FROM i.supplier_id
           GROUP BY bwp.company_name, bu.first_name, bu.last_name
           ORDER BY total_amount DESC
           LIMIT 5
@@ -663,13 +684,17 @@ class InvoiceRepository {
     try {
       const normRole = String(role || "").toLowerCase();
       const normSide = String(side || "").toLowerCase();
-      const userClause = normRole === "admin"
+      const scopeClause = normRole === "admin"
         ? "1=1"
         : normSide === "sales"
         ? "i.supplier_id = $1"
         : normSide === "purchases"
         ? "i.buyer_id = $1"
         : "(i.supplier_id = $1 OR i.buyer_id = $1)";
+
+      // A cancelled invoice collects no GST and is owed by nobody, so it must
+      // not appear in either the tax summary or the ageing buckets.
+      const userClause = `${scopeClause} AND i.invoice_status <> 'Cancelled' AND i.buyer_id IS DISTINCT FROM i.supplier_id`;
 
       const params = normRole === "admin" ? [] : [userId];
 

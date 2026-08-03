@@ -55,14 +55,16 @@ export default function InvoiceFilters({
             onChange={(e) => onFilterChange({ invoiceStatus: e.target.value })}
             className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-espresso/70 focus:outline-none focus:ring-2 focus:ring-clay/20"
           >
-            <option value="">All Invoice Statuses</option>
+            {/* Cancelled invoices are filtered out of every other view; this
+                is the only way to bring them back. */}
+            <option value="">All except cancelled</option>
             <option value="Generated">Generated</option>
             <option value="Sent">Sent</option>
             <option value="Viewed">Viewed</option>
             <option value="Paid">Paid</option>
             <option value="Partial Paid">Partial Paid</option>
             <option value="Overdue">Overdue</option>
-            <option value="Cancelled">Cancelled</option>
+            <option value="Cancelled">Cancelled only</option>
           </select>
 
           {/* Payment Status */}

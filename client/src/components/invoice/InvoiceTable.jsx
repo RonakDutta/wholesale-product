@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import InvoiceStatusBadge from "./InvoiceStatusBadge";
 import { downloadFile } from "../../utils/download";
+import { useAuth } from "../../context/AuthContext";
 
 export default function InvoiceTable({
   invoices = [],
@@ -24,6 +25,30 @@ export default function InvoiceTable({
   onSendEmail,
   onSendReminder,
 }) {
+  const { user } = useAuth();
+
+  /**
+   * The other side of the invoice, from where you are standing.
+   *
+   * This column used to print buyer_name unconditionally, so on an invoice
+   * billed to you it showed your own company back at you. Every invoice has
+   * two parties; the useful one is always the one that is not you.
+   */
+  const counterparty = (invoice) => {
+    const iAmSupplier = user?.id && invoice.supplier_id === user.id;
+    return iAmSupplier
+      ? {
+          label: "Customer",
+          name: invoice.buyer_name,
+          gstin: invoice.buyer_gstin,
+        }
+      : {
+          label: "Supplier",
+          name: invoice.supplier_name,
+          gstin: invoice.supplier_gstin,
+        };
+  };
+
   const getSortIcon = (field) => {
     if (sortBy !== field)
       return <ArrowUpDown className="w-3.5 h-3.5 opacity-40" />;
@@ -64,7 +89,7 @@ export default function InvoiceTable({
                   Issue Date {getSortIcon("issue_date")}
                 </div>
               </th>
-              <th className="py-3.5 px-4">Party (Buyer / Supplier)</th>
+              <th className="py-3.5 px-4">Party</th>
               <th
                 className="py-3.5 px-4 text-right cursor-pointer hover:text-espresso transition-colors"
                 onClick={() => onSort("grand_total")}
@@ -121,16 +146,27 @@ export default function InvoiceTable({
 
                     {/* Party */}
                     <td className="py-3.5 px-4">
-                      <div className="font-medium text-espresso">
-                        {invoice.buyer_name ||
-                          invoice.supplier_name ||
-                          "Merchant"}
-                      </div>
-                      {(invoice.buyer_gstin || invoice.supplier_gstin) && (
-                        <div className="text-xs text-slate-400">
-                          GSTIN: {invoice.buyer_gstin || invoice.supplier_gstin}
-                        </div>
-                      )}
+                      {(() => {
+                        const party = counterparty(invoice);
+                        const isSelfDeal =
+                          invoice.buyer_id === invoice.supplier_id;
+                        return (
+                          <>
+                            <div className="font-medium text-espresso">
+                              {isSelfDeal
+                                ? "Your own account"
+                                : party.name || "Merchant"}
+                            </div>
+                            <div className="text-xs text-slate-400">
+                              {isSelfDeal
+                                ? "Buyer and supplier are the same account"
+                                : party.gstin
+                                  ? `GSTIN: ${party.gstin}`
+                                  : party.label}
+                            </div>
+                          </>
+                        );
+                      })()}
                     </td>
 
                     {/* Grand Total */}

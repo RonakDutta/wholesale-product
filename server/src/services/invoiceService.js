@@ -212,6 +212,11 @@ class InvoiceService {
       if (!buyerId || items.length === 0) {
         throw new Error("Buyer ID and at least one item are required.");
       }
+      // A tax invoice needs two parties. Ordering already blocks buying your
+      // own stock; this closes the same hole on the manual path.
+      if (String(buyerId) === String(supplierId)) {
+        throw new Error("An invoice cannot be raised against your own account.");
+      }
 
       const buyerQuery = await client.query(
         `SELECT u.id, u.email, wp.city FROM users u LEFT JOIN wholesaler_profiles wp ON u.id = wp.user_id WHERE u.id = $1`,

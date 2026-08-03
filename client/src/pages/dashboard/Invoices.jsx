@@ -28,8 +28,9 @@ export default function Invoices() {
     paymentStatus: "",
     startDate: "",
     endDate: "",
-    // This is the seller workspace, so it opens on what you billed out.
-    // Purchases are still reachable through the toggle.
+    // Fixed, not a filter. This workspace is wholesalers only, so it shows
+    // what you billed out. Anything billed TO you belongs to the buyer side
+    // of the app, on the order it came from.
     side: "sales",
     page: 1,
     limit: 10,
@@ -201,7 +202,8 @@ export default function Invoices() {
             Invoices
           </h1>
           <p className="mt-1 text-sm text-espresso/60">
-            Tax invoices, payments received and what is still outstanding.
+            Tax invoices you have issued, payments received, and what is still
+            outstanding.
           </p>
         </div>
 
@@ -239,28 +241,6 @@ export default function Invoices() {
             <Plus className="w-4 h-4" /> New invoice
           </Link>
         </div>
-      </div>
-
-      {/* Sales you raised versus invoices billed to you. Both sides belong to
-          the same account, so neither is hidden behind a role. */}
-      <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
-        {[
-          { key: "sales", label: "Billed by me" },
-          { key: "purchases", label: "Billed to me" },
-        ].map((option) => (
-          <button
-            key={option.key}
-            type="button"
-            onClick={() => handleFilterChange({ side: option.key })}
-            className={`rounded-lg px-4 py-2 text-xs font-bold transition-colors ${
-              filters.side === option.key
-                ? "bg-clay text-white"
-                : "text-espresso/60 hover:text-espresso"
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
       </div>
 
       {/* KPI Metric Summary Cards */}

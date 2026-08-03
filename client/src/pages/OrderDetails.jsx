@@ -12,6 +12,7 @@ import {
   Truck,
 } from "lucide-react";
 import api from "../utils/axios";
+import { downloadFile } from "../utils/download";
 import { toast } from "sonner";
 import { formatOrderStatus, getOrderStatusStyle } from "../utils/orderStatus";
 import OrderTracking from "../components/OrderTracking";
@@ -90,21 +91,18 @@ const OrderDetails = () => {
     load();
   }, [orderId]);
 
+  // The seller issues the invoice; this fetches that exact document rather
+  // than rendering a second, differently numbered one for the buyer.
   const downloadInvoice = async () => {
     try {
-      const response = await api.get(`/api/orders/${orderId}/invoice`, {
-        responseType: "blob",
-      });
-      const blob = new Blob([response.data], { type: "application/pdf" });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `invoice-${orderId}.pdf`;
-      link.click();
-      window.URL.revokeObjectURL(url);
+      await downloadFile(
+        `/api/invoices/by-order/${orderId}/pdf`,
+        `invoice-${order?.order_number || orderId}.pdf`,
+      );
       toast.success("Invoice downloaded");
-    } catch {
-      toast.error("Invoice could not be generated");
+    } catch (err) {
+      console.error("Invoice download failed", err);
+      toast.error("Invoice could not be downloaded");
     }
   };
 
@@ -371,9 +369,7 @@ const OrderDetails = () => {
           </h2>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Status">{order.payment_status || "pending"}</Field>
-            <Field label="Order total">
-              ₹{total.toLocaleString("en-IN")}
-            </Field>
+            <Field label="Order total">₹{total.toLocaleString("en-IN")}</Field>
             {order.subtotal != null && (
               <Field label="Subtotal">
                 ₹{Number(order.subtotal).toLocaleString("en-IN")}

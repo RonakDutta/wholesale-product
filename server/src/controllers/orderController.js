@@ -1,8 +1,8 @@
 const pool = require("../config/db");
 const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange } = require("../services/orderStatusService");
-const PDFDocument = require("pdfkit");
 const { geocodeOrderDestination } = require("../services/geocodingService");
 const invoiceService = require("../services/invoiceService");
+const pdfService = require("../services/pdfService");
 
 const ensureOrderAccess = async (req, res, orderId, { requireBuyer = true, requireSupplier = true } = {}) => {
   const userId = req.user?.id;
@@ -598,41 +598,32 @@ const requestReturn = async (req, res) => {
   }
 };
 
+/**
+ * The buyer's copy of the seller's invoice.
+ *
+ * This used to draw its own six-line PDF with an invented "INV-<order-uuid>"
+ * number, so the same order had two different invoices with two different
+ * numbers depending on who downloaded it - and the buyer's copy carried no
+ * GST breakdown, no HSN codes and only the first line of a multi-item order.
+ *
+ * There is one invoice per order and the seller issues it. This now serves
+ * exactly that document; the route is kept so existing links keep working.
+ */
 const generateInvoice = async (req, res) => {
   try {
-    const accessCheck = await ensureOrderAccess(req, res, req.params.orderId, { requireBuyer: true, requireSupplier: true });
-    if (!accessCheck) return;
-
-    const { rows } = await pool.query(
-      `SELECT o.*, p.name as product_name, u.first_name || ' ' || u.last_name as buyer_name, su.first_name || ' ' || su.last_name as supplier_name
-       FROM orders o
-       JOIN supplier_inventory si ON o.inventory_item_id = si.id
-       JOIN products p ON si.product_id = p.id
-       JOIN users u ON o.buyer_id = u.id
-       JOIN users su ON si.supplier_id = su.id
-       WHERE o.id = $1`,
-      [req.params.orderId],
+    const invoice = await invoiceService.getInvoiceForOrder(
+      req.params.orderId,
+      req.user.id,
+      req.user.role,
     );
-    if (rows.length === 0) {
-      return res.status(404).json({ success: false, message: "Order not found" });
-    }
-    const doc = new PDFDocument({ size: "A4", margin: 36 });
-    const order = rows[0];
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename=invoice-${order.id}.pdf`);
-    doc.pipe(res);
-    doc.fontSize(18).text("Wholesale Marketplace Invoice", { align: "center" });
-    doc.moveDown();
-    doc.fontSize(12).text(`Invoice #: INV-${order.id}`);
-    doc.text(`Order #: ${order.order_number || order.id}`);
-    doc.text(`Buyer: ${order.buyer_name}`);
-    doc.text(`Supplier: ${order.supplier_name}`);
-    doc.text(`Status: ${order.status}`);
-    doc.text(`Total: ₹${Number(order.total_amount || 0).toFixed(2)}`);
-    doc.end();
+    await pdfService.generateInvoicePDF(invoice, res);
   } catch (error) {
     console.error("Invoice generation error:", error);
-    res.status(500).json({ success: false, message: "Failed to generate invoice" });
+    if (res.headersSent) return;
+    const denied = /access denied/i.test(error.message || "");
+    res
+      .status(denied ? 403 : 500)
+      .json({ success: false, message: denied ? error.message : "Failed to generate invoice" });
   }
 };
 

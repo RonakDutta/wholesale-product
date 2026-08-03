@@ -455,10 +455,12 @@ const updatePaymentStatus = async (req, res) => {
 
     await client.query("COMMIT");
 
-    // Automatically trigger invoice generation & PDF dispatch if payment is marked paid
+    // Reconcile, not create: the invoice was raised when the order was placed
+    // and is sitting on Pending, so creating again returned early and left it
+    // stamped UNPAID over money that had just been received.
     if (paymentStatus === "paid") {
-      invoiceService.createInvoiceFromOrder(orderId).catch((invErr) => {
-        console.warn("Background invoice creation notice:", invErr.message);
+      invoiceService.reconcileInvoiceForOrder(orderId).catch((invErr) => {
+        console.warn("Background invoice reconcile notice:", invErr.message);
       });
     }
 

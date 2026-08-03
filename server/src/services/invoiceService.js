@@ -171,6 +171,101 @@ class InvoiceService {
   }
 
   /**
+   * Brings an order's invoice in line with what the order actually says.
+   *
+   * createInvoiceFromOrder only ever creates: it returns early when an invoice
+   * already exists. Since an invoice is raised the moment the order is placed
+   * - while payment is still pending - paying afterwards left the invoice on
+   * Pending forever, and the PDF kept stamping UNPAID over money that had
+   * already been received.
+   *
+   * This is the call the payment path wants. It is idempotent: safe to run on
+   * every payment event, and safe to run again over rows that are already
+   * correct, which is what makes the backfill migration possible.
+   */
+  async reconcileInvoiceForOrder(orderId) {
+    const invoice = await invoiceRepository.findInvoiceByOrderId(orderId);
+    if (!invoice) {
+      // Nothing to reconcile yet; creation stamps the right status itself.
+      return this.createInvoiceFromOrder(orderId);
+    }
+
+    const orderResult = await pool.query(
+      `SELECT payment_status, total_amount, buyer_id FROM orders WHERE id = $1`,
+      [orderId],
+    );
+    if (orderResult.rows.length === 0) throw new Error("Order not found.");
+
+    const order = orderResult.rows[0];
+    const orderPaid = ["paid", "completed"].includes(
+      String(order.payment_status || "").toLowerCase(),
+    );
+    const invoicePaid = String(invoice.payment_status || "").toLowerCase() === "paid";
+
+    // Only ever moves an invoice forward. A cancelled invoice, or one already
+    // settled, is left exactly as it is.
+    if (!orderPaid || invoicePaid || invoice.invoice_status === "Cancelled") {
+      return invoice;
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // Anything already recorded against the invoice counts, so a part
+      // payment taken manually is not billed twice.
+      const alreadyPaid = (invoice.payments || []).reduce(
+        (sum, p) => sum + Number(p.amount),
+        0,
+      );
+      const outstanding = Number(
+        (Number(invoice.grand_total) - alreadyPaid).toFixed(2),
+      );
+
+      if (outstanding > 0) {
+        await invoiceRepository.addPayment(
+          {
+            invoiceId: invoice.id,
+            amount: outstanding,
+            paymentMethod: "UPI",
+            remarks: "Payment completed at checkout",
+          },
+          client,
+        );
+      }
+
+      await invoiceRepository.updateInvoice(
+        invoice.id,
+        { payment_status: "Paid", invoice_status: "Paid" },
+        client,
+      );
+
+      await invoiceRepository.addLog(
+        {
+          invoiceId: invoice.id,
+          action: "Paid",
+          performedBy: order.buyer_id,
+          details: `Invoice settled against order payment of ₹${Number(order.total_amount || 0).toFixed(2)}`,
+        },
+        client,
+      );
+
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    // Re-render so the cached PDF loses the UNPAID watermark, and send the
+    // settled copy on.
+    this.generateAndSendInvoiceEmailAsync(invoice.id, null);
+
+    return invoiceRepository.findInvoiceById(invoice.id);
+  }
+
+  /**
    * Helper to generate PDF and dispatch email in background without blocking API response.
    */
   async generateAndSendInvoiceEmailAsync(invoiceId, targetEmail = null) {
@@ -408,10 +503,22 @@ class InvoiceService {
         client
       );
 
-      // Also update linked Order payment_status if invoice is fully paid
+      // Also update the linked order once the invoice is fully settled.
+      //
+      // This wrote status = 'confirmed', which is not a state the lifecycle
+      // knows: it bricked every later transition with "Invalid current status:
+      // confirmed", and fails outright against the chk_order_status
+      // constraint. payment_completed is the real state, and it is only set
+      // from the payment_pending stage so a dispatched order is not dragged
+      // backwards.
       if (invoice.order_id && newPaymentStatus === "Paid") {
         await client.query(
-          `UPDATE orders SET payment_status = 'paid', status = 'confirmed', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+          `UPDATE orders
+              SET payment_status = 'paid',
+                  status = CASE WHEN status IN ('pending', 'payment_pending')
+                                THEN 'payment_completed' ELSE status END,
+                  updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1`,
           [invoice.order_id]
         );
       }

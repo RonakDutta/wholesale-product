@@ -1,7 +1,12 @@
-import React, { useState } from "react";
-import { CreditCard, Plus, CheckCircle2, DollarSign, Calendar, FileText, X } from "lucide-react";
+import { useState } from "react";
+import { CreditCard, Plus, X } from "lucide-react";
+import { toast } from "sonner";
 
-export default function PaymentHistory({ payments = [], invoice, onRecordPayment }) {
+export default function PaymentHistory({
+  payments = [],
+  invoice,
+  onRecordPayment,
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("UPI");
@@ -18,7 +23,7 @@ export default function PaymentHistory({ payments = [], invoice, onRecordPayment
     e.preventDefault();
     const numAmount = Number(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
-      alert("Please enter a valid positive payment amount.");
+      toast.error("Enter a payment amount greater than zero");
       return;
     }
 
@@ -38,23 +43,29 @@ export default function PaymentHistory({ payments = [], invoice, onRecordPayment
       setRemarks("");
     } catch (err) {
       console.error("Error recording payment:", err);
-      alert(err.message || "Failed to record payment");
+      toast.error(err.message || "Failed to record payment");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
+    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <CreditCard className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          <h3 className="text-base font-bold text-espresso flex items-center gap-2">
+            <CreditCard className="w-5 h-5 text-clay" />
             Payment History
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Total Paid: <span className="font-bold text-emerald-600">₹{totalPaid.toLocaleString("en-IN")}</span> |
-            Balance Due: <span className="font-bold text-rose-600">₹{balanceDue.toLocaleString("en-IN")}</span>
+          <p className="text-xs text-espresso/50 mt-0.5">
+            Total Paid:{" "}
+            <span className="font-bold text-emerald-600">
+              ₹{totalPaid.toLocaleString("en-IN")}
+            </span>{" "}
+            | Balance Due:{" "}
+            <span className="font-bold text-rose-600">
+              ₹{balanceDue.toLocaleString("en-IN")}
+            </span>
           </p>
         </div>
 
@@ -64,7 +75,7 @@ export default function PaymentHistory({ payments = [], invoice, onRecordPayment
               setAmount(String(balanceDue));
               setIsOpen(true);
             }}
-            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
+            className="px-3.5 py-2 bg-clay hover:bg-espresso text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
           >
             <Plus className="w-4 h-4" /> Record Payment
           </button>
@@ -73,7 +84,7 @@ export default function PaymentHistory({ payments = [], invoice, onRecordPayment
 
       {/* Payments List Table */}
       {payments.length === 0 ? (
-        <div className="py-8 text-center text-slate-400 dark:text-slate-500 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+        <div className="py-8 text-center text-espresso/40 border border-dashed border-slate-200 rounded-xl">
           <CreditCard className="w-8 h-8 mx-auto mb-2 opacity-30" />
           <p className="text-xs font-medium">No payments recorded yet</p>
         </div>
@@ -81,7 +92,7 @@ export default function PaymentHistory({ payments = [], invoice, onRecordPayment
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">
+              <tr className="bg-slate-50 border-b border-slate-200 text-espresso/50 uppercase tracking-wider font-semibold">
                 <th className="py-2.5 px-3">Date</th>
                 <th className="py-2.5 px-3">Method</th>
                 <th className="py-2.5 px-3">Transaction ID / Ref</th>
@@ -89,23 +100,28 @@ export default function PaymentHistory({ payments = [], invoice, onRecordPayment
                 <th className="py-2.5 px-3">Remarks</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+            <tbody className="divide-y divide-slate-100 text-espresso/70">
               {payments.map((payment) => (
                 <tr key={payment.id}>
                   <td className="py-2.5 px-3 whitespace-nowrap">
-                    {payment.paid_at ? new Date(payment.paid_at).toLocaleString("en-IN") : "N/A"}
+                    {payment.paid_at
+                      ? new Date(payment.paid_at).toLocaleString("en-IN")
+                      : "N/A"}
                   </td>
-                  <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-white">
+                  <td className="py-2.5 px-3 font-semibold text-espresso">
                     {payment.payment_method}
                   </td>
-                  <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-mono">
-                    {payment.transaction_id || payment.payment_reference || "—"}
+                  <td className="py-2.5 px-3 text-espresso/50 font-mono">
+                    {payment.transaction_id || payment.payment_reference || "-"}
                   </td>
-                  <td className="py-2.5 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
-                    +₹{Number(payment.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  <td className="py-2.5 px-3 text-right font-bold text-emerald-600">
+                    +₹
+                    {Number(payment.amount).toLocaleString("en-IN", {
+                      minimumFractionDigits: 2,
+                    })}
                   </td>
-                  <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400">
-                    {payment.remarks || "—"}
+                  <td className="py-2.5 px-3 text-espresso/50">
+                    {payment.remarks || "-"}
                   </td>
                 </tr>
               ))}
@@ -117,14 +133,15 @@ export default function PaymentHistory({ payments = [], invoice, onRecordPayment
       {/* Record Payment Modal */}
       {isOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 mb-4">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-blue-600" /> Record Invoice Payment
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <h3 className="text-base font-bold text-espresso flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-clay" /> Record Invoice
+                Payment
               </h3>
               <button
                 onClick={() => setIsOpen(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                className="text-slate-400 hover:text-espresso"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -132,7 +149,7 @@ export default function PaymentHistory({ payments = [], invoice, onRecordPayment
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-espresso/70 mb-1">
                   Payment Amount (₹) *
                 </label>
                 <input
@@ -141,7 +158,7 @@ export default function PaymentHistory({ payments = [], invoice, onRecordPayment
                   max={balanceDue}
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-espresso focus:ring-2 focus:ring-clay/20 focus:outline-none"
                   required
                 />
                 <div className="text-[11px] text-slate-400 mt-1">
@@ -150,24 +167,26 @@ export default function PaymentHistory({ payments = [], invoice, onRecordPayment
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-espresso/70 mb-1">
                   Payment Method *
                 </label>
                 <select
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-espresso focus:ring-2 focus:ring-clay/20 focus:outline-none"
                 >
                   <option value="UPI">UPI / QR Code</option>
                   <option value="Cash">Cash</option>
-                  <option value="Bank Transfer">Bank Transfer (NEFT/RTGS/IMPS)</option>
+                  <option value="Bank Transfer">
+                    Bank Transfer (NEFT/RTGS/IMPS)
+                  </option>
                   <option value="Card">Credit / Debit Card</option>
                   <option value="Cheque">Cheque</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-espresso/70 mb-1">
                   Transaction ID / UTR
                 </label>
                 <input
@@ -175,12 +194,12 @@ export default function PaymentHistory({ payments = [], invoice, onRecordPayment
                   placeholder="e.g. UTR92837491823"
                   value={transactionId}
                   onChange={(e) => setTransactionId(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-espresso focus:ring-2 focus:ring-clay/20 focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-espresso/70 mb-1">
                   Remarks / Notes
                 </label>
                 <textarea
@@ -188,22 +207,22 @@ export default function PaymentHistory({ payments = [], invoice, onRecordPayment
                   placeholder="Payment notes..."
                   value={remarks}
                   onChange={(e) => setRemarks(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-espresso focus:ring-2 focus:ring-clay/20 focus:outline-none"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                  className="px-4 py-2 text-xs font-semibold text-espresso/60 hover:bg-slate-100 rounded-xl transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition-colors shadow-xs disabled:opacity-50"
+                  className="px-4 py-2 bg-clay hover:bg-espresso text-white text-xs font-semibold rounded-xl transition-colors shadow-xs disabled:opacity-50"
                 >
                   {isSubmitting ? "Recording..." : "Save Payment"}
                 </button>

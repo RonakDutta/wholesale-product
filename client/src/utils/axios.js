@@ -23,7 +23,11 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
+    // Only 401 means the session is gone. A 403 is a live session being told
+    // "not yours" - dropping the token there logged people out whenever any
+    // page happened to call an endpoint their role does not cover, and every
+    // request after that failed until they reloaded.
+    if (error.response?.status === 401) {
       localStorage.removeItem("token");
     }
     return Promise.reject(error);

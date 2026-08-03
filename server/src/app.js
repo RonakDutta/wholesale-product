@@ -11,6 +11,7 @@ const promotionRoutes = require("./routes/promotionRoutes");
 const reviewRoutes = require("./routes/reviewRoutes");
 const trackRoutes = require("./routes/trackRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 
 const app = express();
 
@@ -32,5 +33,8 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/track", trackRoutes);
 // Enterprise Invoice Management API
 app.use("/api/invoices", invoiceRoutes);
+// The notification bell in the navbar calls these on every page; without the
+// mount every request 404s.
+app.use("/api/notifications", notificationRoutes);
 
 module.exports = app;

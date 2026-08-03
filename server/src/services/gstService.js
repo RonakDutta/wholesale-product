@@ -1,12 +1,70 @@
+// CGST/SGST versus IGST turns on the state, not the city. Comparing cities
+// treated Mumbai to Pune as inter-state and charged IGST on a tax document, so
+// the common metros are mapped back to their state first. Anything unmapped
+// falls back to comparing the value as given, which is right when a state name
+// was passed in and no worse than before when it was a city.
+const STATE_BY_CITY = {
+  delhi: "delhi",
+  "new delhi": "delhi",
+  noida: "uttar pradesh",
+  ghaziabad: "uttar pradesh",
+  lucknow: "uttar pradesh",
+  kanpur: "uttar pradesh",
+  gurgaon: "haryana",
+  gurugram: "haryana",
+  faridabad: "haryana",
+  mumbai: "maharashtra",
+  pune: "maharashtra",
+  nagpur: "maharashtra",
+  nashik: "maharashtra",
+  thane: "maharashtra",
+  bengaluru: "karnataka",
+  bangalore: "karnataka",
+  mysore: "karnataka",
+  chennai: "tamil nadu",
+  coimbatore: "tamil nadu",
+  madurai: "tamil nadu",
+  hyderabad: "telangana",
+  warangal: "telangana",
+  kolkata: "west bengal",
+  howrah: "west bengal",
+  ahmedabad: "gujarat",
+  surat: "gujarat",
+  vadodara: "gujarat",
+  rajkot: "gujarat",
+  jaipur: "rajasthan",
+  jodhpur: "rajasthan",
+  udaipur: "rajasthan",
+  indore: "madhya pradesh",
+  bhopal: "madhya pradesh",
+  patna: "bihar",
+  chandigarh: "chandigarh",
+  ludhiana: "punjab",
+  amritsar: "punjab",
+  kochi: "kerala",
+  ernakulam: "kerala",
+  thiruvananthapuram: "kerala",
+  bhubaneswar: "odisha",
+  guwahati: "assam",
+  raipur: "chhattisgarh",
+  ranchi: "jharkhand",
+  dehradun: "uttarakhand",
+  visakhapatnam: "andhra pradesh",
+  vijayawada: "andhra pradesh",
+};
+
+const toState = (value) => {
+  const clean = String(value || "").trim().toLowerCase();
+  return STATE_BY_CITY[clean] || clean;
+};
+
 class GSTService {
   /**
    * Checks whether the transaction is Intra-State (same state) or Inter-State (different state).
    */
   isIntraState(supplierCityOrState = "Delhi", buyerCityOrState = "Delhi") {
     if (!supplierCityOrState || !buyerCityOrState) return true;
-    const cleanSupplier = String(supplierCityOrState).trim().toLowerCase();
-    const cleanBuyer = String(buyerCityOrState).trim().toLowerCase();
-    return cleanSupplier === cleanBuyer;
+    return toState(supplierCityOrState) === toState(buyerCityOrState);
   }
 
   /**

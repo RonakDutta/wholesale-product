@@ -30,7 +30,8 @@ class InvoiceService {
           bu.first_name AS buyer_first_name, bu.last_name AS buyer_last_name, bu.email AS buyer_email,
           bwp.company_name AS buyer_company, bwp.gstin AS buyer_gstin, bwp.city AS buyer_city,
           su.first_name AS supplier_first_name, su.last_name AS supplier_last_name, su.email AS supplier_email,
-          swp.company_name AS supplier_company, swp.gstin AS supplier_gstin, swp.city AS supplier_city, swp.upi_id AS supplier_upi_id
+          swp.company_name AS supplier_company, swp.gstin AS supplier_gstin, swp.upi_id AS supplier_upi_id,
+          COALESCE(NULLIF(swp.warehouse_state, ''), swp.warehouse_city, swp.city) AS supplier_city
         FROM orders o
         JOIN users bu ON o.buyer_id = bu.id
         LEFT JOIN wholesaler_profiles bwp ON bu.id = bwp.user_id
@@ -58,13 +59,16 @@ class InvoiceService {
       const supplierLocation = order.supplier_city || "Delhi";
       const buyerLocation = order.buyer_city || "Delhi";
 
+      // The seller's own defaults, falling back to platform values.
+      const settings = await invoiceRepository.getSettings(order.supplier_id);
+
       const gstCalculation = gstService.calculateGST({
         items: orderItems.map((item) => ({
           productId: item.product_id,
           productName: item.product_name,
           quantity: item.quantity,
           unitPrice: item.unit_price,
-          gstPercent: 18.00,
+          gstPercent: settings.defaultTaxRate,
           hsnCode: "8504",
         })),
         discount: 0.00,
@@ -74,13 +78,15 @@ class InvoiceService {
         isTaxInclusive: false,
       });
 
-      // Generate sequential invoice number (INV-YYYY-XXXXXX)
-      const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(client);
+      // Generate sequential invoice number (PREFIX-YYYY-XXXXXX)
+      const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(
+        client,
+        settings.prefix,
+      );
 
-      // Set due date to 15 days from issue date by default
       const issueDate = new Date();
       const dueDate = new Date();
-      dueDate.setDate(issueDate.getDate() + 15);
+      dueDate.setDate(issueDate.getDate() + settings.dueDays);
 
       // Determine initial invoice and payment status
       const initialPaymentStatus = order.payment_status === "paid" || order.payment_status === "completed" ? "Paid" : "Pending";
@@ -105,7 +111,7 @@ class InvoiceService {
         issueDate,
         dueDate,
         notes: `Invoice generated for Order ${order.order_number || order.id}`,
-        termsConditions: "1. Goods once sold will not be returned.\n2. Payment is due within 15 days of issuance.",
+        termsConditions: settings.defaultTerms,
         pdfUrl: `/api/invoices/by-order/${order.id}/pdf`,
       };
 
@@ -215,22 +221,31 @@ class InvoiceService {
       const buyerUser = buyerQuery.rows[0];
 
       const supplierQuery = await client.query(
-        `SELECT wp.city FROM wholesaler_profiles wp WHERE wp.user_id = $1`,
+        `SELECT COALESCE(NULLIF(wp.warehouse_state, ''), wp.warehouse_city, wp.city) AS city
+         FROM wholesaler_profiles wp WHERE wp.user_id = $1`,
         [supplierId]
       );
 
       const supplierCity = supplierQuery.rows[0]?.city || "Delhi";
       const buyerCity = buyerUser.city || "Delhi";
 
+      const settings = await invoiceRepository.getSettings(supplierId);
+
       const gstCalculation = gstService.calculateGST({
-        items,
+        items: items.map((item) => ({
+          ...item,
+          gstPercent: item.gstPercent ?? settings.defaultTaxRate,
+        })),
         discount,
         shippingCharge,
         supplierLocation: supplierCity,
         buyerLocation: buyerCity,
       });
 
-      const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(client);
+      const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(
+        client,
+        settings.prefix,
+      );
 
       const invoiceData = {
         invoiceNumber,
@@ -249,9 +264,11 @@ class InvoiceService {
         paymentStatus: "Pending",
         invoiceStatus: "Generated",
         issueDate: new Date(),
-        dueDate: dueDate ? new Date(dueDate) : new Date(Date.now() + 15 * 86400000),
-        notes: notes || "Thank you for your business!",
-        termsConditions: termsConditions || "Standard B2B wholesale terms apply.",
+        dueDate: dueDate
+          ? new Date(dueDate)
+          : new Date(Date.now() + settings.dueDays * 86400000),
+        notes: notes || settings.defaultNotes,
+        termsConditions: termsConditions || settings.defaultTerms,
       };
 
       const invoice = await invoiceRepository.createInvoice(invoiceData, gstCalculation.items, client);
@@ -293,6 +310,31 @@ class InvoiceService {
     }
 
     return invoice;
+  }
+
+  /**
+   * Resolves the invoice for an order, creating it on first access.
+   *
+   * The order is authorized before anything is created or returned: the order
+   * id alone is not a capability, so only its buyer, its supplier or an admin
+   * gets past this point.
+   */
+  async getInvoiceForOrder(orderId, userId, role) {
+    const orderResult = await pool.query(
+      `SELECT buyer_id, supplier_id FROM orders WHERE id = $1`,
+      [orderId],
+    );
+    if (orderResult.rows.length === 0) throw new Error("Order not found.");
+
+    const order = orderResult.rows[0];
+    if (role !== "admin" && order.buyer_id !== userId && order.supplier_id !== userId) {
+      throw new Error("Access Denied: You do not have permission to view this order's invoice.");
+    }
+
+    const existing = await invoiceRepository.findInvoiceByOrderId(orderId);
+    if (existing) return existing;
+
+    return this.createInvoiceFromOrder(orderId);
   }
 
   /**
@@ -439,15 +481,15 @@ class InvoiceService {
   /**
    * Aggregates supplier/buyer dashboard metrics.
    */
-  async getDashboardStats(userId, role) {
-    return invoiceRepository.getDashboardStats(userId, role);
+  async getDashboardStats(userId, role, side) {
+    return invoiceRepository.getDashboardStats(userId, role, side);
   }
 
   /**
    * Aggregates financial reports.
    */
-  async getReportData(userId, role, startDate, endDate) {
-    return invoiceRepository.getReportData(userId, role, startDate, endDate);
+  async getReportData(userId, role, startDate, endDate, side) {
+    return invoiceRepository.getReportData(userId, role, startDate, endDate, side);
   }
 
   /**

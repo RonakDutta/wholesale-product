@@ -228,7 +228,6 @@ const createOrder = async (req, res) => {
     const totalQuantity = lines.reduce((sum, l) => sum + l.quantity, 0);
     const maxShippingDays = Math.max(...lines.map((l) => Number(l.shippingDays) || 7));
 
-    const orderNumber = `ORD-${Date.now()}-${buyerId}`;
     const orderResult = await client.query(
       `INSERT INTO orders (
         buyer_id, supplier_id, inventory_item_id, quantity,

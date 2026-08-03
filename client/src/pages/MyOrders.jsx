@@ -9,10 +9,7 @@ import {
 } from "lucide-react";
 import api from "../utils/axios";
 import { toast } from "sonner";
-import {
-  formatOrderStatus,
-  getOrderStatusStyle,
-} from "../utils/orderStatus";
+import { formatOrderStatus, getOrderStatusStyle } from "../utils/orderStatus";
 
 // Buckets are driven by the payment outcome, which is what a buyer actually
 // wants to sort by: what they paid for, what still needs paying, and what
@@ -28,7 +25,11 @@ const bucketOf = (order) => {
   const payment = String(order.payment_status || "").toLowerCase();
   const status = String(order.status || "").toLowerCase();
 
-  if (status === "cancelled" || payment === "failed" || status === "payment_failed") {
+  if (
+    status === "cancelled" ||
+    payment === "failed" ||
+    status === "payment_failed"
+  ) {
     return "failed";
   }
   if (payment === "paid" || payment === "partial" || payment === "cod") {
@@ -128,18 +129,32 @@ const MyOrders = () => {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [tab, setTab] = useState("all");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
 
     const fetchOrders = async () => {
+      setLoading(true);
       try {
         const res = await api.get("/api/orders/buyer");
-        if (!cancelled) setOrders(Array.isArray(res.data) ? res.data : []);
+        if (!cancelled) {
+          setOrders(Array.isArray(res.data) ? res.data : []);
+          setLoadError("");
+        }
       } catch (err) {
         console.error("Failed to fetch orders", err);
-        if (!cancelled) toast.error("Could not load your orders");
+        if (!cancelled) {
+          // A failed load is not an empty account, and must not be shown as one.
+          setLoadError(
+            err.response?.status === 401
+              ? "Your session has expired. Please sign in again."
+              : "We could not load your orders just now.",
+          );
+          toast.error("Could not load your orders");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -149,7 +164,7 @@ const MyOrders = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKey]);
 
   const counts = useMemo(() => {
     const base = { all: orders.length, paid: 0, awaiting: 0, failed: 0 };
@@ -209,7 +224,9 @@ const MyOrders = () => {
               {t.label}
               <span
                 className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                  active ? "bg-clay/10 text-clay" : "bg-sage/15 text-espresso/50"
+                  active
+                    ? "bg-clay/10 text-clay"
+                    : "bg-sage/15 text-espresso/50"
                 }`}
               >
                 {counts[t.key]}
@@ -219,7 +236,22 @@ const MyOrders = () => {
         })}
       </div>
 
-      {visible.length === 0 ? (
+      {loadError ? (
+        <div className="rounded-2xl border border-clay/30 bg-clay/5 py-16 text-center">
+          <PackageSearch className="mx-auto mb-3 h-10 w-10 text-clay/40" />
+          <p className="font-bold text-espresso">{loadError}</p>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-espresso/50">
+            Your orders are safe. This is a problem loading them, not a sign
+            that anything is missing.
+          </p>
+          <button
+            onClick={() => setReloadKey((key) => key + 1)}
+            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-clay px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-espresso"
+          >
+            Try again
+          </button>
+        </div>
+      ) : visible.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-sage/40 py-16 text-center">
           <PackageSearch className="mx-auto mb-3 h-10 w-10 text-espresso/15" />
           <p className="font-bold text-espresso">{BUCKET_COPY[tab].title}</p>

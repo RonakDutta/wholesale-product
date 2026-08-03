@@ -19,18 +19,23 @@ const { createLink, getOrderLink } = require("../controllers/driverLinkControlle
 
 const router = express.Router();
 
+// Anything a buyer owns is authorized per order, by buyer_id, inside the
+// handler. Gating those on the account role as well hid a seller's own
+// purchases from them and, because the client treats 403 as a dead session,
+// logged them out mid-browse. Supplier-side routes stay role-gated: they act
+// on someone else's order.
 router.get("/supplier", authenticateToken, authorizeRoles("seller", "both"), getSupplierOrders);
-router.get("/buyer", authenticateToken, authorizeRoles("buyer", "both"), getBuyerOrders);
-router.post("/create", authenticateToken, authorizeRoles("buyer", "both"), createOrder);
-router.get("/:orderId/payment-details", authenticateToken, authorizeRoles("buyer", "both"), getPaymentDetails);
-router.put("/:orderId/payment-status", authenticateToken, authorizeRoles("buyer", "both"), updatePaymentStatus);
+router.get("/buyer", authenticateToken, getBuyerOrders);
+router.post("/create", authenticateToken, createOrder);
+router.get("/:orderId/payment-details", authenticateToken, getPaymentDetails);
+router.put("/:orderId/payment-status", authenticateToken, updatePaymentStatus);
 router.patch("/:orderId/status", authenticateToken, authorizeRoles("seller", "both", "admin"), updateOrderStatus);
 router.get("/:orderId/timeline", authenticateToken, getOrderTimelineHandler);
 router.get("/:orderId/tracking", authenticateToken, getTracking);
 router.post("/:orderId/checkpoints", authenticateToken, authorizeRoles("seller", "both"), addCheckpoint);
 router.get("/:orderId/driver-link", authenticateToken, authorizeRoles("seller", "both"), getOrderLink);
 router.post("/:orderId/driver-link", authenticateToken, authorizeRoles("seller", "both"), createLink);
-router.post("/:orderId/return", authenticateToken, authorizeRoles("buyer", "both"), requestReturn);
+router.post("/:orderId/return", authenticateToken, requestReturn);
 router.get("/:orderId/invoice", authenticateToken, generateInvoice);
 router.get("/:orderId/packing-slip", authenticateToken, generatePackingSlip);
 router.get("/:orderId", authenticateToken, getOrderById);

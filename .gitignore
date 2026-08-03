@@ -22,3 +22,6 @@ Thumbs.db
 # editor
 .vscode/
 .idea/
+# generated invoice PDFs and other runtime uploads
+server/uploads/
+server/storage/

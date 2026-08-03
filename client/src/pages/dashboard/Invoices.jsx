@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { FileText, Plus, RefreshCw, BarChart2, Settings, Download } from "lucide-react";
+import { Plus, RefreshCw, BarChart2, Settings } from "lucide-react";
+import { toast } from "sonner";
 import axios from "../../utils/axios";
+import { downloadFile } from "../../utils/download";
 import InvoiceStats from "../../components/invoice/InvoiceStats";
 import InvoiceAnalytics from "../../components/invoice/InvoiceAnalytics";
 import InvoiceFilters from "../../components/invoice/InvoiceFilters";
@@ -10,7 +12,12 @@ import PaymentHistory from "../../components/invoice/PaymentHistory";
 
 export default function Invoices() {
   const [invoices, setInvoices] = useState([]);
-  const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 1,
+  });
   const [dashboardStats, setDashboardStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -21,13 +28,17 @@ export default function Invoices() {
     paymentStatus: "",
     startDate: "",
     endDate: "",
+    // This is the seller workspace, so it opens on what you billed out.
+    // Purchases are still reachable through the toggle.
+    side: "sales",
     page: 1,
     limit: 10,
     sortBy: "created_at",
     sortOrder: "DESC",
   });
 
-  const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState(null);
+  const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] =
+    useState(null);
 
   // Fetch Invoices List
   const fetchInvoices = useCallback(async () => {
@@ -45,7 +56,14 @@ export default function Invoices() {
       const res = await axios.get(`/api/invoices?${params.toString()}`);
       if (res.data.success) {
         setInvoices(res.data.invoices || []);
-        setPagination(res.data.pagination || { page: 1, limit: 10, total: 0, totalPages: 1 });
+        setPagination(
+          res.data.pagination || {
+            page: 1,
+            limit: 10,
+            total: 0,
+            totalPages: 1,
+          },
+        );
       }
     } catch (err) {
       console.error("Error loading invoices:", err);
@@ -56,45 +74,50 @@ export default function Invoices() {
   }, [filters]);
 
   // Fetch Dashboard Stats
-  const fetchDashboardStats = async () => {
+  const fetchDashboardStats = useCallback(async () => {
     try {
-      const res = await axios.get("/api/invoices/dashboard");
+      const res = await axios.get("/api/invoices/dashboard", {
+        params: { side: filters.side },
+      });
       if (res.data.success) {
         setDashboardStats(res.data.stats);
       }
     } catch (err) {
       console.error("Error loading dashboard stats:", err);
     }
-  };
+  }, [filters.side]);
 
   useEffect(() => {
-    fetchInvoices();
-    fetchDashboardStats();
-  }, [fetchInvoices]);
+    void (async () => {
+      await Promise.all([fetchInvoices(), fetchDashboardStats()]);
+    })();
+  }, [fetchInvoices, fetchDashboardStats]);
 
   const handleFilterChange = (newFilters) => {
     setFilters((prev) => ({ ...prev, ...newFilters, page: 1 }));
   };
 
   const handleResetFilters = () => {
-    setFilters({
+    setFilters((prev) => ({
       search: "",
       invoiceStatus: "",
       paymentStatus: "",
       startDate: "",
       endDate: "",
+      side: prev.side,
       page: 1,
       limit: 10,
       sortBy: "created_at",
       sortOrder: "DESC",
-    });
+    }));
   };
 
   const handleSort = (field) => {
     setFilters((prev) => ({
       ...prev,
       sortBy: field,
-      sortOrder: prev.sortBy === field && prev.sortOrder === "DESC" ? "ASC" : "DESC",
+      sortOrder:
+        prev.sortBy === field && prev.sortOrder === "DESC" ? "ASC" : "DESC",
       page: 1,
     }));
   };
@@ -104,17 +127,17 @@ export default function Invoices() {
     try {
       const res = await axios.post(
         `/api/invoices/${selectedInvoiceForPayment.id}/payment`,
-        paymentPayload
+        paymentPayload,
       );
       if (res.data.success) {
-        alert("Payment recorded successfully!");
+        toast.success("Payment recorded");
         setSelectedInvoiceForPayment(null);
         fetchInvoices();
         fetchDashboardStats();
       }
     } catch (err) {
       console.error("Payment error:", err);
-      alert(err.response?.data?.message || "Failed to record payment");
+      toast.error(err.response?.data?.message || "Failed to record payment");
     }
   };
 
@@ -122,11 +145,11 @@ export default function Invoices() {
     try {
       const res = await axios.post(`/api/invoices/${id}/send`);
       if (res.data.success) {
-        alert(res.data.message || "Invoice email sent successfully!");
+        toast.success(res.data.message || "Invoice emailed to the buyer");
         fetchInvoices();
       }
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to send email");
+      toast.error(err.response?.data?.message || "Failed to send email");
     }
   };
 
@@ -134,37 +157,51 @@ export default function Invoices() {
     try {
       const res = await axios.post(`/api/invoices/${id}/reminder`);
       if (res.data.success) {
-        alert(res.data.message || "Payment reminder sent!");
+        toast.success(res.data.message || "Payment reminder sent");
         fetchInvoices();
       }
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to send reminder");
+      toast.error(err.response?.data?.message || "Failed to send reminder");
     }
   };
 
-  const handleExportCSV = () => {
-    window.open("/api/invoices/export/csv", "_blank");
+  // Exports carry the current filters, so what downloads matches what is on
+  // screen, and go through axios so the request is actually authenticated.
+  const exportParams = () => {
+    const rest = { ...filters };
+    delete rest.page;
+    delete rest.limit;
+    return rest;
   };
 
-  const handleExportExcel = () => {
-    window.open("/api/invoices/export/excel", "_blank");
+  const runExport = async (path, filename) => {
+    try {
+      await downloadFile(path, filename, { params: exportParams() });
+    } catch (err) {
+      console.error("Export failed:", err);
+      toast.error("Could not prepare that export");
+    }
   };
 
-  const handleExportPDF = () => {
-    window.open("/api/invoices/export/pdf", "_blank");
-  };
+  const handleExportCSV = () =>
+    runExport("/api/invoices/export/csv", "invoices.csv");
+
+  const handleExportExcel = () =>
+    runExport("/api/invoices/export/excel", "invoices.xls");
+
+  const handleExportPDF = () =>
+    runExport("/api/invoices/export/pdf", "invoices-summary.pdf");
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 lg:p-8 space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
-            <FileText className="w-7 h-7 text-blue-600 dark:text-blue-400" />
-            Enterprise Invoice Management
+          <h1 className="text-2xl font-black tracking-tight text-espresso">
+            Invoices
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">
-            Manage tax invoices, record payments, track receivables, and analyze GST metrics.
+          <p className="mt-1 text-sm text-espresso/60">
+            Tax invoices, payments received and what is still outstanding.
           </p>
         </div>
 
@@ -174,30 +211,62 @@ export default function Invoices() {
               fetchInvoices();
               fetchDashboardStats();
             }}
-            className="p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl transition-colors shadow-xs"
-            title="Refresh Data"
+            className="rounded-xl border border-slate-200 bg-white p-2.5 text-espresso/70 shadow-sm transition-colors hover:bg-slate-100"
+            title="Refresh"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
 
           <Link
-            to="/dashboard/invoices/reports"
-            className="px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center gap-2 transition-colors shadow-xs"
+            to="/seller/invoices/reports"
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-espresso/70 shadow-sm transition-colors hover:bg-slate-100"
           >
-            <BarChart2 className="w-4 h-4 text-emerald-600" /> GST Reports
+            <BarChart2 className="w-4 h-4 text-sage" /> GST reports
           </Link>
 
           <Link
-            to="/dashboard/invoices/create"
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-colors shadow-md shadow-blue-500/20"
+            to="/seller/invoices/settings"
+            className="rounded-xl border border-slate-200 bg-white p-2.5 text-espresso/70 shadow-sm transition-colors hover:bg-slate-100"
+            title="Invoice defaults"
           >
-            <Plus className="w-4 h-4" /> Create Invoice
+            <Settings className="w-4 h-4" />
+          </Link>
+
+          <Link
+            to="/seller/invoices/create"
+            className="flex items-center gap-2 rounded-xl bg-clay px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-clay/20 transition-colors hover:bg-espresso"
+          >
+            <Plus className="w-4 h-4" /> New invoice
           </Link>
         </div>
       </div>
 
+      {/* Sales you raised versus invoices billed to you. Both sides belong to
+          the same account, so neither is hidden behind a role. */}
+      <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
+        {[
+          { key: "sales", label: "Billed by me" },
+          { key: "purchases", label: "Billed to me" },
+        ].map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            onClick={() => handleFilterChange({ side: option.key })}
+            className={`rounded-lg px-4 py-2 text-xs font-bold transition-colors ${
+              filters.side === option.key
+                ? "bg-clay text-white"
+                : "text-espresso/60 hover:text-espresso"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
       {/* KPI Metric Summary Cards */}
-      {dashboardStats?.summary && <InvoiceStats summary={dashboardStats.summary} />}
+      {dashboardStats?.summary && (
+        <InvoiceStats summary={dashboardStats.summary} />
+      )}
 
       {/* Visual Analytics Charts */}
       {dashboardStats && <InvoiceAnalytics stats={dashboardStats} />}
@@ -221,9 +290,11 @@ export default function Invoices() {
 
       {/* Invoice Table Component */}
       {loading ? (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center text-slate-400">
-          <RefreshCw className="w-8 h-8 mx-auto mb-3 animate-spin text-blue-500 opacity-60" />
-          <p className="text-xs font-semibold">Loading ERP Invoice Registry...</p>
+        <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center">
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-clay border-t-transparent" />
+          <p className="mt-3 text-xs font-semibold text-espresso/50">
+            Loading invoices
+          </p>
         </div>
       ) : (
         <InvoiceTable
@@ -232,7 +303,6 @@ export default function Invoices() {
           onPageChange={(page) => setFilters((prev) => ({ ...prev, page }))}
           onSort={handleSort}
           sortBy={filters.sortBy}
-          sortOrder={filters.sortOrder}
           onRecordPayment={(inv) => setSelectedInvoiceForPayment(inv)}
           onSendEmail={handleSendEmail}
           onSendReminder={handleSendReminder}

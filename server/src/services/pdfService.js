@@ -238,29 +238,40 @@ class PDFService {
   }
 
   /**
-   * Generates PDF and persists to disk under /uploads/invoices/
+   * Generates the PDF and caches it on disk.
+   *
+   * Deliberately NOT under uploads/, which app.js serves statically: invoice
+   * numbers are sequential, so a public uploads/invoices/INV-2026-000007.pdf
+   * lets anyone walk the whole ledger and read buyer names, GSTINs and
+   * amounts. The cache lives in a private directory and is only ever handed
+   * out through the authorized /api/invoices routes.
    */
   async generateAndSaveInvoicePDF(invoice) {
     const pdfBuffer = await this.generateInvoicePDF(invoice);
 
-    const uploadsDir = path.join(__dirname, "..", "..", "uploads", "invoices");
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
+    const cacheDir = path.join(__dirname, "..", "..", "storage", "invoices");
+    if (!fs.existsSync(cacheDir)) {
+      fs.mkdirSync(cacheDir, { recursive: true });
     }
 
-    const filename = `${invoice.invoice_number || invoice.id}.pdf`;
-    const relativePath = `/uploads/invoices/${filename}`;
-    const absolutePath = path.join(uploadsDir, filename);
+    // The invoice number reaches the filesystem, so keep it to characters that
+    // cannot escape the directory.
+    const safeName = String(invoice.invoice_number || invoice.id).replace(
+      /[^A-Za-z0-9._-]/g,
+      "_",
+    );
+    const absolutePath = path.join(cacheDir, `${safeName}.pdf`);
 
     fs.writeFileSync(absolutePath, pdfBuffer);
 
-    // Update database record with pdf_path & pdf_url
+    // The download URL stays an API route, which checks who is asking.
+    const downloadUrl = `/api/invoices/${invoice.id}/pdf`;
     await invoiceRepository.updateInvoice(invoice.id, {
-      pdf_path: relativePath,
-      pdf_url: relativePath,
+      pdf_path: absolutePath,
+      pdf_url: downloadUrl,
     });
 
-    return { pdfBuffer, relativePath, absolutePath };
+    return { pdfBuffer, relativePath: downloadUrl, absolutePath };
   }
 }
 

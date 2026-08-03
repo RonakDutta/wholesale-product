@@ -1,5 +1,5 @@
 const pool = require("../config/db");
-const { Queue, QueueScheduler, Worker } = require("bullmq");
+const { Queue, Worker } = require("bullmq");
 const redis = require("../config/redis");
 const { sendEmail } = require("./emailService");
 const { sendSms } = require("./smsService");
@@ -9,7 +9,6 @@ const { emitUserNotification, emitUnreadCount } = require("./socketService");
 
 let notificationQueue = null;
 let notificationWorker = null;
-let notificationScheduler = null;
 let redisReady = false;
 
 const initNotificationQueue = () => {
@@ -18,13 +17,14 @@ const initNotificationQueue = () => {
     return;
   }
 
-  if (redisReady || notificationQueue || notificationWorker || notificationScheduler) {
+  if (redisReady || notificationQueue || notificationWorker) {
     return;
   }
 
   try {
+    // BullMQ v3 folded QueueScheduler into Queue/Worker; constructing one here
+    // threw, which silently disabled the queue even when Redis was healthy.
     notificationQueue = new Queue("notificationQueue", { connection: redis });
-    notificationScheduler = new QueueScheduler("notificationQueue", { connection: redis });
     notificationWorker = new Worker(
       "notificationQueue",
       async (job) => {
@@ -51,7 +51,6 @@ const initNotificationQueue = () => {
   } catch (err) {
     notificationQueue = null;
     notificationWorker = null;
-    notificationScheduler = null;
     redisReady = false;
     console.error("Notification queue setup failed. Notifications will be delivered immediately.", err?.message || err);
   }

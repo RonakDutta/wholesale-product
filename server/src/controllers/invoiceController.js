@@ -44,24 +44,26 @@ class InvoiceController {
 
   async getInvoiceByOrderId(req, res) {
     try {
-      let invoice = await invoiceRepository.findInvoiceByOrderId(req.params.orderId);
-      if (!invoice) {
-        // Automatically create invoice if missing for valid order
-        invoice = await invoiceService.createInvoiceFromOrder(req.params.orderId);
-      }
+      const invoice = await invoiceService.getInvoiceForOrder(
+        req.params.orderId,
+        req.user.id,
+        req.user.role,
+      );
       res.json({ success: true, invoice });
     } catch (err) {
       console.error("Error fetching invoice by order:", err);
-      res.status(500).json({ success: false, message: err.message || "Failed to fetch order invoice" });
+      const denied = /access denied/i.test(err.message || "");
+      res.status(denied ? 403 : 500).json({ success: false, message: err.message || "Failed to fetch order invoice" });
     }
   }
 
   async getInvoicePDFByOrderId(req, res) {
     try {
-      let invoice = await invoiceRepository.findInvoiceByOrderId(req.params.orderId);
-      if (!invoice) {
-        invoice = await invoiceService.createInvoiceFromOrder(req.params.orderId);
-      }
+      const invoice = await invoiceService.getInvoiceForOrder(
+        req.params.orderId,
+        req.user.id,
+        req.user.role,
+      );
 
       await invoiceRepository.addLog({
         invoiceId: invoice.id,
@@ -73,7 +75,8 @@ class InvoiceController {
       await pdfService.generateInvoicePDF(invoice, res);
     } catch (err) {
       console.error("Error generating PDF by order ID:", err);
-      res.status(500).json({ success: false, message: err.message || "Failed to generate invoice PDF" });
+      const denied = /access denied/i.test(err.message || "");
+      res.status(denied ? 403 : 500).json({ success: false, message: err.message || "Failed to generate invoice PDF" });
     }
   }
 
@@ -165,7 +168,7 @@ class InvoiceController {
 
   async getDashboardStats(req, res) {
     try {
-      const stats = await invoiceService.getDashboardStats(req.user.id, req.user.role);
+      const stats = await invoiceService.getDashboardStats(req.user.id, req.user.role, req.query.side);
       res.json({ success: true, stats });
     } catch (err) {
       console.error("Error fetching invoice dashboard stats:", err);
@@ -175,8 +178,8 @@ class InvoiceController {
 
   async getReportData(req, res) {
     try {
-      const { startDate, endDate } = req.query;
-      const report = await invoiceService.getReportData(req.user.id, req.user.role, startDate, endDate);
+      const { startDate, endDate, side } = req.query;
+      const report = await invoiceService.getReportData(req.user.id, req.user.role, startDate, endDate, side);
       res.json({ success: true, report });
     } catch (err) {
       console.error("Error fetching report data:", err);
@@ -241,9 +244,47 @@ class InvoiceController {
     }
   }
 
+  async getSettings(req, res) {
+    try {
+      const settings = await invoiceRepository.getSettings(req.user.id);
+      res.json({ success: true, settings });
+    } catch (err) {
+      console.error("Error fetching invoice settings:", err);
+      res.status(500).json({ success: false, message: "Failed to load invoice settings" });
+    }
+  }
+
+  async saveSettings(req, res) {
+    try {
+      const prefix = String(req.body.prefix || "INV").trim().slice(0, 10) || "INV";
+      const dueDays = Number(req.body.dueDays);
+      const defaultTaxRate = Number(req.body.defaultTaxRate);
+
+      if (!Number.isFinite(dueDays) || dueDays < 0 || dueDays > 365) {
+        return res.status(400).json({ success: false, message: "Payment due days must be between 0 and 365." });
+      }
+      if (!Number.isFinite(defaultTaxRate) || defaultTaxRate < 0 || defaultTaxRate > 100) {
+        return res.status(400).json({ success: false, message: "GST rate must be between 0 and 100." });
+      }
+
+      const settings = await invoiceRepository.saveSettings(req.user.id, {
+        prefix,
+        dueDays: Math.round(dueDays),
+        defaultTaxRate,
+        defaultNotes: req.body.defaultNotes || null,
+        defaultTerms: req.body.defaultTerms || null,
+      });
+
+      res.json({ success: true, settings });
+    } catch (err) {
+      console.error("Error saving invoice settings:", err);
+      res.status(500).json({ success: false, message: "Failed to save invoice settings" });
+    }
+  }
+
   async getBuyers(req, res) {
     try {
-      const buyers = await invoiceRepository.getBuyers();
+      const buyers = await invoiceRepository.getBuyers(req.user.id);
       res.json({ success: true, buyers });
     } catch (err) {
       console.error("Error fetching buyers:", err);

@@ -1,5 +1,9 @@
 import { lazy, Suspense } from "react";
-import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
+import {
+  createBrowserRouter,
+  RouterProvider,
+  Navigate,
+} from "react-router-dom";
 import { Toaster } from "sonner";
 import { CartProvider } from "./context/CartContext";
 import { WishlistProvider } from "./context/WishlistContext";
@@ -28,6 +32,7 @@ import OrderDetails from "./pages/OrderDetails";
 import MyOrders from "./pages/MyOrders";
 import Messages from "./pages/Messages";
 import RetailDashboard from "./pages/RetailDashboard";
+import NotificationCenter from "./pages/NotificationCenter";
 import Invoices from "./pages/dashboard/Invoices";
 import CreateInvoice from "./pages/dashboard/CreateInvoice";
 import InvoiceDetails from "./pages/dashboard/InvoiceDetails";
@@ -39,7 +44,9 @@ import NotFound from "./pages/NotFound";
 
 // Seller workspace is lazy-loaded: retailers never download this bundle.
 const SellerLayout = lazy(() => import("./layouts/SellerLayout"));
-const DashboardOverview = lazy(() => import("./pages/dashboard/DashboardOverview"));
+const DashboardOverview = lazy(
+  () => import("./pages/dashboard/DashboardOverview"),
+);
 const MyProducts = lazy(() => import("./pages/dashboard/MyProducts"));
 const AddProduct = lazy(() => import("./pages/dashboard/AddProduct"));
 const EditProduct = lazy(() => import("./pages/dashboard/EditProduct"));
@@ -84,6 +91,7 @@ const router = createBrowserRouter([
       { path: "payment/:orderId", element: <Payment /> },
       { path: "order-success", element: <OrderSuccess /> },
       { path: "orders", element: <MyOrders /> },
+      { path: "notifications", element: <NotificationCenter /> },
       { path: "orders/:orderId", element: <OrderDetails /> },
       { path: "retail-dashboard", element: <RetailDashboard /> },
     ],

@@ -2,10 +2,10 @@ const jwt = require("jsonwebtoken");
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
-  let token = authHeader && authHeader.split(" ")[1];
-  if (!token && req.query && req.query.token) {
-    token = req.query.token;
-  }
+  // The token stays in the Authorization header. Accepting it from the query
+  // string would leak it into server access logs, browser history and Referer
+  // headers; downloads send it through the axios instance instead.
+  const token = authHeader && authHeader.split(" ")[1];
 
   if (!token) return res.status(401).json({ message: "No token provided" });
 

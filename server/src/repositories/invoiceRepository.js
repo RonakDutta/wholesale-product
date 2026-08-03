@@ -2,6 +2,21 @@ const pool = require("../config/db");
 
 let schemaEnsured = false;
 
+// Everything a caller is allowed to change on an existing invoice. Money
+// columns are absent on purpose: totals come from the GST calculation, not
+// from whatever the client posts.
+const UPDATABLE_INVOICE_COLUMNS = new Set([
+  "payment_status",
+  "invoice_status",
+  "due_date",
+  "notes",
+  "terms_conditions",
+  "pdf_path",
+  "pdf_url",
+  "email_sent",
+  "email_sent_at",
+]);
+
 async function ensureSchema(client = null) {
   if (schemaEnsured) return;
   const dbClient = client || pool;
@@ -81,6 +96,16 @@ async function ensureSchema(client = null) {
           error_logs TEXT,
           details TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS invoice_settings (
+          user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+          prefix VARCHAR(10) NOT NULL DEFAULT 'INV',
+          due_days INTEGER NOT NULL DEFAULT 15,
+          default_tax_rate NUMERIC(5, 2) NOT NULL DEFAULT 18.00,
+          default_notes TEXT,
+          default_terms TEXT,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE INDEX IF NOT EXISTS idx_invoices_order_id ON invoices(order_id);
@@ -297,6 +322,7 @@ class InvoiceRepository {
   async findInvoices({
     userId,
     role,
+    side,
     search,
     invoiceStatus,
     paymentStatus,
@@ -315,17 +341,23 @@ class InvoiceRepository {
 
       let whereClauses = [];
 
+      // Scope by who the user is on the invoice, never by their account role:
+      // the same person sells to some accounts and buys from others, and role
+      // scoping used to hide one whole side of their books from them.
       const normRole = String(role || "").toLowerCase();
-      if (normRole === "buyer") {
-        whereClauses.push(`i.buyer_id = $${paramIndex++}`);
-        params.push(userId);
-      } else if (normRole === "seller" || normRole === "supplier" || normRole === "wholesaler" || normRole === "both") {
-        whereClauses.push(`i.supplier_id = $${paramIndex++}`);
-        params.push(userId);
-      } else if (normRole !== "admin") {
-        whereClauses.push(`(i.buyer_id = $${paramIndex} OR i.supplier_id = $${paramIndex})`);
-        params.push(userId);
-        paramIndex++;
+      const normSide = String(side || "").toLowerCase();
+      if (normRole !== "admin") {
+        if (normSide === "sales") {
+          whereClauses.push(`i.supplier_id = $${paramIndex++}`);
+          params.push(userId);
+        } else if (normSide === "purchases") {
+          whereClauses.push(`i.buyer_id = $${paramIndex++}`);
+          params.push(userId);
+        } else {
+          whereClauses.push(`(i.buyer_id = $${paramIndex} OR i.supplier_id = $${paramIndex})`);
+          params.push(userId);
+          paramIndex++;
+        }
       }
 
       if (search) {
@@ -445,7 +477,10 @@ class InvoiceRepository {
     const values = [];
     let idx = 1;
 
+    // Column names cannot be parameterised, so they are matched against a
+    // fixed list rather than interpolated from request keys.
     for (const [key, val] of Object.entries(updateData)) {
+      if (!UPDATABLE_INVOICE_COLUMNS.has(key)) continue;
       fields.push(`${key} = $${idx++}`);
       values.push(val);
     }
@@ -500,14 +535,17 @@ class InvoiceRepository {
   /**
    * Aggregates ERP dashboard metrics (Total Revenue, Paid, Pending, Overdue, GST, Charts).
    */
-  async getDashboardStats(userId, role) {
+  async getDashboardStats(userId, role, side) {
     await ensureSchema();
     try {
       const normRole = String(role || "").toLowerCase();
-      const userClause = normRole === "buyer"
-        ? "buyer_id = $1"
-        : normRole === "admin"
+      const normSide = String(side || "").toLowerCase();
+      const userClause = normRole === "admin"
         ? "1=1"
+        : normSide === "sales"
+        ? "supplier_id = $1"
+        : normSide === "purchases"
+        ? "buyer_id = $1"
         : "(supplier_id = $1 OR buyer_id = $1)";
 
       const params = normRole === "admin" ? [] : [userId];
@@ -557,8 +595,9 @@ class InvoiceRepository {
       `;
       const statusResult = await pool.query(statusQuery, params);
 
-      // Top Buyers / Suppliers
-      const topPartiesQuery = normRole === "buyer"
+      // Top Buyers / Suppliers. "Purchases" lists who you bought from;
+      // everything else lists who bought from you.
+      const topPartiesQuery = normSide === "purchases"
         ? `
           SELECT 
             swp.company_name AS party_name,
@@ -619,14 +658,17 @@ class InvoiceRepository {
   /**
    * Aggregates financial reports (GST breakdown, Outstanding, Invoice aging).
    */
-  async getReportData(userId, role, startDate, endDate) {
+  async getReportData(userId, role, startDate, endDate, side) {
     await ensureSchema();
     try {
       const normRole = String(role || "").toLowerCase();
-      const userClause = normRole === "buyer"
-        ? "i.buyer_id = $1"
-        : normRole === "admin"
+      const normSide = String(side || "").toLowerCase();
+      const userClause = normRole === "admin"
         ? "1=1"
+        : normSide === "sales"
+        ? "i.supplier_id = $1"
+        : normSide === "purchases"
+        ? "i.buyer_id = $1"
         : "(i.supplier_id = $1 OR i.buyer_id = $1)";
 
       const params = normRole === "admin" ? [] : [userId];
@@ -688,19 +730,89 @@ class InvoiceRepository {
     }
   }
 
-  async getBuyers() {
+  /**
+   * Per-seller invoice defaults. Absent rows fall back to the platform
+   * defaults rather than erroring, so the page works before it is ever saved.
+   */
+  async getSettings(userId) {
     await ensureSchema();
     const result = await pool.query(
-      `SELECT 
-        u.id, 
-        u.email, 
-        u.first_name, 
-        u.last_name, 
+      `SELECT prefix, due_days, default_tax_rate, default_notes, default_terms
+       FROM invoice_settings WHERE user_id = $1`,
+      [userId]
+    );
+
+    const row = result.rows[0] || {};
+    return {
+      prefix: row.prefix || "INV",
+      dueDays: Number(row.due_days ?? 15),
+      defaultTaxRate: Number(row.default_tax_rate ?? 18),
+      defaultNotes: row.default_notes ?? "Thank you for your business!",
+      defaultTerms:
+        row.default_terms ??
+        "1. Goods once sold will not be returned.\n2. Payment is due within the agreed credit period.",
+    };
+  }
+
+  async saveSettings(userId, settings) {
+    await ensureSchema();
+    const result = await pool.query(
+      `INSERT INTO invoice_settings (
+         user_id, prefix, due_days, default_tax_rate, default_notes, default_terms, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+       ON CONFLICT (user_id) DO UPDATE SET
+         prefix = EXCLUDED.prefix,
+         due_days = EXCLUDED.due_days,
+         default_tax_rate = EXCLUDED.default_tax_rate,
+         default_notes = EXCLUDED.default_notes,
+         default_terms = EXCLUDED.default_terms,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING prefix, due_days, default_tax_rate, default_notes, default_terms`,
+      [
+        userId,
+        settings.prefix,
+        settings.dueDays,
+        settings.defaultTaxRate,
+        settings.defaultNotes,
+        settings.defaultTerms,
+      ]
+    );
+
+    const row = result.rows[0];
+    return {
+      prefix: row.prefix,
+      dueDays: Number(row.due_days),
+      defaultTaxRate: Number(row.default_tax_rate),
+      defaultNotes: row.default_notes,
+      defaultTerms: row.default_terms,
+    };
+  }
+
+  /**
+   * The customers this supplier can raise an invoice against.
+   *
+   * Scoped to people who have actually ordered from or been invoiced by them.
+   * Returning every account on the platform would hand any logged-in user the
+   * full customer list, emails included.
+   */
+  async getBuyers(supplierId) {
+    await ensureSchema();
+    const result = await pool.query(
+      `SELECT DISTINCT
+        u.id,
+        u.email,
+        u.first_name,
+        u.last_name,
         COALESCE(wp.company_name, u.first_name || ' ' || u.last_name) AS company_name
        FROM users u
        LEFT JOIN wholesaler_profiles wp ON u.id = wp.user_id
-       WHERE u.role IS NULL OR u.role != 'admin'
-       ORDER BY u.created_at DESC`
+       WHERE u.id <> $1
+         AND (
+           EXISTS (SELECT 1 FROM orders o WHERE o.buyer_id = u.id AND o.supplier_id = $1)
+           OR EXISTS (SELECT 1 FROM invoices i WHERE i.buyer_id = u.id AND i.supplier_id = $1)
+         )
+       ORDER BY company_name ASC`,
+      [supplierId]
     );
     return result.rows;
   }

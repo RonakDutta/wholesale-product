@@ -23,6 +23,11 @@ router.get("/export/pdf", (req, res) => invoiceController.exportPDF(req, res));
 router.get("/by-order/:orderId", (req, res) => invoiceController.getInvoiceByOrderId(req, res));
 router.get("/by-order/:orderId/pdf", (req, res) => invoiceController.getInvoicePDFByOrderId(req, res));
 
+// Per-seller defaults. Registered before "/:id" so the word is not swallowed
+// as an invoice id.
+router.get("/settings", (req, res) => invoiceController.getSettings(req, res));
+router.put("/settings", (req, res) => invoiceController.saveSettings(req, res));
+
 // Invoice List & Details
 router.get("/buyers", (req, res) => invoiceController.getBuyers(req, res));
 router.get("/", (req, res) => invoiceController.getInvoices(req, res));

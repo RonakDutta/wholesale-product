@@ -1,13 +1,18 @@
 -- Notification System Migration
+--
+-- users.id is a uuid in this schema, so every user_id here must be uuid too.
+-- INTEGER columns made these foreign keys unimplementable (SQLSTATE 42804),
+-- which meant the tables were never created and signup started failing at the
+-- welcome notification.
 
 CREATE TABLE IF NOT EXISTS notifications (
   id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   title VARCHAR(255) NOT NULL,
   message TEXT NOT NULL,
   notification_type VARCHAR(50) NOT NULL,
   channel VARCHAR(100) NOT NULL,
-  reference_id INTEGER,
+  reference_id uuid,
   reference_type VARCHAR(50),
   priority VARCHAR(20) DEFAULT 'normal',
   is_read BOOLEAN DEFAULT false,
@@ -21,7 +26,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(notification_
 
 CREATE TABLE IF NOT EXISTS notification_preferences (
   id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
   email_enabled BOOLEAN DEFAULT true,
   sms_enabled BOOLEAN DEFAULT false,
   push_enabled BOOLEAN DEFAULT false,
@@ -37,7 +42,7 @@ CREATE INDEX IF NOT EXISTS idx_notification_preferences_user_id ON notification_
 
 CREATE TABLE IF NOT EXISTS device_tokens (
   id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   token VARCHAR(500) NOT NULL,
   platform VARCHAR(50) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

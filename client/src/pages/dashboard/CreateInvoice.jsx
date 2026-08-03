@@ -1,47 +1,85 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { Plus, Trash2, ArrowLeft, Save, FileText, Calculator } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { Plus, Trash2, ArrowLeft, Save, Users, Calculator } from "lucide-react";
+import { toast } from "sonner";
 import axios from "../../utils/axios";
 
 export default function CreateInvoice() {
   const navigate = useNavigate();
   const [buyerId, setBuyerId] = useState("");
   const [buyers, setBuyers] = useState([]);
-  const [loadingBuyers, setLoadingBuyers] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [defaultTaxRate, setDefaultTaxRate] = useState(18);
   const [discount, setDiscount] = useState("0");
   const [shippingCharge, setShippingCharge] = useState("0");
   const [dueDate, setDueDate] = useState("");
-  const [notes, setNotes] = useState("Thank you for your business!");
-  const [termsConditions, setTermsConditions] = useState("1. Goods once sold will not be taken back.\n2. Payment is due within 15 days.");
+  const [notes, setNotes] = useState("");
+  const [termsConditions, setTermsConditions] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [items, setItems] = useState([
+    {
+      productName: "",
+      hsnCode: "8504",
+      quantity: 1,
+      unitPrice: 0,
+      gstPercent: 18,
+    },
+  ]);
+
   useEffect(() => {
-    const fetchBuyers = async () => {
+    let cancelled = false;
+
+    const load = async () => {
       try {
-        const res = await axios.get("/api/invoices/buyers");
-        if (res.data.success) {
-          setBuyers(res.data.buyers || []);
-          if (res.data.buyers?.length > 0) {
-            setBuyerId(res.data.buyers[0].id);
-          }
+        // Your saved defaults fill the form, so a manual invoice matches the
+        // ones raised automatically from orders.
+        const [buyersRes, settingsRes] = await Promise.all([
+          axios.get("/api/invoices/buyers"),
+          axios.get("/api/invoices/settings"),
+        ]);
+
+        if (cancelled) return;
+
+        if (buyersRes.data.success) {
+          const list = buyersRes.data.buyers || [];
+          setBuyers(list);
+          if (list.length > 0) setBuyerId(list[0].id);
+        }
+
+        if (settingsRes.data.success) {
+          const s = settingsRes.data.settings;
+          setDefaultTaxRate(s.defaultTaxRate);
+          setNotes(s.defaultNotes || "");
+          setTermsConditions(s.defaultTerms || "");
+          setItems((prev) =>
+            prev.map((item) => ({ ...item, gstPercent: s.defaultTaxRate })),
+          );
         }
       } catch (err) {
-        console.error("Failed to fetch buyers list:", err);
+        console.error("Failed to prepare the invoice form:", err);
+        if (!cancelled) toast.error("Could not load your customers");
       } finally {
-        setLoadingBuyers(false);
+        if (!cancelled) setLoading(false);
       }
     };
-    fetchBuyers();
-  }, []);
 
-  const [items, setItems] = useState([
-    { productName: "", hsnCode: "8504", quantity: 1, unitPrice: 0, gstPercent: 18 },
-  ]);
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleAddItem = () => {
     setItems((prev) => [
       ...prev,
-      { productName: "", hsnCode: "8504", quantity: 1, unitPrice: 0, gstPercent: 18 },
+      {
+        productName: "",
+        hsnCode: "8504",
+        quantity: 1,
+        unitPrice: 0,
+        gstPercent: defaultTaxRate,
+      },
     ]);
   };
 
@@ -89,12 +127,12 @@ export default function CreateInvoice() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!buyerId) {
-      alert("Please select or enter a valid Buyer.");
+      toast.error("Pick the customer this invoice is for");
       return;
     }
 
     if (items.some((item) => !item.productName || Number(item.quantity) <= 0)) {
-      alert("Please ensure all items have a name and quantity greater than 0.");
+      toast.error("Every line needs a name and a quantity above zero");
       return;
     }
 
@@ -117,34 +155,66 @@ export default function CreateInvoice() {
       });
 
       if (res.data.success) {
-        alert("Invoice created successfully!");
-        navigate(`/dashboard/invoices/${res.data.invoice.id}`);
+        toast.success("Invoice created");
+        navigate(`/seller/invoices/${res.data.invoice.id}`);
       }
     } catch (err) {
       console.error("Create invoice error:", err);
-      alert(err.response?.data?.message || "Failed to create manual invoice");
+      toast.error(
+        err.response?.data?.message || "Failed to create the invoice",
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-clay border-t-transparent" />
+      </div>
+    );
+  }
+
+  // Manual invoices go to people you already trade with, so with no customers
+  // yet there is nothing sensible to select and no point showing the form.
+  if (buyers.length === 0) {
+    return (
+      <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center text-center">
+        <Users className="mb-3 h-10 w-10 text-espresso/15" />
+        <h2 className="text-lg font-bold text-espresso">No customers yet</h2>
+        <p className="mt-1 text-sm text-espresso/60">
+          You can raise a manual invoice once someone has ordered from you.
+          Orders generate their own invoice automatically.
+        </p>
+        <Link
+          to="/seller/invoices"
+          className="mt-5 rounded-xl bg-clay px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-espresso"
+        >
+          Back to invoices
+        </Link>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 lg:p-8 space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       {/* Top Bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate("/dashboard/invoices")}
-            className="p-2 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-white dark:hover:bg-slate-900 transition-colors"
+            onClick={() => navigate("/seller/invoices")}
+            className="p-2 text-slate-500 hover:text-espresso border border-slate-200 rounded-xl hover:bg-white transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-              <FileText className="w-6 h-6 text-blue-600" /> Create Custom B2B Tax Invoice
+            <h1 className="text-2xl font-black tracking-tight text-espresso">
+              New invoice
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Generate a standalone invoice with automated sequential invoice numbers and GST calculations.
+            <p className="mt-0.5 text-sm text-espresso/60">
+              For billing outside a marketplace order. The number and GST are
+              worked out for you.
             </p>
           </div>
         </div>
@@ -153,71 +223,67 @@ export default function CreateInvoice() {
       {/* Form Container */}
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Header Metadata Card */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-espresso/70 mb-1">
               Select Buyer Account *
             </label>
-            {buyers.length > 0 ? (
-              <select
-                value={buyerId}
-                onChange={(e) => setBuyerId(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
-                required
-              >
-                <option value="">-- Select Buyer Account --</option>
-                {buyers.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.company_name} ({b.email})
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                placeholder="Enter Buyer Account UUID"
-                value={buyerId}
-                onChange={(e) => setBuyerId(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-mono text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
-                required
-              />
-            )}
-            <span className="text-[11px] text-slate-400">Target customer account receiving tax invoice</span>
+            <select
+              value={buyerId}
+              onChange={(e) => setBuyerId(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-bold text-espresso focus:outline-none focus:ring-2 focus:ring-clay/20"
+              required
+            >
+              <option value="">Select a customer</option>
+              {buyers.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.company_name} ({b.email})
+                </option>
+              ))}
+            </select>
+            <span className="text-[11px] text-slate-400">
+              People who have ordered from you
+            </span>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-espresso/70 mb-1">
               Payment Due Date
             </label>
             <input
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
+              className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-espresso focus:ring-2 focus:ring-clay/20 focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Invoice Prefix
+            <label className="block text-xs font-semibold text-espresso/70 mb-1">
+              Invoice number
             </label>
-            <input
-              type="text"
-              value="INV-2026-XXXXXX (Auto)"
-              disabled
-              className="w-full px-3.5 py-2 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-mono text-slate-500"
-            />
+            <p className="rounded-xl border border-slate-200 bg-slate-100/50 px-3.5 py-2 font-mono text-sm text-slate-500">
+              Assigned on save
+            </p>
+            <Link
+              to="/seller/invoices/settings"
+              className="text-[11px] font-semibold text-clay hover:underline"
+            >
+              Change the prefix and defaults
+            </Link>
           </div>
         </div>
 
         {/* Dynamic Line Items Card */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Line Items Breakdown</h3>
+            <h3 className="text-sm font-bold text-espresso">
+              Line Items Breakdown
+            </h3>
             <button
               type="button"
               onClick={handleAddItem}
-              className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+              className="px-3 py-1.5 bg-clay/10 text-clay hover:bg-clay/20 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
             >
               <Plus className="w-3.5 h-3.5" /> Add Row
             </button>
@@ -227,7 +293,7 @@ export default function CreateInvoice() {
             {items.map((item, idx) => (
               <div
                 key={idx}
-                className="grid grid-cols-12 gap-3 items-center p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800"
+                className="grid grid-cols-12 gap-3 items-center p-3 bg-slate-50 rounded-xl border border-slate-200"
               >
                 <div className="col-span-12 sm:col-span-4">
                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">
@@ -237,8 +303,10 @@ export default function CreateInvoice() {
                     type="text"
                     placeholder="Item name / spec..."
                     value={item.productName}
-                    onChange={(e) => handleItemChange(idx, "productName", e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-900 dark:text-white"
+                    onChange={(e) =>
+                      handleItemChange(idx, "productName", e.target.value)
+                    }
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-espresso"
                     required
                   />
                 </div>
@@ -250,8 +318,10 @@ export default function CreateInvoice() {
                   <input
                     type="text"
                     value={item.hsnCode}
-                    onChange={(e) => handleItemChange(idx, "hsnCode", e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-center text-slate-900 dark:text-white"
+                    onChange={(e) =>
+                      handleItemChange(idx, "hsnCode", e.target.value)
+                    }
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-center text-espresso"
                   />
                 </div>
 
@@ -263,8 +333,10 @@ export default function CreateInvoice() {
                     type="number"
                     min="1"
                     value={item.quantity}
-                    onChange={(e) => handleItemChange(idx, "quantity", e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-center text-slate-900 dark:text-white"
+                    onChange={(e) =>
+                      handleItemChange(idx, "quantity", e.target.value)
+                    }
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-center text-espresso"
                     required
                   />
                 </div>
@@ -277,8 +349,10 @@ export default function CreateInvoice() {
                     type="number"
                     step="0.01"
                     value={item.unitPrice}
-                    onChange={(e) => handleItemChange(idx, "unitPrice", e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-right text-slate-900 dark:text-white"
+                    onChange={(e) =>
+                      handleItemChange(idx, "unitPrice", e.target.value)
+                    }
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-right text-espresso"
                     required
                   />
                 </div>
@@ -289,8 +363,10 @@ export default function CreateInvoice() {
                   </label>
                   <select
                     value={item.gstPercent}
-                    onChange={(e) => handleItemChange(idx, "gstPercent", e.target.value)}
-                    className="w-full px-2 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-center text-slate-900 dark:text-white"
+                    onChange={(e) =>
+                      handleItemChange(idx, "gstPercent", e.target.value)
+                    }
+                    className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-center text-espresso"
                   >
                     <option value="0">0%</option>
                     <option value="5">5%</option>
@@ -317,68 +393,68 @@ export default function CreateInvoice() {
 
         {/* Financial Totals & Terms Card */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-espresso/70 mb-1">
                 Invoice Notes
               </label>
               <textarea
                 rows={2}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-espresso"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-espresso/70 mb-1">
                 Terms & Conditions
               </label>
               <textarea
                 rows={3}
                 value={termsConditions}
                 onChange={(e) => setTermsConditions(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-espresso"
               />
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-3 text-xs">
-            <h4 className="font-bold text-slate-900 dark:text-white text-sm pb-2 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
-              <Calculator className="w-4 h-4 text-blue-600" /> Summary Breakdown
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-3 text-xs">
+            <h4 className="flex items-center gap-2 border-b border-slate-100 pb-2 text-sm font-bold text-espresso">
+              <Calculator className="w-4 h-4 text-clay" /> Summary
             </h4>
 
-            <div className="flex justify-between text-slate-600 dark:text-slate-400">
+            <div className="flex justify-between text-espresso/60">
               <span>Subtotal:</span>
               <span>₹{subtotal.toFixed(2)}</span>
             </div>
 
             <div className="flex justify-between items-center gap-4">
-              <span className="text-slate-600 dark:text-slate-400">Discount (₹):</span>
+              <span className="text-espresso/60">Discount (₹):</span>
               <input
                 type="number"
                 value={discount}
                 onChange={(e) => setDiscount(e.target.value)}
-                className="w-28 px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-right font-semibold"
+                className="w-28 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-right font-semibold"
               />
             </div>
 
             <div className="flex justify-between items-center gap-4">
-              <span className="text-slate-600 dark:text-slate-400">Shipping Charge (₹):</span>
+              <span className="text-espresso/60">Shipping Charge (₹):</span>
               <input
                 type="number"
                 value={shippingCharge}
                 onChange={(e) => setShippingCharge(e.target.value)}
-                className="w-28 px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-right font-semibold"
+                className="w-28 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-right font-semibold"
               />
             </div>
 
-            <div className="flex justify-between font-bold text-slate-900 dark:text-white pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex justify-between font-bold text-espresso pt-2 border-t border-slate-100">
               <span>Taxable Amount:</span>
               <span>₹{taxableAmount.toFixed(2)}</span>
             </div>
 
-            <div className="flex justify-between text-slate-600 dark:text-slate-400">
+            <div className="flex justify-between text-espresso/60">
               <span>Total Tax (GST):</span>
               <span>₹{totalTax.toFixed(2)}</span>
             </div>
@@ -391,20 +467,21 @@ export default function CreateInvoice() {
         </div>
 
         {/* Submit Actions */}
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
           <button
             type="button"
-            onClick={() => navigate("/dashboard/invoices")}
-            className="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold transition-colors"
+            onClick={() => navigate("/seller/invoices")}
+            className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-espresso/70 rounded-xl text-xs font-semibold transition-colors"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isSubmitting}
-            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-colors shadow-md shadow-blue-500/20 disabled:opacity-50"
+            className="px-6 py-2.5 bg-clay hover:bg-espresso text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-colors shadow-sm shadow-clay/20 disabled:opacity-50"
           >
-            <Save className="w-4 h-4" /> {isSubmitting ? "Generating..." : "Generate Invoice"}
+            <Save className="w-4 h-4" />{" "}
+            {isSubmitting ? "Generating..." : "Generate Invoice"}
           </button>
         </div>
       </form>

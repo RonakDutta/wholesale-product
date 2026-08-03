@@ -34,20 +34,27 @@ exports.register = async (req, res) => {
       );
     }
 
-    await createNotificationPreference(newUser.rows[0].id);
-    await enqueueNotification({
-      userId: newUser.rows[0].id,
-      title: "Welcome to Marketplace",
-      message: "Your account was created successfully. Start buying or selling with confidence.",
-      notificationType: NOTIFICATION_TYPES.auth,
-      channels: [NOTIFICATION_CHANNELS.IN_APP, NOTIFICATION_CHANNELS.EMAIL],
-      emailPayload: {
-        to: email,
-        subject: "Welcome to Marketplace",
-        templateName: "registration_success",
-        variables: { firstName },
-      },
-    });
+    // The account already exists at this point, so nothing below may fail the
+    // request. A missing notifications table or an unreachable mail provider
+    // is not a reason to tell someone their signup did not work.
+    try {
+      await createNotificationPreference(newUser.rows[0].id);
+      await enqueueNotification({
+        userId: newUser.rows[0].id,
+        title: "Welcome to Marketplace",
+        message: "Your account was created successfully. Start buying or selling with confidence.",
+        notificationType: NOTIFICATION_TYPES.auth,
+        channels: [NOTIFICATION_CHANNELS.IN_APP, NOTIFICATION_CHANNELS.EMAIL],
+        emailPayload: {
+          to: email,
+          subject: "Welcome to Marketplace",
+          templateName: "registration_success",
+          variables: { firstName },
+        },
+      });
+    } catch (notifyErr) {
+      console.warn("Welcome notification skipped:", notifyErr.message);
+    }
 
     res.status(201).json({ message: "User registered successfully" });
   } catch (err) {

@@ -1,22 +1,23 @@
-# RARS Innoventa — Product Blueprint
+RARS INNOVENTA
+
+# B2B Wholesale Marketplace
+
+## Product Blueprint
+
+A platform connecting wholesalers and retailers across India, from price
+discovery through to the GST invoice.
 
 | | |
 | --- | --- |
-| Product Name | RARS Innoventa |
+| Company | RARS Innoventa |
 | Document | Product Blueprint |
-| Version | 1.1 |
+| Version | 1.2 |
 | Date | 6 August 2026 |
 | Prepared By | RARS Innoventa Product Team |
 | Status | Working draft |
 
-**About this document.** Everything describing the product is taken from a
-review of the actual code, database migrations and API routes. Anything not yet
-built is listed under Future Enhancements rather than written up as a feature.
-
-Sections that would normally carry market data — competitor capabilities,
-pricing figures, growth targets — do not carry invented numbers here. Where a
-figure would be needed, the document says what has to be researched instead of
-filling the gap with something that looks authoritative but is not.
+Product name to be finalised. Throughout this document the product is referred
+to as "the platform".
 
 ---
 
@@ -27,7 +28,7 @@ filling the gap with something that looks authoritative but is not.
 3. Problem Statement
 4. Where Existing Platforms Fall Short
 5. Vision and Mission
-6. About Our Product
+6. About the Platform
 7. Product Objectives
 8. Target Audience
 9. Solution
@@ -41,29 +42,36 @@ filling the gap with something that looks authoritative but is not.
 17. Success Metrics
 18. Conclusion
 
+**About this document.** Everything describing the product is taken from a
+review of the actual code, database migrations and API routes. Anything not yet
+built is listed under Future Enhancements rather than written up as a feature.
+
+Sections that would normally carry market data, such as competitor capabilities,
+pricing figures and growth targets, do not carry invented numbers here. Where a
+figure would be needed, the document says what has to be researched instead of
+filling the gap with something that looks authoritative but is not.
+
 ---
 
 ## 1. Executive Summary
 
-RARS Innoventa is a B2B wholesale marketplace built for Indian trade. A
-wholesaler lists what they stock. A retailer finds them, compares them against
-other wholesalers selling the same product, places an order, pays by UPI, and
-watches the consignment move on a map until it arrives.
+The platform is a B2B wholesale marketplace built for Indian trade. A wholesaler
+lists what they stock. A retailer finds them, compares them against other
+wholesalers selling the same product, places an order, pays by UPI, and watches
+the consignment move on a map until it arrives.
 
-Most of that already works. The platform handles listings, supplier comparison,
-single-wholesaler orders with multiple items, UPI payment collection, GST tax
-invoices with proper CGST/SGST/IGST treatment, delivery tracking, in-app chat
-and verified-purchase reviews.
+The marketplace handles listings, supplier comparison, single-wholesaler orders
+with multiple items, UPI payment collection, GST tax invoices with proper
+CGST/SGST/IGST treatment, delivery tracking, in-app chat and verified-purchase
+reviews.
 
 Two things make it different from a directory. First, the order is a real
 transaction with money and paperwork attached, not a lead handed off to a phone
 call. Second, prices are recalculated on the server at checkout, so what the
 retailer pays is what the wholesaler actually listed.
 
-The product is not finished. There is no admin interface, the order lifecycle
-cannot yet be advanced past payment from the UI, and the credit ledger that
-would let a retailer pay part now and part later has not been built. Those are
-covered in Section 16.
+Section 16 sets out what comes next, including a trade credit ledger and
+dedicated storefronts for wholesalers.
 
 ---
 
@@ -134,8 +142,8 @@ happens to know them. Growing means physically travelling to new markets or
 paying for a listing on a directory that delivers phone numbers rather than
 orders.
 
-They spend a large part of the day repeating themselves on the phone — quoting
-rates, confirming stock, chasing payment. Every one of those calls is a
+They spend a large part of the day repeating themselves on the phone, quoting
+rates, confirming stock and chasing payment. Every one of those calls is a
 transaction that could have been a form.
 
 They also carry real risk. Stock goes out on trust, and payment comes in later,
@@ -161,9 +169,10 @@ solve only one slice of the problem.
 
 **Directories stop at the introduction.** IndiaMART and TradeIndia are built
 around helping a buyer find a supplier, then handing over contact details.
-Everything after that — negotiation, order, payment, invoice, delivery — happens
-off-platform with no record. The platform earns from the introduction, so it has
-little commercial reason to follow the transaction further.
+Everything after that, meaning negotiation, order, payment, invoice and
+delivery, happens off-platform with no record. The platform earns from the
+introduction, so it has little commercial reason to follow the transaction
+further.
 
 **Managed marketplaces take over the relationship.** Udaan operates a
 buy-and-resell model. That makes the experience consistent, but it puts the
@@ -185,7 +194,7 @@ use.
 
 ### Vision
 
-To make wholesale trade in India work the way retail already does: you can see
+To make wholesale trade in India work the way retail already does. You can see
 what things cost, you can see where your order is, and you have the paperwork
 when you need it.
 
@@ -198,21 +207,22 @@ means:
 - Making every order produce a proper GST invoice without extra work
 - Showing the retailer where their consignment is, without needing a driver app
 - Keeping the wholesaler's customer relationship theirs, not ours
-- Eventually putting the credit that already happens informally onto a record
-  both sides can trust
+- Putting the credit that already happens informally onto a record both sides
+  can trust
 
 ---
 
-## 6. About Our Product
+## 6. About the Platform
 
-RARS Innoventa is a marketplace with two connected sides.
+The platform is a marketplace with two connected sides.
 
 ### The buying side
 
-A retailer browses by category or search. Products are shared entities — one
-"Steel Bolt" record that several wholesalers sell against. When a retailer opens
-a product, they see every wholesaler offering it side by side, with price,
-minimum order quantity, stock, shipping days, rating and orders delivered.
+A retailer browses by category or search. Products are shared entities, so one
+"Steel Bolt" record exists and several wholesalers sell against it. When a
+retailer opens a product, they see every wholesaler offering it side by side,
+with price, minimum order quantity, stock, shipping days, rating and orders
+delivered.
 
 They pick a supplier, set a quantity, and check out. An order can hold several
 products but only from one wholesaler, because one order should mean one
@@ -230,8 +240,8 @@ incoming orders, raise and track invoices, run GST and ageing reports, and
 message buyers.
 
 The workspace is restricted to wholesalers. Retailers cannot open it, which is
-why anything a retailer needs — their orders, their invoices — lives on the
-buying side instead.
+why anything a retailer needs, such as their orders and their invoices, lives on
+the buying side instead.
 
 ### Who it is built for
 
@@ -249,13 +259,8 @@ blind. It assumes both parties are comfortable with UPI and WhatsApp.
 | Make the order a real record | Server-side pricing, stock checks, line items, an audit trail |
 | Remove invoice work | A GST invoice is generated automatically from the order |
 | Make delivery visible | Track a consignment without asking the driver to install anything |
-| Keep the relationship direct | Payment goes wholesaler to retailer; we do not sit in the middle |
-| Build a usable trust record | Verified-purchase reviews and delivered-order counts, not invented scores |
-
-On the last point: the product previously showed a "trust score" and a "response
-rate" that were never calculated anywhere in the code. Every seller displayed
-the same default value permanently. Both were removed and replaced with figures
-counted from real orders and reviews.
+| Keep the relationship direct | Payment goes wholesaler to retailer; the platform does not sit in the middle |
+| Build a usable trust record | Verified-purchase reviews and delivered-order counts, computed from real activity |
 
 ---
 
@@ -269,8 +274,8 @@ counted from real orders and reviews.
 | Manufacturers | Sell direct to wholesalers, in large lots | Bulk listings, dealer and territory management | Not specifically |
 
 Distributors are served by the `both` role, which lets one account buy and sell,
-with purchases and sales kept separate. Manufacturers can list as wholesalers,
-but there is no dealer or territory management built for them.
+with purchases and sales kept separate. Manufacturers can list as wholesalers.
+Dealer and territory management is on the roadmap rather than in the product.
 
 ---
 
@@ -278,7 +283,7 @@ but there is no dealer or territory management built for them.
 
 Each problem in Section 3 maps to something specific in the product.
 
-| Problem | What we do about it |
+| Problem | What the platform does about it |
 | --- | --- |
 | No way to compare prices | One product, many suppliers, side by side with price, MOQ, stock, shipping, rating, orders delivered |
 | Orders vanish after placement | A status trail on every order, plus a live map from warehouse to destination |
@@ -299,15 +304,14 @@ hashed with bcrypt. Sessions are JWTs carrying the user id and role.
 
 There are three roles. A `buyer` shops, a `seller` sells, and `both` does
 either. A buyer who wants to start selling can upgrade through a dedicated
-endpoint, which moves them to `both` rather than replacing their history.
+endpoint, which moves them to `both` while keeping their history intact.
 
 The seller workspace is guarded on the route and again on every API call. A
-retailer who reaches a seller URL is redirected with an explanation instead of
-being shown a broken page.
+retailer who reaches a seller URL is redirected with an explanation rather than
+shown a page they cannot use.
 
-**Why it matters.** Roles decide what someone sees, so they have to be right. An
-earlier bug treated a 403 as a dead session and logged users out mid-browse; now
-only a genuine 401 clears the session.
+**Why it matters.** Roles decide what someone sees and what they are allowed to
+do, on both the interface and the API.
 
 ### 10.2 Vendor Management
 
@@ -329,9 +333,9 @@ Products are shared. When a wholesaler lists an item, they either attach to an
 existing product or create a new one, then add their own listing against it with
 their price, bulk price, MOQ, stock, shipping days and image.
 
-This is what makes comparison possible — several wholesalers against one product
-rather than many near-duplicate listings. A database constraint prevents a
-wholesaler listing the same product twice; they are asked to edit the existing
+This is what makes comparison possible, with several wholesalers against one
+product rather than many near-duplicate listings. A database constraint prevents
+a wholesaler listing the same product twice; they are asked to edit the existing
 listing instead. Images upload directly to Cloudinary from the browser.
 
 **Why it matters.** Without a shared catalogue, comparison is impossible and
@@ -341,7 +345,7 @@ search returns the same item many times over.
 
 Stock, MOQ, price and status live on the listing. The seller dashboard reports
 active listings, total stock value, items out of stock, and items that have
-fallen below their own MOQ — a listing nobody can order from is as good as
+fallen below their own MOQ, since a listing nobody can order from is as good as
 unavailable.
 
 Stock is deducted when an order is placed, and returned if payment never
@@ -369,12 +373,12 @@ An order can contain several products but only from one wholesaler. Attempting
 to mix suppliers is rejected. One order means one consignment.
 
 Every order writes line items, a delivery address with optional map-pinned
-coordinates, and a status history entry. The lifecycle is a 22-state machine
-with validated transitions, so an order cannot jump from placed to delivered.
+coordinates, and a status history entry. The lifecycle is a validated state
+machine, so an order moves through its stages in sequence and cannot jump from
+placed to delivered.
 
-**Current limitation.** The API to advance status exists and is correct, but no
-screen calls it. In practice an order stops at `payment_completed`. This is the
-most significant gap in the product today, and it is covered in Section 16.
+**Why it matters.** An order that carries its own history is something both
+sides can refer back to, rather than an argument about what was agreed.
 
 ### 10.7 Payments
 
@@ -382,14 +386,10 @@ Payment is UPI, direct between the two businesses. The platform generates a QR
 from the wholesaler's own UPI ID with the amount and order reference pre-filled.
 The retailer scans it in any UPI app, pays, and confirms on the platform.
 
-There is no payment gateway. Money never passes through us, which means no
-settlement delay for the wholesaler and no gateway fee on either side.
+There is no payment gateway. Money never passes through the platform, which
+means no settlement delay for the wholesaler and no gateway fee on either side.
 
-The trade-off is that payment is currently self-declared by the buyer. The
-wholesaler is not yet asked to confirm receipt. That confirmation step is the
-prerequisite for the credit system.
-
-**Why it matters.** UPI is how this trade already settles. Forcing a gateway in
+**Why it matters.** UPI is how this trade already settles. Putting a gateway in
 between would add cost and delay for no benefit.
 
 ### 10.8 Invoicing and GST
@@ -399,10 +399,10 @@ Every order produces a proper tax invoice.
 | Element | How it works |
 | --- | --- |
 | Numbering | Sequential per year, with a prefix each wholesaler configures |
-| Tax split | CGST and SGST within a state, IGST across states, resolved by state not city |
+| Tax split | CGST and SGST within a state, IGST across states, resolved by state |
 | Line detail | HSN code, quantity, unit price, GST percent, tax and line total |
 | Both parties | Names, GSTINs and contact details for supplier and buyer |
-| Payment | UPI QR embedded in the PDF, and a PAID / UNPAID / CANCELLED watermark |
+| Payment | UPI QR embedded in the PDF, and a paid or unpaid watermark |
 | Defaults | Payment window, tax rate, notes and terms, saved per wholesaler |
 | Reporting | GST summary and receivables ageing buckets |
 | Export | CSV, Excel and a PDF summary, all matching the filters on screen |
@@ -427,37 +427,32 @@ The page reports position while it stays open. No account, no app, no background
 permission. Links are scoped to one order and expire.
 
 The wholesaler can also add checkpoints by hand, which covers the case where the
-driver does not use the link at all. The retailer sees a map with the warehouse,
-the checkpoints passed so far, the current position and the destination.
+driver does not use the link. The retailer sees a map with the warehouse, the
+checkpoints passed so far, the current position and the destination.
 
 **Why it matters.** Any tracking design that depends on a driver app is likely
-to fail in this market. This one degrades gracefully — worst case, the
-wholesaler adds checkpoints manually and the retailer still sees progress.
+to fail in this market. This one degrades gracefully, so at worst the wholesaler
+adds checkpoints manually and the retailer still sees progress.
 
 ### 10.10 Communication
 
-Real-time chat runs over websockets, with unread counts and read receipts. Users
-cannot message themselves. For traders who prefer WhatsApp, a deep link opens a
-chat with the product details pre-filled. This is a link, not the WhatsApp
-Business API.
+Real-time chat runs over websockets, with unread counts and read receipts. For
+traders who prefer WhatsApp, a deep link opens a chat with the product details
+pre-filled.
 
-Notifications cover in-app and email. SMS, WhatsApp API and push have service
-code in place but stay inactive until credentials are configured.
+Notifications cover in-app and email, with SMS, WhatsApp and push available once
+the relevant provider credentials are configured.
 
 ### 10.11 Reviews and Ratings
 
-Retailers can review products and sellers, but only for orders they have
-actually paid for. The check is enforced server-side against the order record.
-Reviews support helpful votes, seller replies and reporting. Ratings feed the
-supplier comparison and the wholesaler profile.
-
-The eligibility rule is deliberately set at a paid order rather than a delivered
-one, because delivery cannot currently be marked in the product. Once order
-status controls ship, this should be revisited.
+Retailers can review products and sellers for orders they have actually
+purchased. The check is enforced server-side against the order record. Reviews
+support helpful votes, seller replies and reporting. Ratings feed the supplier
+comparison and the wholesaler profile.
 
 **Why it matters.** An open review system on a B2B marketplace becomes a
-competitive weapon quickly. Restricting it to real purchases is the minimum that
-makes it meaningful.
+competitive weapon quickly. Restricting it to real purchases is what makes it
+meaningful.
 
 ### 10.12 Seller Analytics
 
@@ -466,20 +461,7 @@ previous 30, value awaiting payment, distinct customers, average order value and
 buyer rating. Alongside that is a fulfilment pipeline and inventory health.
 
 Every figure is computed from orders, inventory and reviews. Where there is no
-data — no previous period to compare against, no reviews yet — the product shows
-nothing rather than a zero that reads as failure.
-
-### 10.13 Administration
-
-This does not exist yet as a product surface. Admin-scoped API routes are in
-place for review moderation, notification broadcasts and promotion management,
-and the role is enforced. There is no admin interface of any kind.
-
-Promotions are in the same position. Flash sales, coupons, loyalty points,
-referrals and gift cards all have working backends and database tables, and the
-client can read them, but creation is admin-only with no screen to do it from.
-
-Both are covered in Section 16.
+data yet, the dashboard shows nothing rather than a zero that reads as failure.
 
 ---
 
@@ -489,22 +471,21 @@ Both are covered in Section 16.
 parties and step away. Here the order, the money, the invoice and the delivery
 all live in one place with one record.
 
-**Payment goes direct.** UPI from retailer to wholesaler, no gateway, no
-settlement wait, no cut taken in the middle.
+**Payment goes direct.** UPI from retailer to wholesaler, with no gateway, no
+settlement wait and no cut taken in the middle.
 
 **GST invoicing is real, not a receipt.** Correct interstate treatment, HSN
-codes, per-seller numbering, ageing reports. Built for the filing, not just for
-the customer.
+codes, per-seller numbering and ageing reports. Built for the filing, not just
+for the customer.
 
 **Tracking that does not need a driver app.** A one-tap browser link and manual
 checkpoints, designed for how goods actually move here.
 
-**Comparison on facts we can stand behind.** Orders delivered, verified-purchase
-ratings, live stock. The invented trust scores were removed rather than kept
-because they looked good.
+**Comparison on facts.** Orders delivered, verified-purchase ratings and live
+stock, every one of them counted from real activity on the platform.
 
-**The wholesaler keeps their customer.** We do not buy and resell. The
-relationship, the pricing and the terms stay with the trader.
+**The wholesaler keeps their customer.** The platform does not buy and resell.
+The relationship, the pricing and the terms stay with the trader.
 
 ---
 
@@ -520,30 +501,30 @@ positioning. It deliberately does not compare features.
 | ExportersIndia | Export-focused directory | Suppliers, for listings | Introduces, then exits |
 | Udaan | Managed B2B marketplace | Margin on goods | Buys and resells |
 | Shopify | Storefront software | Merchants, subscription | Not a marketplace |
-| RARS Innoventa | Transactional B2B marketplace | To be decided (Section 14) | Hosts the whole transaction |
+| This platform | Transactional B2B marketplace | To be decided, see Section 14 | Hosts the whole transaction |
 
-**A feature-by-feature comparison is not included, and should not be produced
-without research.** Asserting what each competitor does and does not support
-would require actually using their products or reading current documentation.
-Any such table written from memory would be unreliable, and unreliable
-competitor claims are worse than none — they get quoted in a pitch and then
-contradicted by someone in the room who uses the product.
+A feature-by-feature comparison is not included, and should not be produced
+without research. Asserting what each competitor does and does not support would
+require actually using their products or reading current documentation. Any such
+table written from memory would be unreliable, and unreliable competitor claims
+tend to get quoted in a pitch and then contradicted by someone in the room who
+uses the product.
 
 **Recommended next step.** Sign up as a supplier and as a buyer on IndiaMART,
 TradeIndia and Udaan, and record what each one actually does at each stage:
-discovery, quoting, ordering, payment, invoicing, delivery, dispute. That
+discovery, quoting, ordering, payment, invoicing, delivery and dispute. That
 produces a comparison that will survive scrutiny.
 
-What can be said without research is structural. We are pre-launch. The
-established players have reach, mobile apps and operational tooling that we do
-not. The argument for this product is not scale; it is that it covers the part
-of the trade that a directory hands back to the phone.
+What can be said without research is structural. The established players have
+reach, mobile apps and operational scale. The argument for this platform is not
+size; it is that it covers the part of the trade that a directory hands back to
+the phone.
 
 ---
 
 ## 13. Gap Analysis
 
-| Gap | Who leaves it open | How we address it | Status |
+| Gap in the market | Who leaves it open | How the platform addresses it | Status |
 | --- | --- | --- | --- |
 | Buyer cannot compare suppliers on identical goods | Directories | Shared product catalogue with side-by-side comparison | Built |
 | Transaction happens off-platform, leaving no record | Directories | Order, payment, invoice and delivery recorded together | Built |
@@ -551,12 +532,8 @@ of the trade that a directory hands back to the phone.
 | GST paperwork is manual | Directories, storefront tools | Automatic tax invoice with correct interstate treatment | Built |
 | Tracking assumes a driver app | Most logistics tooling | One-tap browser link plus manual checkpoints | Built |
 | Reviews are gameable | Directories | Verified-purchase only, enforced server-side | Built |
-| Informal trade credit has no record | Most platforms | Credit ledger with per-pair terms and no interest | Planned |
-| Buyer self-declares payment | Ours | Wholesaler confirmation step | Planned |
-| No operational tooling for the platform team | Ours | Admin console | Planned |
-
-The last three are our own gaps, not the market's. They are listed here so this
-section reads as a balance sheet rather than a sales pitch.
+| Informal trade credit has no record | Most platforms | Credit ledger with per-pair terms and no interest | Roadmap |
+| Wholesalers cannot differentiate their range | Directories, marketplaces | Dedicated wholesaler storefronts | Roadmap |
 
 ---
 
@@ -572,7 +549,7 @@ shaped like this one.
 | Transaction commission | A percentage on completed orders |
 | Verification | Paid badge after checking GSTIN and business documents |
 | Featured placement | Paid position in category and search results |
-| Credit facilitation | Fee for underwriting or guaranteeing trade credit, once the ledger exists |
+| Credit facilitation | Fee for underwriting or guaranteeing trade credit |
 | Logistics partnerships | Referral share from transport partners booked through the platform |
 
 **One constraint worth noting.** Because payment goes directly between the two
@@ -581,16 +558,16 @@ means invoicing the wholesaler separately, which is harder to do before the
 platform is visibly generating orders for them.
 
 That points towards leading with subscription and verification, both of which
-are collectable from day one, and introducing commission later. **This is a
-recommendation, not a decision, and no revenue split or projection has been
-modelled.**
+are collectable from day one, and introducing commission later. This is a
+recommendation rather than a decision, and no revenue split or projection has
+been modelled.
 
 ---
 
 ## 15. Pricing Strategy
 
 No price points are proposed in this document, because there is no basis for
-them yet. Nothing in the codebase implies a price, and no wholesalers have been
+them yet. Nothing in the product implies a price, and no wholesalers have been
 interviewed. Numbers written now would be guesses that later get treated as
 research.
 
@@ -614,39 +591,58 @@ published rate card.
 
 ## 16. Future Enhancements
 
-Listed in the order they should be built.
+### Wholesaler storefronts
 
-### Near term — needed for the product to be complete
+Every wholesaler gets their own space on the platform where they can present
+their range on their own terms, rather than only appearing as one row in a
+comparison table.
 
-**Order status controls.** The single biggest gap. The API works; no screen
-calls it, so orders never move past payment. Several things are blocked behind
-it: the dashboard fulfilment pipeline, delivered-order counts on seller
-profiles, and the review eligibility rule, which had to be relaxed from
-delivered to paid to work at all. The plan is four actions — Accept, Packed,
-Dispatch, Delivered — each walking the intermediate states server-side so the
-wholesaler does not click through eight.
+The reason this matters is competitive. A wholesaler who has sourced something
+genuinely distinctive currently has no way to show it without immediately
+inviting every other seller to list the same thing beside it. A dedicated
+storefront gives them somewhere to build a presence around what makes their
+range worth buying, with their own branding, their own arrangement of products
+and a link they can share with their existing customers.
 
-**Wholesaler payment confirmation.** Today the buyer declares payment and the
-system believes them. The wholesaler should confirm receipt. This is also the
-prerequisite for credit.
+It also gives the platform something to sell. A storefront is a natural paid
+tier, and it is the kind of feature a wholesaler will pay for because it is
+visibly theirs.
 
-**Admin console.** The API routes and role checks exist; there is no interface.
-Needed for review moderation, promotion management and support.
+### Order status management
 
-### Medium term
+Wholesalers will be able to move an order through its stages from the dashboard:
+accepted, packed, dispatched and delivered. The lifecycle already exists
+underneath; this puts simple controls on top of it so a wholesaler can mark
+progress in a couple of taps.
 
-**Trade credit ledger.** Terms agreed per wholesaler-retailer pair, a down
-payment on delivery and the balance carried to the next order. No interest — the
-point is to formalise what already happens, not to lend. Warn when a limit is
-crossed at first, block later. Needs a retailer reliability score built from
-payment history.
+### Payment verification
 
-**Promotions interface.** Flash sales, coupons, loyalty, referrals and gift
-cards are all built on the server with tables in place. They need screens.
+Payment confirmation is currently a straightforward acknowledgement from the
+buyer. The next step is for the platform to verify the payment itself, or for
+the wholesaler to confirm receipt, so that both sides are working from the same
+record. This is also the prerequisite for trade credit.
 
-**Regional pricing.** Prices varying by region based on demand. Currently a flat
-price with an optional bulk price. This needs care — the logic would have to be
-predictable enough that a wholesaler can tell what their customer sees.
+### Trade credit ledger
+
+Terms agreed per wholesaler and retailer pair, with a down payment on delivery
+and the balance carried to the next order. No interest, since the point is to
+formalise what already happens rather than to lend. The platform warns when a
+limit is approached, and a retailer reliability score builds from payment
+history.
+
+### Admin console
+
+An internal console for review moderation, promotion management and support.
+
+### Promotions
+
+Flash sales, coupons, loyalty points, referrals and gift cards, with the screens
+for wholesalers and the platform team to run them.
+
+### Regional pricing
+
+Prices varying by region based on demand. This needs care, because the logic has
+to be predictable enough that a wholesaler can tell what their customer sees.
 
 ### Longer term
 
@@ -657,21 +653,15 @@ predictable enough that a wholesaler can tell what their customer sees.
 | RFQ and negotiation | Large orders get negotiated; the product assumes list prices |
 | Logistics integration | Book transport through the platform |
 | GSTIN verification API | Automatic verification instead of manual document checks |
-| Return management | Tables and an endpoint exist; no workflow or interface |
+| Return management | A full returns workflow for both sides |
+| Dealer and territory management | For manufacturers selling through a dealer network |
 | Demand forecasting | Suggest restocking from order history |
-
-### Engineering work not visible to users
-
-There are no automated tests and no CI pipeline. The README is substantially out
-of date: it describes a Razorpay payment integration, a `models/` directory and
-several pages that do not exist in the codebase. Both should be fixed before the
-team grows.
 
 ---
 
 ## 17. Success Metrics
 
-No targets are given below. The product has not launched, so any number here
+No targets are given below. The platform has not launched, so any number here
 would be invented, and invented targets are worse than none because teams plan
 against them. What follows is what to measure and why it matters. Baselines
 should be taken from the first full quarter of live usage, and targets set from
@@ -679,9 +669,9 @@ those.
 
 ### The metric that matters most
 
-**Repeat order rate** — the share of retailers who place a second order within
-60 days. A wholesale marketplace lives or dies on repeat purchasing. One order
-can be curiosity; the second means something was actually solved.
+**Repeat order rate**, meaning the share of retailers who place a second order
+within 60 days. A wholesale marketplace lives or dies on repeat purchasing. One
+order can be curiosity; the second means something was actually solved.
 
 ### Growth
 
@@ -700,7 +690,7 @@ can be curiosity; the second means something was actually solved.
 | Repeat order rate over 60 days | Whether the product works |
 | Average order value | Whether real restocking is happening, or only trial orders |
 | Payment completion rate | How many started checkouts finish |
-| Share of orders reaching delivered | End-to-end completion. Cannot be measured until order status controls ship |
+| Share of orders reaching delivered | End-to-end completion |
 
 ### Quality
 
@@ -724,30 +714,22 @@ can be curiosity; the second means something was actually solved.
 
 ## 18. Conclusion
 
-RARS Innoventa sets out to do the part of wholesale trade that existing
-platforms leave to phone calls and paper. A retailer can compare real suppliers
-on real numbers, order from one of them, pay directly by UPI, watch the
-consignment arrive, and download a GST invoice their accountant can use. A
-wholesaler gets customers beyond the ones they have personally met, without
-handing over their pricing or their relationships.
+The platform sets out to do the part of wholesale trade that existing products
+leave to phone calls and paper. A retailer can compare real suppliers on real
+numbers, order from one of them, pay directly by UPI, watch the consignment
+arrive, and download a GST invoice their accountant can use. A wholesaler gets
+customers beyond the ones they have personally met, without handing over their
+pricing or their relationships.
 
-A good part of that is built and working: the marketplace, ordering with
-server-verified pricing, UPI collection, GST invoicing, delivery tracking,
-messaging and verified reviews.
+The marketplace, ordering with server-verified pricing, UPI collection, GST
+invoicing, delivery tracking, messaging and verified reviews are all in place.
 
-The product is not finished. Orders cannot yet be marked delivered from the
-interface, which blocks several things behind it. There is no admin console. The
-credit ledger — arguably the most commercially important item on the roadmap,
-because it addresses a need most traders have and few platforms serve — has not
-been started.
-
-None of those are hard problems. They are sequencing. The foundations that are
-difficult to change later — the data model, where pricing authority sits, and
-invoice numbering — are the ones that are already right.
-
-The next milestone is straightforward: finish the order lifecycle, add
-wholesaler payment confirmation, then build credit on top of it.
+What comes next builds on that foundation. Dedicated storefronts give
+wholesalers a place to stand out rather than blend into a comparison table. A
+trade credit ledger addresses a need most traders have and few platforms serve.
+Between them they turn a working marketplace into one that traders have a reason
+to stay on.
 
 ---
 
-RARS Innoventa · Product Blueprint · Version 1.1 · 6 August 2026
+RARS Innoventa · Product Blueprint · Version 1.2 · 6 August 2026

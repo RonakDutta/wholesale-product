@@ -1,0 +1,928 @@
+<title>RARS Innoventa — Product Blueprint</title>
+
+<style>
+  /* ---------------------------------------------------------------
+     Tokens taken from the product's own theme (client/src/index.css):
+     cream / clay / espresso / sage. The app is set in a geometric
+     sans throughout, so this document stays sans as well and builds
+     hierarchy from weight, size and tracking rather than a contrast
+     serif. Mono is used only for structural data: section numbers,
+     metadata, figures in tables.
+     --------------------------------------------------------------- */
+  :root {
+    --cream: #faf6ef;
+    --clay: #c56b4a;
+    --espresso: #3d2e24;
+    --sage: #7a8b6f;
+
+    --ground: var(--cream);
+    --surface: #fffdf9;
+    --ink: var(--espresso);
+    /* neutrals biased warm off the espresso, never a flat grey */
+    --ink-soft: #6b5949;
+    --ink-faint: #9a8878;
+    --rule: #e4dbcd;
+    --rule-soft: #efe8dc;
+    --accent: var(--clay);
+    --accent-soft: #f0ded5;
+    --good: #5f7355;
+    --good-soft: #e6ebe2;
+    --shadow: 0 1px 2px rgba(61, 46, 36, 0.05);
+
+    --measure: 68ch;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+      "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+      "Liberation Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #211812;
+      --surface: #2a1f18;
+      --ink: #f2e9dc;
+      --ink-soft: #c2b1a0;
+      --ink-faint: #94806f;
+      --rule: #3d2e24;
+      --rule-soft: #33261e;
+      --accent: #e08b68;
+      --accent-soft: #4a3226;
+      --good: #9db08f;
+      --good-soft: #33402c;
+      --shadow: none;
+    }
+  }
+
+  /* The viewer's toggle stamps data-theme on the root and must win
+     over the media query in both directions. */
+  :root[data-theme="dark"] {
+    --ground: #211812;
+    --surface: #2a1f18;
+    --ink: #f2e9dc;
+    --ink-soft: #c2b1a0;
+    --ink-faint: #94806f;
+    --rule: #3d2e24;
+    --rule-soft: #33261e;
+    --accent: #e08b68;
+    --accent-soft: #4a3226;
+    --good: #9db08f;
+    --good-soft: #33402c;
+    --shadow: none;
+  }
+
+  :root[data-theme="light"] {
+    --ground: #faf6ef;
+    --surface: #fffdf9;
+    --ink: #3d2e24;
+    --ink-soft: #6b5949;
+    --ink-faint: #9a8878;
+    --rule: #e4dbcd;
+    --rule-soft: #efe8dc;
+    --accent: #c56b4a;
+    --accent-soft: #f0ded5;
+    --good: #5f7355;
+    --good-soft: #e6ebe2;
+    --shadow: 0 1px 2px rgba(61, 46, 36, 0.05);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .doc {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 3.5rem 1.5rem 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3.5rem;
+  }
+
+  /* ---- Cover ---- */
+  .cover {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+    padding-bottom: 3rem;
+    border-bottom: 2px solid var(--ink);
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0;
+  }
+  .wordmark {
+    font-size: clamp(2.4rem, 7vw, 3.6rem);
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    line-height: 1;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .wordmark .dot { color: var(--accent); }
+  .cover-sub {
+    font-size: 1.15rem;
+    color: var(--ink-soft);
+    margin: 0;
+    max-width: 34ch;
+  }
+
+  .meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 1.25rem 2rem;
+    padding-top: 0.5rem;
+  }
+  .meta div { display: flex; flex-direction: column; gap: 0.2rem; }
+  .meta dt {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .meta dd { margin: 0; font-weight: 600; font-size: 0.95rem; }
+
+  .note {
+    border-left: 2px solid var(--accent);
+    padding: 0.15rem 0 0.15rem 1.15rem;
+    color: var(--ink-soft);
+    font-size: 0.93rem;
+  }
+  .note p { margin: 0; }
+
+  /* ---- Contents ---- */
+  .toc { display: flex; flex-direction: column; gap: 0.9rem; }
+  .toc ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    columns: 2;
+    column-gap: 2.5rem;
+  }
+  @media (max-width: 34rem) { .toc ol { columns: 1; } }
+  .toc li {
+    break-inside: avoid;
+    padding: 0.28rem 0;
+    font-size: 0.92rem;
+    display: flex;
+    gap: 0.7rem;
+  }
+  .toc .n {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+    padding-top: 0.15rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .toc a { color: var(--ink); text-decoration: none; border-bottom: 1px solid transparent; }
+  .toc a:hover, .toc a:focus-visible { border-bottom-color: var(--accent); color: var(--accent); }
+
+  /* ---- Sections ---- */
+  section { display: flex; flex-direction: column; gap: 1.1rem; }
+
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.85rem;
+    padding-bottom: 0.7rem;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 0.4rem;
+  }
+  .sec-head .n {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+  h2 {
+    font-size: 1.55rem;
+    font-weight: 750;
+    letter-spacing: -0.02em;
+    margin: 0;
+    line-height: 1.2;
+    text-wrap: balance;
+  }
+  h3 {
+    font-size: 1.08rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 1rem 0 -0.3rem;
+    text-wrap: balance;
+  }
+  h4 {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0.8rem 0 -0.4rem;
+    font-weight: 600;
+  }
+  p { margin: 0; max-width: var(--measure); }
+  strong { font-weight: 660; }
+  em { font-style: italic; color: var(--ink-soft); }
+
+  ul { margin: 0; padding-left: 1.15rem; display: flex; flex-direction: column; gap: 0.45rem; max-width: var(--measure); }
+  li::marker { color: var(--accent); }
+
+  /* ---- Tables ---- */
+  .scroll { overflow-x: auto; margin: 0.3rem 0; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 32rem;
+    font-size: 0.88rem;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  thead th {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    padding: 0.7rem 0.85rem;
+    border-bottom: 1.5px solid var(--rule);
+    white-space: nowrap;
+  }
+  tbody td {
+    padding: 0.65rem 0.85rem;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td:first-child { font-weight: 600; }
+
+  /* State is encoded in form as well as words, so it reads at a glance. */
+  .chip {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.63rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    padding: 0.16rem 0.45rem;
+    border-radius: 2px;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  .chip.built { background: var(--good-soft); color: var(--good); }
+  .chip.planned { background: var(--accent-soft); color: var(--accent); }
+  .chip.none { background: var(--rule-soft); color: var(--ink-faint); }
+
+  .callout {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    padding: 1rem 1.15rem;
+    font-size: 0.93rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    box-shadow: var(--shadow);
+  }
+  .callout .label {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .persona {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 1.15rem 1.3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    box-shadow: var(--shadow);
+  }
+  .persona h3 { margin: 0; font-size: 1rem; }
+  .persona .role {
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .persona p { font-size: 0.91rem; }
+  .persona .uses {
+    font-size: 0.88rem;
+    color: var(--ink-soft);
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--rule-soft);
+  }
+
+  footer {
+    padding-top: 2rem;
+    border-top: 1px solid var(--rule);
+    font-size: 0.82rem;
+    color: var(--ink-faint);
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  @media print {
+    :root {
+      --ground: #fff; --surface: #fff; --ink: #2b201a;
+      --ink-soft: #55463b; --ink-faint: #7d6d5e;
+      --rule: #ccc0b0; --rule-soft: #e2d9cc; --shadow: none;
+    }
+    body { font-size: 10.5pt; }
+    .doc { padding: 0; gap: 2rem; max-width: none; }
+    section { break-inside: auto; }
+    .sec-head, h3 { break-after: avoid; }
+    table, .persona, .callout { break-inside: avoid; }
+    .toc { break-after: page; }
+  }
+</style>
+
+<div class="doc">
+
+  <header class="cover">
+    <p class="eyebrow">Product Blueprint · Version 1.0</p>
+    <h1 class="wordmark">RARS Innoventa<span class="dot">.</span></h1>
+    <p class="cover-sub">A B2B wholesale marketplace for Indian trade — from price discovery to GST invoice.</p>
+
+    <dl class="meta">
+      <div><dt>Document</dt><dd>Product Blueprint</dd></div>
+      <div><dt>Version</dt><dd>1.0</dd></div>
+      <div><dt>Date</dt><dd>6 August 2026</dd></div>
+      <div><dt>Prepared by</dt><dd>Product Team</dd></div>
+      <div><dt>Status</dt><dd>Working draft</dd></div>
+      <div><dt>Basis</dt><dd>Current codebase</dd></div>
+    </dl>
+
+    <div class="note">
+      <p>This describes what the product does today, based on a review of the actual code, database migrations and API routes. Anything not yet built is listed under Future Enhancements rather than written up as a feature. Where a figure could not be verified from the code, it is marked as an assumption.</p>
+    </div>
+  </header>
+
+  <nav class="toc" aria-label="Contents">
+    <h4>Contents</h4>
+    <ol>
+      <li><span class="n">01</span><a href="#s1">Executive Summary</a></li>
+      <li><span class="n">02</span><a href="#s2">Introduction</a></li>
+      <li><span class="n">03</span><a href="#s3">Problem Statement</a></li>
+      <li><span class="n">04</span><a href="#s4">Where Existing Platforms Fall Short</a></li>
+      <li><span class="n">05</span><a href="#s5">Vision and Mission</a></li>
+      <li><span class="n">06</span><a href="#s6">About Our Product</a></li>
+      <li><span class="n">07</span><a href="#s7">Product Objectives</a></li>
+      <li><span class="n">08</span><a href="#s8">Target Audience</a></li>
+      <li><span class="n">09</span><a href="#s9">User Personas</a></li>
+      <li><span class="n">10</span><a href="#s10">Solution</a></li>
+      <li><span class="n">11</span><a href="#s11">Core Features</a></li>
+      <li><span class="n">12</span><a href="#s12">Unique Selling Points</a></li>
+      <li><span class="n">13</span><a href="#s13">Competitor Analysis</a></li>
+      <li><span class="n">14</span><a href="#s14">Gap Analysis</a></li>
+      <li><span class="n">15</span><a href="#s15">Business Model</a></li>
+      <li><span class="n">16</span><a href="#s16">Pricing Strategy</a></li>
+      <li><span class="n">17</span><a href="#s17">Future Enhancements</a></li>
+      <li><span class="n">18</span><a href="#s18">Success Metrics</a></li>
+      <li><span class="n">19</span><a href="#s19">Conclusion</a></li>
+    </ol>
+  </nav>
+
+  <section id="s1">
+    <div class="sec-head"><span class="n">01</span><h2>Executive Summary</h2></div>
+    <p>RARS Innoventa is a B2B wholesale marketplace built for Indian trade. A wholesaler lists what they stock. A retailer finds them, compares them against other wholesalers selling the same product, places an order, pays by UPI, and watches the consignment move on a map until it arrives.</p>
+    <p>Most of that already works. The platform handles listings, supplier comparison, single-wholesaler orders with multiple items, UPI payment collection, GST tax invoices with proper CGST/SGST/IGST treatment, delivery tracking, in-app chat and verified-purchase reviews.</p>
+    <p>Two things make it different from a directory. First, the order is a real transaction with money and paperwork attached, not a lead handed off to a phone call. Second, prices are recalculated on the server at checkout, so what the retailer pays is what the wholesaler actually listed.</p>
+    <p>The product is not finished. There is no admin interface, the order lifecycle cannot yet be advanced past payment from the UI, and the credit ledger that would let a retailer pay part now and part later has not been built. Those are covered honestly in Section 17.</p>
+  </section>
+
+  <section id="s2">
+    <div class="sec-head"><span class="n">02</span><h2>Introduction</h2></div>
+
+    <h3>How Indian wholesale actually works</h3>
+    <p>Indian retail runs on a long chain. A manufacturer sells to a distributor, the distributor sells to a wholesaler, and the wholesaler supplies the neighbourhood kirana, the chemist, the hardware shop, the garment store. Most of these businesses are small, family-run, and have been trading with the same two or three suppliers for years.</p>
+    <p>The relationships are the business. A retailer stays with a wholesaler because that wholesaler answers the phone at nine at night, sends stock on credit before Diwali, and takes back what did not sell. None of that is written down anywhere.</p>
+
+    <h3>Why digitisation is picking up</h3>
+    <p>Three things changed at the same time. UPI made small-value business payments instant and free, so a retailer can pay a wholesaler in seconds without either of them touching a bank branch. GST made invoicing a legal requirement rather than an optional courtesy, which pushed even small traders towards keeping records. And smartphones reached the counter, so the person running the shop is already comfortable doing business on a screen.</p>
+
+    <h3>Why B2B commerce is harder than B2C</h3>
+    <p>A consumer buying a phone case wants speed and a good price. A retailer buying stock wants something else entirely.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>B2C shopping</th><th>B2B wholesale buying</th></tr></thead>
+        <tbody>
+          <tr><td>One or two units</td><td>Minimum order quantities, often 50 or 100+</td></tr>
+          <tr><td>One fixed price</td><td>Price depends on quantity, relationship, season</td></tr>
+          <tr><td>Pay now, always</td><td>Part payment, credit, settle next order</td></tr>
+          <tr><td>Buy once, move on</td><td>Same supplier every month for years</td></tr>
+          <tr><td>Receipt is optional</td><td>GST invoice is a legal and accounting necessity</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>A platform that treats wholesale like a bigger version of retail shopping will get the important parts wrong. That is the starting assumption behind this product.</p>
+  </section>
+
+  <section id="s3">
+    <div class="sec-head"><span class="n">03</span><h2>Problem Statement</h2></div>
+
+    <h3>What the retailer deals with</h3>
+    <p>A shop owner who wants to restock has to work the phone. They call the two wholesalers they know, ask what today's rate is, and take whatever they are told. There is no easy way to check whether a third wholesaler two districts away is selling the same thing for less, because there is no list to check.</p>
+    <p>Once the order is placed, it disappears. The retailer does not know if it has been packed, if it has left, or when it will arrive. They call to ask, and get told <em>"aa raha hai."</em> Stock planning becomes guesswork.</p>
+    <p>Payment and paperwork are equally loose. Money moves over UPI or in cash, and the invoice, if it comes at all, arrives later on a WhatsApp photo of a handwritten bill. At GST filing time, someone has to reconstruct months of this from memory.</p>
+
+    <h3>What the wholesaler deals with</h3>
+    <p>The wholesaler's problem is the mirror image. Their customer base is whoever happens to know them. Growing means physically travelling to new markets or paying for a listing on a directory that delivers phone numbers rather than orders.</p>
+    <p>They spend a large part of the day repeating themselves on the phone — quoting rates, confirming stock, chasing payment. Every one of those calls is a transaction that could have been a form.</p>
+    <p>They also carry real risk. Stock goes out on trust, and payment comes in later, if it comes. There is no record of who pays reliably and who does not, other than what they remember.</p>
+
+    <h3>What both sides lose</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Problem</th><th>Cost to the business</th></tr></thead>
+        <tbody>
+          <tr><td>No price visibility</td><td>Retailers overpay; good wholesalers cannot prove they are cheaper</td></tr>
+          <tr><td>No order visibility</td><td>Retailers hold extra stock as a buffer, tying up cash</td></tr>
+          <tr><td>Paperwork after the fact</td><td>GST filing is painful and error-prone for both sides</td></tr>
+          <tr><td>Trust is undocumented</td><td>A good payment record is worth nothing to a new supplier</td></tr>
+          <tr><td>Everything runs on calls</td><td>The working day is consumed by coordination, not selling</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="s4">
+    <div class="sec-head"><span class="n">04</span><h2>Where Existing Platforms Fall Short</h2></div>
+    <p>There is no shortage of B2B platforms in India. The gap is that most of them solve only one slice of the problem.</p>
+    <p><strong>Directories stop at the introduction.</strong> IndiaMART and TradeIndia are very good at helping a buyer find a supplier. They then hand over a phone number, and everything after that — negotiation, order, payment, invoice, delivery — happens off-platform with no record. The platform earns from the introduction, so it has little reason to care what happens next.</p>
+    <p><strong>Managed marketplaces take over the relationship.</strong> Udaan buys and resells, which makes the experience consistent but puts the platform between the wholesaler and their customer. The wholesaler becomes a supplier to Udaan rather than a business with its own customers, and loses control over pricing and terms.</p>
+    <p><strong>Storefront tools assume you already have customers.</strong> Shopify and similar products are excellent for running your own shop, but they are not a marketplace. A wholesaler on Shopify still has to find every buyer themselves.</p>
+    <p><strong>Almost none of them handle Indian trade credit.</strong> The single most important commercial mechanism in Indian wholesale — goods now, part payment now, balance against the next order — is largely absent from these platforms. Traders keep doing it in a paper khata on the side.</p>
+  </section>
+
+  <section id="s5">
+    <div class="sec-head"><span class="n">05</span><h2>Vision and Mission</h2></div>
+    <h3>Vision</h3>
+    <p>To make wholesale trade in India work the way retail already does: you can see what things cost, you can see where your order is, and you have the paperwork when you need it.</p>
+    <h3>Mission</h3>
+    <p>To reduce the distance between wholesalers and retailers. Practically, that means:</p>
+    <ul>
+      <li>Letting a retailer compare real suppliers on real numbers before ordering</li>
+      <li>Making every order produce a proper GST invoice without extra work</li>
+      <li>Showing the retailer where their consignment is, without needing a driver app</li>
+      <li>Keeping the wholesaler's customer relationship theirs, not ours</li>
+      <li>Eventually putting the credit that already happens informally onto a record both sides can trust</li>
+    </ul>
+  </section>
+
+  <section id="s6">
+    <div class="sec-head"><span class="n">06</span><h2>About Our Product</h2></div>
+    <p>RARS Innoventa is a marketplace with two connected sides.</p>
+
+    <h3>The buying side</h3>
+    <p>A retailer lands on the marketplace and browses by category or search. Products are shared entities — one "Steel Bolt" listing that several wholesalers sell against. When a retailer opens a product, they see every wholesaler offering it side by side, with price, minimum order quantity, stock, shipping days, rating and orders delivered.</p>
+    <p>They pick a supplier, set a quantity, and check out. An order can hold several products but only from one wholesaler, because one order should mean one consignment on one truck. Payment is a UPI QR generated from that wholesaler's own UPI ID, so money goes directly from retailer to wholesaler.</p>
+    <p>After paying, the retailer can follow the delivery on a map and download the GST invoice from the order page.</p>
+
+    <h3>The selling side</h3>
+    <p>A wholesaler gets a separate workspace, deliberately styled differently from the storefront so it reads as its own tool. They list products, manage stock and pricing, see incoming orders, raise and track invoices, run GST and ageing reports, and message buyers.</p>
+    <p>The workspace is restricted to wholesalers. Retailers cannot open it, which is why anything a retailer needs — their orders, their invoices — lives on the buying side instead.</p>
+
+    <h3>Who it is built for</h3>
+    <p>Small and mid-sized Indian wholesalers who want more customers without giving up control of their pricing, and independent retailers who are tired of buying blind. It assumes both parties are comfortable with UPI and WhatsApp, which most already are.</p>
+  </section>
+
+  <section id="s7">
+    <div class="sec-head"><span class="n">07</span><h2>Product Objectives</h2></div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Objective</th><th>What it means concretely</th></tr></thead>
+        <tbody>
+          <tr><td>Make prices comparable</td><td>Show every supplier for a product on one screen with the numbers that matter</td></tr>
+          <tr><td>Make the order a real record</td><td>Server-side pricing, stock checks, line items, an audit trail</td></tr>
+          <tr><td>Remove invoice work</td><td>A GST invoice is generated automatically from the order</td></tr>
+          <tr><td>Make delivery visible</td><td>Track a consignment without asking the driver to install anything</td></tr>
+          <tr><td>Keep the relationship direct</td><td>Payment goes wholesaler-to-retailer; we do not sit in the middle</td></tr>
+          <tr><td>Build a usable trust record</td><td>Verified-purchase reviews and delivered-order counts, not invented scores</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout">
+      <span class="label">On the last point</span>
+      <p>The product previously showed a "trust score" and "response rate" that were never calculated — every seller displayed the same default forever. Both were removed and replaced with figures counted from real orders and reviews. Showing an invented number is worse than showing nothing.</p>
+    </div>
+  </section>
+
+  <section id="s8">
+    <div class="sec-head"><span class="n">08</span><h2>Target Audience</h2></div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Segment</th><th>Who they are</th><th>What they need from us</th><th>Supported today</th></tr></thead>
+        <tbody>
+          <tr><td>Wholesalers</td><td>Small to mid-sized traders supplying a district or region</td><td>More customers, fewer phone calls, automatic invoicing</td><td><span class="chip built">Full</span></td></tr>
+          <tr><td>Retailers</td><td>Kirana stores, chemists, hardware and garment shops</td><td>Honest price comparison, order visibility, proper bills</td><td><span class="chip built">Full</span></td></tr>
+          <tr><td>Distributors</td><td>Sit between manufacturer and wholesaler; buy and sell in bulk</td><td>Both sides of the platform at once</td><td><span class="chip planned">Partial</span></td></tr>
+          <tr><td>Manufacturers</td><td>Sell direct to wholesalers, in large lots</td><td>Bulk listings, dealer and territory management</td><td><span class="chip none">Not specific</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Distributors are served by the <strong>both</strong> role, which lets one account buy and sell. Manufacturers can list as wholesalers, but there is no dealer or territory management built for them.</p>
+    <div class="callout">
+      <span class="label">Assumption</span>
+      <p>We expect early traction to come from wholesalers first. A marketplace with no supply is useless to retailers, so the seller side has to be populated before the buying side is worth visiting.</p>
+    </div>
+  </section>
+
+  <section id="s9">
+    <div class="sec-head"><span class="n">09</span><h2>User Personas</h2></div>
+
+    <div class="persona">
+      <span class="role">Wholesaler · Nashik</span>
+      <h3>Ramesh Gupta, 44</h3>
+      <p>Runs a hardware wholesale business with a small godown and two staff. He supplies around forty shops across the district and has done for eleven years.</p>
+      <p>His day is phone calls. Rates, stock checks, "bhej diya kya", payment reminders. He knows he could serve more shops, but he has no way to reach ones he has not personally met, and he is wary of platforms that would put themselves between him and his customers.</p>
+      <p>He wants his existing customers to be easier to serve, and a few new ones a month. He is not interested in becoming somebody's supplier.</p>
+      <p class="uses"><strong>Uses:</strong> the seller workspace — listings, orders, invoices, and the driver link so he stops fielding "where is my order" calls.</p>
+    </div>
+
+    <div class="persona">
+      <span class="role">Retailer · Pune</span>
+      <h3>Kavita Shah, 31</h3>
+      <p>Runs a general store in a suburb. She restocks every two weeks and buys from two wholesalers, mostly out of habit.</p>
+      <p>She suspects she is paying more than she should on some items but has no way to check. When an order is late she loses sales, and she has started over-ordering to compensate, which ties up money she would rather not have sitting in a storeroom.</p>
+      <p>At GST time she and her accountant piece together bills from a WhatsApp folder.</p>
+      <p class="uses"><strong>Uses:</strong> supplier comparison before ordering, the tracking map after, and the invoice download at filing time.</p>
+    </div>
+
+    <div class="persona">
+      <span class="role">Distributor · Surat to two states</span>
+      <h3>Imran Sheikh, 38</h3>
+      <p>Buys textiles in bulk from mills and breaks them down for wholesalers across two states. He is a buyer and a seller in the same week.</p>
+      <p>He needs both sides of the platform in one account, and his purchase records kept apart from his sales records so his books make sense.</p>
+      <p class="uses"><strong>Uses:</strong> the <strong>both</strong> role. Purchases appear on the buying side, sales in the seller workspace. This separation is deliberate — an earlier version scoped invoices by account role and hid one side of his books from him entirely.</p>
+    </div>
+
+    <div class="persona">
+      <span class="role">Accountant · works for a dozen traders</span>
+      <h3>Meena Rao, 29</h3>
+      <p>Does the books for a dozen small traders including Kavita. She is not a platform user in the usual sense; she cares about one thing, which is whether the paperwork is clean.</p>
+      <p class="uses"><strong>Uses:</strong> the GST invoice PDFs and, through her clients, the GST summary and ageing reports.</p>
+    </div>
+  </section>
+
+  <section id="s10">
+    <div class="sec-head"><span class="n">10</span><h2>Solution</h2></div>
+    <p>Each problem in Section 3 maps to something specific in the product.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Problem</th><th>What we do about it</th></tr></thead>
+        <tbody>
+          <tr><td>No way to compare prices</td><td>One product, many suppliers, shown side by side with price, MOQ, stock, shipping, rating, orders delivered</td></tr>
+          <tr><td>Orders vanish after placement</td><td>A status trail on every order, plus a live map from warehouse to destination</td></tr>
+          <tr><td>Invoices are an afterthought</td><td>A GST invoice is raised automatically when the order is placed and settled when payment lands</td></tr>
+          <tr><td>Everything runs on phone calls</td><td>In-app chat over websockets, with a WhatsApp fallback for people who prefer it</td></tr>
+          <tr><td>Prices manipulated at checkout</td><td>The server re-prices every line against live inventory and ignores whatever amount the client sends</td></tr>
+          <tr><td>Overselling</td><td>Stock deduction is a guarded update that fails rather than going negative</td></tr>
+          <tr><td>Trust is undocumented</td><td>Reviews restricted to verified buyers; delivered-order counts computed from real orders</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="s11">
+    <div class="sec-head"><span class="n">11</span><h2>Core Features</h2></div>
+
+    <h3>11.1 Authentication and Access</h3>
+    <p>Registration captures name, email, phone, password and a role. Passwords are hashed with bcrypt. Sessions are JWTs carrying the user id and role.</p>
+    <p>There are three roles. A <strong>buyer</strong> shops, a <strong>seller</strong> sells, and <strong>both</strong> does either. A buyer who wants to start selling can upgrade through a dedicated endpoint, which moves them to <strong>both</strong> rather than replacing their history.</p>
+    <p>The seller workspace is guarded on the route and again on every API call. A retailer who reaches a seller URL is redirected with an explanation instead of being shown a broken page.</p>
+    <p><strong>Why it matters:</strong> roles decide what someone sees, so they have to be right. An earlier bug treated a 403 as a dead session and logged users out mid-browse; now only a genuine 401 clears the session.</p>
+
+    <h3>11.2 Vendor Management</h3>
+    <p>Each wholesaler has a business profile: company name, GSTIN, contact phone, city, UPI ID and warehouse address with state and pincode. The warehouse is stored on the business rather than per product, because deliveries leave from the same yard regardless of what is in the box.</p>
+    <p>Public wholesaler profiles show verification status, years in business, city, orders delivered, rating, review count and the full catalogue.</p>
+    <p><strong>Why it matters:</strong> a retailer buying from someone they have never met needs something to go on. Everything shown here is either declared by the wholesaler or counted from real activity.</p>
+
+    <h3>11.3 Product Management</h3>
+    <p>Products are shared. When a wholesaler lists an item, they either attach to an existing product or create a new one, then add their own listing against it with their price, bulk price, MOQ, stock, shipping days and image.</p>
+    <p>This is what makes comparison possible — several wholesalers against one product rather than fifty near-duplicate listings. A wholesaler cannot list the same product twice; they are asked to edit the existing listing instead. Images upload directly to Cloudinary from the browser.</p>
+    <p><strong>Why it matters:</strong> without a shared catalogue, comparison is impossible and search returns the same item forty times.</p>
+
+    <h3>11.4 Inventory</h3>
+    <p>Stock, MOQ, price and status live on the listing. The seller dashboard reports active listings, total stock value, items out of stock, and items that have fallen below their own MOQ — a listing nobody can legally order from is as good as unavailable.</p>
+    <p>Stock is deducted when an order is placed, and returned if payment never completes, so abandoned checkouts do not quietly consume inventory.</p>
+    <p><strong>Why it matters:</strong> an accurate stock number is the difference between a confirmed order and an apology.</p>
+
+    <h3>11.5 Pricing</h3>
+    <p>Each listing carries a standard price and an optional bulk price that applies once quantity reaches the MOQ threshold. The wholesaler sets both.</p>
+    <p>The important part is where pricing is decided. At checkout the server looks up every line against live inventory and recalculates the total. Any amount sent by the client is ignored.</p>
+    <p><strong>Why it matters:</strong> this closes the most obvious way to attack a marketplace. It also means a price change between adding to cart and paying is handled correctly rather than silently honoured.</p>
+
+    <h3>11.6 Orders</h3>
+    <p>An order can contain several products but only from one wholesaler. Attempting to mix suppliers is rejected. One order means one consignment.</p>
+    <p>Every order writes line items, a delivery address with optional map-pinned coordinates, and a status history entry. The lifecycle is a 22-state machine with validated transitions, so an order cannot jump from placed to delivered.</p>
+    <div class="callout">
+      <span class="label">Current limitation</span>
+      <p>The API to advance status exists and is correct, but no screen calls it. In practice an order stops at <strong>payment_completed</strong>. This is the most significant gap in the product today and is listed in Section 17.</p>
+    </div>
+
+    <h3>11.7 Payments</h3>
+    <p>Payment is UPI, direct between the two businesses. The platform generates a QR from the wholesaler's own UPI ID with the amount and order reference pre-filled. The retailer scans it in any UPI app, pays, and confirms on the platform.</p>
+    <p>There is <strong>no payment gateway</strong>. Money never passes through us, which means no settlement delay for the wholesaler and no gateway fee on either side.</p>
+    <p>The trade-off is honest: payment is currently self-declared by the buyer. The wholesaler is not yet asked to confirm receipt. That confirmation step is the prerequisite for the credit system and is covered in Section 17.</p>
+    <p><strong>Why it matters:</strong> UPI is how this trade already settles. Forcing a gateway in between would add cost and delay for no benefit.</p>
+
+    <h3>11.8 Invoicing and GST</h3>
+    <p>Every order produces a proper tax invoice.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Element</th><th>How it works</th></tr></thead>
+        <tbody>
+          <tr><td>Numbering</td><td>Sequential per year, with a prefix each wholesaler configures</td></tr>
+          <tr><td>Tax split</td><td>CGST and SGST within a state, IGST across states, resolved by state not city</td></tr>
+          <tr><td>Line detail</td><td>HSN code, quantity, unit price, GST percent, tax and line total</td></tr>
+          <tr><td>Both parties</td><td>Names, GSTINs and contact details for supplier and buyer</td></tr>
+          <tr><td>Payment</td><td>UPI QR embedded in the PDF, and a PAID / UNPAID / CANCELLED watermark</td></tr>
+          <tr><td>Defaults</td><td>Payment window, tax rate, notes and terms, saved per wholesaler</td></tr>
+          <tr><td>Reporting</td><td>GST summary and receivables ageing buckets</td></tr>
+          <tr><td>Export</td><td>CSV, Excel and a PDF summary, all matching the filters on screen</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>There is exactly one invoice per order, issued by the seller. The buyer downloads that same document from their order page.</p>
+    <p><strong>Why it matters:</strong> this is the part that turns an informal transaction into a record both sides can file. It is also the feature most likely to bring a reluctant trader onto the platform, because it removes work they currently do by hand.</p>
+
+    <h3>11.9 Delivery Tracking</h3>
+    <p>Tracking is deliberately built around what actually exists on the ground. Most delivery in this trade is done by a driver in a hired vehicle who is not a platform user and will not install an app.</p>
+    <p>So the wholesaler generates a link and sends it over WhatsApp or SMS. The driver opens it in whatever browser their phone has and taps once to share location. The page reports position while it stays open. No account, no app, no background permission. Links are scoped to one order and expire.</p>
+    <p>The wholesaler can also add checkpoints by hand, which covers the case where the driver does not use the link at all. The retailer sees a map with the warehouse, the checkpoints passed so far, the current position and the destination.</p>
+    <p><strong>Why it matters:</strong> every tracking design that depends on a driver app fails in this market. This one degrades gracefully — worst case, the wholesaler adds checkpoints manually and the retailer still sees progress.</p>
+
+    <h3>11.10 Communication</h3>
+    <p>Real-time chat runs over websockets, with unread counts and read receipts. Users cannot message themselves. For traders who prefer WhatsApp, a deep link opens a chat with the product details pre-filled — this is a link, not the WhatsApp Business API.</p>
+    <p>Notifications cover in-app and email. SMS, WhatsApp API and push have service code in place but stay inactive until credentials are configured.</p>
+
+    <h3>11.11 Reviews and Ratings</h3>
+    <p>Retailers can review products and sellers, but only for things they have actually bought — the check is enforced server-side. Reviews support helpful votes, seller replies and reporting. Ratings feed the supplier comparison and the wholesaler profile.</p>
+    <p><strong>Why it matters:</strong> an open review system on a B2B marketplace becomes a competitive weapon within weeks. Restricting it to verified purchases is the minimum that makes it meaningful.</p>
+
+    <h3>11.12 Seller Analytics</h3>
+    <p>The dashboard shows revenue received over 30 days with a trend against the previous 30, value awaiting payment, distinct customers, average order value and buyer rating. Alongside that is a fulfilment pipeline and inventory health.</p>
+    <p>Every figure is computed from orders, inventory and reviews. Where there is no data — no previous period to compare against, no reviews yet — the product shows nothing rather than a zero that reads as failure.</p>
+
+    <h3>11.13 Administration</h3>
+    <div class="callout">
+      <span class="label">Not built yet</span>
+      <p>Admin-scoped API routes exist for review moderation, notification broadcasts and promotion management, and the role is enforced. There is <strong>no admin interface of any kind</strong>.</p>
+      <p>Promotions are in the same position: flash sales, coupons, loyalty points, referrals and gift cards all have working backends and database tables, and the client can read them, but creation is admin-only with no screen to do it from.</p>
+    </div>
+    <p>Listing these honestly matters more than listing them impressively. Both are in Section 17.</p>
+  </section>
+
+  <section id="s12">
+    <div class="sec-head"><span class="n">12</span><h2>Unique Selling Points</h2></div>
+    <p><strong>The order is a transaction, not a lead.</strong> Directories introduce you and step away. Here the order, the money, the invoice and the delivery all live in one place with one record.</p>
+    <p><strong>Payment goes direct.</strong> UPI from retailer to wholesaler, no gateway, no settlement wait, no cut. For a wholesaler used to waiting on marketplace payouts, this is the difference between cash today and cash next week.</p>
+    <p><strong>GST invoicing is real, not a receipt.</strong> Correct interstate treatment, HSN codes, per-seller numbering, ageing reports. Built for the filing, not just for the customer.</p>
+    <p><strong>Tracking that does not need a driver app.</strong> A one-tap browser link and manual checkpoints. Designed for how goods actually move here.</p>
+    <p><strong>Comparison on facts we can stand behind.</strong> Orders delivered, verified-purchase ratings, live stock. We removed the invented trust scores rather than keep them because they looked good.</p>
+    <p><strong>The wholesaler keeps their customer.</strong> We do not buy and resell. The relationship, the pricing and the terms stay with the trader.</p>
+  </section>
+
+  <section id="s13">
+    <div class="sec-head"><span class="n">13</span><h2>Competitor Analysis</h2></div>
+
+    <h4>Positioning</h4>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Platform</th><th>What it fundamentally is</th><th>Who pays it</th><th>Role in the transaction</th></tr></thead>
+        <tbody>
+          <tr><td>IndiaMART</td><td>Supplier directory + lead engine</td><td>Suppliers, for leads</td><td>Introduces, then exits</td></tr>
+          <tr><td>TradeIndia</td><td>Supplier directory</td><td>Suppliers, for listings</td><td>Introduces, then exits</td></tr>
+          <tr><td>ExportersIndia</td><td>Export-focused directory</td><td>Suppliers, for listings</td><td>Introduces, then exits</td></tr>
+          <tr><td>Udaan</td><td>Managed B2B marketplace</td><td>Margin on goods</td><td>Buys and resells</td></tr>
+          <tr><td>Shopify</td><td>Storefront software</td><td>Merchants, subscription</td><td>Not a marketplace</td></tr>
+          <tr><td>RARS Innoventa</td><td>Transactional B2B marketplace</td><td>Commission / subscription</td><td>Hosts the whole transaction</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>Feature comparison</h4>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Capability</th><th>IndiaMART</th><th>TradeIndia</th><th>Exporters<wbr>India</th><th>Udaan</th><th>Shopify</th><th>Ours</th></tr></thead>
+        <tbody>
+          <tr><td>Supplier discovery</td><td>Strong</td><td>Strong</td><td>Strong</td><td>Yes</td><td>No</td><td>Yes</td></tr>
+          <tr><td>Compare suppliers on one product</td><td>No</td><td>No</td><td>No</td><td>Limited</td><td>No</td><td><strong>Yes</strong></td></tr>
+          <tr><td>Order placed on platform</td><td>No</td><td>No</td><td>No</td><td>Yes</td><td>Yes</td><td><strong>Yes</strong></td></tr>
+          <tr><td>Server-verified pricing</td><td>—</td><td>—</td><td>—</td><td>Yes</td><td>Yes</td><td><strong>Yes</strong></td></tr>
+          <tr><td>Direct UPI, no gateway</td><td>—</td><td>—</td><td>—</td><td>No</td><td>No</td><td><strong>Yes</strong></td></tr>
+          <tr><td>GST invoice generated</td><td>No</td><td>No</td><td>No</td><td>Yes</td><td>Add-on</td><td><strong>Yes</strong></td></tr>
+          <tr><td>Delivery tracking</td><td>No</td><td>No</td><td>No</td><td>Yes</td><td>Add-on</td><td><strong>Yes</strong></td></tr>
+          <tr><td>Tracking without a driver app</td><td>—</td><td>—</td><td>—</td><td>No</td><td>—</td><td><strong>Yes</strong></td></tr>
+          <tr><td>Verified-purchase reviews</td><td>Limited</td><td>Limited</td><td>Limited</td><td>Yes</td><td>Add-on</td><td><strong>Yes</strong></td></tr>
+          <tr><td>Trade credit / khata</td><td>No</td><td>No</td><td>No</td><td>Yes</td><td>No</td><td>Planned</td></tr>
+          <tr><td>Seller keeps the customer</td><td>Yes</td><td>Yes</td><td>Yes</td><td><strong>No</strong></td><td>Yes</td><td><strong>Yes</strong></td></tr>
+          <tr><td>Admin / moderation console</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Not yet</td></tr>
+          <tr><td>Mobile apps</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Not yet</td></tr>
+          <tr><td>Scale and network</td><td>Very large</td><td>Large</td><td>Medium</td><td>Large</td><td>—</td><td>Pre-launch</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>We are honest about the last three rows. Established players have reach, apps and operational tooling we do not. Our argument is not that we are bigger; it is that we handle the part of the trade they leave out.</p>
+  </section>
+
+  <section id="s14">
+    <div class="sec-head"><span class="n">14</span><h2>Gap Analysis</h2></div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Gap in the market</th><th>Who leaves it open</th><th>How we address it</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Buyer cannot compare suppliers on identical goods</td><td>All directories</td><td>Shared product catalogue with side-by-side comparison</td><td><span class="chip built">Built</span></td></tr>
+          <tr><td>Transaction happens off-platform, no record</td><td>All directories</td><td>Order, payment, invoice and delivery recorded together</td><td><span class="chip built">Built</span></td></tr>
+          <tr><td>Platform inserts itself between the businesses</td><td>Udaan</td><td>Direct UPI, no reselling, wholesaler keeps pricing and terms</td><td><span class="chip built">Built</span></td></tr>
+          <tr><td>GST paperwork is manual</td><td>Directories, Shopify</td><td>Automatic tax invoice with correct interstate treatment</td><td><span class="chip built">Built</span></td></tr>
+          <tr><td>Tracking assumes a driver app</td><td>Most logistics tooling</td><td>One-tap browser link plus manual checkpoints</td><td><span class="chip built">Built</span></td></tr>
+          <tr><td>Reviews are gameable</td><td>Directories</td><td>Verified-purchase only, enforced server-side</td><td><span class="chip built">Built</span></td></tr>
+          <tr><td>Informal trade credit has no record</td><td>Almost everyone</td><td>Credit ledger with per-pair terms and no interest</td><td><span class="chip planned">Planned</span></td></tr>
+          <tr><td>Buyer self-declares payment</td><td>—</td><td>Wholesaler confirmation step</td><td><span class="chip planned">Planned</span></td></tr>
+          <tr><td>No operational tooling for the platform team</td><td>—</td><td>Admin console</td><td><span class="chip planned">Planned</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The last three are ours, not the market's. They are listed here so the gap analysis is a balance sheet rather than a sales pitch.</p>
+  </section>
+
+  <section id="s15">
+    <div class="sec-head"><span class="n">15</span><h2>Business Model</h2></div>
+    <p>The platform does not buy or hold stock, so revenue has to come from the service rather than a margin on goods.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Stream</th><th>How it works</th><th>When to introduce</th></tr></thead>
+        <tbody>
+          <tr><td>Wholesaler subscription</td><td>Monthly or annual fee for the seller workspace beyond a free listing tier</td><td>At launch</td></tr>
+          <tr><td>Transaction commission</td><td>Small percentage on completed orders</td><td>Once volume is steady</td></tr>
+          <tr><td>Verification</td><td>Paid badge after checking GSTIN and business documents</td><td>Early, low effort</td></tr>
+          <tr><td>Featured placement</td><td>Paid position in category and search results</td><td>Once traffic justifies it</td></tr>
+          <tr><td>Credit facilitation</td><td>Fee for underwriting or guaranteeing trade credit</td><td>After the ledger ships</td></tr>
+          <tr><td>Logistics partnerships</td><td>Referral share from transport partners booked through us</td><td>Later</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout">
+      <span class="label">Why commission is not the day-one model</span>
+      <p>Because payment goes directly between the businesses over UPI, we cannot deduct a commission at source. Collecting it means invoicing the wholesaler separately, which only works once they can see the platform is bringing them orders.</p>
+      <p><strong>Recommendation:</strong> lead with subscription and verification, both collectable from day one. Introduce commission later. This is a judgement call, not something derived from the code.</p>
+    </div>
+  </section>
+
+  <section id="s16">
+    <div class="sec-head"><span class="n">16</span><h2>Pricing Strategy</h2></div>
+    <p>Pricing has to respect what a small trader will actually pay. A wholesaler doing ₹15 lakh a month is not going to sign up for a plan priced like enterprise software.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Plan</th><th class="num">Price</th><th class="num">Listings</th><th>Included</th></tr></thead>
+        <tbody>
+          <tr><td>Free</td><td class="num">₹0</td><td class="num">Up to 10</td><td>Listings, orders, UPI payment, basic invoicing, chat</td></tr>
+          <tr><td>Growth</td><td class="num">₹999 / mo</td><td class="num">Up to 100</td><td>Free, plus verification badge, GST and ageing reports, delivery tracking, full analytics</td></tr>
+          <tr><td>Business</td><td class="num">₹2,499 / mo</td><td class="num">Unlimited</td><td>Growth, plus featured placement, priority support, multiple staff logins</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>Retailer pricing is free, permanently.</strong> Retailers are the demand side; charging them would kill the network before it forms.</p>
+    <div class="callout">
+      <span class="label">These numbers are assumptions</span>
+      <p>They are not derived from the codebase or from market research, and should be tested with real wholesalers before launch. The reasoning: the free tier has to be genuinely usable or wholesalers will not list at all; ₹999 is roughly one small order's margin, an easy amount to justify; invoicing and GST reports sit in the paid tier because they replace real work; verification is paid because it costs us effort to actually check.</p>
+    </div>
+  </section>
+
+  <section id="s17">
+    <div class="sec-head"><span class="n">17</span><h2>Future Enhancements</h2></div>
+    <p>Listed roughly in the order they should be built.</p>
+
+    <h3>Near term — needed for the product to be complete</h3>
+    <p><strong>Order status controls.</strong> The single biggest gap. The API works; no screen calls it, so orders never move past payment. Everything downstream is blocked by this: the dashboard pipeline, delivered-order counts, and reviews, which require a delivered order. The plan is four buttons — Accept, Packed, Dispatch, Delivered — each walking the intermediate states server-side so the wholesaler does not click through eight.</p>
+    <p><strong>Wholesaler payment confirmation.</strong> Today the buyer declares payment and the system believes them. The wholesaler should confirm receipt. This is also the prerequisite for credit.</p>
+    <p><strong>Admin console.</strong> The API routes and role checks exist; there is no interface. Needed for review moderation, promotion management and support.</p>
+
+    <h3>Medium term — the commercial differentiator</h3>
+    <p><strong>Trade credit ledger.</strong> Terms agreed per wholesaler-retailer pair, a down payment on delivery and the balance carried to the next order. No interest — the point is to formalise what already happens, not to lend. Warn when a limit is crossed at first; block later. Needs a retailer reliability score built from payment history.</p>
+    <p><strong>Promotions interface.</strong> Flash sales, coupons, loyalty, referrals and gift cards are all built on the server with tables in place. They need screens.</p>
+    <p><strong>Regional pricing.</strong> Prices varying by region based on demand. Currently a flat price with an optional bulk price. This needs care — the logic would have to be clear enough that a wholesaler can predict what their customer sees.</p>
+
+    <h3>Longer term</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Enhancement</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>Mobile apps</td><td>Most of this trade happens on a phone at a counter</td></tr>
+          <tr><td>Regional languages</td><td>Hindi, Marathi, Gujarati, Tamil — English is a real barrier</td></tr>
+          <tr><td>RFQ / negotiation</td><td>Large orders get negotiated; the product assumes list prices</td></tr>
+          <tr><td>Logistics integration</td><td>Book transport through the platform</td></tr>
+          <tr><td>GSTIN verification API</td><td>Automatic verification instead of manual document checks</td></tr>
+          <tr><td>Return management</td><td>Tables and an endpoint exist; no workflow or interface</td></tr>
+          <tr><td>Demand forecasting</td><td>Suggest restocking from order history</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <span class="label">Engineering work not visible to users</span>
+      <p>There are no automated tests and no CI pipeline. The README is substantially out of date — it describes a Razorpay integration, a <strong>models/</strong> directory and several pages that do not exist. Both should be fixed before the team grows.</p>
+    </div>
+  </section>
+
+  <section id="s18">
+    <div class="sec-head"><span class="n">18</span><h2>Success Metrics</h2></div>
+
+    <div class="callout">
+      <span class="label">The metric that matters most</span>
+      <p><strong>Repeat order rate</strong> — the share of retailers who place a second order within 60 days. A wholesale marketplace lives or dies on repeat purchasing. One order can be curiosity; the second means we solved something.</p>
+    </div>
+
+    <h4>Growth</h4>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Metric</th><th>What it tells us</th><th class="num">Year-one target</th></tr></thead>
+        <tbody>
+          <tr><td>Registered wholesalers</td><td>Supply depth</td><td class="num">500</td></tr>
+          <tr><td>Registered retailers</td><td>Demand</td><td class="num">2,500</td></tr>
+          <tr><td>Active listings</td><td>Catalogue usefulness</td><td class="num">10,000</td></tr>
+          <tr><td>Wholesalers with 5+ listings</td><td>Genuinely committed sellers, not just sign-ups</td><td class="num">60%</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>Transaction health</h4>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Metric</th><th>What it tells us</th><th class="num">Target</th></tr></thead>
+        <tbody>
+          <tr><td>Orders per month</td><td>Core volume</td><td class="num">+20% MoM</td></tr>
+          <tr><td>Repeat order rate (60 days)</td><td>Whether the product actually works</td><td class="num">Above 40%</td></tr>
+          <tr><td>Average order value</td><td>Real restocking, not trial orders</td><td class="num">₹15,000+</td></tr>
+          <tr><td>Payment completion rate</td><td>How many started checkouts finish</td><td class="num">Above 85%</td></tr>
+          <tr><td>Orders reaching delivered</td><td>End-to-end completion — blocked until status controls ship</td><td class="num">Above 90%</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>Quality</h4>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Metric</th><th>What it tells us</th><th class="num">Target</th></tr></thead>
+        <tbody>
+          <tr><td>Average seller rating</td><td>Supply-side quality</td><td class="num">Above 4.0</td></tr>
+          <tr><td>Orders with a review</td><td>Whether the trust signal has enough data</td><td class="num">Above 25%</td></tr>
+          <tr><td>Disputes per 100 orders</td><td>Friction between the parties</td><td class="num">Below 2</td></tr>
+          <tr><td>Invoice download rate</td><td>Whether the GST feature is genuinely used</td><td class="num">Above 50%</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>Commercial</h4>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Metric</th><th>What it tells us</th></tr></thead>
+        <tbody>
+          <tr><td>Free to paid conversion</td><td>Whether the paid tier is worth its price</td></tr>
+          <tr><td>Monthly recurring revenue</td><td>Predictable income</td></tr>
+          <tr><td>Subscription retention</td><td>Whether value persists past month one</td></tr>
+          <tr><td>Gross merchandise value</td><td>Total trade flowing through the platform</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>All targets above are <strong>assumptions</strong> for planning. They should be replaced with real baselines after the first quarter of live usage.</p>
+  </section>
+
+  <section id="s19">
+    <div class="sec-head"><span class="n">19</span><h2>Conclusion</h2></div>
+    <p>RARS Innoventa sets out to do the part of wholesale trade that existing platforms leave to phone calls and paper. A retailer can compare real suppliers on real numbers, order from one of them, pay directly by UPI, watch the consignment arrive, and download a GST invoice that their accountant can actually use. A wholesaler gets customers beyond the ones they have personally met, without handing over their pricing or their relationships.</p>
+    <p>A good part of that is built and working. The marketplace, ordering with server-verified pricing, UPI collection, GST invoicing, delivery tracking, messaging and verified reviews are all in place.</p>
+    <p>The honest position is that the product is not finished. Orders cannot yet be marked delivered from the interface, which blocks several features behind it. There is no admin console. The credit ledger — arguably the most commercially important thing on the roadmap, because it addresses a need every trader has and almost no platform serves — has not been started.</p>
+    <p>None of those are hard problems. They are sequencing. The foundations that are difficult to change later — the data model, the pricing authority, the invoice numbering — are the ones that are already right.</p>
+    <p>The next milestone is straightforward: finish the order lifecycle, add wholesaler payment confirmation, and then build credit on top of it.</p>
+  </section>
+
+  <footer>
+    <p>RARS Innoventa · Product Blueprint · Version 1.0 · 6 August 2026</p>
+    <p>Prepared from a review of the codebase, database migrations and API surface as of this date. Items marked as assumptions are planning inputs, not findings.</p>
+  </footer>
+
+</div>

@@ -1,23 +1,21 @@
 RARS INNOVENTA
 
-# B2B Wholesale Marketplace
+# Mercato
 
 ## Product Blueprint
 
-A platform connecting wholesalers and retailers across India, from price
-discovery through to the GST invoice.
+A B2B wholesale marketplace connecting wholesalers and retailers across India,
+from price discovery through to the GST invoice.
 
 | | |
 | --- | --- |
+| Product | Mercato |
 | Company | RARS Innoventa |
 | Document | Product Blueprint |
-| Version | 1.2 |
+| Version | 1.3 |
 | Date | 6 August 2026 |
 | Prepared By | RARS Innoventa Product Team |
 | Status | Working draft |
-
-Product name to be finalised. Throughout this document the product is referred
-to as "the platform".
 
 ---
 
@@ -28,7 +26,7 @@ to as "the platform".
 3. Problem Statement
 4. Where Existing Platforms Fall Short
 5. Vision and Mission
-6. About the Platform
+6. About Mercato
 7. Product Objectives
 8. Target Audience
 9. Solution
@@ -55,7 +53,7 @@ filling the gap with something that looks authoritative but is not.
 
 ## 1. Executive Summary
 
-The platform is a B2B wholesale marketplace built for Indian trade. A wholesaler
+Mercato is a B2B wholesale marketplace built for Indian trade. A wholesaler
 lists what they stock. A retailer finds them, compares them against other
 wholesalers selling the same product, places an order, pays by UPI, and watches
 the consignment move on a map until it arrives.
@@ -212,9 +210,9 @@ means:
 
 ---
 
-## 6. About the Platform
+## 6. About Mercato
 
-The platform is a marketplace with two connected sides.
+Mercato is a marketplace with two connected sides.
 
 ### The buying side
 
@@ -283,7 +281,7 @@ Dealer and territory management is on the roadmap rather than in the product.
 
 Each problem in Section 3 maps to something specific in the product.
 
-| Problem | What the platform does about it |
+| Problem | What Mercato does about it |
 | --- | --- |
 | No way to compare prices | One product, many suppliers, side by side with price, MOQ, stock, shipping, rating, orders delivered |
 | Orders vanish after placement | A status trail on every order, plus a live map from warehouse to destination |
@@ -501,7 +499,7 @@ positioning. It deliberately does not compare features.
 | ExportersIndia | Export-focused directory | Suppliers, for listings | Introduces, then exits |
 | Udaan | Managed B2B marketplace | Margin on goods | Buys and resells |
 | Shopify | Storefront software | Merchants, subscription | Not a marketplace |
-| This platform | Transactional B2B marketplace | To be decided, see Section 14 | Hosts the whole transaction |
+| Mercato | Transactional B2B marketplace | To be decided, see Section 14 | Hosts the whole transaction |
 
 A feature-by-feature comparison is not included, and should not be produced
 without research. Asserting what each competitor does and does not support would
@@ -516,7 +514,7 @@ discovery, quoting, ordering, payment, invoicing, delivery and dispute. That
 produces a comparison that will survive scrutiny.
 
 What can be said without research is structural. The established players have
-reach, mobile apps and operational scale. The argument for this platform is not
+reach, mobile apps and operational scale. The argument for Mercato is not
 size; it is that it covers the part of the trade that a directory hands back to
 the phone.
 
@@ -524,7 +522,7 @@ the phone.
 
 ## 13. Gap Analysis
 
-| Gap in the market | Who leaves it open | How the platform addresses it | Status |
+| Gap in the market | Who leaves it open | How Mercato addresses it | Status |
 | --- | --- | --- | --- |
 | Buyer cannot compare suppliers on identical goods | Directories | Shared product catalogue with side-by-side comparison | Built |
 | Transaction happens off-platform, leaving no record | Directories | Order, payment, invoice and delivery recorded together | Built |
@@ -539,7 +537,7 @@ the phone.
 
 ## 14. Business Model
 
-The platform does not buy or hold stock, so revenue has to come from the service
+Mercato does not buy or hold stock, so revenue has to come from the service
 rather than a margin on goods. These are the options available to a product
 shaped like this one.
 
@@ -593,7 +591,7 @@ published rate card.
 
 ### Wholesaler storefronts
 
-Every wholesaler gets their own space on the platform where they can present
+Every wholesaler gets their own space on Mercato where they can present
 their range on their own terms, rather than only appearing as one row in a
 comparison table.
 
@@ -661,7 +659,7 @@ to be predictable enough that a wholesaler can tell what their customer sees.
 
 ## 17. Success Metrics
 
-No targets are given below. The platform has not launched, so any number here
+No targets are given below. Mercato has not launched, so any number here
 would be invented, and invented targets are worse than none because teams plan
 against them. What follows is what to measure and why it matters. Baselines
 should be taken from the first full quarter of live usage, and targets set from
@@ -714,7 +712,7 @@ order can be curiosity; the second means something was actually solved.
 
 ## 18. Conclusion
 
-The platform sets out to do the part of wholesale trade that existing products
+Mercato sets out to do the part of wholesale trade that existing products
 leave to phone calls and paper. A retailer can compare real suppliers on real
 numbers, order from one of them, pay directly by UPI, watch the consignment
 arrive, and download a GST invoice their accountant can use. A wholesaler gets
@@ -732,4 +730,4 @@ to stay on.
 
 ---
 
-RARS Innoventa · Product Blueprint · Version 1.2 · 6 August 2026
+Mercato · Product Blueprint · RARS Innoventa · Version 1.3 · 6 August 2026

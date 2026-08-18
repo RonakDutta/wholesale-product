@@ -21,10 +21,15 @@ const Payment = () => {
   const orderIdRef = useRef(orderId);
   orderIdRef.current = orderId;
 
+  // Id of the payment session opened on load. Sent back on confirm so the
+  // amount recorded is the one the QR code showed.
+  const [paymentId, setPaymentId] = useState(null);
+  const [upiReference, setUpiReference] = useState("");
+
   const markPaymentFailed = (remarks) =>
     api
       .put(`/api/orders/${orderIdRef.current}/payment-status`, {
-        paymentStatus: "failed",
+        markFailed: true,
         remarks,
       })
       .catch(() => {});
@@ -52,9 +57,22 @@ const Payment = () => {
       try {
         const response = await api.get(`/api/orders/${orderId}/payment-details`);
         setPaymentDetails(response.data);
-        // The server decides this from the order's lifecycle state, so a
-        // cancelled or already-paid order never renders a live QR code.
-        setPayable(response.data.payable !== false);
+        // The server decides this from the order's state and balance, so a
+        // cancelled or fully paid order never renders a live QR code.
+        const canPay = response.data.payable !== false;
+        setPayable(canPay);
+
+        // Open a session so the server, not the browser, fixes the amount.
+        // A failure here is not fatal: confirming without a session still
+        // charges whatever the order actually owes.
+        if (canPay) {
+          try {
+            const session = await api.post(`/api/orders/${orderId}/payment`);
+            if (session.data?.success) setPaymentId(session.data.paymentId);
+          } catch (sessionErr) {
+            console.warn("Could not open a payment session:", sessionErr.message);
+          }
+        }
       } catch (err) {
         console.error("Error fetching payment details:", err);
         setError(err.response?.data?.message || "Failed to load payment details");
@@ -87,12 +105,18 @@ const Payment = () => {
     setUpdating(true);
     try {
       const response = await api.put(`/api/orders/${orderId}/payment-status`, {
-        paymentStatus: "paid"
+        paymentStatus: "paid",
+        paymentId,
+        upiTransactionReference: upiReference.trim() || undefined,
       });
 
       if (response.data.success) {
         resolvedRef.current = true;
-        toast.success("Payment confirmed successfully!");
+        toast.success(
+          response.data.fullyPaid
+            ? "Payment confirmed. Your order is fully paid."
+            : `Payment recorded. ₹${Number(response.data.remainingAmount).toLocaleString("en-IN")} still due.`,
+        );
         // replace, so the browser back button cannot return to a payment
         // screen for an order that has already been settled.
         navigate("/order-success", { replace: true });
@@ -208,6 +232,14 @@ const Payment = () => {
   }
 
   const upiUrl = generateUPIUrl();
+  const onInstalments = paymentDetails.paymentPlan === "installment_50_50";
+  const partPaid = Number(paymentDetails.amountPaid || 0) > 0;
+  const money = (value) =>
+    Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const dueAfterThisPayment = Math.max(
+    Number(paymentDetails.remainingAmount || 0) - Number(paymentDetails.paymentAmount || 0),
+    0,
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
@@ -216,21 +248,74 @@ const Payment = () => {
         <div className="flex items-center gap-4 mb-8">
           <button
             onClick={async () => {
+              // Walking away from a later instalment must not cancel an order
+              // the seller may already be preparing, so only an untouched
+              // order is failed on the way out.
               resolvedRef.current = true;
-              await markPaymentFailed("Buyer went back from the payment screen");
-              toast.info("Payment cancelled");
+              if (!partPaid) {
+                await markPaymentFailed("Buyer went back from the payment screen");
+                toast.info("Payment cancelled");
+              }
               navigate("/orders", { replace: true });
             }}
-            aria-label="Cancel payment and go back"
+            aria-label={partPaid ? "Back to orders" : "Cancel payment and go back"}
             className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Payment</h1>
-            <p className="text-sm text-slate-500">Complete your payment to confirm order</p>
+            <h1 className="text-2xl font-bold text-slate-900">
+              {onInstalments
+                ? `Instalment ${paymentDetails.installmentNumber} of 2`
+                : "Payment"}
+            </h1>
+            <p className="text-sm text-slate-500">
+              {onInstalments
+                ? "Pay 50% now and the balance later."
+                : "Complete your payment to confirm order"}
+            </p>
           </div>
         </div>
+
+        {/* Instalment progress */}
+        {onInstalments && (
+          <div className="mb-6 rounded-xl border border-clay/20 bg-clay/5 p-5">
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  Order total
+                </p>
+                <p className="mt-1 text-lg font-bold text-slate-900">
+                  ₹{money(paymentDetails.totalAmount)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  Already paid
+                </p>
+                <p className="mt-1 text-lg font-bold text-emerald-600">
+                  ₹{money(paymentDetails.amountPaid)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  Due now
+                </p>
+                <p className="mt-1 text-lg font-black text-clay">
+                  ₹{money(paymentDetails.paymentAmount)}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-white">
+              <div
+                className="h-full rounded-full bg-emerald-500 transition-all"
+                style={{
+                  width: `${Math.min(100, Math.round((Number(paymentDetails.amountPaid || 0) / Math.max(Number(paymentDetails.totalAmount || 1), 1)) * 100))}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* QR Code Section */}
@@ -341,6 +426,27 @@ const Payment = () => {
 
             {/* Action Buttons */}
             <div className="space-y-3">
+              <div>
+                <label
+                  htmlFor="upi-ref"
+                  className="block text-xs font-semibold text-slate-600 mb-1.5"
+                >
+                  UPI reference number{" "}
+                  <span className="font-normal text-slate-400">(optional)</span>
+                </label>
+                <input
+                  id="upi-ref"
+                  type="text"
+                  value={upiReference}
+                  onChange={(e) => setUpiReference(e.target.value)}
+                  placeholder="From your UPI app, e.g. 412345678901"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 outline-none transition-colors focus:border-clay"
+                />
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Helps the seller match your payment if there is a query.
+                </p>
+              </div>
+
               <button
                 onClick={handlePaymentComplete}
                 disabled={updating || !paymentDetails.supplierUpiId}
@@ -354,22 +460,39 @@ const Payment = () => {
                 ) : (
                   <>
                     <CheckCircle className="w-5 h-5" />
-                    I have completed payment
+                    {onInstalments
+                      ? `I have paid ₹${money(paymentDetails.paymentAmount)}`
+                      : "I have completed payment"}
                   </>
                 )}
               </button>
 
-              <button
-                onClick={handlePaymentFailed}
-                disabled={updating}
-                className="w-full bg-slate-100 text-slate-700 text-sm font-semibold py-3 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                Cancel Payment
-              </button>
+              {/* Cancelling kills the order and returns its stock, which is
+                  only right while nothing has been paid. Once a deposit is in,
+                  the way out is back to the order, not a cancellation. */}
+              {partPaid ? (
+                <button
+                  onClick={() => navigate(`/orders/${orderId}`, { replace: true })}
+                  disabled={updating}
+                  className="w-full bg-slate-100 text-slate-700 text-sm font-semibold py-3 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  Pay later
+                </button>
+              ) : (
+                <button
+                  onClick={handlePaymentFailed}
+                  disabled={updating}
+                  className="w-full bg-slate-100 text-slate-700 text-sm font-semibold py-3 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Cancel Payment
+                </button>
+              )}
             </div>
 
             <p className="text-xs text-slate-500 text-center">
-              Your order will be confirmed after successful payment verification
+              {onInstalments && paymentDetails.installmentNumber === 1
+                ? `₹${money(dueAfterThisPayment)} will remain due. Your seller can start preparing the order once this deposit is in.`
+                : "Your order will be confirmed after successful payment verification"}
             </p>
           </div>
         </div>

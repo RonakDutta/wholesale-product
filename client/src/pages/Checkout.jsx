@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, MapPin, Phone, User, ShoppingBag, IndianRupee } from "lucide-react";
+import { ArrowLeft, MapPin, Phone, User, ShoppingBag, IndianRupee, CreditCard } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { toast } from "sonner";
 import api from "../utils/axios";
@@ -10,6 +10,7 @@ const Checkout = () => {
   const navigate = useNavigate();
   const { items, subtotal, clearCart } = useCart();
   const [loading, setLoading] = useState(false);
+  const [paymentPlan, setPaymentPlan] = useState("full"); // 'full' or 'installment_50_50'
   
   const [addressForm, setAddressForm] = useState({
     name: "",
@@ -24,8 +25,6 @@ const Checkout = () => {
   });
 
   const [errors, setErrors] = useState({});
-  // Exact delivery point. Optional, but far more reliable than geocoding a
-  // typed Indian address, so it wins when present.
   const [pin, setPin] = useState(null);
 
   if (items.length === 0) {
@@ -86,8 +85,6 @@ const Checkout = () => {
 
     setLoading(true);
     try {
-      // Send every line. Prices are recomputed server-side from live
-      // inventory, so nothing money-related is trusted from here.
       const products = items.map((item) => ({
         productId: item.productId,
         inventoryId: item.inventoryId,
@@ -96,6 +93,7 @@ const Checkout = () => {
 
       const response = await api.post("/api/orders/create", {
         products,
+        paymentPlan,
         deliveryAddress: pin ? { ...addressForm, ...pin } : addressForm,
       });
 
@@ -107,13 +105,19 @@ const Checkout = () => {
       }
     } catch (error) {
       console.error("Order creation error details:", error);
-      // Automatically captures and pushes explicit diagnostic error strings to screen layout
       const message = error.response?.data?.message || "Failed to create order";
       toast.error(message);
     } finally {
       setLoading(false);
     }
   };
+
+  const initialAmount = paymentPlan === "installment_50_50" 
+    ? Number((subtotal * 0.5).toFixed(2)) 
+    : subtotal;
+  const remainingAmount = paymentPlan === "installment_50_50"
+    ? Number((subtotal - initialAmount).toFixed(2))
+    : subtotal;
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
@@ -133,8 +137,9 @@ const Checkout = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Address Form */}
-          <div className="lg:col-span-2">
+          {/* Main Checkout Section */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Address Form */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
               <div className="flex items-center gap-3 mb-6">
                 <MapPin className="w-5 h-5 text-clay" />
@@ -210,7 +215,7 @@ const Checkout = () => {
                     name="street"
                     value={addressForm.street}
                     onChange={handleInputChange}
-                    placeholder="e.g., Main Street, Sector 15"
+                    placeholder="e.g., MG Road, Near City Center"
                     className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay/20 ${
                       errors.street ? "border-rose-300" : "border-slate-200"
                     }`}
@@ -218,24 +223,24 @@ const Checkout = () => {
                   {errors.street && <p className="text-xs text-rose-500 mt-1">{errors.street}</p>}
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Area/Locality <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="area"
-                    value={addressForm.area}
-                    onChange={handleInputChange}
-                    placeholder="e.g., Connaught Place"
-                    className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay/20 ${
-                      errors.area ? "border-rose-300" : "border-slate-200"
-                    }`}
-                  />
-                  {errors.area && <p className="text-xs text-rose-500 mt-1">{errors.area}</p>}
-                </div>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                      Area / Landmark <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="area"
+                      value={addressForm.area}
+                      onChange={handleInputChange}
+                      placeholder="e.g., Indiranagar"
+                      className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay/20 ${
+                        errors.area ? "border-rose-300" : "border-slate-200"
+                      }`}
+                    />
+                    {errors.area && <p className="text-xs text-rose-500 mt-1">{errors.area}</p>}
+                  </div>
+
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-2">
                       City <span className="text-rose-500">*</span>
@@ -245,14 +250,16 @@ const Checkout = () => {
                       name="city"
                       value={addressForm.city}
                       onChange={handleInputChange}
-                      placeholder="e.g., Delhi"
+                      placeholder="e.g., Bengaluru"
                       className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay/20 ${
                         errors.city ? "border-rose-300" : "border-slate-200"
                       }`}
                     />
                     {errors.city && <p className="text-xs text-rose-500 mt-1">{errors.city}</p>}
                   </div>
+                </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-2">
                       State <span className="text-rose-500">*</span>
@@ -262,16 +269,14 @@ const Checkout = () => {
                       name="state"
                       value={addressForm.state}
                       onChange={handleInputChange}
-                      placeholder="e.g., Maharashtra"
+                      placeholder="e.g., Karnataka"
                       className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay/20 ${
                         errors.state ? "border-rose-300" : "border-slate-200"
                       }`}
                     />
                     {errors.state && <p className="text-xs text-rose-500 mt-1">{errors.state}</p>}
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-2">
                       Country <span className="text-rose-500">*</span>
@@ -281,6 +286,7 @@ const Checkout = () => {
                       name="country"
                       value={addressForm.country}
                       onChange={handleInputChange}
+                      placeholder="India"
                       className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay/20 ${
                         errors.country ? "border-rose-300" : "border-slate-200"
                       }`}
@@ -318,12 +324,80 @@ const Checkout = () => {
                 </div>
               </div>
             </div>
+
+            {/* Payment Plan Options */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <CreditCard className="w-5 h-5 text-clay" />
+                <h2 className="text-lg font-bold text-slate-900">Payment Option</h2>
+              </div>
+              <p className="text-xs text-slate-500 mb-4">
+                Choose your preferred payment method. Selecting installments does NOT alter the total order amount.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Pay Full Amount */}
+                <div
+                  onClick={() => setPaymentPlan("full")}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                    paymentPlan === "full"
+                      ? "border-clay bg-clay/5 shadow-sm"
+                      : "border-slate-200 hover:border-slate-300 bg-white"
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="font-bold text-sm text-slate-900 block">Pay Full Amount</span>
+                      <span className="text-xs text-slate-500">Pay 100% now</span>
+                    </div>
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentPlan === "full" ? "border-clay bg-clay" : "border-slate-300"}`}>
+                      {paymentPlan === "full" && <div className="w-2 h-2 rounded-full bg-white" />}
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center">
+                    <span className="text-xs text-slate-600 font-medium">Pay Now</span>
+                    <span className="text-base font-bold text-slate-900">₹{subtotal.toLocaleString("en-IN")}</span>
+                  </div>
+                </div>
+
+                {/* Pay 2 Installments */}
+                <div
+                  onClick={() => setPaymentPlan("installment_50_50")}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                    paymentPlan === "installment_50_50"
+                      ? "border-clay bg-clay/5 shadow-sm"
+                      : "border-slate-200 hover:border-slate-300 bg-white"
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-sm text-slate-900">Pay in 2 Installments</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">50 / 50</span>
+                      </div>
+                      <span className="text-xs text-slate-500">Pay 50% now, 50% later</span>
+                    </div>
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentPlan === "installment_50_50" ? "border-clay bg-clay" : "border-slate-300"}`}>
+                      {paymentPlan === "installment_50_50" && <div className="w-2 h-2 rounded-full bg-white" />}
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-slate-100 space-y-1">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-600 font-medium">Pay 50% Now</span>
+                      <span className="font-bold text-clay">₹{initialAmount.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-500">Remaining 50%</span>
+                      <span className="font-semibold text-slate-700">₹{remainingAmount.toLocaleString("en-IN")}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Order Summary */}
           <div className="lg:col-span-1">
-            {/* top-24 clears the sticky 4rem navbar; a smaller offset makes the
-                card scroll underneath it */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 sticky top-24">
               <div className="flex items-center gap-3 mb-6">
                 <ShoppingBag className="w-5 h-5 text-clay" />
@@ -359,16 +433,39 @@ const Checkout = () => {
                 })}
               </div>
 
-              <div className="border-t border-slate-200 pt-4">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-sm font-semibold text-slate-600">Subtotal</span>
-                  <div className="flex items-center gap-1">
-                    <IndianRupee className="w-4 h-4 text-clay" />
-                    <span className="text-xl font-bold text-clay">
-                      {subtotal.toLocaleString("en-IN")}
-                    </span>
-                  </div>
+              <div className="border-t border-slate-200 pt-4 space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-semibold text-slate-600">Total Order Amount</span>
+                  <span className="font-bold text-slate-900">₹{subtotal.toLocaleString("en-IN")}</span>
                 </div>
+
+                {paymentPlan === "installment_50_50" ? (
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-1.5">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-bold text-clay">Pay Now (50%)</span>
+                      <div className="flex items-center gap-0.5">
+                        <IndianRupee className="w-4 h-4 text-clay" />
+                        <span className="text-lg font-black text-clay">
+                          {initialAmount.toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-slate-600 border-t border-slate-200 pt-1.5">
+                      <span>Remaining Amount</span>
+                      <span className="font-semibold">₹{remainingAmount.toLocaleString("en-IN")}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between text-sm pb-1">
+                    <span className="font-bold text-clay">Pay Now (100%)</span>
+                    <div className="flex items-center gap-1">
+                      <IndianRupee className="w-4 h-4 text-clay" />
+                      <span className="text-xl font-black text-clay">
+                        {subtotal.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <button
                   onClick={handleProceedToPayment}
@@ -378,7 +475,7 @@ const Checkout = () => {
                   {loading ? "Creating Order..." : "Proceed to Payment"}
                 </button>
 
-                <p className="text-xs text-slate-500 text-center mt-3">
+                <p className="text-xs text-slate-500 text-center">
                   By proceeding, you agree to our Terms of Service
                 </p>
               </div>

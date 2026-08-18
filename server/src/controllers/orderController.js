@@ -3,30 +3,80 @@ const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimelin
 const { geocodeOrderDestination } = require("../services/geocodingService");
 const invoiceService = require("../services/invoiceService");
 const pdfService = require("../services/pdfService");
+const {
+  enqueueNotification,
+  NOTIFICATION_CHANNELS,
+  NOTIFICATION_TYPES,
+} = require("../services/notificationManager");
 
-// One rule for "can this order still be paid", shared by the screen that
-// renders the QR code and the endpoint that settles it. The lifecycle is the
-// authority: payment_failed and cancelled are terminal, and payment_completed
-// cannot be paid twice.
-const isAwaitingPayment = (orderStatus) =>
-  validateStatusTransition(orderStatus, "payment_completed").valid;
+// Money is handled in paise so that splitting a bill never loses or invents a
+// fraction of a rupee.
+const toPaise = (rupees) => Math.round(Number(rupees || 0) * 100);
+const fromPaise = (paise) => Number((Number(paise || 0) / 100).toFixed(2));
+
+// A part-paid order still owes money, so "can this be paid" cannot be asked of
+// the lifecycle alone: an order can sit at payment_completed, or even be
+// shipped, and still be waiting on its second instalment. Two things decide
+// it - the order has not been killed, and there is a balance left.
+const PAYMENT_BLOCKING_STATUSES = new Set([
+  "cancelled",
+  "refunded",
+  "payment_failed",
+  "return_completed",
+]);
+
+const remainingFor = (order) => {
+  const total = Number(order.total_amount || 0);
+  const paid = Number(order.amount_paid || 0);
+  return order.remaining_amount != null
+    ? Number(order.remaining_amount)
+    : fromPaise(toPaise(total) - toPaise(paid));
+};
+
+const canAcceptPayment = (order) =>
+  !PAYMENT_BLOCKING_STATUSES.has(order.status) && toPaise(remainingFor(order)) > 0;
 
 // What to tell a buyer who lands on the payment screen for an order that has
-// moved on. The lifecycle message names internal states, so it is logged
+// moved on. Lifecycle messages name internal states, so they are logged
 // rather than shown.
-const notPayableReason = (orderStatus) => {
-  switch (orderStatus) {
+const notPayableReason = (order) => {
+  switch (order.status) {
     case "payment_failed":
       return "This payment was cancelled. Place a new order to buy these items.";
     case "cancelled":
       return "This order was cancelled and can no longer be paid.";
-    case "payment_completed":
-      return "This order is already paid.";
     case "refunded":
       return "This order was refunded.";
+    case "return_completed":
+      return "This order was returned.";
     default:
-      return "This order is no longer awaiting payment.";
+      return toPaise(remainingFor(order)) <= 0
+        ? "This order is fully paid."
+        : "This order is no longer awaiting payment.";
   }
+};
+
+// What the buyer owes next. On the 50/50 plan the first instalment is half,
+// rounded in paise, and the second is whatever is actually left, so the two
+// always add up to the total exactly.
+const nextInstalment = (order) => {
+  const total = Number(order.total_amount || 0);
+  const paid = Number(order.amount_paid || 0);
+  const remaining = remainingFor(order);
+
+  if ((order.payment_plan || "full") !== "installment_50_50") {
+    return { amount: remaining, installmentNumber: 1, paymentType: "full" };
+  }
+
+  if (toPaise(paid) <= 0) {
+    return {
+      amount: fromPaise(Math.round(toPaise(total) / 2)),
+      installmentNumber: 1,
+      paymentType: "initial",
+    };
+  }
+
+  return { amount: remaining, installmentNumber: 2, paymentType: "remaining" };
 };
 
 const ensureOrderAccess = async (req, res, orderId, { requireBuyer = true, requireSupplier = true } = {}) => {
@@ -120,7 +170,8 @@ const getBuyerOrders = async (req, res) => {
     // by its lines rather than naming whichever product happened to be first.
     const result = await pool.query(
       `SELECT o.id, o.order_number, o.status, o.payment_status,
-              o.total_amount, o.created_at, o.quantity,
+              o.total_amount, o.amount_paid, o.remaining_amount, o.payment_plan,
+              o.created_at, o.quantity,
               COALESCE(wp.company_name, u.first_name || ' ' || u.last_name) AS supplier_name,
               COALESCE(o.supplier_id, si.supplier_id) AS supplier_user_id,
               COALESCE(items.item_count, 1) AS item_count,
@@ -152,7 +203,16 @@ const getBuyerOrders = async (req, res) => {
 };
 
 const createOrder = async (req, res) => {
-  const { products, deliveryAddress, billingAddress, paymentMethod = "upi" } = req.body;
+  const {
+    products,
+    deliveryAddress,
+    billingAddress,
+    paymentMethod = "upi",
+    paymentPlan = "full",
+  } = req.body;
+  // Only plans the server knows about. Anything else falls back to paying in
+  // full rather than creating an order nobody can settle.
+  const plan = paymentPlan === "installment_50_50" ? "installment_50_50" : "full";
   const buyerId = req.user?.id;
 
   if (!buyerId) {
@@ -263,11 +323,12 @@ const createOrder = async (req, res) => {
     const orderResult = await client.query(
       `INSERT INTO orders (
         buyer_id, supplier_id, inventory_item_id, quantity,
-        total_amount, subtotal, status, payment_status,
+        total_amount, subtotal, amount_paid, remaining_amount, payment_plan,
+        status, payment_status,
         delivery_address, billing_address, contact_phone, notes,
         order_number, expected_delivery_date, updated_at
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, CURRENT_TIMESTAMP)
        RETURNING id`,
       [
         buyerId,
@@ -277,6 +338,9 @@ const createOrder = async (req, res) => {
         totalQuantity,
         subtotal,
         subtotal,
+        0,
+        subtotal,
+        plan,
         "payment_pending",
         "pending",
         JSON.stringify(deliveryAddress),
@@ -381,12 +445,15 @@ const getPaymentDetails = async (req, res) => {
 
   try {
     const orderQuery = await pool.query(
-      `SELECT o.id, o.total_amount, o.buyer_id, o.supplier_id, o.delivery_address, si.product_id,
-              p.name as product_name, wp.company_name, wp.upi_id, o.order_number, o.payment_status, o.status
+      `SELECT o.id, o.total_amount, o.amount_paid, o.remaining_amount, o.payment_plan,
+              o.buyer_id, o.supplier_id, o.delivery_address, si.product_id,
+              p.name as product_name, wp.company_name, wp.upi_id, o.order_number,
+              o.payment_status, o.status
        FROM orders o
        JOIN supplier_inventory si ON o.inventory_item_id = si.id
        JOIN products p ON si.product_id = p.id
-       JOIN wholesaler_profiles wp ON si.supplier_id = wp.user_id
+       -- LEFT so an order still loads while the seller's profile is incomplete
+       LEFT JOIN wholesaler_profiles wp ON si.supplier_id = wp.user_id
        WHERE o.id = $1`,
       [orderId],
     );
@@ -403,11 +470,22 @@ const getPaymentDetails = async (req, res) => {
       return res.status(403).json({ success: false, message: "Access Denied: Unauthorized access verification layer." });
     }
 
+    const payable = canAcceptPayment(orderRecord);
+    const due = nextInstalment(orderRecord);
+
     res.json({
       success: true,
       orderId: orderRecord.id,
       orderNumber: orderRecord.order_number,
-      amount: orderRecord.total_amount,
+      // `amount` is what to pay right now, which on an instalment plan is not
+      // the order total. Kept under this name because the QR code reads it.
+      amount: due.amount,
+      totalAmount: Number(orderRecord.total_amount || 0),
+      amountPaid: Number(orderRecord.amount_paid || 0),
+      remainingAmount: remainingFor(orderRecord),
+      paymentAmount: due.amount,
+      paymentPlan: orderRecord.payment_plan || "full",
+      installmentNumber: due.installmentNumber,
       supplierName: orderRecord.company_name || "Wholesale Merchant",
       supplierUpiId: orderRecord.upi_id,
       productName: orderRecord.product_name,
@@ -417,10 +495,8 @@ const getPaymentDetails = async (req, res) => {
       // Told to the client so the QR code and the pay button are never shown
       // for an order that cannot accept a payment. Returning to this screen
       // through browser history is the usual way that happens.
-      payable: isAwaitingPayment(orderRecord.status),
-      notPayableReason: isAwaitingPayment(orderRecord.status)
-        ? null
-        : notPayableReason(orderRecord.status),
+      payable,
+      notPayableReason: payable ? null : notPayableReason(orderRecord),
     });
   } catch (error) {
     console.error("Error processing dynamic payment extraction routing:", error);
@@ -428,13 +504,99 @@ const getPaymentDetails = async (req, res) => {
   }
 };
 
+/**
+ * Open a payment session. Records what the buyer owes right now so the amount
+ * is decided by the server, not posted by the browser. Any earlier unfinished
+ * session for the order is superseded, otherwise revisiting the payment screen
+ * leaves a trail of pending rows that later payments could pick up.
+ */
+const initiatePayment = async (req, res) => {
+  const { orderId } = req.params;
+  const userId = req.user.id;
+  const paymentMethod = req.body?.paymentMethod || "upi";
+
+  const client = await pool.connect();
+  try {
+    const accessCheck = await ensureOrderAccess(req, res, orderId, { requireBuyer: true, requireSupplier: false });
+    if (!accessCheck) return;
+
+    await client.query("BEGIN");
+    const orderRes = await client.query(
+      `SELECT id, total_amount, amount_paid, remaining_amount, payment_plan,
+              buyer_id, supplier_id, status
+         FROM orders WHERE id = $1 FOR UPDATE`,
+      [orderId],
+    );
+    if (orderRes.rows.length === 0) throw new Error("Order not found");
+    const order = orderRes.rows[0];
+    if (String(order.buyer_id) !== String(userId)) {
+      throw new Error("This order belongs to someone else.");
+    }
+
+    if (!canAcceptPayment(order)) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({
+        success: false,
+        code: "ORDER_NOT_AWAITING_PAYMENT",
+        status: order.status,
+        message: notPayableReason(order),
+      });
+    }
+
+    await client.query(
+      `UPDATE payment_transactions SET payment_status = 'superseded', updated_at = CURRENT_TIMESTAMP
+        WHERE order_id = $1 AND payment_status = 'pending'`,
+      [orderId],
+    );
+
+    const due = nextInstalment(order);
+    const inserted = await client.query(
+      `INSERT INTO payment_transactions
+         (order_id, buyer_id, supplier_id, amount, payment_method, payment_status,
+          installment_number, payment_type, created_at)
+       VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,CURRENT_TIMESTAMP) RETURNING id`,
+      [orderId, order.buyer_id, order.supplier_id, due.amount, paymentMethod, due.installmentNumber, due.paymentType],
+    );
+
+    await client.query("COMMIT");
+
+    return res.json({
+      success: true,
+      paymentId: inserted.rows[0].id,
+      totalAmount: Number(order.total_amount || 0),
+      amountPaid: Number(order.amount_paid || 0),
+      remainingAmount: remainingFor(order),
+      paymentAmount: due.amount,
+      paymentPlan: order.payment_plan || "full",
+      installmentNumber: due.installmentNumber,
+    });
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    console.error("initiatePayment error:", error);
+    return res.status(400).json({ success: false, message: error.message || "Failed to start this payment." });
+  } finally {
+    client.release();
+  }
+};
+
 const updatePaymentStatus = async (req, res) => {
   const { orderId } = req.params;
-  const { paymentStatus, paymentMethod = "upi", remarks } = req.body;
+  const {
+    paymentStatus,
+    paymentMethod = "upi",
+    remarks,
+    paymentId,
+    upiTransactionReference,
+    markFailed,
+  } = req.body;
   const userId = req.user.id;
 
-  if (!["paid", "failed", "pending", "partial", "cod"].includes(paymentStatus)) {
-    return res.status(400).json({ success: false, message: "Invalid payload argument tracking variables." });
+  // `failed` is the buyer abandoning the screen. Everything else is a payment
+  // of whatever is currently owed, so the browser never names an amount.
+  const abandoning = markFailed === true || paymentStatus === "failed";
+
+  if (!abandoning && paymentStatus && !["paid", "pending", "partial", "partially_paid", "cod"].includes(paymentStatus)) {
+    return res.status(400).json({ success: false, message: "Unrecognised payment status." });
   }
 
   const client = await pool.connect();
@@ -443,82 +605,218 @@ const updatePaymentStatus = async (req, res) => {
     if (!accessCheck) return;
 
     await client.query("BEGIN");
-    const checkOrder = await client.query("SELECT buyer_id, status, total_amount FROM orders WHERE id = $1", [orderId]);
-    if (checkOrder.rows.length === 0) {
-      throw new Error("Order metadata mapping context missing.");
-    }
-    if (checkOrder.rows[0].buyer_id !== userId) {
-      throw new Error("Unauthorized credentials check state.");
+    const orderRes = await client.query(
+      `SELECT id, buyer_id, status, payment_status, total_amount, amount_paid,
+              remaining_amount, payment_plan, quantity
+         FROM orders WHERE id = $1 FOR UPDATE`,
+      [orderId],
+    );
+    if (orderRes.rows.length === 0) throw new Error("Order not found.");
+    const order = orderRes.rows[0];
+    if (String(order.buyer_id) !== String(userId)) {
+      throw new Error("This order belongs to someone else.");
     }
 
-    const previousStatus = checkOrder.rows[0].status;
-    const nextOrderStatus = mapPaymentStatusToOrderStatus(paymentStatus);
-    const validation = validateStatusTransition(previousStatus, nextOrderStatus);
-    if (!validation.valid) {
-      // The lifecycle already refuses to settle a cancelled or paid order, so
-      // no money moves here. It is reported as a conflict rather than a bad
-      // request, and in words a buyer can act on: the raw lifecycle message
-      // names internal states and belongs in the log.
-      await client.query("ROLLBACK");
-      console.warn(
-        `Rejected payment update on order ${orderId}: ${validation.message}`,
+    const previousStatus = order.status;
+    const alreadyPaid = Number(order.amount_paid || 0);
+
+    // ---- Buyer abandoned the payment screen -------------------------------
+    if (abandoning) {
+      // Only an order that has taken no money at all can be failed this way.
+      // Walking away from a second instalment must not cancel an order the
+      // seller may already have shipped, nor hand its stock back.
+      if (toPaise(alreadyPaid) > 0) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({
+          success: false,
+          code: "ORDER_PART_PAID",
+          message: "This order has already been part paid, so it cannot be cancelled here. Contact the seller.",
+        });
+      }
+
+      const validation = validateStatusTransition(previousStatus, "payment_failed");
+      if (!validation.valid) {
+        await client.query("ROLLBACK");
+        console.warn(`Rejected abandon on order ${orderId}: ${validation.message}`);
+        return res.status(409).json({
+          success: false,
+          code: "ORDER_NOT_AWAITING_PAYMENT",
+          status: previousStatus,
+          message: notPayableReason(order),
+        });
+      }
+
+      await client.query(
+        `UPDATE orders SET payment_status = 'failed', status = 'payment_failed',
+                remaining_amount = total_amount, updated_at = CURRENT_TIMESTAMP
+          WHERE id = $1`,
+        [orderId],
       );
+
+      // Stock is reserved when the order is created. Hand it back, otherwise
+      // abandoned checkouts silently consume inventory. payment_failed is
+      // terminal in the lifecycle, so this cannot run twice.
+      await client.query(
+        `UPDATE supplier_inventory si
+            SET stock = si.stock + oi.quantity
+           FROM order_items oi
+          WHERE oi.order_id = $1 AND si.id = oi.inventory_item_id`,
+        [orderId],
+      );
+
+      await client.query(
+        `UPDATE payment_transactions SET payment_status = 'superseded', updated_at = CURRENT_TIMESTAMP
+          WHERE order_id = $1 AND payment_status = 'pending'`,
+        [orderId],
+      );
+
+      await client.query(
+        `INSERT INTO order_status_history (order_id, status, previous_status, updated_by, updated_by_role, remarks)
+         VALUES ($1,'payment_failed',$2,$3,$4,$5)`,
+        [orderId, previousStatus, userId, req.user.role || "buyer", remarks || "Buyer left the payment screen before paying"],
+      );
+
+      await client.query("COMMIT");
+      return res.json({ success: true, message: "Payment cancelled." });
+    }
+
+    // ---- Buyer says they have paid ----------------------------------------
+    if (!canAcceptPayment(order)) {
+      await client.query("ROLLBACK");
       return res.status(409).json({
         success: false,
         code: "ORDER_NOT_AWAITING_PAYMENT",
         status: previousStatus,
-        message: notPayableReason(previousStatus),
+        message: notPayableReason(order),
       });
     }
 
-    await client.query(
-      `UPDATE orders SET payment_status = $1, status = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3`,
-      [paymentStatus, nextOrderStatus, orderId],
-    );
+    const remaining = remainingFor(order);
+    const due = nextInstalment(order);
 
-    // Stock is deducted when the order is created. If payment never completes,
-    // hand it back, otherwise abandoned checkouts silently consume inventory.
-    // The lifecycle makes payment_failed terminal, so this cannot double-run.
-    if (nextOrderStatus === "payment_failed") {
-      await client.query(
-        `UPDATE supplier_inventory si
-         SET stock = si.stock + o.quantity
-         FROM orders o
-         WHERE o.id = $1 AND si.id = o.inventory_item_id`,
+    // Settle the session opened by initiatePayment when there is one, so the
+    // amount shown on the QR code is the amount recorded. Its value is still
+    // checked against what is owed, because the row is older than this moment.
+    let session = null;
+    if (paymentId) {
+      const found = await client.query(
+        "SELECT * FROM payment_transactions WHERE id = $1 AND order_id = $2 FOR UPDATE",
+        [paymentId, orderId],
+      );
+      if (found.rows.length === 0) throw new Error("Payment session not found.");
+      session = found.rows[0];
+    } else {
+      const found = await client.query(
+        `SELECT * FROM payment_transactions
+          WHERE order_id = $1 AND payment_status = 'pending'
+          ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
         [orderId],
+      );
+      session = found.rows[0] || null;
+    }
+
+    if (session && ["completed", "paid"].includes(session.payment_status)) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({
+        success: false,
+        code: "PAYMENT_ALREADY_RECORDED",
+        message: "This payment has already been recorded.",
+      });
+    }
+
+    // Never take more than is owed, whatever a stale session says.
+    const paidNow = Math.min(
+      toPaise(session ? session.amount : due.amount),
+      toPaise(remaining),
+    );
+    if (paidNow <= 0) throw new Error("There is nothing left to pay on this order.");
+    const paidNowRupees = fromPaise(paidNow);
+
+    if (session) {
+      await client.query(
+        `UPDATE payment_transactions
+            SET payment_status = 'completed', amount = $1, upi_transaction_reference = $2,
+                payment_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+          WHERE id = $3`,
+        [paidNowRupees, upiTransactionReference || null, session.id],
+      );
+    } else {
+      await client.query(
+        `INSERT INTO payment_transactions
+           (order_id, buyer_id, supplier_id, amount, payment_method, payment_status,
+            installment_number, payment_type, upi_transaction_reference,
+            gateway_response, payment_date, created_at)
+         SELECT $1, o.buyer_id, o.supplier_id, $2, $3, 'completed', $4, $5, $6, $7,
+                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+           FROM orders o WHERE o.id = $1`,
+        [orderId, paidNowRupees, paymentMethod, due.installmentNumber, due.paymentType,
+         upiTransactionReference || null, JSON.stringify({ method: paymentMethod })],
       );
     }
 
-    // Record the order's actual value. This was hardcoded to 0, which both
-    // misrepresented the payment and violated the amount > 0 check constraint.
-    const transactionAmount = Number(checkOrder.rows[0].total_amount) || 0;
+    const newPaidPaise = toPaise(alreadyPaid) + paidNow;
+    const newRemainingPaise = toPaise(order.total_amount) - newPaidPaise;
+    const settled = newRemainingPaise <= 0;
+    const newPaymentStatus = settled ? "paid" : "partially_paid";
 
     await client.query(
-      `INSERT INTO payment_transactions (order_id, amount, payment_method, payment_status, gateway_response, created_at)
-       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-      [orderId, transactionAmount, paymentMethod, paymentStatus === "paid" ? "completed" : "pending", JSON.stringify({ method: paymentMethod })],
+      `UPDATE orders SET amount_paid = $1, remaining_amount = $2, payment_status = $3,
+              updated_at = CURRENT_TIMESTAMP
+        WHERE id = $4`,
+      [fromPaise(newPaidPaise), fromPaise(Math.max(newRemainingPaise, 0)), newPaymentStatus, orderId],
     );
+
+    // Advance the lifecycle only when it is actually waiting on this payment.
+    // A second instalment lands on an order the seller may already be
+    // processing, and must not drag it back to payment_completed.
+    const nextOrderStatus = mapPaymentStatusToOrderStatus(newPaymentStatus);
+    const transition = validateStatusTransition(previousStatus, nextOrderStatus);
+    const statusMoved = transition.valid && nextOrderStatus !== previousStatus;
+    if (statusMoved) {
+      await client.query(
+        "UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+        [nextOrderStatus, orderId],
+      );
+    }
 
     await client.query(
       `INSERT INTO order_status_history (order_id, status, previous_status, updated_by, updated_by_role, remarks)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [orderId, nextOrderStatus, previousStatus, userId, req.user.role || "buyer", remarks || `Payment marked as ${paymentStatus}`],
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [
+        orderId,
+        statusMoved ? nextOrderStatus : previousStatus,
+        previousStatus,
+        userId,
+        req.user.role || "buyer",
+        remarks ||
+          `Payment of ${paidNowRupees.toFixed(2)} recorded (instalment ${due.installmentNumber}). Outstanding ${fromPaise(Math.max(newRemainingPaise, 0)).toFixed(2)}.`,
+      ],
     );
 
     await client.query("COMMIT");
 
     // Reconcile, not create: the invoice was raised when the order was placed
     // and is sitting on Pending, so creating again returned early and left it
-    // stamped UNPAID over money that had just been received.
-    if (paymentStatus === "paid") {
+    // stamped UNPAID over money that had just been received. Only a fully
+    // settled order closes its invoice.
+    if (settled) {
       invoiceService.reconcileInvoiceForOrder(orderId).catch((invErr) => {
         console.warn("Background invoice reconcile notice:", invErr.message);
       });
     }
 
-    res.json({ success: true, message: `Payment state mapped successfully to active parameter: ${paymentStatus}.` });
+    notifyPaymentRecorded(orderId, paidNowRupees, fromPaise(Math.max(newRemainingPaise, 0)));
+
+    res.json({
+      success: true,
+      message: settled ? "Payment complete." : "Payment recorded.",
+      amountPaid: fromPaise(newPaidPaise),
+      remainingAmount: fromPaise(Math.max(newRemainingPaise, 0)),
+      paymentStatus: newPaymentStatus,
+      fullyPaid: settled,
+    });
   } catch (error) {
-    await client.query("ROLLBACK");
+    await client.query("ROLLBACK").catch(() => {});
     console.error("Error updating transaction records pipeline:", error);
     res.status(400).json({ success: false, message: error.message || "Internal server state error processing updates." });
   } finally {
@@ -577,7 +875,28 @@ const getOrderById = async (req, res) => {
       [req.params.orderId],
     );
 
-    res.json({ ...result.rows[0], items: itemsResult.rows });
+    // Real payments taken against this order. Without these the instalment
+    // timeline has nothing to show and falls back to placeholders, which
+    // leaves a paid instalment looking unpaid.
+    const paymentsResult = await pool.query(
+      // 'paid' is the word the timeline reads, and only completed rows are
+      // listed, so the status is fixed rather than selected.
+      `SELECT id, amount, payment_method, 'paid' AS status,
+              installment_number AS "installmentNumber",
+              payment_type AS "paymentType",
+              upi_transaction_reference AS "upiReference",
+              COALESCE(payment_date, created_at) AS "createdAt"
+         FROM payment_transactions
+        WHERE order_id = $1 AND payment_status = 'completed'
+        ORDER BY installment_number ASC, created_at ASC`,
+      [req.params.orderId],
+    );
+
+    res.json({
+      ...result.rows[0],
+      items: itemsResult.rows,
+      payments: paymentsResult.rows,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -707,10 +1026,103 @@ const generatePackingSlip = async (req, res) => {
   }
 };
 
+/**
+ * Tell both sides that money moved. Deliberately not awaited by the caller and
+ * never allowed to throw: a notification channel being down must not fail a
+ * payment that has already been committed.
+ */
+const notifyPaymentRecorded = async (orderId, paidNow, outstanding) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT buyer_id, supplier_id, order_number FROM orders WHERE id = $1",
+      [orderId],
+    );
+    if (rows.length === 0) return;
+    const { buyer_id: buyerId, supplier_id: supplierId, order_number: orderNumber } = rows[0];
+    const tail = outstanding > 0
+      ? `Outstanding balance ₹${outstanding.toFixed(2)}.`
+      : "This order is now fully paid.";
+
+    const send = (userId, title, message) =>
+      userId &&
+      enqueueNotification({
+        userId,
+        title,
+        message,
+        notificationType: NOTIFICATION_TYPES.payment_update,
+        channels: [NOTIFICATION_CHANNELS.IN_APP],
+        referenceId: orderId,
+        referenceType: "order",
+      });
+
+    await send(buyerId, "Payment recorded", `We recorded ₹${paidNow.toFixed(2)} for order ${orderNumber}. ${tail}`);
+    await send(supplierId, "Payment received", `₹${paidNow.toFixed(2)} received for order ${orderNumber}. ${tail}`);
+  } catch (err) {
+    console.warn("Payment notification notice:", err.message);
+  }
+};
+
+/**
+ * Seller nudges a buyer who still owes an instalment.
+ * @route POST /api/orders/:orderId/send-installment-reminder
+ */
+const sendInstallmentReminder = async (req, res) => {
+  const { orderId } = req.params;
+  try {
+    const accessCheck = await ensureOrderAccess(req, res, orderId, { requireBuyer: false, requireSupplier: true });
+    if (!accessCheck) return;
+
+    const { rows } = await pool.query(
+      `SELECT o.id, o.buyer_id, o.supplier_id, o.order_number, o.total_amount,
+              o.amount_paid, o.remaining_amount, o.status,
+              COALESCE(wp.company_name, u.first_name || ' ' || u.last_name) AS supplier_name
+         FROM orders o
+         LEFT JOIN users u ON u.id = o.supplier_id
+         LEFT JOIN wholesaler_profiles wp ON wp.user_id = o.supplier_id
+        WHERE o.id = $1`,
+      [orderId],
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Order not found." });
+    }
+
+    const order = rows[0];
+    // Only the seller on the order, never another seller who guessed the id.
+    if (req.user.role !== "admin" && String(order.supplier_id) !== String(req.user.id)) {
+      return res.status(403).json({ success: false, message: "This is not your order." });
+    }
+
+    const outstanding = remainingFor(order);
+    if (toPaise(outstanding) <= 0) {
+      return res.status(400).json({ success: false, message: "This order has nothing outstanding." });
+    }
+    if (PAYMENT_BLOCKING_STATUSES.has(order.status)) {
+      return res.status(409).json({ success: false, message: "This order can no longer take a payment." });
+    }
+
+    await enqueueNotification({
+      userId: order.buyer_id,
+      title: "Payment reminder",
+      message: `${order.supplier_name || "Your supplier"} is waiting on ₹${outstanding.toFixed(2)} for order ${order.order_number}.`,
+      notificationType: NOTIFICATION_TYPES.payment_update,
+      channels: [NOTIFICATION_CHANNELS.IN_APP],
+      referenceId: order.id,
+      referenceType: "order",
+    });
+
+    return res.json({ success: true, message: "Reminder sent.", remainingAmount: outstanding });
+  } catch (error) {
+    console.error("sendInstallmentReminder error:", error);
+    return res.status(500).json({ success: false, message: "Could not send the reminder." });
+  }
+};
+
 module.exports = {
   createOrder,
   getPaymentDetails,
+  initiatePayment,
   updatePaymentStatus,
+  sendInstallmentReminder,
   getOrderById,
   getSupplierOrders,
   getBuyerOrders,

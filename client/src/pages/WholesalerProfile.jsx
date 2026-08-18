@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   BadgeCheck,
-  Building2,
   CalendarDays,
   Check,
   Truck,
   MapPin,
+  MessageCircle,
   Package,
+  Phone,
+  Search,
   ShieldCheck,
   ShoppingCart,
   Share2,
@@ -21,52 +23,111 @@ import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { toast } from "sonner";
 
-const Stat = ({ icon: Icon, label, value }) => (
-  <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-sage/20 bg-white/70 px-3 py-4 text-center">
-    <Icon className="h-5 w-5 text-clay" />
-    <span className="text-[10px] font-bold uppercase tracking-wider text-espresso/40">
-      {label}
-    </span>
-    <span className="text-sm font-bold text-espresso">{value}</span>
-  </div>
-);
+// A storefront should not look like every other storefront, and there is no
+// cover image in the data. The name picks one of a few theme palettes, so a
+// given wholesaler always gets the same banner.
+const COVERS = [
+  "from-clay/80 via-clay/50 to-sage/40",
+  "from-sage/70 via-sage/40 to-clay/30",
+  "from-espresso/70 via-clay/40 to-sage/30",
+  "from-clay/60 via-espresso/40 to-espresso/70",
+];
 
-const Media = ({ item }) =>
-  item.image ? (
+const coverFor = (name = "") => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    hash = (hash * 31 + name.charCodeAt(i)) % 9973;
+  }
+  return COVERS[hash % COVERS.length];
+};
+
+const rupees = (value) =>
+  Number(value || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+const Media = ({ item }) => {
+  // Listing images are external URLs that can rot. Without this, a dead one
+  // renders as overflowing alt text across the card instead of a placeholder.
+  const [broken, setBroken] = useState(false);
+
+  if (!item.image || broken) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-sage/10">
+        <Package className="h-10 w-10 text-espresso/15" />
+      </div>
+    );
+  }
+
+  return (
     <img
       src={item.image}
       alt={item.name}
+      loading="lazy"
+      onError={() => setBroken(true)}
       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
     />
-  ) : (
-    <div className="flex h-full w-full items-center justify-center">
-      <Package className="h-10 w-10 text-espresso/15" />
-    </div>
   );
+};
 
-const Price = ({ item }) => {
+const StockLine = ({ item }) => {
+  if (item.stock <= 0) {
+    return (
+      <span className="font-semibold text-rose-500">Out of stock</span>
+    );
+  }
+  if (item.stock < Math.max(item.moq || 1, 1) * 2) {
+    return <span className="font-semibold text-amber-600">Low stock</span>;
+  }
+  return <span className="text-espresso/50">{item.stock} in stock</span>;
+};
+
+const PriceBlock = ({ item }) => {
   const hasDiscount = item.discountPrice && item.discountPrice < item.price;
   const effectivePrice = hasDiscount ? item.discountPrice : item.price;
+  const off = hasDiscount
+    ? Math.round(((item.price - item.discountPrice) / item.price) * 100)
+    : 0;
 
   return (
-    <>
-      <div className="mt-auto flex items-baseline gap-2 pt-2">
-        <span className="flex items-center text-lg font-bold text-espresso">
+    <div className="mt-auto pt-3">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="flex items-center text-lg font-black text-espresso">
           <IndianRupee className="h-4 w-4" />
-          {Number(effectivePrice).toFixed(2)}
+          {rupees(effectivePrice)}
         </span>
         {hasDiscount && (
-          <span className="text-xs text-espresso/40 line-through">
-            ₹{Number(item.price).toFixed(2)}
-          </span>
+          <>
+            <span className="text-xs text-espresso/40 line-through">
+              ₹{rupees(item.price)}
+            </span>
+            <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+              {off}% off
+            </span>
+          </>
         )}
       </div>
-
-      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-espresso/50">
-        <span>MOQ: {item.moq}</span>
-        <span>{item.stock > 0 ? `${item.stock} in stock` : "Out of stock"}</span>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+        <span className="rounded bg-sage/15 px-1.5 py-0.5 font-semibold text-espresso/70">
+          MOQ {item.moq}
+        </span>
+        <StockLine item={item} />
       </div>
-    </>
+    </div>
+  );
+};
+
+// `to` turns the whole card into a link. Without it the card is a plain box,
+// used where the card carries its own button instead.
+const CardShell = ({ to, children, className = "" }) => {
+  const shared = `group flex flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${className}`;
+  return to ? (
+    <Link to={to} className={shared}>
+      {children}
+    </Link>
+  ) : (
+    <div className={shared}>{children}</div>
   );
 };
 
@@ -75,23 +136,23 @@ const Price = ({ item }) => {
  * right destination: it carries the reviews and the other sellers.
  */
 const CatalogueCard = ({ item }) => (
-  <Link
+  <CardShell
     to={`/product/${item.id}`}
-    className="group flex flex-col overflow-hidden rounded-2xl border border-sage/20 bg-white/80 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-clay/30 hover:shadow-lg"
+    className="border-sage/20 hover:border-clay/30"
   >
-    <div className="aspect-square overflow-hidden bg-sage/10">
+    <div className="aspect-square overflow-hidden">
       <Media item={item} />
     </div>
-    <div className="flex flex-1 flex-col gap-1.5 p-4">
+    <div className="flex flex-1 flex-col p-4">
       <span className="text-[10px] font-bold uppercase tracking-wider text-espresso/40">
         {item.category}
       </span>
-      <h3 className="line-clamp-2 font-semibold text-espresso transition-colors group-hover:text-clay">
+      <h3 className="mt-1 line-clamp-2 font-semibold text-espresso transition-colors group-hover:text-clay">
         {item.name}
       </h3>
-      <Price item={item} />
+      <PriceBlock item={item} />
     </div>
-  </Link>
+  </CardShell>
 );
 
 /**
@@ -100,32 +161,65 @@ const CatalogueCard = ({ item }) => (
  * orders directly from this wholesaler instead.
  */
 const ExclusiveCard = ({ item, wholesaler, onAdd }) => (
-  <div className="group flex flex-col overflow-hidden rounded-2xl border border-clay/25 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-clay/50 hover:shadow-lg">
-    <div className="relative aspect-square overflow-hidden bg-sage/10">
+  <CardShell className="border-clay/25 hover:border-clay/50">
+    <div className="relative aspect-square overflow-hidden">
       <Media item={item} />
       <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-clay px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-cream shadow-sm">
         <Store className="h-3 w-3" />
         Only here
       </span>
+      {item.stock <= 0 && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+          <span className="rounded-full bg-espresso/80 px-3 py-1 text-xs font-bold uppercase tracking-wider text-cream">
+            Out of stock
+          </span>
+        </div>
+      )}
     </div>
 
-    <div className="flex flex-1 flex-col gap-1.5 p-4">
+    <div className="flex flex-1 flex-col p-4">
       <span className="text-[10px] font-bold uppercase tracking-wider text-espresso/40">
         {item.category}
       </span>
-      <h3 className="line-clamp-2 font-semibold text-espresso">{item.name}</h3>
-      <Price item={item} />
+      <h3 className="mt-1 line-clamp-2 font-semibold text-espresso">
+        {item.name}
+      </h3>
+      <PriceBlock item={item} />
 
       <button
         type="button"
         disabled={item.stock <= 0}
         onClick={() => onAdd(item, wholesaler)}
-        className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-clay px-4 py-2 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:cursor-not-allowed disabled:opacity-50"
+        className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-clay px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:cursor-not-allowed disabled:bg-espresso/20 disabled:text-espresso/50"
       >
         <ShoppingCart className="h-4 w-4" />
-        {item.stock > 0 ? `Add ${item.moq} to cart` : "Out of stock"}
+        {item.stock > 0 ? `Add ${item.moq} to cart` : "Unavailable"}
       </button>
     </div>
+  </CardShell>
+);
+
+const TrustChip = ({ icon: Icon, children, tone = "sage" }) => {
+  const tones = {
+    sage: "bg-sage/15 text-espresso/75",
+    emerald: "bg-emerald-50 text-emerald-700",
+    clay: "bg-clay/10 text-clay",
+  };
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${tones[tone]}`}
+    >
+      <Icon className="h-3.5 w-3.5 shrink-0" />
+      {children}
+    </span>
+  );
+};
+
+const EmptyRange = ({ title, body }) => (
+  <div className="rounded-2xl border border-dashed border-sage/40 bg-white/50 py-16 text-center">
+    <Package className="mx-auto mb-3 h-10 w-10 text-espresso/15" />
+    <p className="font-semibold text-espresso">{title}</p>
+    <p className="mt-1 text-sm text-espresso/50">{body}</p>
   </div>
 );
 
@@ -137,6 +231,8 @@ const WholesalerProfile = () => {
   const [wholesaler, setWholesaler] = useState(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("All");
 
   useEffect(() => {
     let cancelled = false;
@@ -162,6 +258,29 @@ const WholesalerProfile = () => {
       cancelled = true;
     };
   }, [id, navigate]);
+
+  const products = useMemo(() => wholesaler?.products || [], [wholesaler]);
+
+  const categories = useMemo(() => {
+    const seen = [...new Set(products.map((p) => p.category).filter(Boolean))];
+    return ["All", ...seen.sort()];
+  }, [products]);
+
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return products.filter((item) => {
+      if (category !== "All" && item.category !== category) return false;
+      if (!needle) return true;
+      return (
+        item.name?.toLowerCase().includes(needle) ||
+        item.category?.toLowerCase().includes(needle)
+      );
+    });
+  }, [products, query, category]);
+
+  const exclusive = visible.filter((item) => item.exclusive);
+  const catalogue = visible.filter((item) => !item.exclusive);
+  const filtering = query.trim() !== "" || category !== "All";
 
   const handleShare = async () => {
     const url = window.location.href;
@@ -217,11 +336,9 @@ const WholesalerProfile = () => {
   const memberSince = wholesaler.memberSince
     ? new Date(wholesaler.memberSince).getFullYear()
     : null;
-
-  const products = wholesaler.products || [];
-  const exclusive = products.filter((item) => item.exclusive);
-  const catalogue = products.filter((item) => !item.exclusive);
   const isOwner = user?.id && String(user.id) === String(wholesaler.id);
+  const phone = String(wholesaler.contactPhone || "").replace(/\D/g, "");
+  const totalExclusive = products.filter((item) => item.exclusive).length;
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 pb-16">
@@ -233,131 +350,180 @@ const WholesalerProfile = () => {
         Back
       </button>
 
-      {/* Header */}
-      <header className="rounded-2xl border border-sage/20 bg-white/80 p-6 shadow-sm sm:p-8">
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
-          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-clay/10 text-2xl font-black uppercase text-clay">
-            {wholesaler.companyName?.[0] || "?"}
-          </div>
+      {/* Shopfront header */}
+      <header className="overflow-hidden rounded-2xl border border-sage/20 bg-white shadow-sm">
+        <div
+          className={`h-28 bg-linear-to-r sm:h-36 ${coverFor(wholesaler.companyName)}`}
+        />
 
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-black tracking-tight text-espresso sm:text-3xl">
-                {wholesaler.companyName}
-              </h1>
-              {wholesaler.verified && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
-                  <BadgeCheck className="h-3.5 w-3.5" />
-                  Verified
-                </span>
-              )}
-              {wholesaler.gstVerified && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-sage/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-espresso/70">
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  GST
-                </span>
-              )}
-            </div>
-
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-espresso/60">
-              {wholesaler.contactName && (
-                <span className="flex items-center gap-1.5">
-                  <Building2 className="h-4 w-4" />
-                  {wholesaler.contactName}
-                </span>
-              )}
-              {location && (
-                <span className="flex items-center gap-1.5">
-                  <MapPin className="h-4 w-4" />
-                  {location}
-                </span>
-              )}
-              {memberSince && (
-                <span className="flex items-center gap-1.5">
-                  <CalendarDays className="h-4 w-4" />
-                  Member since {memberSince}
-                </span>
-              )}
-            </div>
-
-            {wholesaler.totalReviews > 0 && (
-              <div className="mt-3 flex items-center gap-1.5">
-                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                <span className="font-bold text-espresso">
-                  {wholesaler.rating.toFixed(1)}
-                </span>
-                <span className="text-sm text-espresso/50">
-                  ({wholesaler.totalReviews} review
-                  {wholesaler.totalReviews === 1 ? "" : "s"})
-                </span>
+        <div className="px-5 pb-6 sm:px-8">
+          <div className="-mt-12 flex flex-col gap-4 sm:-mt-14 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex items-end gap-4">
+              <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border-4 border-white bg-cream text-3xl font-black uppercase text-clay shadow-md sm:h-28 sm:w-28 sm:text-4xl">
+                {wholesaler.companyName?.[0] || "?"}
               </div>
+              <div className="min-w-0 pb-1">
+                <h1 className="line-clamp-2 text-2xl font-black tracking-tight text-espresso sm:text-3xl">
+                  {wholesaler.companyName}
+                </h1>
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-espresso/60">
+                  {location && (
+                    <span className="flex items-center gap-1.5">
+                      <MapPin className="h-4 w-4" />
+                      {location}
+                    </span>
+                  )}
+                  {wholesaler.totalReviews > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                      <span className="font-bold text-espresso">
+                        {Number(wholesaler.rating).toFixed(1)}
+                      </span>
+                      <span className="text-espresso/50">
+                        ({wholesaler.totalReviews})
+                      </span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pb-1">
+              {phone && !isOwner && (
+                <>
+                  <a
+                    href={`tel:${phone}`}
+                    className="flex items-center gap-2 rounded-lg border border-sage/30 bg-white px-4 py-2.5 text-sm font-bold text-espresso/70 transition-colors hover:border-clay hover:text-clay"
+                  >
+                    <Phone className="h-4 w-4" />
+                    Call
+                  </a>
+                  <a
+                    href={`https://wa.me/${phone}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2 rounded-lg border border-sage/30 bg-white px-4 py-2.5 text-sm font-bold text-espresso/70 transition-colors hover:border-clay hover:text-clay"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    WhatsApp
+                  </a>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={handleShare}
+                className="flex items-center gap-2 rounded-lg bg-clay px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso"
+              >
+                {copied ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  <Share2 className="h-4 w-4" />
+                )}
+                {copied ? "Copied" : "Share"}
+              </button>
+            </div>
+          </div>
+
+          {/* Trust row: only facts we actually hold */}
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            {wholesaler.verified && (
+              <TrustChip icon={BadgeCheck} tone="emerald">
+                Verified seller
+              </TrustChip>
+            )}
+            {wholesaler.gstVerified && (
+              <TrustChip icon={ShieldCheck}>GST registered</TrustChip>
+            )}
+            <TrustChip icon={Package}>
+              {products.length} product{products.length === 1 ? "" : "s"}
+            </TrustChip>
+            {totalExclusive > 0 && (
+              <TrustChip icon={Store} tone="clay">
+                {totalExclusive} only here
+              </TrustChip>
+            )}
+            {wholesaler.fulfilledOrders > 0 && (
+              <TrustChip icon={Truck}>
+                {wholesaler.fulfilledOrders} order
+                {wholesaler.fulfilledOrders === 1 ? "" : "s"} delivered
+              </TrustChip>
+            )}
+            {wholesaler.yearsInBusiness > 0 && (
+              <TrustChip icon={CalendarDays}>
+                {wholesaler.yearsInBusiness} years in business
+              </TrustChip>
+            )}
+            {!wholesaler.yearsInBusiness && memberSince && (
+              <TrustChip icon={CalendarDays}>Since {memberSince}</TrustChip>
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={handleShare}
-            className="flex h-fit shrink-0 items-center gap-2 rounded-lg border border-sage/30 bg-white px-4 py-2.5 text-sm font-bold text-espresso/70 transition-colors hover:border-clay hover:text-clay"
-          >
-            {copied ? (
-              <Check className="h-4 w-4 text-emerald-600" />
-            ) : (
-              <Share2 className="h-4 w-4" />
-            )}
-            {copied ? "Link copied" : "Share storefront"}
-          </button>
+          {isOwner && (
+            <p className="mt-4 rounded-xl border border-clay/20 bg-clay/5 px-4 py-3 text-xs text-espresso/70">
+              This is your storefront as buyers see it. Share the link with your
+              customers. Anything you set to Private stays off this page.
+            </p>
+          )}
         </div>
-
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat icon={Package} label="Products" value={products.length} />
-          <Stat
-            icon={Truck}
-            label="Orders delivered"
-            value={wholesaler.fulfilledOrders ?? 0}
-          />
-          <Stat
-            icon={Star}
-            label="Rating"
-            value={
-              wholesaler.totalReviews > 0
-                ? Number(wholesaler.rating).toFixed(1)
-                : "-"
-            }
-          />
-          <Stat
-            icon={ShieldCheck}
-            label="Experience"
-            value={
-              wholesaler.yearsInBusiness
-                ? `${wholesaler.yearsInBusiness} yr`
-                : "-"
-            }
-          />
-        </div>
-
-        {isOwner && (
-          <p className="mt-4 rounded-xl border border-clay/20 bg-clay/5 px-4 py-3 text-xs text-espresso/70">
-            This is your storefront as buyers see it. Share the link above with
-            your customers. Anything you set to Private stays out of this page.
-          </p>
-        )}
       </header>
+
+      {/* Browse the range */}
+      {products.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-sage/20 bg-white/70 p-4 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-espresso/30" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={`Search ${wholesaler.companyName}'s products`}
+              className="w-full rounded-lg border border-sage/25 bg-white py-2.5 pl-9 pr-4 text-sm text-espresso outline-none transition-colors placeholder:text-espresso/35 focus:border-clay"
+            />
+          </div>
+
+          {categories.length > 2 && (
+            <div className="flex gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+              {categories.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => setCategory(name)}
+                  className={`whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-bold transition-colors ${
+                    category === name
+                      ? "bg-espresso text-cream"
+                      : "text-espresso/60 hover:bg-sage/15"
+                  }`}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {filtering && visible.length === 0 && (
+        <EmptyRange
+          title="Nothing matches that"
+          body="Try a different word, or clear the category filter."
+        />
+      )}
 
       {/* Storefront-only range: the reason to visit this page */}
       {exclusive.length > 0 && (
         <section className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div className="flex flex-wrap items-end justify-between gap-2 border-b border-sage/20 pb-3">
             <div>
               <h2 className="flex items-center gap-2 text-xl font-bold text-espresso">
                 <Store className="h-5 w-5 text-clay" />
                 Only available here
               </h2>
               <p className="mt-1 text-sm text-espresso/50">
-                These are not in the shared catalogue. You will not find them
-                listed by anyone else.
+                Not in the shared catalogue. You will not find these listed by
+                anyone else.
               </p>
             </div>
-            <span className="text-sm text-espresso/50">
+            <span className="text-sm font-semibold text-espresso/50">
               {exclusive.length} product{exclusive.length === 1 ? "" : "s"}
             </span>
           </div>
@@ -376,40 +542,41 @@ const WholesalerProfile = () => {
       )}
 
       {/* Everything else, which is also in the shared catalogue */}
-      <section className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-xl font-bold text-espresso">
-            {exclusive.length > 0
-              ? "Also in the public catalogue"
-              : `Products from ${wholesaler.companyName}`}
-          </h2>
-          <span className="text-sm text-espresso/50">
-            {catalogue.length} listing{catalogue.length === 1 ? "" : "s"}
-          </span>
-        </div>
+      {(catalogue.length > 0 || !filtering) && (
+        <section className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-end justify-between gap-2 border-b border-sage/20 pb-3">
+            <h2 className="text-xl font-bold text-espresso">
+              {exclusive.length > 0 || totalExclusive > 0
+                ? "Also in the public catalogue"
+                : "Products"}
+            </h2>
+            <span className="text-sm font-semibold text-espresso/50">
+              {catalogue.length} listing{catalogue.length === 1 ? "" : "s"}
+            </span>
+          </div>
 
-        {catalogue.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-sage/40 py-16 text-center">
-            <Package className="mx-auto mb-3 h-10 w-10 text-espresso/15" />
-            <p className="font-semibold text-espresso">
-              {exclusive.length > 0
-                ? "Nothing in the public catalogue"
-                : "No active listings"}
-            </p>
-            <p className="mt-1 text-sm text-espresso/50">
-              {exclusive.length > 0
-                ? "Everything this wholesaler sells is available on this page only."
-                : "This wholesaler has no products available right now."}
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
-            {catalogue.map((item) => (
-              <CatalogueCard key={item.inventoryId} item={item} />
-            ))}
-          </div>
-        )}
-      </section>
+          {catalogue.length === 0 ? (
+            <EmptyRange
+              title={
+                totalExclusive > 0
+                  ? "Nothing in the public catalogue"
+                  : "No listings yet"
+              }
+              body={
+                totalExclusive > 0
+                  ? "Everything this wholesaler sells is available on this page only."
+                  : "This wholesaler has no products available right now."
+              }
+            />
+          ) : (
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
+              {catalogue.map((item) => (
+                <CatalogueCard key={item.inventoryId} item={item} />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 };

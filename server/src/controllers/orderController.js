@@ -4,6 +4,31 @@ const { geocodeOrderDestination } = require("../services/geocodingService");
 const invoiceService = require("../services/invoiceService");
 const pdfService = require("../services/pdfService");
 
+// One rule for "can this order still be paid", shared by the screen that
+// renders the QR code and the endpoint that settles it. The lifecycle is the
+// authority: payment_failed and cancelled are terminal, and payment_completed
+// cannot be paid twice.
+const isAwaitingPayment = (orderStatus) =>
+  validateStatusTransition(orderStatus, "payment_completed").valid;
+
+// What to tell a buyer who lands on the payment screen for an order that has
+// moved on. The lifecycle message names internal states, so it is logged
+// rather than shown.
+const notPayableReason = (orderStatus) => {
+  switch (orderStatus) {
+    case "payment_failed":
+      return "This payment was cancelled. Place a new order to buy these items.";
+    case "cancelled":
+      return "This order was cancelled and can no longer be paid.";
+    case "payment_completed":
+      return "This order is already paid.";
+    case "refunded":
+      return "This order was refunded.";
+    default:
+      return "This order is no longer awaiting payment.";
+  }
+};
+
 const ensureOrderAccess = async (req, res, orderId, { requireBuyer = true, requireSupplier = true } = {}) => {
   const userId = req.user?.id;
   if (!userId) {
@@ -389,6 +414,13 @@ const getPaymentDetails = async (req, res) => {
       deliveryAddress: orderRecord.delivery_address,
       paymentStatus: orderRecord.payment_status,
       status: orderRecord.status,
+      // Told to the client so the QR code and the pay button are never shown
+      // for an order that cannot accept a payment. Returning to this screen
+      // through browser history is the usual way that happens.
+      payable: isAwaitingPayment(orderRecord.status),
+      notPayableReason: isAwaitingPayment(orderRecord.status)
+        ? null
+        : notPayableReason(orderRecord.status),
     });
   } catch (error) {
     console.error("Error processing dynamic payment extraction routing:", error);
@@ -423,7 +455,20 @@ const updatePaymentStatus = async (req, res) => {
     const nextOrderStatus = mapPaymentStatusToOrderStatus(paymentStatus);
     const validation = validateStatusTransition(previousStatus, nextOrderStatus);
     if (!validation.valid) {
-      throw new Error(validation.message);
+      // The lifecycle already refuses to settle a cancelled or paid order, so
+      // no money moves here. It is reported as a conflict rather than a bad
+      // request, and in words a buyer can act on: the raw lifecycle message
+      // names internal states and belongs in the log.
+      await client.query("ROLLBACK");
+      console.warn(
+        `Rejected payment update on order ${orderId}: ${validation.message}`,
+      );
+      return res.status(409).json({
+        success: false,
+        code: "ORDER_NOT_AWAITING_PAYMENT",
+        status: previousStatus,
+        message: notPayableReason(previousStatus),
+      });
     }
 
     await client.query(

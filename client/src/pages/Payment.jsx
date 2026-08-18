@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, QrCode, IndianRupee, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { Link, useParams, useNavigate } from "react-router-dom";
+import { ArrowLeft, QrCode, IndianRupee, CheckCircle, AlertCircle, Loader2, Ban } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react"; // Standardized named export to resolve Vite bundler error
 import { toast } from "sonner";
 import api from "../utils/axios";
@@ -12,6 +12,8 @@ const Payment = () => {
   const [updating, setUpdating] = useState(false);
   const [paymentDetails, setPaymentDetails] = useState(null);
   const [error, setError] = useState(null);
+  // null while loading, then true/false from the server's lifecycle check.
+  const [payable, setPayable] = useState(null);
   // Tracks whether the payment reached a final state, so leaving the screen
   // after paying does not also mark the order failed.
   const resolvedRef = useRef(false);
@@ -29,8 +31,11 @@ const Payment = () => {
 
   // Abandoning the QR screen (browser back, closing the view) fails the order.
   // Arming is delayed so React's development double-mount cannot cancel an
-  // order the moment the page opens.
+  // order the moment the page opens, and it never arms for an order that is
+  // not awaiting payment: there is nothing left to abandon.
   useEffect(() => {
+    if (payable !== true) return undefined;
+
     const timer = setTimeout(() => {
       armedRef.current = true;
     }, 1500);
@@ -40,14 +45,16 @@ const Payment = () => {
       if (!armedRef.current || resolvedRef.current) return;
       markPaymentFailed("Buyer left the payment screen before paying");
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [payable]);
 
   useEffect(() => {
     const fetchPaymentDetails = async () => {
       try {
         const response = await api.get(`/api/orders/${orderId}/payment-details`);
         setPaymentDetails(response.data);
+        // The server decides this from the order's lifecycle state, so a
+        // cancelled or already-paid order never renders a live QR code.
+        setPayable(response.data.payable !== false);
       } catch (err) {
         console.error("Error fetching payment details:", err);
         setError(err.response?.data?.message || "Failed to load payment details");
@@ -86,10 +93,23 @@ const Payment = () => {
       if (response.data.success) {
         resolvedRef.current = true;
         toast.success("Payment confirmed successfully!");
-        navigate("/order-success");
+        // replace, so the browser back button cannot return to a payment
+        // screen for an order that has already been settled.
+        navigate("/order-success", { replace: true });
       }
     } catch (err) {
       console.error("Error updating payment status:", err);
+      // 409 means the order moved on while this screen was open, so stop
+      // offering to pay it rather than letting the buyer try again.
+      if (err.response?.status === 409) {
+        resolvedRef.current = true;
+        setPayable(false);
+        setPaymentDetails((prev) =>
+          prev
+            ? { ...prev, notPayableReason: err.response.data?.message }
+            : prev,
+        );
+      }
       toast.error(err.response?.data?.message || "Failed to confirm payment");
     } finally {
       setUpdating(false);
@@ -106,11 +126,13 @@ const Payment = () => {
       if (response.data.success) {
         resolvedRef.current = true;
         toast.info("Payment cancelled");
-        navigate("/orders");
+        // replace, so browser back does not land on a live-looking QR code
+        // for an order that has just been cancelled.
+        navigate("/orders", { replace: true });
       }
     } catch (err) {
       console.error("Error updating payment status:", err);
-      toast.error("Failed to cancel payment");
+      toast.error(err.response?.data?.message || "Failed to cancel payment");
     } finally {
       setUpdating(false);
     }
@@ -145,6 +167,46 @@ const Payment = () => {
     );
   }
 
+  // Reached by browser history after cancelling or paying, or by opening an
+  // old link. No QR code and no pay button: the order cannot take a payment,
+  // and showing a live-looking one invites the buyer to send money that can
+  // never be matched to it.
+  if (payable === false) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+        <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <Ban className="mx-auto mb-4 h-14 w-14 text-slate-300" />
+          <h2 className="mb-2 text-xl font-bold text-slate-800">
+            Payment closed
+          </h2>
+          <p className="mb-1 text-slate-600">
+            {paymentDetails.notPayableReason ||
+              "This order is no longer awaiting payment."}
+          </p>
+          {paymentDetails.orderNumber && (
+            <p className="mb-6 font-mono text-xs text-slate-400">
+              {paymentDetails.orderNumber}
+            </p>
+          )}
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
+            <Link
+              to={`/orders/${orderId}`}
+              className="rounded-lg bg-clay px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-espresso"
+            >
+              View this order
+            </Link>
+            <Link
+              to="/"
+              className="rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-100"
+            >
+              Keep shopping
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const upiUrl = generateUPIUrl();
 
   return (
@@ -157,7 +219,7 @@ const Payment = () => {
               resolvedRef.current = true;
               await markPaymentFailed("Buyer went back from the payment screen");
               toast.info("Payment cancelled");
-              navigate("/orders");
+              navigate("/orders", { replace: true });
             }}
             aria-label="Cancel payment and go back"
             className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"

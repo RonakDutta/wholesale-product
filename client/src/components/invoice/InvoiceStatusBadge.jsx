@@ -15,7 +15,7 @@ const STYLES = {
 
 const FALLBACK = "bg-slate-100 text-slate-600 border-slate-200";
 
-export default function InvoiceStatusBadge({ status }) {
+export default function InvoiceStatusBadge({ status, className = "" }) {
   if (!status) return null;
 
   const normalized = String(status).trim();
@@ -23,7 +23,7 @@ export default function InvoiceStatusBadge({ status }) {
 
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${badgeStyles}`}
+      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors duration-150 ${badgeStyles} ${className}`}
     >
       <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-current opacity-75" />
       {normalized}

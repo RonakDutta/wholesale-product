@@ -61,9 +61,15 @@ A modern B2B wholesale marketplace platform designed for wholesalers/suppliers a
 
 ### Order Management
 - **Order Creation**: Complete checkout flow with address validation
-- **Payment Integration**: Razorpay payment gateway integration
-- **Order Status Tracking**: Real-time order status updates
+- **Payment Integration**: Razorpay & Dynamic UPI QR code payment integration
+- **Order Status Tracking**: Real-time order status updates and driver tracking
 - **Order History**: Complete order history for both buyers and suppliers
+
+### Invoice & Tax Compliance
+- **Automated GST Invoicing**: Auto-generates GST tax invoices with intra-state (CGST/SGST) and inter-state (IGST) support
+- **PDF Generation & Export**: Vector-quality downloadable PDF invoices with scannable UPI QR codes
+- **Payment Reconciliation**: Automatic status reconciliation and payment audit trails
+- **Financial Analytics**: Exportable CSV reports and tax breakdown summaries
 
 ## 🛠 Tech Stack
 

@@ -8,14 +8,22 @@ import api from "./axios";
  * so every export it opened came back as a 404 page or a 401.
  */
 export const downloadFile = async (url, filename, { params } = {}) => {
-  const response = await api.get(url, { params, responseType: "blob" });
+  try {
+    const response = await api.get(url, { params, responseType: "blob" });
+    if (!response?.data) {
+      throw new Error("No data received for file download");
+    }
 
-  const objectUrl = window.URL.createObjectURL(new Blob([response.data]));
-  const link = document.createElement("a");
-  link.href = objectUrl;
-  link.setAttribute("download", filename);
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.URL.revokeObjectURL(objectUrl);
+    const objectUrl = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(objectUrl);
+  } catch (error) {
+    console.error(`Failed to download file [${filename}]:`, error);
+    throw error;
+  }
 };

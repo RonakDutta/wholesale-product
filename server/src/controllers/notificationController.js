@@ -3,7 +3,6 @@ const {
   getUserPreferences,
   ensureNotificationPreferences,
   enqueueNotification,
-  notificationQueue,
   NOTIFICATION_CHANNELS,
   NOTIFICATION_TYPES,
 } = require("../services/notificationManager");

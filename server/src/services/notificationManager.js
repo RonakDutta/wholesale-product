@@ -1,79 +1,9 @@
 const pool = require("../config/db");
-const { Queue, Worker } = require("bullmq");
-const redis = require("../config/redis");
 const { sendEmail } = require("./emailService");
 const { sendSms } = require("./smsService");
 const { sendPushNotification } = require("./pushService");
 const { sendWhatsApp } = require("./whatsappService");
 const { emitUserNotification, emitUnreadCount } = require("./socketService");
-
-let notificationQueue = null;
-let notificationWorker = null;
-let redisReady = false;
-
-const initNotificationQueue = () => {
-  if (!redis) {
-    console.warn("Redis not configured; notification queue disabled.");
-    return;
-  }
-
-  if (redisReady || notificationQueue || notificationWorker) {
-    return;
-  }
-
-  try {
-    // BullMQ v3 folded QueueScheduler into Queue/Worker; constructing one here
-    // threw, which silently disabled the queue even when Redis was healthy.
-    notificationQueue = new Queue("notificationQueue", { connection: redis });
-    notificationWorker = new Worker(
-      "notificationQueue",
-      async (job) => {
-        try {
-          return await deliverNotification(job.data);
-        } catch (err) {
-          console.error("Notification worker failed:", err);
-          throw err;
-        }
-      },
-      { connection: redis, autorun: true },
-    );
-
-    notificationWorker.on("failed", async (job, err) => {
-      console.error("Notification job failed:", job?.id, err?.message || err);
-    });
-
-    notificationWorker.on("error", (error) => {
-      console.error("Notification worker error:", error?.message || error);
-    });
-
-    redisReady = true;
-    console.log("Notification queue initialized using Redis.");
-  } catch (err) {
-    notificationQueue = null;
-    notificationWorker = null;
-    redisReady = false;
-    console.error("Notification queue setup failed. Notifications will be delivered immediately.", err?.message || err);
-  }
-};
-
-if (redis) {
-  redis.on("ready", () => {
-    if (!redisReady) {
-      initNotificationQueue();
-    }
-  });
-
-  redis.on("error", (error) => {
-    if (redisReady) {
-      console.error("Redis connection error for notifications:", error?.message || error);
-      redisReady = false;
-    }
-  });
-
-  if (redis.status === "ready") {
-    initNotificationQueue();
-  }
-}
 
 const NOTIFICATION_CHANNELS = {
   IN_APP: "in_app",
@@ -90,13 +20,6 @@ const NOTIFICATION_TYPES = {
   inventory: "inventory",
   review: "review",
   auth: "auth",
-};
-
-const QUEUE_OPTIONS = {
-  attempts: 3,
-  backoff: { type: "exponential", delay: 1000 },
-  removeOnComplete: true,
-  removeOnFail: false,
 };
 
 const createNotificationRecord = async ({ userId, title, message, notificationType, channel, referenceId = null, referenceType = null, priority = "normal" }) => {
@@ -126,14 +49,9 @@ const ensureNotificationPreferences = async (userId) => {
   return preferences;
 };
 
-const enqueueNotification = async (payload, opts = {}) => {
-  if (!notificationQueue || !redisReady) {
-    console.warn("Notification queue is unavailable; delivering immediately.");
-    return await deliverNotification(payload);
-  }
-
-  return await notificationQueue.add("sendNotification", payload, { ...QUEUE_OPTIONS, ...opts });
-};
+// Notifications are delivered on the request that raises them. Callers treat
+// this as fire and forget, so a failing channel must not fail their work.
+const enqueueNotification = async (payload) => deliverNotification(payload);
 
 const deliverNotification = async (payload) => {
   const {
@@ -239,7 +157,6 @@ const getDeviceTokens = async (userId) => {
 };
 
 module.exports = {
-  notificationQueue,
   enqueueNotification,
   deliverNotification,
   getUserPreferences,

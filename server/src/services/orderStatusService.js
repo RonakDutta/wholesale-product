@@ -1,4 +1,10 @@
-const pool = require("../config/db");
+let pool;
+const getPool = () => {
+  if (!pool) {
+    pool = require("../config/db");
+  }
+  return pool;
+};
 
 /**
  * Order Status Service
@@ -71,9 +77,9 @@ const mapPaymentStatusToOrderStatus = (paymentStatus) => {
     case 'partially_paid':
       return 'payment_completed';
     case 'pending':
+    case 'cod':
       return 'payment_pending';
     case 'failed':
-    case 'cod':
       return 'payment_failed';
     default:
       return 'payment_pending';
@@ -84,7 +90,7 @@ const mapPaymentStatusToOrderStatus = (paymentStatus) => {
  * Update order status with validation and history tracking
  */
 const updateOrderStatus = async (orderId, newStatus, userId, userRole, remarks = null) => {
-  const client = await pool.connect();
+  const client = await getPool().connect();
   
   try {
     await client.query('BEGIN');
@@ -136,7 +142,7 @@ const updateOrderStatus = async (orderId, newStatus, userId, userRole, remarks =
  * Cancel an order with inventory restoration
  */
 const cancelOrder = async (orderId, userId, userRole, reason = null) => {
-  const client = await pool.connect();
+  const client = await getPool().connect();
   
   try {
     await client.query('BEGIN');
@@ -203,7 +209,7 @@ const cancelOrder = async (orderId, userId, userRole, reason = null) => {
  */
 const recordStatusChange = async (orderId, status, previousStatus, userId, userRole, remarks = null) => {
   try {
-    await pool.query(
+    await getPool().query(
       `INSERT INTO order_status_history (order_id, status, previous_status, updated_by, updated_by_role, remarks)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [orderId, status, previousStatus, userId, userRole, remarks]
@@ -218,7 +224,7 @@ const recordStatusChange = async (orderId, status, previousStatus, userId, userR
  * Deduct inventory stock when order is placed
  */
 const deductInventoryStock = async (inventoryId, quantity, orderId, userId) => {
-  const client = await pool.connect();
+  const client = await getPool().connect();
   
   try {
     await client.query('BEGIN');
@@ -267,7 +273,7 @@ const deductInventoryStock = async (inventoryId, quantity, orderId, userId) => {
  * Restore inventory stock when order is cancelled or returned
  */
 const restoreInventoryStock = async (inventoryId, quantity, orderId, userId) => {
-  const client = await pool.connect();
+  const client = await getPool().connect();
   
   try {
     await client.query('BEGIN');
@@ -313,7 +319,7 @@ const restoreInventoryStock = async (inventoryId, quantity, orderId, userId) => 
  */
 const getOrderTimeline = async (orderId) => {
   try {
-    const result = await pool.query(
+    const result = await getPool().query(
       `SELECT 
         osh.id,
         osh.status,

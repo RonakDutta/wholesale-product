@@ -1,5 +1,8 @@
 // Safely parse any incoming number/string to a strict float
 export const parseNum = (val, defaultVal = 0) => {
+  if (val === null || val === undefined || (typeof val === "string" && val.trim() === "")) {
+    return defaultVal;
+  }
   const num = Number(val);
   return Number.isNaN(num) ? defaultVal : num;
 };
@@ -10,7 +13,7 @@ export const getEffectivePrice = (supplier) =>
   );
 
 export const getCheapestSupplier = (product) => {
-  const suppliers = product?.suppliers ?? [];
+  const suppliers = Array.isArray(product?.suppliers) ? product.suppliers : [];
   if (suppliers.length === 0) return null;
   return [...suppliers].sort(
     (a, b) => getEffectivePrice(a) - getEffectivePrice(b),
@@ -18,14 +21,16 @@ export const getCheapestSupplier = (product) => {
 };
 
 export const getSortedSuppliers = (product) => {
-  const suppliers = product?.suppliers ?? [];
+  const suppliers = Array.isArray(product?.suppliers) ? product.suppliers : [];
   return [...suppliers].sort(
     (a, b) => getEffectivePrice(a) - getEffectivePrice(b),
   );
 };
 
-export const hasVerifiedSupplier = (product) =>
-  (product?.suppliers ?? []).some((s) => s.verified);
+export const hasVerifiedSupplier = (product) => {
+  const suppliers = Array.isArray(product?.suppliers) ? product.suppliers : [];
+  return suppliers.some((s) => Boolean(s?.verified));
+};
 
 export const sortSuppliers = (suppliers, sortBy) => {
   if (!Array.isArray(suppliers)) return [];
@@ -37,42 +42,44 @@ export const sortSuppliers = (suppliers, sortBy) => {
     case "price-desc":
       return list.sort((a, b) => getEffectivePrice(b) - getEffectivePrice(a));
     case "highest-rated":
-      return list.sort((a, b) => parseNum(b.rating) - parseNum(a.rating));
+      return list.sort((a, b) => parseNum(b?.rating) - parseNum(a?.rating));
     case "lowest-moq":
-      return list.sort((a, b) => parseNum(a.moq) - parseNum(b.moq));
+      return list.sort((a, b) => parseNum(a?.moq) - parseNum(b?.moq));
     case "fastest-shipping":
       return list.sort(
         (a, b) =>
-          parseNum(a.shippingDays || a.shipping_days) -
-          parseNum(b.shippingDays || b.shipping_days),
+          parseNum(a?.shippingDays ?? a?.shipping_days) -
+          parseNum(b?.shippingDays ?? b?.shipping_days),
       );
     case "highest-stock":
-      return list.sort((a, b) => parseNum(b.stock) - parseNum(a.stock));
+      return list.sort((a, b) => parseNum(b?.stock) - parseNum(a?.stock));
     case "most-delivered":
       return list.sort(
-        (a, b) => parseNum(b.fulfilledOrders) - parseNum(a.fulfilledOrders),
+        (a, b) => parseNum(b?.fulfilledOrders) - parseNum(a?.fulfilledOrders),
       );
     default:
       return list;
   }
 };
 
-export const filterSuppliers = (suppliers, filters) => {
+export const filterSuppliers = (suppliers, filters = {}) => {
   if (!Array.isArray(suppliers)) return [];
-  const normalizedSearch = String(filters.search || "")
+  const activeFilters = filters || {};
+  const normalizedSearch = String(activeFilters.search || "")
     .trim()
     .toLowerCase();
-  const maxMOQ = Number(filters.maxMOQ || 0);
-  const maxShipping = Number(filters.maxShipping || 0);
-  const minRating = Number(filters.minRating || 0);
+  const maxMOQ = Number(activeFilters.maxMOQ || 0);
+  const maxShipping = Number(activeFilters.maxShipping || 0);
+  const minRating = Number(activeFilters.minRating || 0);
 
   return suppliers.filter((supplier) => {
-    if (filters.verifiedOnly && !supplier.verified) return false;
-    if (filters.gstVerifiedOnly && !supplier.gstVerified) return false;
+    if (!supplier) return false;
+    if (activeFilters.verifiedOnly && !supplier.verified) return false;
+    if (activeFilters.gstVerifiedOnly && !supplier.gstVerified) return false;
     if (maxMOQ > 0 && parseNum(supplier.moq) > maxMOQ) return false;
     if (
       maxShipping > 0 &&
-      parseNum(supplier.shippingDays || supplier.shipping_days) > maxShipping
+      parseNum(supplier.shippingDays ?? supplier.shipping_days) > maxShipping
     )
       return false;
     if (minRating > 0 && parseNum(supplier.rating) < minRating) return false;
@@ -100,6 +107,10 @@ export const getBestSupplierMetrics = (suppliers) => {
     highestStockId: null,
   };
 
+  if (!Array.isArray(suppliers) || suppliers.length === 0) {
+    return metrics;
+  }
+
   let bestPrice = Infinity,
     bestMOQ = Infinity,
     bestRating = -Infinity;
@@ -108,6 +119,7 @@ export const getBestSupplierMetrics = (suppliers) => {
     bestStock = -Infinity;
 
   suppliers.forEach((supplier) => {
+    if (!supplier) return;
     const price = getEffectivePrice(supplier);
     if (price < bestPrice) {
       bestPrice = price;
@@ -126,7 +138,7 @@ export const getBestSupplierMetrics = (suppliers) => {
       metrics.highestRatingId = supplier.id;
     }
 
-    const shipping = parseNum(supplier.shippingDays || supplier.shipping_days);
+    const shipping = parseNum(supplier.shippingDays ?? supplier.shipping_days);
     if (shipping < bestShipping) {
       bestShipping = shipping;
       metrics.fastestShippingId = supplier.id;
@@ -150,7 +162,7 @@ export const getBestSupplierMetrics = (suppliers) => {
 
 export const getSupplyLabel = (stock = 0) => {
   const currentStock = parseNum(stock);
-  if (currentStock === 0) return "Out of stock";
+  if (currentStock <= 0) return "Out of stock";
   if (currentStock < 50) return "Low stock";
   return "High supply";
 };

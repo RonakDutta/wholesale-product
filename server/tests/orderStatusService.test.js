@@ -4,7 +4,10 @@ const { mapPaymentStatusToOrderStatus, validateStatusTransition } = require('../
 
 test('maps payment success to the enterprise order lifecycle', () => {
   assert.equal(mapPaymentStatusToOrderStatus('paid'), 'payment_completed');
+  assert.equal(mapPaymentStatusToOrderStatus('partially_paid'), 'payment_completed');
+  assert.equal(mapPaymentStatusToOrderStatus('partial'), 'payment_completed');
   assert.equal(mapPaymentStatusToOrderStatus('pending'), 'payment_pending');
+  assert.equal(mapPaymentStatusToOrderStatus('cod'), 'payment_pending');
   assert.equal(mapPaymentStatusToOrderStatus('failed'), 'payment_failed');
 });
 

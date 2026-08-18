@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, UploadCloud, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import api from "../../utils/axios";
+import VisibilityPicker from "../../components/VisibilityPicker";
 
 const EditProduct = () => {
   const { id } = useParams();
@@ -20,6 +21,7 @@ const EditProduct = () => {
     stock: "",
     shippingDays: "",
     status: "Active",
+    visibility: "public",
   });
 
   const [imageFile, setImageFile] = useState(null);
@@ -46,6 +48,7 @@ const EditProduct = () => {
           stock: data.stock,
           shippingDays: data.shipping_days,
           status: data.status,
+          visibility: data.visibility || "public",
         });
 
         setExistingImage(data.image_url);
@@ -124,6 +127,7 @@ const EditProduct = () => {
         stock: Number(formData.stock),
         shippingDays: Number(formData.shippingDays),
         status: formData.status,
+        visibility: formData.visibility,
         imageUrl: imageUrl,
       };
 
@@ -188,7 +192,7 @@ const EditProduct = () => {
               Listing Status
             </h3>
             <label className="block text-xs font-semibold text-slate-600 mb-2">
-              Visibility
+              Selling status
             </label>
             <select
               name="status"
@@ -196,8 +200,8 @@ const EditProduct = () => {
               onChange={handleChange}
               className="w-full bg-slate-50 border border-slate-200 focus:border-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900"
             >
-              <option value="Active">Active (Visible to buyers)</option>
-              <option value="Draft">Draft (Hidden from marketplace)</option>
+              <option value="Active">Active (Available to order)</option>
+              <option value="Draft">Draft (Not for sale right now)</option>
             </select>
           </div>
 
@@ -238,6 +242,23 @@ const EditProduct = () => {
               </label>
             )}
           </div>
+        </div>
+
+        {/* Where it appears */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 mb-1">
+            Where This Listing Appears
+          </h3>
+          <p className="text-xs text-slate-500 mb-4">
+            Moving a listing out of the public catalogue takes effect straight
+            away. Existing orders are not affected.
+          </p>
+          <VisibilityPicker
+            value={formData.visibility}
+            onChange={(visibility) =>
+              setFormData((prev) => ({ ...prev, visibility }))
+            }
+          />
         </div>
 
         {/* Pricing Matrix */}

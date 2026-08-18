@@ -93,7 +93,18 @@ const OrderRow = ({ order }) => {
           )}
         </h3>
         <p className="mt-0.5 truncate text-sm text-espresso/60">
-          {order.supplier_name} · Placed {placed}
+          {order.supplier_user_id ? (
+            <Link
+              to={`/wholesaler/${order.supplier_user_id}`}
+              className="font-semibold text-espresso/70 hover:text-clay hover:underline"
+              title={`See everything ${order.supplier_name} sells`}
+            >
+              {order.supplier_name}
+            </Link>
+          ) : (
+            order.supplier_name
+          )}{" "}
+          · Placed {placed}
         </p>
       </div>
 

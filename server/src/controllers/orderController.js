@@ -97,6 +97,7 @@ const getBuyerOrders = async (req, res) => {
       `SELECT o.id, o.order_number, o.status, o.payment_status,
               o.total_amount, o.created_at, o.quantity,
               COALESCE(wp.company_name, u.first_name || ' ' || u.last_name) AS supplier_name,
+              COALESCE(o.supplier_id, si.supplier_id) AS supplier_user_id,
               COALESCE(items.item_count, 1) AS item_count,
               COALESCE(items.first_product, p.name) AS product,
               COALESCE(items.image, si.image_url, p.global_image_url) AS image
@@ -156,8 +157,9 @@ const createOrder = async (req, res) => {
       if (!productId) throw new Error("Invalid product reference in order.");
       if (quantity <= 0) throw new Error("Every item needs a quantity of at least 1.");
 
-      // Prefer the exact listing the buyer chose; fall back to any active
-      // listing of that product.
+      // Prefer the exact listing the buyer chose. A storefront listing is
+      // orderable this way: the buyer reached it through the wholesaler's own
+      // page, which is the point of it.
       let lookup = { rows: [] };
       if (inventoryId) {
         lookup = await client.query(
@@ -165,10 +167,14 @@ const createOrder = async (req, res) => {
                   si.price, si.discount_price, si.shipping_days, p.name AS product_name
            FROM supplier_inventory si
            JOIN products p ON p.id = si.product_id
-           WHERE si.id = $1 AND si.status = 'Active'`,
+           WHERE si.id = $1 AND si.status = 'Active'
+             AND si.visibility IN ('public', 'storefront')`,
           [inventoryId],
         );
       }
+      // Fall back to the cheapest listing of that product. Only public
+      // listings take part: picking the cheapest is the comparison engine, and
+      // an off-catalogue listing is precisely the one that opted out of it.
       if (lookup.rows.length === 0) {
         lookup = await client.query(
           `SELECT si.id, si.supplier_id, si.product_id, si.stock, si.moq,
@@ -176,6 +182,7 @@ const createOrder = async (req, res) => {
            FROM supplier_inventory si
            JOIN products p ON p.id = si.product_id
            WHERE si.product_id = $1 AND si.status = 'Active'
+             AND si.visibility = 'public'
            ORDER BY si.price ASC
            LIMIT 1`,
           [productId],

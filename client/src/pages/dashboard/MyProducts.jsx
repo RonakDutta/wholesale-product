@@ -4,12 +4,41 @@ import {
   Search,
   Edit,
   Trash2,
+  Globe,
+  Store,
+  Lock,
+  ExternalLink,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../utils/axios";
+import { useAuth } from "../../context/AuthContext";
 import { toast } from "sonner";
 
+// Matches the visibility column on supplier_inventory. Kept compact here
+// because it renders inside a table cell.
+const VISIBILITY_BADGES = {
+  public: {
+    label: "Catalogue",
+    icon: Globe,
+    className: "bg-sky-50 text-sky-700 border-sky-200",
+    title: "Listed in the public catalogue and in price comparison",
+  },
+  storefront: {
+    label: "Storefront",
+    icon: Store,
+    className: "bg-clay/10 text-clay border-clay/20",
+    title: "On your storefront only, kept out of the shared catalogue",
+  },
+  private: {
+    label: "Private",
+    icon: Lock,
+    className: "bg-slate-100 text-slate-600 border-slate-200",
+    title: "Not shown anywhere public",
+  },
+};
+
 const MyProducts = () => {
+  const { user } = useAuth();
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -71,8 +100,15 @@ const MyProducts = () => {
     if (filter === "Active" && item.status !== "Active") return false;
     if (filter === "Draft" && item.status !== "Draft") return false;
     if (filter === "Low Stock" && item.stock >= 50) return false;
+    if (filter === "Storefront" && item.visibility !== "storefront")
+      return false;
+    if (filter === "Private" && item.visibility !== "private") return false;
     return true;
   });
+
+  const storefrontCount = inventory.filter(
+    (item) => item.visibility === "storefront" && item.status === "Active",
+  ).length;
 
   if (loading) {
     return (
@@ -88,21 +124,40 @@ const MyProducts = () => {
         <div>
           <h2 className="text-2xl font-black text-espresso">My Products</h2>
           <p className="text-sm text-slate-500 mt-1">
-            Manage your active catalog and inventory.
+            Manage your catalogue, your storefront and your stock.
+            {storefrontCount > 0 && (
+              <span className="text-clay font-semibold">
+                {" "}
+                {storefrontCount} listing{storefrontCount === 1 ? "" : "s"}{" "}
+                available only on your storefront.
+              </span>
+            )}
           </p>
         </div>
-        <Link
-          to="/seller/products/new"
-          className="flex items-center justify-center gap-2 bg-clay text-cream px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm hover:bg-espresso transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Add New Product
-        </Link>
+        <div className="flex items-center gap-2">
+          {user?.id && (
+            <Link
+              to={`/wholesaler/${user.id}`}
+              className="flex items-center justify-center gap-2 border border-slate-200 bg-white text-slate-700 px-4 py-2.5 rounded-lg text-sm font-bold hover:border-clay hover:text-clay transition-colors"
+              title="See your storefront the way buyers see it"
+            >
+              <ExternalLink className="w-4 h-4" />
+              My Storefront
+            </Link>
+          )}
+          <Link
+            to="/seller/products/new"
+            className="flex items-center justify-center gap-2 bg-clay text-cream px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm hover:bg-espresso transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add New Product
+          </Link>
+        </div>
       </div>
 
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0">
-          {["All", "Active", "Draft", "Low Stock"].map((tab) => (
+          {["All", "Active", "Draft", "Low Stock", "Storefront", "Private"].map((tab) => (
             <button
               key={tab}
               onClick={() => setFilter(tab)}
@@ -143,6 +198,9 @@ const MyProducts = () => {
                   Inventory
                 </th>
                 <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-slate-500">
+                  Shown In
+                </th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-slate-500">
                   Status
                 </th>
                 <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-slate-500 text-right">
@@ -154,7 +212,7 @@ const MyProducts = () => {
               {displayedInventory.length === 0 ? (
                 <tr>
                   <td
-                    colSpan="5"
+                    colSpan="6"
                     className="px-6 py-10 text-center text-slate-500"
                   >
                     No products found.
@@ -211,6 +269,23 @@ const MyProducts = () => {
                           MOQ: {item.moq}
                         </span>
                       </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {(() => {
+                        const badge =
+                          VISIBILITY_BADGES[item.visibility] ||
+                          VISIBILITY_BADGES.public;
+                        const BadgeIcon = badge.icon;
+                        return (
+                          <span
+                            title={badge.title}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wider ${badge.className}`}
+                          >
+                            <BadgeIcon className="w-3 h-3" />
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4">
                       <span

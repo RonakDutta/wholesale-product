@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../../utils/axios";
+import VisibilityPicker from "../../components/VisibilityPicker";
 
 const AddProduct = () => {
   const navigate = useNavigate();
@@ -29,6 +30,7 @@ const AddProduct = () => {
     bulkQuantity: "",
     stock: "",
     shippingDays: "",
+    visibility: "public",
   });
 
   // 'undecided'
@@ -216,6 +218,7 @@ const AddProduct = () => {
         stock: Number(formData.stock),
         shippingDays: Number(formData.shippingDays),
         imageUrl: imageUrl,
+        visibility: formData.visibility,
       };
 
       await api.post("/api/products", payload);
@@ -533,6 +536,22 @@ const AddProduct = () => {
               />
             </div>
           </div>
+        </div>
+
+        {/* Where it appears */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 mb-1">
+            Where This Listing Appears
+          </h3>
+          <p className="text-xs text-slate-500 mb-4">
+            You can change this at any time from My Products.
+          </p>
+          <VisibilityPicker
+            value={formData.visibility}
+            onChange={(visibility) =>
+              setFormData((prev) => ({ ...prev, visibility }))
+            }
+          />
         </div>
 
         {/* Logistics & Fulfillment */}

@@ -39,6 +39,7 @@ import InvoiceDetails from "./pages/dashboard/InvoiceDetails";
 import InvoiceReports from "./pages/dashboard/InvoiceReports";
 import InvoiceSettings from "./pages/dashboard/InvoiceSettings";
 import WholesalerProfile from "./pages/WholesalerProfile";
+import SharedListing from "./pages/SharedListing";
 import DriverTracking from "./pages/DriverTracking";
 import NotFound from "./pages/NotFound";
 
@@ -83,6 +84,7 @@ const router = createBrowserRouter([
       { index: true, element: <MarketplaceHome /> },
       { path: "product/:id", element: <ProductDetails /> },
       { path: "wholesaler/:id", element: <WholesalerProfile /> },
+      { path: "listing/:inventoryId", element: <SharedListing /> },
       { path: "wishlist", element: <Wishlist /> },
       { path: "search", element: <SearchResults /> },
       { path: "messages", element: <Messages /> },

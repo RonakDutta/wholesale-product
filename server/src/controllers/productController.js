@@ -254,6 +254,86 @@ exports.getProductById = async (req, res) => {
   }
 };
 
+// @desc    One listing by its own id, whatever its visibility. This is the
+//          link a wholesaler shares on WhatsApp for a private item: the id is
+//          a random UUID, so the page is unlisted rather than secret, the same
+//          way an unlisted video works. Nothing enumerates it, and it appears
+//          in no catalogue, search result or storefront.
+// @route   GET /api/products/listing/:inventoryId
+exports.getListingById = async (req, res) => {
+  const { inventoryId } = req.params;
+
+  // A malformed id would otherwise reach Postgres and come back as a 500.
+  if (!/^[0-9a-f-]{36}$/i.test(String(inventoryId))) {
+    return res.status(404).json({ message: "Listing not found" });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT
+         si.id            AS inventory_id,
+         si.price,
+         si.discount_price,
+         si.moq,
+         si.stock,
+         si.shipping_days,
+         si.visibility,
+         si.status,
+         p.id             AS product_id,
+         p.name,
+         p.category,
+         p.description,
+         COALESCE(si.image_url, p.global_image_url) AS image,
+         u.id             AS supplier_id,
+         COALESCE(wp.company_name, u.first_name || ' ' || u.last_name) AS company_name,
+         wp.city,
+         wp.country,
+         wp.is_verified,
+         wp.contact_phone
+       FROM supplier_inventory si
+       JOIN products p ON p.id = si.product_id
+       JOIN users u ON u.id = si.supplier_id
+       LEFT JOIN wholesaler_profiles wp ON wp.user_id = si.supplier_id
+       WHERE si.id = $1 AND si.status = 'Active'`,
+      [inventoryId],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Listing not found" });
+    }
+
+    const row = result.rows[0];
+    return res.status(200).json({
+      inventoryId: row.inventory_id,
+      productId: row.product_id,
+      name: row.name,
+      category: row.category,
+      description: row.description,
+      image: row.image,
+      price: Number(row.price) || 0,
+      discountPrice: row.discount_price ? Number(row.discount_price) : null,
+      moq: row.moq,
+      stock: row.stock,
+      shippingDays: row.shipping_days,
+      visibility: row.visibility,
+      // A private listing has no storefront to fall back to, so the page says
+      // so rather than linking the buyer somewhere that will not show it.
+      onStorefront: row.visibility !== "private",
+      supplier: {
+        id: row.supplier_id,
+        companyName: row.company_name,
+        city: row.city,
+        country: row.country,
+        verified: row.is_verified ?? false,
+        contactPhone: row.contact_phone,
+      },
+    });
+  } catch (err) {
+    console.error("Error fetching listing:", err);
+    res.status(500).json({ message: "Server error fetching listing" });
+  }
+};
+
 // @desc    Public wholesaler profile with their active listings
 // @route   GET /api/products/wholesaler/:id
 exports.getWholesalerById = async (req, res) => {

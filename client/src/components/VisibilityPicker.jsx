@@ -5,27 +5,27 @@ import { Globe, Store, Lock } from "lucide-react";
 const VISIBILITY_OPTIONS = [
   {
     value: "public",
-    label: "Public catalogue",
+    label: "Everyone",
     icon: Globe,
-    summary: "Anyone browsing can find it",
+    summary: "Shows in search",
     detail:
-      "Shows in search and on the product page next to other sellers of the same item, with your price visible. Best for everyday stock that brings new buyers to you.",
+      "Buyers find it by searching. Your price is shown next to other sellers of the same item. Good for normal stock that brings new buyers to you.",
   },
   {
     value: "storefront",
-    label: "My storefront only",
+    label: "Only my shop page",
     icon: Store,
-    summary: "Off the shared catalogue",
+    summary: "Not in search",
     detail:
-      "Kept out of search and out of price comparison. Buyers see it only on your own page, so nobody can list the same item beside yours. Best for your distinctive range.",
+      "Does not come up in search, and your price is never shown next to other sellers. Buyers see it only when they open your shop page. Good for your special items.",
   },
   {
     value: "private",
-    label: "Private",
+    label: "Only with my link",
     icon: Lock,
-    summary: "Not shown anywhere",
+    summary: "Hidden from everyone",
     detail:
-      "Visible to you here and nowhere else. Use it for stock you would rather quote over a call or on WhatsApp.",
+      "Nobody can find this item on the site. You get a link to send on WhatsApp, and only people you send it to can open it.",
   },
 ];
 

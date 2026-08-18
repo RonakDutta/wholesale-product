@@ -287,7 +287,7 @@ const WholesalerProfile = () => {
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
-      toast.success("Storefront link copied");
+      toast.success("Shop link copied. Paste it on WhatsApp to share.");
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard is blocked outside a secure context, so show the link
@@ -460,8 +460,9 @@ const WholesalerProfile = () => {
 
           {isOwner && (
             <p className="mt-4 rounded-xl border border-clay/20 bg-clay/5 px-4 py-3 text-xs text-espresso/70">
-              This is your storefront as buyers see it. Share the link with your
-              customers. Anything you set to Private stays off this page.
+              This is your shop page, the way buyers see it. Send the link to your
+              customers. Products you set to "Only with my link" stay off this
+              page.
             </p>
           )}
         </div>
@@ -476,7 +477,7 @@ const WholesalerProfile = () => {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={`Search ${wholesaler.companyName}'s products`}
+              placeholder={`Search in ${wholesaler.companyName}`}
               className="w-full rounded-lg border border-sage/25 bg-white py-2.5 pl-9 pr-4 text-sm text-espresso outline-none transition-colors placeholder:text-espresso/35 focus:border-clay"
             />
           </div>
@@ -516,11 +517,11 @@ const WholesalerProfile = () => {
             <div>
               <h2 className="flex items-center gap-2 text-xl font-bold text-espresso">
                 <Store className="h-5 w-5 text-clay" />
-                Only available here
+                Only in this shop
               </h2>
               <p className="mt-1 text-sm text-espresso/50">
-                Not in the shared catalogue. You will not find these listed by
-                anyone else.
+                You will not find these anywhere else on the site. Only this seller
+                has them.
               </p>
             </div>
             <span className="text-sm font-semibold text-espresso/50">
@@ -547,7 +548,7 @@ const WholesalerProfile = () => {
           <div className="flex flex-wrap items-end justify-between gap-2 border-b border-sage/20 pb-3">
             <h2 className="text-xl font-bold text-espresso">
               {exclusive.length > 0 || totalExclusive > 0
-                ? "Also in the public catalogue"
+                ? "Other products"
                 : "Products"}
             </h2>
             <span className="text-sm font-semibold text-espresso/50">
@@ -559,13 +560,13 @@ const WholesalerProfile = () => {
             <EmptyRange
               title={
                 totalExclusive > 0
-                  ? "Nothing in the public catalogue"
+                  ? "Nothing in search"
                   : "No listings yet"
               }
               body={
                 totalExclusive > 0
-                  ? "Everything this wholesaler sells is available on this page only."
-                  : "This wholesaler has no products available right now."
+                  ? "Everything this seller has is on this page only."
+                  : "This seller has no products right now."
               }
             />
           ) : (

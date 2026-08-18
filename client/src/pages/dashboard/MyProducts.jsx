@@ -8,6 +8,9 @@ import {
   Store,
   Lock,
   ExternalLink,
+  Link as LinkIcon,
+  MessageCircle,
+  Check,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../utils/axios";
@@ -18,27 +21,54 @@ import { toast } from "sonner";
 // because it renders inside a table cell.
 const VISIBILITY_BADGES = {
   public: {
-    label: "Catalogue",
+    label: "Everyone",
     icon: Globe,
     className: "bg-sky-50 text-sky-700 border-sky-200",
-    title: "Listed in the public catalogue and in price comparison",
+    title: "Buyers can find this in search, next to other sellers",
   },
   storefront: {
-    label: "Storefront",
+    label: "Shop page",
     icon: Store,
     className: "bg-clay/10 text-clay border-clay/20",
-    title: "On your storefront only, kept out of the shared catalogue",
+    title: "Not in search. Buyers see it only on your shop page",
   },
   private: {
-    label: "Private",
+    label: "Link only",
     icon: Lock,
     className: "bg-slate-100 text-slate-600 border-slate-200",
-    title: "Not shown anywhere public",
+    title: "Hidden from the site. Only people you send the link to can see it",
   },
 };
 
+// The link a wholesaler sends on WhatsApp. It opens the product on its own
+// page, which works for a hidden listing too because the page is reached by
+// the link rather than by browsing.
+const shareUrlFor = (inventoryId) =>
+  `${window.location.origin}/listing/${inventoryId}`;
+
 const MyProducts = () => {
   const { user } = useAuth();
+  const [copiedId, setCopiedId] = useState(null);
+
+  const handleCopyLink = async (item) => {
+    const url = shareUrlFor(item.id);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(item.id);
+      toast.success("Link copied. Paste it on WhatsApp to share.");
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      // Clipboard is blocked outside a secure context, so show the link
+      // instead of failing quietly.
+      toast.info(url);
+    }
+  };
+
+  const handleWhatsApp = (item) => {
+    const text = `${item.name} - ₹${item.price}. Minimum order ${item.moq}. ${shareUrlFor(item.id)}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+  };
+
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -100,9 +130,9 @@ const MyProducts = () => {
     if (filter === "Active" && item.status !== "Active") return false;
     if (filter === "Draft" && item.status !== "Draft") return false;
     if (filter === "Low Stock" && item.stock >= 50) return false;
-    if (filter === "Storefront" && item.visibility !== "storefront")
+    if (filter === "Shop page" && item.visibility !== "storefront")
       return false;
-    if (filter === "Private" && item.visibility !== "private") return false;
+    if (filter === "Link only" && item.visibility !== "private") return false;
     return true;
   });
 
@@ -124,12 +154,12 @@ const MyProducts = () => {
         <div>
           <h2 className="text-2xl font-black text-espresso">My Products</h2>
           <p className="text-sm text-slate-500 mt-1">
-            Manage your catalogue, your storefront and your stock.
+            Manage your products, your shop page and your stock.
             {storefrontCount > 0 && (
               <span className="text-clay font-semibold">
                 {" "}
                 {storefrontCount} listing{storefrontCount === 1 ? "" : "s"}{" "}
-                available only on your storefront.
+                shown only on your shop page.
               </span>
             )}
           </p>
@@ -139,10 +169,10 @@ const MyProducts = () => {
             <Link
               to={`/wholesaler/${user.id}`}
               className="flex items-center justify-center gap-2 border border-slate-200 bg-white text-slate-700 px-4 py-2.5 rounded-lg text-sm font-bold hover:border-clay hover:text-clay transition-colors"
-              title="See your storefront the way buyers see it"
+              title="See your shop page the way buyers see it"
             >
               <ExternalLink className="w-4 h-4" />
-              My Storefront
+              My Shop Page
             </Link>
           )}
           <Link
@@ -157,7 +187,7 @@ const MyProducts = () => {
 
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0">
-          {["All", "Active", "Draft", "Low Stock", "Storefront", "Private"].map((tab) => (
+          {["All", "Active", "Draft", "Low Stock", "Shop page", "Link only"].map((tab) => (
             <button
               key={tab}
               onClick={() => setFilter(tab)}
@@ -300,6 +330,26 @@ const MyProducts = () => {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => handleWhatsApp(item)}
+                          className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 bg-slate-50 lg:bg-transparent rounded-md transition-colors"
+                          title="Send this product on WhatsApp"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          onClick={() => handleCopyLink(item)}
+                          className="p-2 text-slate-500 hover:text-clay hover:bg-clay/10 bg-slate-50 lg:bg-transparent rounded-md transition-colors"
+                          title="Copy the link to this product"
+                        >
+                          {copiedId === item.id ? (
+                            <Check className="w-4 h-4 text-emerald-600" />
+                          ) : (
+                            <LinkIcon className="w-4 h-4" />
+                          )}
+                        </button>
+
                         <button
                           onClick={() =>
                             navigate(`/seller/products/edit/${item.id}`)

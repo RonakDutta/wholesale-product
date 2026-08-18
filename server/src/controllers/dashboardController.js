@@ -11,8 +11,9 @@ exports.getInventory = async (req, res) => {
         si.price, 
         si.discount_price, 
         si.moq, 
-        si.stock, 
-        si.status, 
+        si.stock,
+        si.status,
+        si.visibility,
         COALESCE(si.image_url, p.global_image_url) as image
       FROM supplier_inventory si
       JOIN products p ON p.id = si.product_id

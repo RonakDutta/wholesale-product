@@ -2,6 +2,7 @@ const express = require("express");
 const {
   createOrder,
   getPaymentDetails,
+  initiatePayment,
   updatePaymentStatus,
   getOrderById,
   getSupplierOrders,
@@ -11,6 +12,7 @@ const {
   requestReturn,
   generateInvoice,
   generatePackingSlip,
+  sendInstallmentReminder,
 } = require("../controllers/orderController");
 const authenticateToken = require("../middlewares/authMiddleware");
 const authorizeRoles = require("../middlewares/roleMiddleware");
@@ -28,6 +30,8 @@ router.get("/supplier", authenticateToken, authorizeRoles("seller", "both"), get
 router.get("/buyer", authenticateToken, getBuyerOrders);
 router.post("/create", authenticateToken, createOrder);
 router.get("/:orderId/payment-details", authenticateToken, getPaymentDetails);
+router.post("/:orderId/payment", authenticateToken, initiatePayment);
+router.post("/:orderId/send-installment-reminder", authenticateToken, authorizeRoles("seller", "both", "admin"), sendInstallmentReminder);
 router.put("/:orderId/payment-status", authenticateToken, updatePaymentStatus);
 router.patch("/:orderId/status", authenticateToken, authorizeRoles("seller", "both", "admin"), updateOrderStatus);
 router.get("/:orderId/timeline", authenticateToken, getOrderTimelineHandler);

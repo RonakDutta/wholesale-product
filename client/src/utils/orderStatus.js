@@ -11,6 +11,8 @@
 const LABELS = {
   pending: "Pending",
   payment_pending: "Payment Pending",
+  partially_paid: "Partially Paid",
+  partial: "Partially Paid",
   payment_completed: "Payment Received",
   payment_failed: "Payment Failed",
   supplier_accepted: "Accepted",
@@ -38,6 +40,8 @@ const GROUPS = {
   awaiting: [
     "pending",
     "payment_pending",
+    "partially_paid",
+    "partial",
     "payment_completed",
     "supplier_accepted",
   ],
@@ -59,6 +63,8 @@ const GROUPS = {
 // Per-status overrides where the group colour would be misleading - a
 // received payment is a success and should read green, not "still pending".
 const STATUS_STYLES = {
+  partially_paid: "bg-amber-100 text-amber-800 border-amber-300 font-bold",
+  partial: "bg-amber-100 text-amber-800 border-amber-300 font-bold",
   payment_completed: "bg-emerald-100 text-emerald-700 border-emerald-200",
   supplier_accepted: "bg-emerald-100 text-emerald-700 border-emerald-200",
 };

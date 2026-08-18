@@ -16,6 +16,7 @@ import { downloadFile } from "../utils/download";
 import { toast } from "sonner";
 import { formatOrderStatus, getOrderStatusStyle } from "../utils/orderStatus";
 import OrderTracking from "../components/OrderTracking";
+import InstallmentTimeline from "../components/InstallmentTimeline";
 
 const PAYMENT_STYLES = {
   paid: "bg-emerald-100 text-emerald-700 border-emerald-200",
@@ -383,6 +384,16 @@ const OrderDetails = () => {
           </div>
         </section>
       </div>
+
+      {/* Only meaningful on a plan that has stages, so it stays out of the
+          way of an ordinary pay-once order. */}
+      {order.payment_plan === "installment_50_50" && (
+        <InstallmentTimeline
+          payments={order.payments || []}
+          totalAmount={total}
+          paymentPlan={order.payment_plan}
+        />
+      )}
 
       <OrderTracking orderId={orderId} />
 

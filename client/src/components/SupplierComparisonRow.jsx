@@ -1,5 +1,6 @@
 import PropTypes from "prop-types";
-import { ShieldCheck, Star, MapPin, IndianRupee } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ShieldCheck, Star, MapPin, IndianRupee, Store } from "lucide-react";
 import {
   getEffectivePrice,
   parseNum,
@@ -23,6 +24,12 @@ const SupplierComparisonRow = ({
   const shippingDays = parseNum(
     supplier.shippingDays || supplier.shipping_days,
   );
+
+  // The way into the seller's own page. Their off-catalogue range is not
+  // visible from here at all, so this is the only route to it.
+  const sellerId = supplier.supplierId || supplier.supplier_id;
+  const catalogSize = parseNum(supplier.catalogSize) || 0;
+  const exclusiveCount = parseNum(supplier.exclusiveCount) || 0;
 
   return (
     <tr
@@ -48,6 +55,19 @@ const SupplierComparisonRow = ({
             </span>
           </div>
         </label>
+
+        {sellerId && catalogSize > 1 && (
+          <Link
+            to={`/wholesaler/${sellerId}`}
+            onClick={(e) => e.stopPropagation()}
+            className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-clay hover:text-espresso hover:underline"
+          >
+            <Store className="w-3 h-3" />
+            {exclusiveCount > 0
+              ? `${exclusiveCount} more only on their storefront`
+              : `View all ${catalogSize} products`}
+          </Link>
+        )}
       </td>
       <td className="px-4 py-4">
         {supplier.verified ? (

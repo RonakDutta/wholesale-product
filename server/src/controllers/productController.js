@@ -1,5 +1,19 @@
 const pool = require("../config/db");
 
+// Where a listing is allowed to appear. See migrations/listing_visibility.sql.
+//   public      catalogue, search, comparison, and the storefront
+//   storefront  the wholesaler's own page only, never the shared catalogue
+//   private     nowhere public, the wholesaler's dashboard only
+const VISIBILITY_LEVELS = ["public", "storefront", "private"];
+
+// An unrecognised value would otherwise fail the CHECK constraint with a 500.
+// Falling back to the caller's current setting (or 'public' on create) keeps
+// the old clients working, since they send no visibility at all.
+const normalizeVisibility = (value, fallback = "public") => {
+  const level = String(value || "").toLowerCase();
+  return VISIBILITY_LEVELS.includes(level) ? level : fallback;
+};
+
 // @desc    Add a product
 // @route   POST /api/products
 exports.addProduct = async (req, res) => {
@@ -14,6 +28,7 @@ exports.addProduct = async (req, res) => {
     stock,
     shippingDays,
     imageUrl,
+    visibility,
   } = req.body;
   const supplierId = req.user.id;
 
@@ -29,9 +44,9 @@ exports.addProduct = async (req, res) => {
     }
 
     await pool.query(
-      `INSERT INTO supplier_inventory 
-      (supplier_id, product_id, price, discount_price, moq, stock, shipping_days, image_url, status) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Active')`,
+      `INSERT INTO supplier_inventory
+      (supplier_id, product_id, price, discount_price, moq, stock, shipping_days, image_url, status, visibility)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Active', $9)`,
       [
         supplierId,
         finalProductId,
@@ -41,6 +56,7 @@ exports.addProduct = async (req, res) => {
         stock,
         shippingDays,
         imageUrl,
+        normalizeVisibility(visibility),
       ],
     );
 
@@ -85,7 +101,7 @@ exports.getPublicCatalog = async (req, res) => {
       FROM products p
       JOIN supplier_inventory si ON p.id = si.product_id
       JOIN wholesaler_profiles wp ON si.supplier_id = wp.user_id
-      WHERE si.status = 'Active' AND si.stock > 0
+      WHERE si.status = 'Active' AND si.stock > 0 AND si.visibility = 'public'
       GROUP BY p.id, p.name, p.category, p.description, p.global_image_url
       ORDER BY p.id DESC
     `;
@@ -131,6 +147,7 @@ exports.getProductById = async (req, res) => {
       JOIN supplier_inventory si ON p.id = si.product_id
       JOIN wholesaler_profiles wp ON si.supplier_id = wp.user_id
       WHERE p.id = $1 AND si.status = 'Active' AND si.stock > 0
+        AND si.visibility = 'public'
       GROUP BY p.id, p.name, p.category, p.description, p.global_image_url
     `;
     const result = await pool.query(query, [id]);
@@ -178,16 +195,24 @@ exports.getProductById = async (req, res) => {
         });
       });
 
+      // Counts what a visitor would actually find on the storefront, so the
+      // "view all N products" link never promises more than it shows.
+      // Private listings are excluded for the same reason.
       const catalog = await pool.query(
-        `SELECT supplier_id, COUNT(*) AS catalog_size
+        `SELECT supplier_id,
+                COUNT(*) AS catalog_size,
+                COUNT(*) FILTER (WHERE visibility = 'storefront') AS exclusive_count
          FROM supplier_inventory
-         WHERE supplier_id = ANY($1::uuid[]) AND status = 'Active'
+         WHERE supplier_id = ANY($1::uuid[])
+           AND status = 'Active'
+           AND visibility IN ('public', 'storefront')
          GROUP BY supplier_id`,
         [supplierIds],
       );
       catalog.rows.forEach((row) => {
         const entry = statsById.get(row.supplier_id) || {};
         entry.catalogSize = Number(row.catalog_size) || 0;
+        entry.exclusiveCount = Number(row.exclusive_count) || 0;
         statsById.set(row.supplier_id, entry);
       });
 
@@ -214,6 +239,7 @@ exports.getProductById = async (req, res) => {
       product.suppliers = product.suppliers.map((supplier) => ({
         fulfilledOrders: 0,
         catalogSize: 0,
+        exclusiveCount: 0,
         rating: 0,
         reviews: 0,
         ...supplier,
@@ -225,6 +251,86 @@ exports.getProductById = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error fetching product" });
+  }
+};
+
+// @desc    One listing by its own id, whatever its visibility. This is the
+//          link a wholesaler shares on WhatsApp for a private item: the id is
+//          a random UUID, so the page is unlisted rather than secret, the same
+//          way an unlisted video works. Nothing enumerates it, and it appears
+//          in no catalogue, search result or storefront.
+// @route   GET /api/products/listing/:inventoryId
+exports.getListingById = async (req, res) => {
+  const { inventoryId } = req.params;
+
+  // A malformed id would otherwise reach Postgres and come back as a 500.
+  if (!/^[0-9a-f-]{36}$/i.test(String(inventoryId))) {
+    return res.status(404).json({ message: "Listing not found" });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT
+         si.id            AS inventory_id,
+         si.price,
+         si.discount_price,
+         si.moq,
+         si.stock,
+         si.shipping_days,
+         si.visibility,
+         si.status,
+         p.id             AS product_id,
+         p.name,
+         p.category,
+         p.description,
+         COALESCE(si.image_url, p.global_image_url) AS image,
+         u.id             AS supplier_id,
+         COALESCE(wp.company_name, u.first_name || ' ' || u.last_name) AS company_name,
+         wp.city,
+         wp.country,
+         wp.is_verified,
+         wp.contact_phone
+       FROM supplier_inventory si
+       JOIN products p ON p.id = si.product_id
+       JOIN users u ON u.id = si.supplier_id
+       LEFT JOIN wholesaler_profiles wp ON wp.user_id = si.supplier_id
+       WHERE si.id = $1 AND si.status = 'Active'`,
+      [inventoryId],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Listing not found" });
+    }
+
+    const row = result.rows[0];
+    return res.status(200).json({
+      inventoryId: row.inventory_id,
+      productId: row.product_id,
+      name: row.name,
+      category: row.category,
+      description: row.description,
+      image: row.image,
+      price: Number(row.price) || 0,
+      discountPrice: row.discount_price ? Number(row.discount_price) : null,
+      moq: row.moq,
+      stock: row.stock,
+      shippingDays: row.shipping_days,
+      visibility: row.visibility,
+      // A private listing has no storefront to fall back to, so the page says
+      // so rather than linking the buyer somewhere that will not show it.
+      onStorefront: row.visibility !== "private",
+      supplier: {
+        id: row.supplier_id,
+        companyName: row.company_name,
+        city: row.city,
+        country: row.country,
+        verified: row.is_verified ?? false,
+        contactPhone: row.contact_phone,
+      },
+    });
+  } catch (err) {
+    console.error("Error fetching listing:", err);
+    res.status(500).json({ message: "Server error fetching listing" });
   }
 };
 
@@ -256,6 +362,9 @@ exports.getWholesalerById = async (req, res) => {
       return res.status(404).json({ message: "Wholesaler not found" });
     }
 
+    // The storefront is the one place a wholesaler's off-catalogue range is
+    // shown. 'private' listings stay out of it: those are dashboard only.
+    // Storefront items are listed first, because they are the reason to visit.
     const listingsResult = await pool.query(
       `SELECT
          si.id            AS inventory_id,
@@ -264,6 +373,7 @@ exports.getWholesalerById = async (req, res) => {
          si.moq,
          si.stock,
          si.shipping_days,
+         si.visibility,
          p.id             AS product_id,
          p.name,
          p.category,
@@ -271,8 +381,10 @@ exports.getWholesalerById = async (req, res) => {
          COALESCE(si.image_url, p.global_image_url) AS image
        FROM supplier_inventory si
        JOIN products p ON p.id = si.product_id
-       WHERE si.supplier_id = $1 AND si.status = 'Active'
-       ORDER BY si.created_at DESC`,
+       WHERE si.supplier_id = $1
+         AND si.status = 'Active'
+         AND si.visibility IN ('public', 'storefront')
+       ORDER BY (si.visibility = 'storefront') DESC, si.created_at DESC`,
       [id],
     );
 
@@ -321,6 +433,11 @@ exports.getWholesalerById = async (req, res) => {
       rating: Number(ratingRow.average_rating) || 0,
       totalReviews: Number(ratingRow.total_reviews) || 0,
       productCount: listingsResult.rows.length,
+      // How much of the range is only available here. The storefront uses it
+      // to decide whether to show the "only here" section at all.
+      exclusiveCount: listingsResult.rows.filter(
+        (row) => row.visibility === "storefront",
+      ).length,
       fulfilledOrders,
       products: listingsResult.rows.map((row) => ({
         id: row.product_id,
@@ -334,6 +451,10 @@ exports.getWholesalerById = async (req, res) => {
         moq: row.moq,
         stock: row.stock,
         shippingDays: row.shipping_days,
+        visibility: row.visibility,
+        // A storefront item has no comparison page to link to, because it is
+        // deliberately absent from the shared catalogue.
+        exclusive: row.visibility === "storefront",
       })),
     });
   } catch (err) {
@@ -347,10 +468,31 @@ exports.getWholesalerById = async (req, res) => {
 exports.updateInventoryItem = async (req, res) => {
   const { id } = req.params;
   const supplierId = req.user.id;
-  const { price, bulkPrice, moq, stock, shippingDays, imageUrl, status } =
-    req.body;
+  const {
+    price,
+    bulkPrice,
+    moq,
+    stock,
+    shippingDays,
+    imageUrl,
+    status,
+    visibility,
+  } = req.body;
 
   try {
+    // Left null when the client sends nothing, so COALESCE keeps the listing
+    // where it already is. An unknown value is rejected rather than silently
+    // moving the listing somewhere the wholesaler did not choose.
+    let nextVisibility = null;
+    if (visibility !== undefined && visibility !== null && visibility !== "") {
+      nextVisibility = normalizeVisibility(visibility, null);
+      if (!nextVisibility) {
+        return res.status(400).json({
+          message: `Visibility must be one of: ${VISIBILITY_LEVELS.join(", ")}`,
+        });
+      }
+    }
+
     const result = await pool.query(
       `UPDATE supplier_inventory
        SET price = COALESCE($1, price),
@@ -359,8 +501,9 @@ exports.updateInventoryItem = async (req, res) => {
            stock = COALESCE($4, stock),
            shipping_days = COALESCE($5, shipping_days),
            image_url = COALESCE($6, image_url),
-           status = COALESCE($7, status)
-       WHERE id = $8 AND supplier_id = $9
+           status = COALESCE($7, status),
+           visibility = COALESCE($8, visibility)
+       WHERE id = $9 AND supplier_id = $10
        RETURNING *`,
       [
         price,
@@ -370,6 +513,7 @@ exports.updateInventoryItem = async (req, res) => {
         shippingDays,
         imageUrl,
         status,
+        nextVisibility,
         id,
         supplierId,
       ],
@@ -510,7 +654,7 @@ exports.contactSupplier = async (req, res) => {
       JOIN supplier_inventory si ON p.id = si.product_id
       JOIN wholesaler_profiles wp ON si.supplier_id = wp.user_id
       JOIN users u ON si.supplier_id = u.id
-      WHERE p.id = $1 AND si.status = 'Active'
+      WHERE p.id = $1 AND si.status = 'Active' AND si.visibility <> 'private'
     `;
 
     let queryParams = [id];

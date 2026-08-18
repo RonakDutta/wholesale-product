@@ -13,13 +13,10 @@
 	"dependencies": {
 		"@sendgrid/mail": "^8.1.6",
 		"bcryptjs": "^3.0.3",
-		"bullmq": "^5.81.1",
 		"cors": "^2.8.5",
 		"dotenv": "^17.4.2",
 		"express": "^5.2.1",
-		"express-rate-limit": "^8.6.0",
 		"firebase-admin": "^14.2.0",
-		"ioredis": "^5.11.1",
 		"jsonwebtoken": "^9.0.3",
 		"multer": "^1.4.5-lts.1",
 		"nodemailer": "^6.9.4",

@@ -68,6 +68,7 @@ const mapPaymentStatusToOrderStatus = (paymentStatus) => {
   switch (paymentStatus) {
     case 'paid':
     case 'partial':
+    case 'partially_paid':
       return 'payment_completed';
     case 'pending':
       return 'payment_pending';

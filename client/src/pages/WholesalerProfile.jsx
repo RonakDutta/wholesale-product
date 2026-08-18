@@ -27,10 +27,10 @@ import { toast } from "sonner";
 // cover image in the data. The name picks one of a few theme palettes, so a
 // given wholesaler always gets the same banner.
 const COVERS = [
-  "from-clay/80 via-clay/50 to-sage/40",
-  "from-sage/70 via-sage/40 to-clay/30",
-  "from-espresso/70 via-clay/40 to-sage/30",
-  "from-clay/60 via-espresso/40 to-espresso/70",
+  "from-clay via-clay/70 to-espresso/60",
+  "from-sage via-sage/70 to-espresso/50",
+  "from-espresso via-espresso/70 to-clay/70",
+  "from-clay/90 via-espresso/60 to-sage/70",
 ];
 
 const coverFor = (name = "") => {
@@ -353,42 +353,19 @@ const WholesalerProfile = () => {
       {/* Shopfront header */}
       <header className="overflow-hidden rounded-2xl border border-sage/20 bg-white shadow-sm">
         <div
-          className={`h-28 bg-linear-to-r sm:h-36 ${coverFor(wholesaler.companyName)}`}
+          className={`h-24 bg-linear-to-br sm:h-28 ${coverFor(wholesaler.companyName)}`}
         />
 
         <div className="px-5 pb-6 sm:px-8">
-          <div className="-mt-12 flex flex-col gap-4 sm:-mt-14 sm:flex-row sm:items-end sm:justify-between">
-            <div className="flex items-end gap-4">
-              <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border-4 border-white bg-cream text-3xl font-black uppercase text-clay shadow-md sm:h-28 sm:w-28 sm:text-4xl">
-                {wholesaler.companyName?.[0] || "?"}
-              </div>
-              <div className="min-w-0 pb-1">
-                <h1 className="line-clamp-2 text-2xl font-black tracking-tight text-espresso sm:text-3xl">
-                  {wholesaler.companyName}
-                </h1>
-                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-espresso/60">
-                  {location && (
-                    <span className="flex items-center gap-1.5">
-                      <MapPin className="h-4 w-4" />
-                      {location}
-                    </span>
-                  )}
-                  {wholesaler.totalReviews > 0 && (
-                    <span className="flex items-center gap-1">
-                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                      <span className="font-bold text-espresso">
-                        {Number(wholesaler.rating).toFixed(1)}
-                      </span>
-                      <span className="text-espresso/50">
-                        ({wholesaler.totalReviews})
-                      </span>
-                    </span>
-                  )}
-                </div>
-              </div>
+          {/* Avatar overlaps the banner; the actions sit on the same line so
+              the name gets the full width below rather than being squeezed
+              against a button on the far right. */}
+          <div className="flex items-end justify-between gap-4">
+            <div className="-mt-10 flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border-4 border-white bg-cream text-3xl font-black uppercase text-clay shadow-md sm:-mt-12 sm:h-24 sm:w-24 sm:text-4xl">
+              {wholesaler.companyName?.[0] || "?"}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 pb-1">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               {phone && !isOwner && (
                 <>
                   <a
@@ -424,8 +401,34 @@ const WholesalerProfile = () => {
             </div>
           </div>
 
+          <div className="mt-3">
+            <h1 className="text-2xl font-black tracking-tight text-espresso sm:text-3xl">
+              {wholesaler.companyName}
+            </h1>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-espresso/60">
+              {location && (
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="h-4 w-4" />
+                  {location}
+                </span>
+              )}
+              {wholesaler.totalReviews > 0 && (
+                <span className="flex items-center gap-1">
+                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                  <span className="font-bold text-espresso">
+                    {Number(wholesaler.rating).toFixed(1)}
+                  </span>
+                  <span className="text-espresso/50">
+                    ({wholesaler.totalReviews} review
+                    {wholesaler.totalReviews === 1 ? "" : "s"})
+                  </span>
+                </span>
+              )}
+            </div>
+          </div>
+
           {/* Trust row: only facts we actually hold */}
-          <div className="mt-5 flex flex-wrap items-center gap-2">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             {wholesaler.verified && (
               <TrustChip icon={BadgeCheck} tone="emerald">
                 Verified seller
@@ -454,7 +457,11 @@ const WholesalerProfile = () => {
               </TrustChip>
             )}
             {!wholesaler.yearsInBusiness && memberSince && (
-              <TrustChip icon={CalendarDays}>Since {memberSince}</TrustChip>
+              <TrustChip icon={CalendarDays}>
+                {memberSince === new Date().getFullYear()
+                  ? "New seller"
+                  : `Selling since ${memberSince}`}
+              </TrustChip>
             )}
           </div>
 

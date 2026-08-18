@@ -114,6 +114,18 @@ const SellerLayout = () => {
         </nav>
 
         <div className="shrink-0 border-t border-white/10 p-3">
+          {/* The buyer-facing shop page, not a dashboard screen, so it sits
+              with the other ways out rather than in the nav list above. */}
+          {user?.id && (
+            <Link
+              to={`/wholesaler/${user.id}`}
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-cream/60 transition-colors hover:bg-white/5 hover:text-cream"
+              title="See your shop page the way buyers see it"
+            >
+              <Store className="h-4 w-4" />
+              My shop page
+            </Link>
+          )}
           <Link
             to="/"
             className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-cream/60 transition-colors hover:bg-white/5 hover:text-cream"

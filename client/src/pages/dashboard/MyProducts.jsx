@@ -16,6 +16,7 @@ import { Link, useNavigate } from "react-router-dom";
 import api from "../../utils/axios";
 import { useAuth } from "../../context/AuthContext";
 import { toast } from "sonner";
+import ProductThumb from "../../components/ProductThumb";
 
 // Matches the visibility column on supplier_inventory. Kept compact here
 // because it renders inside a table cell.
@@ -256,11 +257,7 @@ const MyProducts = () => {
                   >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="w-10 h-10 rounded-lg object-cover border border-slate-200"
-                        />
+                        <ProductThumb src={item.image} alt={item.name} />
                         <div>
                           <p className="font-bold text-espresso text-sm max-w-50 sm:max-w-xs truncate">
                             {item.name}
@@ -329,7 +326,10 @@ const MyProducts = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                      {/* Always visible, not hover-only: for a "Link only" product the
+                            share button is the single way to put it in front of a buyer,
+                            so it must not be hidden until the mouse arrives. */}
+                      <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => handleWhatsApp(item)}
                           className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 bg-slate-50 lg:bg-transparent rounded-md transition-colors"

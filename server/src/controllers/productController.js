@@ -14,6 +14,33 @@ const normalizeVisibility = (value, fallback = "public") => {
   return VISIBILITY_LEVELS.includes(level) ? level : fallback;
 };
 
+const toProductResponse = (row) => ({
+  id: row.id,
+  name: row.name,
+  category: row.category,
+  description: row.description,
+  image: row.image,
+  starting_price: row.price,
+  suppliers: [
+    {
+      id: row.inventory_id,
+      supplierId: row.supplier_id,
+      companyName: row.company_name,
+      image: row.listing_image || row.image,
+      price: row.price,
+      discountPrice: row.discount_price,
+      verified: row.is_verified,
+      moq: row.moq,
+      stock: row.stock,
+      shippingDays: row.shipping_days,
+      city: row.city,
+      country: row.country,
+      gstVerified: row.gst_verified ?? false,
+      contactPhone: row.contact_phone,
+    },
+  ],
+});
+
 // @desc    Add a product
 // @route   POST /api/products
 exports.addProduct = async (req, res) => {
@@ -73,82 +100,76 @@ exports.addProduct = async (req, res) => {
   }
 };
 
-// @desc    Get all products for the Home Page (with bundled suppliers)
+// @desc    Get the catalogue with one wholesaler listing per product
 // @route   GET /api/products
 exports.getPublicCatalog = async (req, res) => {
   try {
     const query = `
-      SELECT 
-        p.id, 
-        p.name, 
-        p.category, 
+      SELECT DISTINCT ON (p.id)
+        p.id,
+        p.name,
+        p.category,
         p.description,
-        p.global_image_url as image,
-        MIN(si.price) as starting_price,
-        COUNT(si.id) as total_suppliers,
-        json_agg(
-          json_build_object(
-            'id', si.id,
-            'supplierId', si.supplier_id,
-            'companyName', wp.company_name,
-            'price', si.price,
-            'discountPrice', si.discount_price,
-            'verified', wp.is_verified,
-            'moq', si.moq,
-            'stock', si.stock
-          )
-        ) as suppliers
+        p.global_image_url AS image,
+        si.id AS inventory_id,
+        si.supplier_id,
+        wp.company_name,
+        si.price,
+        si.discount_price,
+        wp.is_verified,
+        si.moq,
+        si.stock,
+        si.shipping_days,
+        wp.city,
+        wp.country,
+        wp.contact_phone
       FROM products p
       JOIN supplier_inventory si ON p.id = si.product_id
       JOIN wholesaler_profiles wp ON si.supplier_id = wp.user_id
       WHERE si.status = 'Active' AND si.stock > 0 AND si.visibility = 'public'
-      GROUP BY p.id, p.name, p.category, p.description, p.global_image_url
-      ORDER BY p.id DESC
+      ORDER BY p.id, si.created_at DESC
     `;
     const result = await pool.query(query);
-    res.status(200).json(result.rows);
+    res.status(200).json(result.rows.map(toProductResponse));
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error fetching catalog" });
   }
 };
 
-// @desc    Get a single product and ALL its suppliers
+// @desc    Get a single product with its catalogue listing
 // @route   GET /api/products/:id
 exports.getProductById = async (req, res) => {
   const { id } = req.params;
   try {
     const query = `
-      SELECT 
-        p.id, 
-        p.name, 
-        p.category, 
+      SELECT
+        p.id,
+        p.name,
+        p.category,
         p.description,
-        p.global_image_url as image,
-        json_agg(
-          json_build_object(
-            'id', si.id,
-            'supplierId', si.supplier_id,
-            'companyName', wp.company_name,
-            'image', COALESCE(si.image_url, p.global_image_url),
-            'price', si.price,
-            'discountPrice', si.discount_price,
-            'verified', wp.is_verified,
-            'moq', si.moq,
-            'stock', si.stock,
-            'shippingDays', si.shipping_days,
-            'city', wp.city,
-            'country', wp.country,
-            'gstVerified', (wp.gstin IS NOT NULL AND wp.gstin <> ''),
-            'contactPhone', wp.contact_phone
-          )
-        ) as suppliers
+        p.global_image_url AS image,
+        si.id AS inventory_id,
+        si.supplier_id,
+        wp.company_name,
+        COALESCE(si.image_url, p.global_image_url) AS listing_image,
+        si.price,
+        si.discount_price,
+        wp.is_verified,
+        si.moq,
+        si.stock,
+        si.shipping_days,
+        wp.city,
+        wp.country,
+        (wp.gstin IS NOT NULL AND wp.gstin <> '') AS gst_verified,
+        wp.contact_phone
       FROM products p
       JOIN supplier_inventory si ON p.id = si.product_id
       JOIN wholesaler_profiles wp ON si.supplier_id = wp.user_id
       WHERE p.id = $1 AND si.status = 'Active' AND si.stock > 0
         AND si.visibility = 'public'
-      GROUP BY p.id, p.name, p.category, p.description, p.global_image_url
+      ORDER BY si.created_at DESC
+      LIMIT 1
     `;
     const result = await pool.query(query, [id]);
 
@@ -168,85 +189,8 @@ exports.getProductById = async (req, res) => {
       console.warn('Review summary query failed:', reviewErr.message);
     }
 
-    const product = result.rows[0];
+    const product = toProductResponse(result.rows[0]);
     product.reviewSummary = reviewSummary.rows[0];
-
-    // Per-supplier track record. These are counted from real orders and
-    // reviews, so a new seller honestly shows zero instead of a stock figure.
-    const supplierIds = [
-      ...new Set((product.suppliers || []).map((s) => s.supplierId)),
-    ].filter(Boolean);
-
-    if (supplierIds.length > 0) {
-      const statsById = new Map();
-
-      const fulfilment = await pool.query(
-        `SELECT COALESCE(o.supplier_id, si.supplier_id) AS supplier_id,
-                COUNT(*) FILTER (WHERE o.status IN ('delivered', 'completed')) AS fulfilled_orders
-         FROM orders o
-         LEFT JOIN supplier_inventory si ON si.id = o.inventory_item_id
-         WHERE COALESCE(o.supplier_id, si.supplier_id) = ANY($1::uuid[])
-         GROUP BY 1`,
-        [supplierIds],
-      );
-      fulfilment.rows.forEach((row) => {
-        statsById.set(row.supplier_id, {
-          fulfilledOrders: Number(row.fulfilled_orders) || 0,
-        });
-      });
-
-      // Counts what a visitor would actually find on the storefront, so the
-      // "view all N products" link never promises more than it shows.
-      // Private listings are excluded for the same reason.
-      const catalog = await pool.query(
-        `SELECT supplier_id,
-                COUNT(*) AS catalog_size,
-                COUNT(*) FILTER (WHERE visibility = 'storefront') AS exclusive_count
-         FROM supplier_inventory
-         WHERE supplier_id = ANY($1::uuid[])
-           AND status = 'Active'
-           AND visibility IN ('public', 'storefront')
-         GROUP BY supplier_id`,
-        [supplierIds],
-      );
-      catalog.rows.forEach((row) => {
-        const entry = statsById.get(row.supplier_id) || {};
-        entry.catalogSize = Number(row.catalog_size) || 0;
-        entry.exclusiveCount = Number(row.exclusive_count) || 0;
-        statsById.set(row.supplier_id, entry);
-      });
-
-      try {
-        const sellerRatings = await pool.query(
-          `SELECT seller_id,
-                  COALESCE(AVG(overall_experience), 0)::numeric(10,2) AS rating,
-                  COUNT(*) FILTER (WHERE status = 'active') AS reviews
-           FROM seller_reviews
-           WHERE seller_id = ANY($1::uuid[])
-           GROUP BY seller_id`,
-          [supplierIds],
-        );
-        sellerRatings.rows.forEach((row) => {
-          const entry = statsById.get(row.seller_id) || {};
-          entry.rating = Number(row.rating) || 0;
-          entry.reviews = Number(row.reviews) || 0;
-          statsById.set(row.seller_id, entry);
-        });
-      } catch (ratingErr) {
-        console.warn("Supplier rating query failed:", ratingErr.message);
-      }
-
-      product.suppliers = product.suppliers.map((supplier) => ({
-        fulfilledOrders: 0,
-        catalogSize: 0,
-        exclusiveCount: 0,
-        rating: 0,
-        reviews: 0,
-        ...supplier,
-        ...(statsById.get(supplier.supplierId) || {}),
-      }));
-    }
-
     res.status(200).json(product);
   } catch (err) {
     console.error(err);

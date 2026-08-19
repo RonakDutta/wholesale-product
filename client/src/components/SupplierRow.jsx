@@ -1,6 +1,6 @@
-import { ShieldCheck, MapPin, Crown } from "lucide-react";
+import { ShieldCheck, MapPin } from "lucide-react";
 
-const SupplierRow = ({ supplier, isBest }) => {
+const SupplierRow = ({ supplier }) => {
   const {
     name,
     city,
@@ -23,20 +23,7 @@ const SupplierRow = ({ supplier, isBest }) => {
   const location = city ? `${city}, ${country}` : country;
 
   return (
-    <div
-      className={`relative flex flex-col gap-1 px-3 py-2.5 rounded-xl shrink-0 transition-all duration-200 ${
-        isBest
-          ? "mt-2 bg-linear-to-r from-sage/20 via-sage/5 to-transparent border border-sage/40 shadow-sm"
-          : "bg-white/70 border border-transparent hover:border-slate-200 hover:bg-slate-50/80"
-      }`}
-    >
-      {isBest && (
-        <span className="absolute -top-2.5 left-3 flex items-center gap-1 rounded-full bg-sage px-2 py-0.5 text-[7px] sm:text-[8px] font-bold uppercase tracking-wider text-white shadow-md whitespace-nowrap">
-          <Crown className="w-2.5 h-2.5 shrink-0" strokeWidth={3} />
-          Best price
-        </span>
-      )}
-
+    <div className="relative flex flex-col gap-1 px-3 py-2.5 rounded-xl shrink-0 bg-linear-to-r from-sage/20 via-sage/5 to-transparent border border-sage/40 shadow-sm">
       <div className="flex items-center gap-1.5 min-w-0">
         <span className="text-xs sm:text-sm font-semibold text-slate-800 truncate">
           {name}
@@ -48,6 +35,10 @@ const SupplierRow = ({ supplier, isBest }) => {
           />
         )}
       </div>
+
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-sage">
+        Available from your wholesaler
+      </span>
 
       <div className="flex items-center gap-1.5 flex-wrap">
         {hasDiscount && (

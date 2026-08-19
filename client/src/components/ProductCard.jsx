@@ -1,7 +1,7 @@
-import { Heart, IndianRupee, Users } from "lucide-react";
+import { Heart, IndianRupee } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useWishlist } from "../context/WishlistContext";
-import { getSortedSuppliers } from "../utils/supplierUtils";
+import { getEffectivePrice } from "../utils/supplierUtils";
 import SupplierRow from "./SupplierRow";
 
 const ProductCard = ({ product }) => {
@@ -10,29 +10,10 @@ const ProductCard = ({ product }) => {
   const { toggleWishlist, isWishlisted } = useWishlist();
   const wishlisted = isWishlisted(id);
 
-  const sortedSuppliers = getSortedSuppliers({ ...product, suppliers });
+  // In closed-network model, there should only be one supplier (the wholesaler)
+  const supplier = suppliers[0] ?? null;
 
-  const displayedSuppliers = sortedSuppliers
-    .map((supplier) => ({
-      ...supplier,
-      name:
-        supplier.companyName ||
-        supplier.company_name ||
-        supplier.name ||
-        "Verified Supplier",
-      city: supplier.city || supplier.location || "",
-      country: supplier.country || "India",
-      price: supplier.price ?? supplier.originalPrice ?? supplier.unitPrice,
-      discountPrice:
-        supplier.discountPrice ??
-        supplier.discount_price ??
-        supplier.offerPrice,
-    }))
-    .slice(0, 6);
-
-  const bestSupplier = displayedSuppliers[0] ?? null;
-
-  if (!bestSupplier) return null;
+  if (!supplier) return null;
 
   return (
     <div className="group bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col h-full transition-all duration-300 hover:shadow-2xl hover:shadow-slate-200/60 hover:-translate-y-1.5 hover:border-slate-300">
@@ -63,12 +44,6 @@ const ProductCard = ({ product }) => {
               }`}
             />
           </button>
-
-          <div className="shrink-0 bg-white/90 backdrop-blur-md text-slate-700 text-[10px] sm:text-xs font-bold px-2 sm:px-3 py-1 sm:py-1.5 rounded-full shadow-sm flex items-center gap-1 sm:gap-1.5 ring-1 ring-slate-900/5">
-            <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-clay shrink-0" />
-            <span>{suppliers.length}</span>
-            <span className="hidden sm:inline">suppliers</span>
-          </div>
         </div>
       </div>
 
@@ -91,7 +66,7 @@ const ProductCard = ({ product }) => {
                 strokeWidth={2.5}
               />
               <span className="text-lg sm:text-2xl font-black leading-none tracking-tight">
-                {bestSupplier.discountPrice ?? bestSupplier.price}
+                {getEffectivePrice(supplier)}
               </span>
             </div>
             <span className="text-[9px] sm:text-xs font-medium text-slate-400 tracking-wider whitespace-nowrap">
@@ -101,23 +76,14 @@ const ProductCard = ({ product }) => {
           </div>
 
           <div className="border-t border-slate-100 pt-3 sm:pt-4">
-            <div
-              className="flex flex-col gap-2 h-22 sm:h-24 overflow-y-auto pr-1 snap-y snap-mandatory [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent"
-              style={{ scrollbarWidth: "thin" }}
-            >
-              {displayedSuppliers.map((supplier, idx) => (
-                <div key={supplier.id ?? idx} className="shrink-0 snap-start">
-                  <SupplierRow supplier={supplier} isBest={idx === 0} />
-                </div>
-              ))}
-            </div>
+            <SupplierRow supplier={supplier} />
           </div>
 
           <Link
             to={`/product/${id}`}
             className="group/btn mt-4 flex items-center justify-center gap-2 w-full py-3 sm:py-3.5 bg-slate-900 text-white text-[11px] sm:text-sm font-bold rounded-xl no-underline hover:bg-clay transition-all duration-300 active:scale-[0.97] shadow-sm hover:shadow-md"
           >
-            Compare and Buy
+            View and Buy
           </Link>
         </div>
       </div>

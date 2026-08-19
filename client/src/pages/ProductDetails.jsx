@@ -22,15 +22,10 @@ import { gsap } from "gsap";
 import api from "../utils/axios";
 import { toast } from "sonner";
 import ContactVendorBtn from "../components/ContactVendorBtn";
-import SupplierComparison from "../components/SupplierComparison";
 import ReviewSection from "../components/ReviewSection";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
-import {
-  getCheapestSupplier,
-  getEffectivePrice,
-  getSupplyLabel,
-} from "../utils/supplierUtils";
+import { getEffectivePrice, getSupplyLabel } from "../utils/supplierUtils";
 
 const ProductDetails = () => {
   const { id } = useParams();
@@ -41,7 +36,6 @@ const ProductDetails = () => {
   const { toggleWishlist, isWishlisted } = useWishlist();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [selectedSupplierId, setSelectedSupplierId] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
 
@@ -62,10 +56,6 @@ const ProductDetails = () => {
         };
 
         setProduct(productData);
-
-        const cheapest =
-          getCheapestSupplier(productData)?.id ?? productData.suppliers[0]?.id;
-        setSelectedSupplierId(cheapest);
       } catch (error) {
         console.error("Failed to fetch product", error);
         toast.error("Product not found");
@@ -78,21 +68,21 @@ const ProductDetails = () => {
     fetchProduct();
   }, [id, navigate]);
 
+  // In closed-network model, there should be only one supplier (the wholesaler)
   const suppliers = product?.suppliers ?? [];
-  const selectedSupplier =
-    suppliers.find((s) => s.id === selectedSupplierId) ?? suppliers[0] ?? {};
+  const selectedSupplier = suppliers[0] ?? {};
 
   const currentSupplierName =
     selectedSupplier.companyName ||
     selectedSupplier.company_name ||
     selectedSupplier.name ||
-    "Verified Supplier";
+    "My Wholesaler";
   const baseMoq = selectedSupplier.moq ?? 1;
   const quantityStep = Math.max(1, Math.round(baseMoq / 10));
 
   useEffect(() => {
     setQuantity(baseMoq);
-  }, [selectedSupplierId, baseMoq]);
+  }, [baseMoq]);
 
   // useLayoutEffect, not useEffect: the tween starts the elements at
   // opacity 0, and in useEffect that happens *after* the browser has already
@@ -237,7 +227,7 @@ const ProductDetails = () => {
               {selectedSupplier.verified && (
                 <div className="flex items-center gap-1 bg-white border border-emerald-600 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full shadow-xs">
                   <ShieldCheck className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  <span>Verified Supplier</span>
+                  <span>Wholesaler</span>
                 </div>
               )}
             </div>
@@ -251,46 +241,6 @@ const ProductDetails = () => {
               </span>
             </div>
           </div>
-
-          {suppliers.length > 1 && (
-            <div className="flex flex-col gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                {suppliers.length} suppliers available
-              </span>
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {suppliers.map((s) => {
-                  const active = s.id === selectedSupplierId;
-                  const btnSupplierName =
-                    s.companyName || s.company_name || s.name || "Supplier";
-                  return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => setSelectedSupplierId(s.id)}
-                      className={`shrink-0 flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-all cursor-pointer ${
-                        active
-                          ? "border-clay bg-clay/5 shadow-sm"
-                          : "border-slate-200 bg-white hover:border-slate-300"
-                      }`}
-                    >
-                      <span className="flex items-center gap-1 text-xs font-bold text-slate-800">
-                        {btnSupplierName}
-                        {s.verified && (
-                          <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                        )}
-                      </span>
-                      <span className="text-xs font-bold text-clay">
-                        ₹{getEffectivePrice(s)}
-                        <span className="text-slate-400 font-normal">
-                          /unit
-                        </span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight">
@@ -478,9 +428,7 @@ const ProductDetails = () => {
               ref={addToCartBtnRef}
               onClick={handleAddToCart}
               disabled={ownListing}
-              title={
-                ownListing ? "This is your own listing" : undefined
-              }
+              title={ownListing ? "This is your own listing" : undefined}
               className={`w-full flex items-center justify-center gap-2 py-3.5 text-sm font-bold rounded-xl transition-all shadow-sm active:scale-[0.99] ${
                 ownListing
                   ? "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none"
@@ -506,43 +454,6 @@ const ProductDetails = () => {
           </div>
         </div>
       </div>
-
-      <SupplierComparison
-        product={product}
-        onAddToCart={(productObj, qty, supplier) => {
-          addToCart(productObj, qty, supplier);
-          setSelectedSupplierId(supplier.id);
-        }}
-        onContactSupplier={async (supplier) => {
-          setSelectedSupplierId(supplier.id);
-
-          try {
-            const response = await api.get(
-              `/api/products/${product.id}/contact`,
-              {
-                params: { supplierId: supplier.supplierId || supplier.id },
-              },
-            );
-
-            if (response.data.success && response.data.whatsappUrl) {
-              window.open(response.data.whatsappUrl, "_blank");
-            } else {
-              toast.error(
-                response.data.message || "Failed to generate WhatsApp link",
-              );
-            }
-          } catch (error) {
-            console.error("Failed to contact supplier:", error);
-            if (error.response?.status === 401) {
-              toast.error("Please login to contact suppliers");
-            } else if (error.response?.status === 403) {
-              toast.error("Only buyers can contact suppliers");
-            } else {
-              toast.error("Failed to connect with supplier");
-            }
-          }
-        }}
-      />
 
       <ReviewSection productId={product.id} />
     </div>

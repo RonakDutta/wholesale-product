@@ -43,7 +43,7 @@ const WhatsAppModal = ({
     },
     {
       label: "Best Offer",
-      text: `Hello, I'm comparing suppliers - what's your best offer for ${productName || "this product"}?`,
+      text: `Hello, I would like to order ${productName || "this product"}. Please share the current wholesale details.`,
     },
   ];
 

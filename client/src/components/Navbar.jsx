@@ -9,16 +9,15 @@ import {
   LayoutDashboard,
   ChevronDown,
   Check,
-  MessageSquare, // <-- Added this import
-  Package,
+  MessageSquare,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { useAuth } from "../context/AuthContext";
 import { useUnread } from "../context/UnreadContext";
-import NotificationBell from "./NotificationBell";
 import CartDrawer from "./CartDrawer";
+import NotificationBell from "./NotificationBell";
 
 const CITIES = [
   "Delhi NCR",
@@ -44,6 +43,13 @@ const Navbar = () => {
   const [selectedCity, setSelectedCity] = useState("Delhi NCR");
   const navRef = useRef(null);
   const navigate = useNavigate();
+  const isSupplier =
+    user && (user.bizType === "seller" || user.bizType === "both");
+
+  const dashboardPath = () => {
+    if (!user) return "/login";
+    return "/dashboard";
+  };
 
   // Close profile dropdown when clicking outside
   useEffect(() => {
@@ -85,15 +91,6 @@ const Navbar = () => {
       <div className="p-2 flex flex-col gap-1">
         {/* <-- Added Messages Link Here --> */}
         <Link
-          to="/orders"
-          onClick={() => setIsProfileOpen(false)}
-          className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-clay/5 hover:text-clay rounded-lg transition-colors cursor-pointer"
-        >
-          <Package className="w-4 h-4" />
-          Your Orders
-        </Link>
-
-        <Link
           to="/messages"
           onClick={() => setIsProfileOpen(false)}
           className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-clay/5 hover:text-clay rounded-lg transition-colors cursor-pointer"
@@ -104,7 +101,7 @@ const Navbar = () => {
 
         {(user?.role === "seller" || user?.role === "both") && (
           <Link
-            to="/seller"
+            to="/dashboard"
             onClick={() => setIsProfileOpen(false)}
             className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-clay/5 hover:text-clay rounded-lg transition-colors cursor-pointer"
           >
@@ -152,8 +149,9 @@ const Navbar = () => {
             {selectedCity}
           </span>
           <ChevronDown
-            className={`hidden sm:block w-3 h-3 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""
-              }`}
+            className={`hidden sm:block w-3 h-3 text-slate-400 transition-transform ${
+              isOpen ? "rotate-180" : ""
+            }`}
           />
         </button>
 
@@ -173,10 +171,11 @@ const Navbar = () => {
                     setSelectedCity(city);
                     setIsOpen(false);
                   }}
-                  className={`w-full text-left px-3 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer flex items-center justify-between ${selectedCity === city
-                    ? "bg-clay/10 text-clay"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                    }`}
+                  className={`w-full text-left px-3 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer flex items-center justify-between ${
+                    selectedCity === city
+                      ? "bg-clay/10 text-clay"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  }`}
                 >
                   {city}
                   {selectedCity === city && <Check className="w-4 h-4" />}
@@ -197,9 +196,7 @@ const Navbar = () => {
         <Link
           to="/messages"
           aria-label={
-            unreadCount > 0
-              ? `Messages, ${unreadCount} unread`
-              : "Messages"
+            unreadCount > 0 ? `Messages, ${unreadCount} unread` : "Messages"
           }
           className="relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-colors group cursor-pointer"
         >

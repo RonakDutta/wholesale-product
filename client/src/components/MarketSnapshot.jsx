@@ -1,4 +1,18 @@
-import { Boxes, MapPin, Store } from "lucide-react";
+import { Boxes, MapPin } from "lucide-react";
+
+const Stat = ({ icon: Icon, value, label }) => (
+  <div className="flex items-center gap-2.5">
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-clay/10 text-clay">
+      <Icon className="h-4 w-4" strokeWidth={2.5} />
+    </span>
+    <div className="leading-tight">
+      <p className="text-sm font-black text-espresso">{value}</p>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-espresso/40">
+        {label}
+      </p>
+    </div>
+  </div>
+);
 
 /**
  * Supply-side snapshot for the marketplace home.
@@ -12,44 +26,15 @@ import { Boxes, MapPin, Store } from "lucide-react";
 const MarketSnapshot = ({ products = [], region = "Delhi NCR" }) => {
   const productCount = products.length;
 
-  const supplierCount = new Set(
-    products.flatMap((p) =>
-      (p.suppliers || [])
-        .map((s) => s.supplierId ?? s.id)
-        .filter(Boolean)
-        .map(String),
-    ),
-  ).size;
-
-  const categoryCount = new Set(
-    products.map((p) => p.category).filter(Boolean),
-  ).size;
+  const categoryCount = new Set(products.map((p) => p.category).filter(Boolean))
+    .size;
 
   if (productCount === 0) return null;
-
-  const Stat = ({ icon: Icon, value, label }) => (
-    <div className="flex items-center gap-2.5">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-clay/10 text-clay">
-        <Icon className="h-4 w-4" strokeWidth={2.5} />
-      </span>
-      <div className="leading-tight">
-        <p className="text-sm font-black text-espresso">{value}</p>
-        <p className="text-[10px] font-bold uppercase tracking-wider text-espresso/40">
-          {label}
-        </p>
-      </div>
-    </div>
-  );
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-slate-200 border-l-4 border-l-clay bg-white p-4 shadow-sm transition-shadow duration-200 hover:shadow-md sm:flex-row sm:items-center sm:justify-between sm:p-5">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-        <Stat icon={Boxes} value={productCount} label="Products listed" />
-        <Stat
-          icon={Store}
-          value={supplierCount}
-          label={supplierCount === 1 ? "Wholesaler" : "Wholesalers"}
-        />
+        <Stat icon={Boxes} value={productCount} label="My catalogue" />
         <Stat icon={Boxes} value={categoryCount} label="Categories" />
       </div>
 

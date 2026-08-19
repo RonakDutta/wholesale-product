@@ -8,10 +8,6 @@ import CTABanner from "../components/CTABanner";
 import LoadMore from "../components/LoadMore";
 import MarketSnapshot from "../components/MarketSnapshot";
 import PromotionStrip from "../components/PromotionStrip";
-import {
-  getCheapestSupplier,
-  hasVerifiedSupplier,
-} from "../utils/supplierUtils";
 import api from "../utils/axios"; // Added API import
 import { toast } from "sonner";
 
@@ -110,47 +106,46 @@ const MarketplaceHome = () => {
 
   const filteredSorted = useMemo(() => {
     let result = products.filter((product) => {
-      if (verifiedOnly && !hasVerifiedSupplier(product)) return false;
       if (selectedCategory && product.category !== selectedCategory)
         return false;
+      if (verifiedOnly && !product.suppliers?.[0]?.verified) return false;
       return true;
     });
 
-    switch (sortBy) {
-      case "price-asc":
-        result = [...result].sort((a, b) => {
-          const pa =
-            getCheapestSupplier(a)?.discountPrice ??
-            getCheapestSupplier(a)?.price ??
-            0;
-          const pb =
-            getCheapestSupplier(b)?.discountPrice ??
-            getCheapestSupplier(b)?.price ??
-            0;
-          return pa - pb;
-        });
-        break;
-      case "price-desc":
-        result = [...result].sort((a, b) => {
-          const pa =
-            getCheapestSupplier(a)?.discountPrice ??
-            getCheapestSupplier(a)?.price ??
-            0;
-          const pb =
-            getCheapestSupplier(b)?.discountPrice ??
-            getCheapestSupplier(b)?.price ??
-            0;
-          return pb - pa;
-        });
-        break;
-      case "verified":
-        result = [...result].sort(
-          (a, b) =>
-            Number(hasVerifiedSupplier(b)) - Number(hasVerifiedSupplier(a)),
-        );
-        break;
-      default:
-        break;
+    if (sortBy === "price-asc") {
+      result.sort(
+        (left, right) =>
+          Number(
+            left.suppliers?.[0]?.discountPrice ??
+              left.suppliers?.[0]?.price ??
+              0,
+          ) -
+          Number(
+            right.suppliers?.[0]?.discountPrice ??
+              right.suppliers?.[0]?.price ??
+              0,
+          ),
+      );
+    } else if (sortBy === "price-desc") {
+      result.sort(
+        (left, right) =>
+          Number(
+            right.suppliers?.[0]?.discountPrice ??
+              right.suppliers?.[0]?.price ??
+              0,
+          ) -
+          Number(
+            left.suppliers?.[0]?.discountPrice ??
+              left.suppliers?.[0]?.price ??
+              0,
+          ),
+      );
+    } else if (sortBy === "verified") {
+      result.sort(
+        (left, right) =>
+          Number(right.suppliers?.[0]?.verified ?? false) -
+          Number(left.suppliers?.[0]?.verified ?? false),
+      );
     }
 
     return result;
@@ -158,7 +153,7 @@ const MarketplaceHome = () => {
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [selectedCategory, verifiedOnly, sortBy]);
+  }, [selectedCategory]);
 
   const displayedProducts = useMemo(
     () => filteredSorted.slice(0, visibleCount),
@@ -178,8 +173,9 @@ const MarketplaceHome = () => {
   };
 
   const handleClearFilters = () => {
-    setVerifiedOnly(false);
     setSelectedCategory(null);
+    setVerifiedOnly(false);
+    setSortBy("recommended");
   };
 
   // Initial Page Load Animation

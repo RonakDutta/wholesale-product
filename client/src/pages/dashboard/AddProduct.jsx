@@ -302,9 +302,7 @@ const AddProduct = () => {
                           {p.name}
                         </p>
                         <p className="text-[11px] text-slate-400">
-                          {p.category} ·{" "}
-                          {p.total_suppliers || p.suppliers?.length || 0}{" "}
-                          suppliers
+                          {p.category} · Existing catalogue product
                         </p>
                       </div>
                     </button>

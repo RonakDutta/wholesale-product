@@ -11,21 +11,39 @@ import {
   Menu,
   X,
   Store,
+  Users,
+  BarChart3,
   ChevronLeft,
 } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useUnread } from "../context/UnreadContext";
+import { FEATURES } from "../config/features";
 
+// Wholesale 3.0 nav. "Customers" sits second because the customer book is the
+// thing a wholesaler opens the app for. The marketplace-era entries are kept
+// but only shown when the marketplace flag is on, so nothing is deleted.
 const NAV = [
   { path: "/seller", label: "Overview", icon: LayoutDashboard, exact: true },
-  { path: "/seller/products", label: "Products", icon: Package },
-  { path: "/seller/orders", label: "Orders", icon: ShoppingBag },
+  { path: "/seller/customers", label: "Customers", icon: Users },
+  { path: "/seller/products", label: "Rate list", icon: Package },
+  { path: "/seller/orders", label: "Sales", icon: ShoppingBag },
   { path: "/seller/invoices", label: "Invoices", icon: FileText },
   { path: "/seller/messages", label: "Messages", icon: MessageSquare, badge: "unread" },
-  { path: "/seller/promotions", label: "Promotions", icon: Sparkles },
+  {
+    path: "/seller/promotions",
+    label: "Promotions",
+    icon: Sparkles,
+    flag: "MARKETPLACE",
+  },
+  {
+    path: "/seller/analytics",
+    label: "Analytics",
+    icon: BarChart3,
+    flag: "ANALYTICS",
+  },
   { path: "/seller/settings", label: "Settings", icon: Settings },
-];
+].filter((item) => !item.flag || FEATURES[item.flag]);
 
 const SellerLayout = () => {
   const location = useLocation();
@@ -115,8 +133,10 @@ const SellerLayout = () => {
 
         <div className="shrink-0 border-t border-white/10 p-3">
           {/* The buyer-facing shop page, not a dashboard screen, so it sits
-              with the other ways out rather than in the nav list above. */}
-          {user?.id && (
+              with the other ways out rather than in the nav list above.
+              Both of these belong to the marketplace, which is switched off
+              in 3.0, so they follow the same flag. */}
+          {FEATURES.MARKETPLACE && user?.id && (
             <Link
               to={`/wholesaler/${user.id}`}
               className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-cream/60 transition-colors hover:bg-white/5 hover:text-cream"
@@ -126,13 +146,15 @@ const SellerLayout = () => {
               My shop page
             </Link>
           )}
-          <Link
-            to="/"
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-cream/60 transition-colors hover:bg-white/5 hover:text-cream"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Back to marketplace
-          </Link>
+          {FEATURES.MARKETPLACE && (
+            <Link
+              to="/"
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-cream/60 transition-colors hover:bg-white/5 hover:text-cream"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Back to marketplace
+            </Link>
+          )}
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-rose-300 transition-colors hover:bg-rose-500/10 hover:text-rose-200"
@@ -164,12 +186,14 @@ const SellerLayout = () => {
             </div>
           </div>
 
+          {/* The most common thing a wholesaler does when setting up is add
+              the shops he sells to, so that is the header action in 3.0. */}
           <Link
-            to="/seller/products/new"
+            to="/seller/customers"
             className="flex shrink-0 items-center gap-2 rounded-lg bg-espresso px-3 py-2 text-xs font-bold text-cream transition-colors hover:bg-clay"
           >
-            <Store className="h-4 w-4" />
-            <span className="hidden sm:inline">Add product</span>
+            <Users className="h-4 w-4" />
+            <span className="hidden sm:inline">Customers</span>
           </Link>
         </header>
 

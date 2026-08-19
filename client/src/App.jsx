@@ -17,8 +17,9 @@ import AuthLayout from "./layouts/AuthLayout";
 import InfoLayout from "./layouts/InfoLayout";
 
 import RequireRole from "./components/RequireRole";
+import { FEATURES } from "./config/features";
 
-import MarketplaceHome from "./pages/MarketplaceHome";
+import Home from "./pages/Home";
 import ProductDetails from "./pages/ProductDetails";
 import Wishlist from "./pages/Wishlist";
 import SignUp from "./pages/SignUp";
@@ -54,6 +55,8 @@ const EditProduct = lazy(() => import("./pages/dashboard/EditProduct"));
 const Orders = lazy(() => import("./pages/dashboard/Orders"));
 const Promotions = lazy(() => import("./pages/dashboard/Promotions"));
 const Settings = lazy(() => import("./pages/dashboard/Settings"));
+const Parties = lazy(() => import("./pages/dashboard/Parties"));
+const PartyDetail = lazy(() => import("./pages/dashboard/PartyDetail"));
 
 const SellerFallback = () => (
   <div className="flex min-h-dvh items-center justify-center bg-slate-100">
@@ -70,6 +73,20 @@ const SellerArea = () => (
   </RequireRole>
 );
 
+// Marketplace-only screens. Kept in the tree and still compiled, but not
+// routable while FEATURES.MARKETPLACE is off. Flipping the flag brings the
+// whole browsing side back with no other change.
+const MARKETPLACE_ROUTES = [
+  { path: "product/:id", element: <ProductDetails /> },
+  { path: "wholesaler/:id", element: <WholesalerProfile /> },
+  { path: "wishlist", element: <Wishlist /> },
+  { path: "search", element: <SearchResults /> },
+  { path: "checkout", element: <Checkout /> },
+  { path: "payment/:orderId", element: <Payment /> },
+  { path: "order-success", element: <OrderSuccess /> },
+  { path: "retail-dashboard", element: <RetailDashboard /> },
+];
+
 const router = createBrowserRouter([
   {
     path: "*",
@@ -81,21 +98,16 @@ const router = createBrowserRouter([
     path: "/",
     element: <MainLayout />,
     children: [
-      { index: true, element: <MarketplaceHome /> },
-      { path: "product/:id", element: <ProductDetails /> },
-      { path: "wholesaler/:id", element: <WholesalerProfile /> },
+      { index: true, element: <Home /> },
+      ...(FEATURES.MARKETPLACE ? MARKETPLACE_ROUTES : []),
+      // A share link is reached by its URL, not by browsing, so it survives
+      // the marketplace being switched off.
       { path: "listing/:inventoryId", element: <SharedListing /> },
-      { path: "wishlist", element: <Wishlist /> },
-      { path: "search", element: <SearchResults /> },
       { path: "messages", element: <Messages /> },
       { path: "messages/:vendorId", element: <Messages /> },
-      { path: "checkout", element: <Checkout /> },
-      { path: "payment/:orderId", element: <Payment /> },
-      { path: "order-success", element: <OrderSuccess /> },
       { path: "orders", element: <MyOrders /> },
       { path: "notifications", element: <NotificationCenter /> },
       { path: "orders/:orderId", element: <OrderDetails /> },
-      { path: "retail-dashboard", element: <RetailDashboard /> },
     ],
   },
   {
@@ -103,6 +115,8 @@ const router = createBrowserRouter([
     element: <SellerArea />,
     children: [
       { index: true, element: <DashboardOverview /> },
+      { path: "customers", element: <Parties /> },
+      { path: "customers/:id", element: <PartyDetail /> },
       { path: "products", element: <MyProducts /> },
       { path: "products/new", element: <AddProduct /> },
       { path: "products/edit/:id", element: <EditProduct /> },

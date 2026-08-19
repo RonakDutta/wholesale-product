@@ -13,6 +13,7 @@ import {
   Store,
   Users,
   BarChart3,
+  Plus,
   ChevronLeft,
 } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -27,7 +28,14 @@ const NAV = [
   { path: "/seller", label: "Overview", icon: LayoutDashboard, exact: true },
   { path: "/seller/customers", label: "Customers", icon: Users },
   { path: "/seller/products", label: "Rate list", icon: Package },
-  { path: "/seller/orders", label: "Sales", icon: ShoppingBag },
+  { path: "/seller/sales", label: "Sales", icon: ShoppingBag },
+  // Marketplace orders, which are a different thing from a recorded sale.
+  {
+    path: "/seller/orders",
+    label: "Orders",
+    icon: ShoppingBag,
+    flag: "MARKETPLACE",
+  },
   { path: "/seller/invoices", label: "Invoices", icon: FileText },
   { path: "/seller/messages", label: "Messages", icon: MessageSquare, badge: "unread" },
   {
@@ -186,14 +194,14 @@ const SellerLayout = () => {
             </div>
           </div>
 
-          {/* The most common thing a wholesaler does when setting up is add
-              the shops he sells to, so that is the header action in 3.0. */}
+          {/* Recording a sale is the thing a wholesaler does every day, so it
+              is one tap away from every screen. */}
           <Link
-            to="/seller/customers"
+            to="/seller/sales/new"
             className="flex shrink-0 items-center gap-2 rounded-lg bg-espresso px-3 py-2 text-xs font-bold text-cream transition-colors hover:bg-clay"
           >
-            <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">Customers</span>
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Record sale</span>
           </Link>
         </header>
 

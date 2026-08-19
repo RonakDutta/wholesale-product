@@ -135,3 +135,19 @@ CREATE TABLE IF NOT EXISTS party_payments (
 
 CREATE INDEX IF NOT EXISTS idx_party_payments_party ON party_payments (party_id, paid_on DESC);
 CREATE INDEX IF NOT EXISTS idx_party_payments_wholesaler ON party_payments (wholesaler_id, paid_on DESC);
+
+-- ---------------------------------------------------------------
+-- Sale numbering, one running series per wholesaler
+-- ---------------------------------------------------------------
+-- Each wholesaler counts his own sales from 1, the way a bill book does.
+-- The row is locked inside the same transaction that inserts the sale, so
+-- two sales recorded at the same moment cannot take the same number.
+CREATE TABLE IF NOT EXISTS sale_sequences (
+    wholesaler_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    last_number INTEGER NOT NULL DEFAULT 0
+);
+
+-- A number is only unique within one wholesaler's book, never globally.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_number_per_wholesaler
+    ON sales (wholesaler_id, sale_number)
+    WHERE sale_number IS NOT NULL;

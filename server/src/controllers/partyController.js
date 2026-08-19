@@ -208,6 +208,72 @@ exports.updateParty = async (req, res) => {
   }
 };
 
+const PAYMENT_METHODS = ["cash", "upi", "bank", "cheque", "other"];
+
+/**
+ * Money received from a customer. The sale it settles is optional on purpose:
+ * a trader hands over a lump sum against several old bills without saying
+ * which, so a payment can sit against the running balance instead.
+ */
+exports.recordPayment = async (req, res) => {
+  const wholesalerId = req.user.id;
+  const { id } = req.params;
+  const { amount, method, paidOn, note, saleId } = req.body;
+
+  const value = Number(amount);
+  if (!Number.isFinite(value) || value <= 0) {
+    return res.status(400).json({ message: "Enter an amount" });
+  }
+
+  if (method && !PAYMENT_METHODS.includes(method)) {
+    return res.status(400).json({ message: "Unknown payment method" });
+  }
+
+  try {
+    const party = await pool.query(
+      "SELECT id FROM parties WHERE id = $1 AND wholesaler_id = $2",
+      [id, wholesalerId],
+    );
+    if (party.rows.length === 0) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+
+    // A payment may name a sale, but only one of this wholesaler's own.
+    if (clean(saleId)) {
+      const sale = await pool.query(
+        "SELECT id FROM sales WHERE id = $1 AND wholesaler_id = $2 AND party_id = $3",
+        [saleId, wholesalerId, id],
+      );
+      if (sale.rows.length === 0) {
+        return res
+          .status(404)
+          .json({ message: "That sale is not on this customer's account" });
+      }
+    }
+
+    const result = await pool.query(
+      `INSERT INTO party_payments
+         (wholesaler_id, party_id, sale_id, amount, method, paid_on, note)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6::date, CURRENT_DATE), $7)
+       RETURNING *`,
+      [
+        wholesalerId,
+        id,
+        clean(saleId),
+        value.toFixed(2),
+        method || "cash",
+        clean(paidOn),
+        clean(note),
+      ],
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error("Error recording payment:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 /**
  * Headline numbers for the customer book. Every value here is computed from
  * real rows. A wholesaler with no data sees zeroes, which is the truth.

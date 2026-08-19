@@ -13,6 +13,7 @@ const trackRoutes = require("./routes/trackRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const partyRoutes = require("./routes/partyRoutes");
+const saleRoutes = require("./routes/saleRoutes");
 
 const app = express();
 
@@ -39,5 +40,6 @@ app.use("/api/invoices", invoiceRoutes);
 app.use("/api/notifications", notificationRoutes);
 // Wholesale 3.0: the wholesaler's own customer book.
 app.use("/api/parties", partyRoutes);
+app.use("/api/sales", saleRoutes);
 
 module.exports = app;

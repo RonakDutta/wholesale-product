@@ -57,6 +57,9 @@ const Promotions = lazy(() => import("./pages/dashboard/Promotions"));
 const Settings = lazy(() => import("./pages/dashboard/Settings"));
 const Parties = lazy(() => import("./pages/dashboard/Parties"));
 const PartyDetail = lazy(() => import("./pages/dashboard/PartyDetail"));
+const Sales = lazy(() => import("./pages/dashboard/Sales"));
+const RecordSale = lazy(() => import("./pages/dashboard/RecordSale"));
+const SaleDetail = lazy(() => import("./pages/dashboard/SaleDetail"));
 
 const SellerFallback = () => (
   <div className="flex min-h-dvh items-center justify-center bg-slate-100">
@@ -117,6 +120,10 @@ const router = createBrowserRouter([
       { index: true, element: <DashboardOverview /> },
       { path: "customers", element: <Parties /> },
       { path: "customers/:id", element: <PartyDetail /> },
+      { path: "sales", element: <Sales /> },
+      // Before "sales/:id" so the word is not read as a sale id.
+      { path: "sales/new", element: <RecordSale /> },
+      { path: "sales/:id", element: <SaleDetail /> },
       { path: "products", element: <MyProducts /> },
       { path: "products/new", element: <AddProduct /> },
       { path: "products/edit/:id", element: <EditProduct /> },

@@ -6,11 +6,13 @@ import {
   MapPin,
   MessageCircle,
   Phone,
+  Plus,
   Receipt,
   Wallet,
 } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
+import RecordPaymentModal from "../../components/RecordPaymentModal";
 
 const money = (value) =>
   Number(value || 0).toLocaleString("en-IN", {
@@ -47,24 +49,33 @@ const PartyDetail = () => {
   const { id } = useParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showPayment, setShowPayment] = useState(false);
+  // Bumped after a payment is recorded so the balance and both lists reload.
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    let alive = true;
     const load = async () => {
       try {
         const res = await api.get(`/api/parties/${id}`);
-        setData(res.data);
+        if (alive) setData(res.data);
       } catch (error) {
         console.error("Failed to load customer", error);
-        toast.error(
-          error.response?.status === 404
-            ? "That customer is not in your list."
-            : "Could not load this customer.",
-        );
+        if (alive) {
+          toast.error(
+            error.response?.status === 404
+              ? "That customer is not in your list."
+              : "Could not load this customer.",
+          );
+        }
       }
-      setLoading(false);
+      if (alive) setLoading(false);
     };
     load();
-  }, [id]);
+    return () => {
+      alive = false;
+    };
+  }, [id, refreshKey]);
 
   if (loading) {
     return (
@@ -158,26 +169,42 @@ const PartyDetail = () => {
           </div>
         </div>
 
-        {digits && (
-          <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-5">
-            <a
-              href={`tel:${party.phone}`}
-              className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
-            >
-              <Phone className="h-4 w-4" />
-              Call
-            </a>
-            <a
-              href={`https://wa.me/${digits}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-50"
-            >
-              <MessageCircle className="h-4 w-4" />
-              WhatsApp
-            </a>
-          </div>
-        )}
+        <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-5">
+          <Link
+            to={`/seller/sales/new?party=${party.id}`}
+            className="flex items-center gap-2 rounded-lg bg-espresso px-4 py-2 text-sm font-bold text-cream transition-colors hover:bg-clay"
+          >
+            <Plus className="h-4 w-4" />
+            Record a sale
+          </Link>
+          <button
+            onClick={() => setShowPayment(true)}
+            className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+          >
+            <Wallet className="h-4 w-4" />
+            Record payment
+          </button>
+          {digits && (
+            <>
+              <a
+                href={`tel:${party.phone}`}
+                className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+              >
+                <Phone className="h-4 w-4" />
+                Call
+              </a>
+              <a
+                href={`https://wa.me/${digits}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-50"
+              >
+                <MessageCircle className="h-4 w-4" />
+                WhatsApp
+              </a>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -203,30 +230,32 @@ const PartyDetail = () => {
           ) : (
             <ul className="divide-y divide-slate-100">
               {sales.map((sale) => (
-                <li
-                  key={sale.id}
-                  className="flex items-center justify-between gap-3 px-6 py-3.5"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-espresso">
-                      {sale.sale_number || "Sale"}
-                    </p>
-                    <p className="text-xs font-medium text-slate-500">
-                      {dateLabel(sale.sale_date)}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
-                        STATUS_STYLES[sale.status] || STATUS_STYLES.draft
-                      }`}
-                    >
-                      {sale.status}
-                    </span>
-                    <p className="w-20 text-right text-sm font-black text-espresso">
-                      ₹{money(sale.total)}
-                    </p>
-                  </div>
+                <li key={sale.id}>
+                  <Link
+                    to={`/seller/sales/${sale.id}`}
+                    className="flex items-center justify-between gap-3 px-6 py-3.5 transition-colors hover:bg-slate-50"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-espresso">
+                        {sale.sale_number || "Sale"}
+                      </p>
+                      <p className="text-xs font-medium text-slate-500">
+                        {dateLabel(sale.sale_date)}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                          STATUS_STYLES[sale.status] || STATUS_STYLES.draft
+                        }`}
+                      >
+                        {sale.status}
+                      </span>
+                      <p className="w-20 text-right text-sm font-black text-espresso">
+                        ₹{money(sale.total)}
+                      </p>
+                    </div>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -287,6 +316,20 @@ const PartyDetail = () => {
             {party.notes}
           </p>
         </div>
+      )}
+
+      {showPayment && (
+        <RecordPaymentModal
+          partyId={party.id}
+          partyName={party.name}
+          outstanding={due}
+          sales={sales}
+          onClose={() => setShowPayment(false)}
+          onSaved={() => {
+            setShowPayment(false);
+            setRefreshKey((key) => key + 1);
+          }}
+        />
       )}
     </div>
   );

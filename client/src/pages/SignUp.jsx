@@ -213,7 +213,7 @@ const SignUp = () => {
           Create your account
         </h2>
         <p className="text-slate-500 text-sm mt-1 font-dmsans">
-          Start sourcing from verified suppliers
+          Set up your business in a couple of minutes
         </p>
       </div>
 
@@ -328,7 +328,7 @@ const SignUp = () => {
           style={{ opacity: 0, transform: "translateY(20px)" }}
         >
           <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
-            Business Type
+            What do you do?
           </label>
           <div className="relative">
             <Building2 className="input-icon absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 transition-colors duration-300" />
@@ -342,11 +342,11 @@ const SignUp = () => {
               style={errStyle("bizType")}
             >
               <option value="" className="text-slate-400">
-                Select your role
+                Choose one
               </option>
-              <option value="buyer">Buyer / Procurement</option>
-              <option value="seller">Seller / Supplier</option>
-              <option value="both">Both</option>
+              <option value="seller">I sell wholesale</option>
+              <option value="buyer">I buy for my shop</option>
+              <option value="both">I do both</option>
             </select>
             <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             <div className="input-line" />

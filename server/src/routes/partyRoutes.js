@@ -5,6 +5,7 @@ const {
   createParty,
   updateParty,
   getPartyStats,
+  recordPayment,
 } = require("../controllers/partyController");
 const authenticateToken = require("../middlewares/authMiddleware");
 const authorizeRoles = require("../middlewares/roleMiddleware");
@@ -21,5 +22,6 @@ router.get("/", listParties);
 router.post("/", createParty);
 router.get("/:id", getPartyById);
 router.put("/:id", updateParty);
+router.post("/:id/payments", recordPayment);
 
 module.exports = router;

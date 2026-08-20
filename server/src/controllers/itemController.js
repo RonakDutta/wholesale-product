@@ -149,45 +149,49 @@ exports.updateItem = async (req, res) => {
     return res.status(400).json({ message: "Unknown status" });
   }
 
-  let rateValue = null;
   if (rate !== undefined && rate !== null && String(rate).trim() !== "") {
     const number = Number(rate);
     if (!Number.isFinite(number) || number < 0) {
       return res.status(400).json({ message: "Enter a valid rate" });
     }
-    rateValue = number.toFixed(2);
+  }
+
+  // Built one column at a time rather than with COALESCE, because COALESCE
+  // cannot express "clear this field". A wholesaler who empties the pack size
+  // box means to remove it, and the old version silently kept the old value.
+  // A key that is absent is left alone; a key sent as empty or null is
+  // cleared. Rate is the exception: it is NOT NULL, so an empty rate box
+  // means "leave it", and zero is a real rate that must be storable.
+  const sets = [];
+  const values = [id, wholesalerId];
+  const put = (column, value) => {
+    values.push(value);
+    sets.push(`${column} = $${values.length}`);
+  };
+
+  if (name !== undefined) put("name", clean(name));
+  if (category !== undefined) put("category", clean(category));
+  if (unit !== undefined && unit !== null) put("unit", unit);
+  if (packSize !== undefined) put("pack_size", optionalNumber(packSize));
+  if (moq !== undefined) put("moq", optionalNumber(moq));
+  if (hsnCode !== undefined) put("hsn_code", clean(hsnCode));
+  if (notes !== undefined) put("notes", clean(notes));
+  if (status !== undefined) put("status", status);
+  if (rate !== undefined && rate !== null && String(rate).trim() !== "") {
+    put("rate", Number(rate).toFixed(2));
+  }
+
+  if (sets.length === 0) {
+    return res.status(400).json({ message: "Nothing to update" });
   }
 
   try {
-    // COALESCE so changing one rate does not blank every other field. The
-    // rate list is edited a column at a time, not a form at a time.
     const result = await pool.query(
-      `UPDATE items SET
-         name       = COALESCE($3, name),
-         category   = COALESCE($4, category),
-         unit       = COALESCE($5, unit),
-         pack_size  = COALESCE($6, pack_size),
-         rate       = COALESCE($7, rate),
-         moq        = COALESCE($8, moq),
-         hsn_code   = COALESCE($9, hsn_code),
-         notes      = COALESCE($10, notes),
-         status     = COALESCE($11, status),
-         updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1 AND wholesaler_id = $2
-       RETURNING *`,
-      [
-        id,
-        wholesalerId,
-        clean(name),
-        clean(category),
-        unit ?? null,
-        optionalNumber(packSize),
-        rateValue,
-        optionalNumber(moq),
-        clean(hsnCode),
-        clean(notes),
-        status ?? null,
-      ],
+      `UPDATE items
+          SET ${sets.join(", ")}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1 AND wholesaler_id = $2
+        RETURNING *`,
+      values,
     );
 
     if (result.rows.length === 0) {

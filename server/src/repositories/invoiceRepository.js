@@ -248,12 +248,22 @@ class InvoiceRepository {
       SELECT 
         i.*,
         o.order_number,
-        COALESCE(bu.first_name || ' ' || bu.last_name, 'Buyer') AS buyer_name,
+        -- An invoice raised from a sale stores who it was issued to on the
+        -- row itself, because a party need not have a user account and
+        -- because a tax document must not change when a contact is edited.
+        -- The snapshot wins wherever it exists; the joins remain for the
+        -- older marketplace invoices that have no snapshot.
+        COALESCE(
+          i.recipient_name,
+          bwp.company_name,
+          bu.first_name || ' ' || bu.last_name,
+          'Buyer'
+        ) AS buyer_name,
         bu.email AS buyer_email,
-        bu.phone AS buyer_phone,
-        bwp.company_name AS buyer_company,
-        bwp.gstin AS buyer_gstin,
-        bwp.city AS buyer_city,
+        COALESCE(i.recipient_phone, bu.phone) AS buyer_phone,
+        COALESCE(i.recipient_name, bwp.company_name) AS buyer_company,
+        COALESCE(i.recipient_gstin, bwp.gstin) AS buyer_gstin,
+        COALESCE(i.recipient_city, bwp.city) AS buyer_city,
         bwp.country AS buyer_country,
         COALESCE(su.first_name || ' ' || su.last_name, 'Supplier') AS supplier_name,
         su.email AS supplier_email,
@@ -368,7 +378,9 @@ class InvoiceRepository {
           bwp.company_name ILIKE $${paramIndex} OR
           su.first_name ILIKE $${paramIndex} OR
           swp.company_name ILIKE $${paramIndex} OR
-          bwp.gstin ILIKE $${paramIndex}
+          bwp.gstin ILIKE $${paramIndex} OR
+          i.recipient_name ILIKE $${paramIndex} OR
+          i.recipient_gstin ILIKE $${paramIndex}
         )`);
         params.push(`%${search}%`);
         paramIndex++;
@@ -443,9 +455,14 @@ class InvoiceRepository {
           i.due_date,
           i.pdf_url,
           i.created_at,
-          COALESCE(bwp.company_name, bu.first_name || ' ' || bu.last_name, 'Buyer') AS buyer_name,
+          COALESCE(
+            i.recipient_name,
+            bwp.company_name,
+            bu.first_name || ' ' || bu.last_name,
+            'Buyer'
+          ) AS buyer_name,
           COALESCE(swp.company_name, su.first_name || ' ' || su.last_name, 'Supplier') AS supplier_name,
-          bwp.gstin AS buyer_gstin,
+          COALESCE(i.recipient_gstin, bwp.gstin) AS buyer_gstin,
           swp.gstin AS supplier_gstin
         FROM invoices i
         LEFT JOIN users bu ON i.buyer_id = bu.id
@@ -632,7 +649,12 @@ class InvoiceRepository {
         `
         : `
           SELECT 
-            COALESCE(bwp.company_name, bu.first_name || ' ' || bu.last_name, 'Customer') AS party_name,
+            COALESCE(
+              i.recipient_name,
+              bwp.company_name,
+              bu.first_name || ' ' || bu.last_name,
+              'Customer'
+            ) AS party_name,
             COUNT(i.id)::int AS invoice_count,
             COALESCE(SUM(i.grand_total), 0)::numeric(12,2) AS total_amount
           FROM invoices i
@@ -641,7 +663,9 @@ class InvoiceRepository {
           WHERE ${normRole === "admin" ? "1=1" : "i.supplier_id = $1"}
             AND i.invoice_status <> 'Cancelled'
             AND i.buyer_id IS DISTINCT FROM i.supplier_id
-          GROUP BY bwp.company_name, bu.first_name, bu.last_name
+          -- recipient_name is now part of the selected expression, so it
+          -- has to be grouped as well or Postgres rejects the whole query.
+          GROUP BY i.recipient_name, bwp.company_name, bu.first_name, bu.last_name
           ORDER BY total_amount DESC
           LIMIT 5
         `;

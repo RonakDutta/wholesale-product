@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Check, Truck, X } from "lucide-react";
+import { ArrowLeft, Check, Download, FileText, Truck, X } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
 
@@ -54,6 +54,8 @@ const SaleDetail = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [invoice, setInvoice] = useState(null);
+  const [billing, setBilling] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -70,6 +72,18 @@ const SaleDetail = () => {
           );
         }
       }
+
+      // A 404 here is the normal case: most sales have no bill yet. Only a
+      // real failure is worth saying anything about.
+      try {
+        const res = await api.get(`/api/sales/${id}/invoice`);
+        if (alive) setInvoice(res.data);
+      } catch (error) {
+        if (alive && error.response?.status !== 404) {
+          console.error("Could not check for a bill", error);
+        }
+      }
+
       if (alive) setLoading(false);
     };
     load();
@@ -77,6 +91,20 @@ const SaleDetail = () => {
       alive = false;
     };
   }, [id]);
+
+  const makeBill = async () => {
+    setBilling(true);
+    try {
+      const { data: raised } = await api.post(`/api/sales/${id}/invoice`);
+      setInvoice(raised);
+      toast.success(`Bill ${raised.invoice_number} is ready.`);
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message || "Could not raise the bill.",
+      );
+    }
+    setBilling(false);
+  };
 
   const changeStatus = async (status) => {
     setBusy(true);
@@ -197,6 +225,67 @@ const SaleDetail = () => {
           </div>
         )}
       </div>
+
+      {/* The bill. A cancelled sale cannot have one, so nothing is offered. */}
+      {sale.status !== "cancelled" && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          {invoice ? (
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 shrink-0 text-slate-400" />
+                  <p className="text-sm font-bold text-espresso">
+                    {invoice.invoice_number}
+                  </p>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  {invoice.recipient_gstin
+                    ? `GST bill for ${invoice.recipient_name || sale.party_name}`
+                    : `Bill for ${invoice.recipient_name || sale.party_name}. Add their GST number to make it claimable.`}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <a
+                  href={`${api.defaults.baseURL}/api/invoices/${invoice.id}/pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+                >
+                  <Download className="h-4 w-4" />
+                  Open bill
+                </a>
+                <Link
+                  to={`/seller/invoices/${invoice.id}`}
+                  className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+                >
+                  Details
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-espresso">
+                  No bill raised for this sale
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {sale.status === "draft"
+                    ? "Confirm the sale first, then you can raise its bill."
+                    : "Raise it once and the number is fixed. It cannot be raised twice."}
+                </p>
+              </div>
+              <button
+                onClick={makeBill}
+                disabled={billing || sale.status === "draft"}
+                className="flex items-center gap-2 rounded-lg bg-clay px-4 py-2 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-50"
+              >
+                <FileText className="h-4 w-4" />
+                {billing ? "Making bill..." : "Make bill"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Lines */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">

@@ -61,6 +61,7 @@ const Sales = lazy(() => import("./pages/dashboard/Sales"));
 const RecordSale = lazy(() => import("./pages/dashboard/RecordSale"));
 const SaleDetail = lazy(() => import("./pages/dashboard/SaleDetail"));
 const RateList = lazy(() => import("./pages/dashboard/RateList"));
+const Overview = lazy(() => import("./pages/dashboard/Overview"));
 
 const SellerFallback = () => (
   <div className="flex min-h-dvh items-center justify-center bg-slate-100">
@@ -118,7 +119,12 @@ const router = createBrowserRouter([
     path: "/seller",
     element: <SellerArea />,
     children: [
-      { index: true, element: <DashboardOverview /> },
+      // The marketplace dashboard reported a buyer rating and a listing
+      // count. It is kept behind the flag rather than deleted.
+      {
+        index: true,
+        element: FEATURES.MARKETPLACE ? <DashboardOverview /> : <Overview />,
+      },
       { path: "customers", element: <Parties /> },
       { path: "customers/:id", element: <PartyDetail /> },
       { path: "sales", element: <Sales /> },

@@ -24,10 +24,11 @@ const blankLine = () => ({
   quantity: "",
   unit: "pcs",
   rate: "",
-  // Carried from the rate list when an item is picked, only so the line can
-  // warn about a quantity below what the wholesaler said he will sell. It is
-  // never sent to the server, and nothing is blocked by it.
+  // Carried from the rate list when an item is picked. moq only drives the
+  // warning below and is never sent. hsnCode is sent, and is snapshot onto
+  // the line so a bill raised today keeps its HSN if the rate list changes.
   moq: null,
+  hsnCode: null,
 });
 
 const RecordSale = () => {
@@ -94,6 +95,7 @@ const RecordSale = () => {
               rate: String(Number(item.rate)),
               unit: UNITS.includes(item.unit) ? item.unit : line.unit,
               moq: item.moq === null ? null : Number(item.moq),
+              hsnCode: item.hsn_code || null,
             }
           : line,
       ),
@@ -158,6 +160,7 @@ const RecordSale = () => {
           quantity: line.quantity,
           unit: line.unit,
           rate: line.rate || 0,
+          hsnCode: line.hsnCode || undefined,
         })),
       });
       toast.success(`${data.sale_number} recorded.`);

@@ -4,6 +4,8 @@ const {
   listSales,
   getSaleById,
   updateSaleStatus,
+  createInvoiceForSale,
+  getInvoiceForSale,
 } = require("../controllers/saleController");
 const authenticateToken = require("../middlewares/authMiddleware");
 const authorizeRoles = require("../middlewares/roleMiddleware");
@@ -18,5 +20,7 @@ router.get("/", listSales);
 router.post("/", createSale);
 router.get("/:id", getSaleById);
 router.patch("/:id/status", updateSaleStatus);
+router.get("/:id/invoice", getInvoiceForSale);
+router.post("/:id/invoice", createInvoiceForSale);
 
 module.exports = router;

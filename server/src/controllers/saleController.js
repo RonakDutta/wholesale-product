@@ -1,4 +1,5 @@
 const pool = require("../config/db");
+const saleInvoiceService = require("../services/saleInvoiceService");
 
 /**
  * Recording a sale is the wholesaler's core action. He is usually writing
@@ -66,6 +67,9 @@ const buildLines = (rawLines) => {
       quantity,
       unit: clean(raw.unit),
       rate,
+      // Snapshot from the rate list, so editing an item later cannot change
+      // the HSN printed on a bill already raised.
+      hsnCode: clean(raw.hsnCode ?? raw.hsn_code),
       amountPaise: Math.round(toPaise(rate) * quantity),
     });
   }
@@ -153,8 +157,9 @@ exports.createSale = async (req, res) => {
 
     for (const line of lines) {
       await client.query(
-        `INSERT INTO sale_lines (sale_id, item_name, quantity, unit, rate, amount)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+        `INSERT INTO sale_lines
+           (sale_id, item_name, quantity, unit, rate, amount, hsn_code)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
           saleId,
           line.itemName,
@@ -162,6 +167,7 @@ exports.createSale = async (req, res) => {
           line.unit,
           line.rate,
           fromPaise(line.amountPaise),
+          line.hsnCode,
         ],
       );
     }
@@ -258,7 +264,7 @@ exports.getSaleById = async (req, res) => {
 
     const [lines, payments] = await Promise.all([
       pool.query(
-        `SELECT id, item_name, quantity, unit, rate, amount
+        `SELECT id, item_name, quantity, unit, rate, amount, hsn_code
            FROM sale_lines WHERE sale_id = $1 ORDER BY created_at ASC`,
         [id],
       ),
@@ -322,6 +328,48 @@ exports.updateSaleStatus = async (req, res) => {
     res.status(200).json(updated.rows[0]);
   } catch (err) {
     console.error("Error updating sale status:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/**
+ * Raises the bill for a sale, or hands back the one already raised. A sale
+ * gets exactly one invoice: a second would give the same goods two numbers.
+ */
+exports.createInvoiceForSale = async (req, res) => {
+  const wholesalerId = req.user.id;
+  const { id } = req.params;
+
+  const REASONS = {
+    notFound: [404, "Sale not found"],
+    cancelled: [400, "A cancelled sale cannot be billed"],
+    draft: [400, "Confirm this sale before raising a bill"],
+    empty: [400, "This sale has no items to bill"],
+  };
+
+  try {
+    const result = await saleInvoiceService.createInvoiceFromSale(id, wholesalerId);
+
+    if (result.error) {
+      const [status, message] = REASONS[result.error] || [400, "Cannot bill this sale"];
+      return res.status(status).json({ message });
+    }
+
+    res.status(result.created ? 201 : 200).json(result.invoice);
+  } catch (err) {
+    console.error("Error raising invoice for sale:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+exports.getInvoiceForSale = async (req, res) => {
+  const wholesalerId = req.user.id;
+  try {
+    const invoice = await saleInvoiceService.findBySaleId(req.params.id, wholesalerId);
+    if (!invoice) return res.status(404).json({ message: "No bill raised yet" });
+    res.status(200).json(invoice);
+  } catch (err) {
+    console.error("Error fetching invoice for sale:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

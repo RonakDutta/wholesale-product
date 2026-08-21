@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
+import ItemPicker from "../../components/ItemPicker";
 
 const UNITS = ["pcs", "dozen", "case", "mtr", "kg", "box", "bundle"];
 
@@ -23,6 +24,10 @@ const blankLine = () => ({
   quantity: "",
   unit: "pcs",
   rate: "",
+  // Carried from the rate list when an item is picked, only so the line can
+  // warn about a quantity below what the wholesaler said he will sell. It is
+  // never sent to the server, and nothing is blocked by it.
+  moq: null,
 });
 
 const RecordSale = () => {
@@ -30,6 +35,7 @@ const RecordSale = () => {
   const [searchParams] = useSearchParams();
 
   const [parties, setParties] = useState([]);
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -53,6 +59,17 @@ const RecordSale = () => {
         console.error("Failed to load customers", error);
         if (alive) toast.error("Could not load your customer list.");
       }
+
+      // The rate list only fills in suggestions. A wholesaler who has not
+      // built one yet must still be able to record a sale by typing, so a
+      // failure here is not worth telling him about.
+      try {
+        const { data } = await api.get("/api/items");
+        if (alive) setItems(data || []);
+      } catch (error) {
+        console.error("Failed to load the rate list", error);
+      }
+
       if (alive) setLoading(false);
     };
     load();
@@ -64,6 +81,22 @@ const RecordSale = () => {
   const setLine = (key, field, value) =>
     setLines((prev) =>
       prev.map((line) => (line.key === key ? { ...line, [field]: value } : line)),
+    );
+
+  // Picking from the rate list fills several fields at once.
+  const fillFromItem = (key, item) =>
+    setLines((prev) =>
+      prev.map((line) =>
+        line.key === key
+          ? {
+              ...line,
+              itemName: item.name,
+              rate: String(Number(item.rate)),
+              unit: UNITS.includes(item.unit) ? item.unit : line.unit,
+              moq: item.moq === null ? null : Number(item.moq),
+            }
+          : line,
+      ),
     );
 
   const removeLine = (key) =>
@@ -237,6 +270,12 @@ const RecordSale = () => {
             const amount = fromPaise(
               Math.round(toPaise(line.rate) * Number(line.quantity || 0)),
             );
+            // A note, not a rule. Nothing enforces a minimum, and a wholesaler
+            // undercutting his own is his business, but he should see it.
+            const belowMoq =
+              line.moq > 0 &&
+              Number(line.quantity) > 0 &&
+              Number(line.quantity) < line.moq;
             return (
               <div key={line.key} className="p-4 sm:px-5">
                 <div className="flex items-start gap-3">
@@ -245,13 +284,12 @@ const RecordSale = () => {
                   </span>
 
                   <div className="min-w-0 flex-1 space-y-2">
-                    <input
+                    <ItemPicker
                       value={line.itemName}
-                      onChange={(e) =>
-                        setLine(line.key, "itemName", e.target.value)
-                      }
+                      items={items}
                       placeholder="Item name"
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold outline-none transition-colors focus:border-clay"
+                      onChange={(name) => setLine(line.key, "itemName", name)}
+                      onPick={(item) => fillFromItem(line.key, item)}
                     />
 
                     <div className="grid grid-cols-3 gap-2">
@@ -287,6 +325,13 @@ const RecordSale = () => {
                         className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-colors focus:border-clay"
                       />
                     </div>
+
+                    {belowMoq && (
+                      <p className="text-xs font-semibold text-amber-600">
+                        You usually do not sell less than {line.moq}{" "}
+                        {line.unit} of this.
+                      </p>
+                    )}
 
                     {/* On a phone the amount sits under the inputs. Keeping it
                         in its own column squeezed qty, unit and rate down to

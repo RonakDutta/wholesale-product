@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Receipt } from "lucide-react";
+import { Receipt } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
 
@@ -60,20 +60,13 @@ const Sales = () => {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-black text-espresso">Sales</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Everything you have sold, newest first.
-          </p>
-        </div>
-        <Link
-          to="/seller/sales/new"
-          className="flex items-center gap-2 rounded-lg bg-espresso px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-clay"
-        >
-          <Plus className="h-4 w-4" />
-          Record a sale
-        </Link>
+      {/* Same reason as the Overview: the workspace header already carries a
+          Record sale button on every screen. */}
+      <div>
+        <h2 className="text-2xl font-black text-espresso">Sales</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Everything you have sold, newest first.
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-2">

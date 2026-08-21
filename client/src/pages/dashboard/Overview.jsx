@@ -7,7 +7,6 @@ import {
   Clock,
   Package,
   Phone,
-  Plus,
   Truck,
   Users,
   Wallet,
@@ -64,13 +63,22 @@ const MoneyCard = ({ label, value, hint, tone = "espresso" }) => (
   </div>
 );
 
-const Panel = ({ icon: Icon, title, action, children }) => (
+const Panel = ({ icon: Icon, title, subtitle, action, children }) => (
   <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-    <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3.5">
-      <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-500">
-        <Icon className="h-4 w-4 text-slate-400" />
-        {title}
-      </h3>
+    <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3">
+      <div className="min-w-0">
+        <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-500">
+          <Icon className="h-4 w-4 shrink-0 text-slate-400" />
+          {title}
+        </h3>
+        {/* A panel title alone does not say what would appear in it. The
+            subtitle does, so an empty panel still explains itself. */}
+        {subtitle && (
+          <p className="mt-0.5 pl-6 text-xs font-medium text-slate-400">
+            {subtitle}
+          </p>
+        )}
+      </div>
       {action}
     </div>
     {children}
@@ -155,24 +163,18 @@ const Overview = () => {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-black text-espresso">Overview</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            {counts.salesThisMonth === 0
-              ? "No sales recorded this month yet."
-              : `${counts.salesThisMonth} ${
-                  counts.salesThisMonth === 1 ? "sale" : "sales"
-                } recorded this month.`}
-          </p>
-        </div>
-        <Link
-          to="/seller/sales/new"
-          className="flex items-center gap-2 rounded-lg bg-espresso px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-clay"
-        >
-          <Plus className="h-4 w-4" />
-          Record a sale
-        </Link>
+      {/* No Record a sale button here. The workspace header carries one on
+          every screen, and two of them side by side on this one looked like
+          a mistake. */}
+      <div>
+        <h2 className="text-2xl font-black text-espresso">Overview</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          {counts.salesThisMonth === 0
+            ? "No sales recorded this month yet."
+            : `${counts.salesThisMonth} ${
+                counts.salesThisMonth === 1 ? "sale" : "sales"
+              } recorded this month.`}
+        </p>
       </div>
 
       {!setupDone && (
@@ -235,6 +237,7 @@ const Overview = () => {
         <Panel
           icon={Truck}
           title="Still to send out"
+          subtitle="Confirmed but not marked delivered"
           action={
             <Link
               to="/seller/sales"
@@ -275,6 +278,7 @@ const Overview = () => {
         <Panel
           icon={Wallet}
           title="Who owes you"
+          subtitle="Billed to them, not yet received"
           action={
             <Link
               to="/seller/customers"
@@ -321,17 +325,21 @@ const Overview = () => {
 
       {/* items-start so a short panel does not stretch to match a tall one. */}
       <div className="grid items-start gap-6 lg:grid-cols-2">
-        <Panel icon={Clock} title="Have gone quiet">
+        <Panel
+          icon={Clock}
+          title="Have gone quiet"
+          subtitle={`Used to buy, nothing for ${data.quietAfterDays} days`}
+        >
           {quiet.length === 0 ? (
             <Empty>
               {/* "Everyone has bought recently" is untrue of an account with
                   nobody in it, so what this says depends on how far along he
                   actually is. */}
               {counts.parties === 0
-                ? "Once you add customers, this shows anyone who has stopped buying."
+                ? "Once you add customers, anyone who stops buying shows up here to chase."
                 : recentSales.length === 0
-                  ? "Once you record sales, this shows anyone who has stopped buying."
-                  : "Everyone who buys from you has bought recently."}
+                  ? "Once you record sales, anyone who stops buying shows up here to chase."
+                  : `Nobody has gone quiet. Customers with no sale for ${data.quietAfterDays} days appear here.`}
             </Empty>
           ) : (
             <ul className="divide-y divide-slate-100">
@@ -369,7 +377,7 @@ const Overview = () => {
           )}
         </Panel>
 
-        <Panel icon={Package} title="Latest sales">
+        <Panel icon={Package} title="Latest sales" subtitle="Newest first">
           {recentSales.length === 0 ? (
             <Empty>Nothing recorded yet.</Empty>
           ) : (

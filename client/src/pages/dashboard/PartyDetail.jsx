@@ -5,6 +5,7 @@ import {
   FileText,
   MapPin,
   MessageCircle,
+  Pencil,
   Phone,
   Plus,
   Receipt,
@@ -13,6 +14,7 @@ import {
 import api from "../../utils/axios";
 import { toast } from "sonner";
 import RecordPaymentModal from "../../components/RecordPaymentModal";
+import PartyFormModal from "../../components/PartyFormModal";
 
 const money = (value) =>
   Number(value || 0).toLocaleString("en-IN", {
@@ -50,6 +52,7 @@ const PartyDetail = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showPayment, setShowPayment] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   // Bumped after a payment is recorded so the balance and both lists reload.
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -184,6 +187,13 @@ const PartyDetail = () => {
             <Wallet className="h-4 w-4" />
             Record payment
           </button>
+          <button
+            onClick={() => setShowEdit(true)}
+            className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+          >
+            <Pencil className="h-4 w-4" />
+            Edit
+          </button>
           {digits && (
             <>
               <a
@@ -316,6 +326,18 @@ const PartyDetail = () => {
             {party.notes}
           </p>
         </div>
+      )}
+
+      {showEdit && (
+        <PartyFormModal
+          party={party}
+          onClose={() => setShowEdit(false)}
+          onSaved={(updated) => {
+            setShowEdit(false);
+            toast.success(`${updated.name} saved.`);
+            setRefreshKey((key) => key + 1);
+          }}
+        />
       )}
 
       {showPayment && (

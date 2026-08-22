@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
-import AddPartyModal from "../../components/AddPartyModal";
+import PartyFormModal from "../../components/PartyFormModal";
 
 const money = (value) =>
   Number(value || 0).toLocaleString("en-IN", {
@@ -66,6 +66,7 @@ const Parties = () => {
   // Bumped after a customer is added, which re-runs the effect below rather
   // than duplicating the fetch in two places.
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showInactive, setShowInactive] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -73,7 +74,9 @@ const Parties = () => {
     const load = async () => {
       try {
         const [list, summary] = await Promise.all([
-          api.get("/api/parties"),
+          api.get("/api/parties", {
+            params: showInactive ? { includeInactive: 1 } : {},
+          }),
           api.get("/api/parties/stats"),
         ]);
         if (!alive) return;
@@ -90,7 +93,7 @@ const Parties = () => {
     return () => {
       alive = false;
     };
-  }, [refreshKey]);
+  }, [refreshKey, showInactive]);
 
   // Filtering client side keeps typing instant. The server also supports a
   // search parameter for when a book grows past a few hundred names.
@@ -103,6 +106,10 @@ const Parties = () => {
         .some((field) => String(field).toLowerCase().includes(term)),
     );
   }, [parties, search]);
+
+  const retiredCount = stats
+    ? Math.max(0, stats.totalParties - stats.activeParties)
+    : 0;
 
   const handleAdded = (party) => {
     setShowAdd(false);
@@ -174,9 +181,24 @@ const Parties = () => {
               className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none transition-colors focus:border-clay"
             />
           </div>
-          <p className="text-xs font-semibold text-slate-400">
-            {visible.length} of {parties.length}
-          </p>
+          <div className="flex items-center gap-4">
+            {/* Only offered when he actually has some, so the control does
+                not sit there meaning nothing. */}
+            {(showInactive || retiredCount > 0) && (
+              <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-500">
+                <input
+                  type="checkbox"
+                  checked={showInactive}
+                  onChange={(e) => setShowInactive(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-clay"
+                />
+                Show retired
+              </label>
+            )}
+            <p className="text-xs font-semibold text-slate-400">
+              {visible.length} of {parties.length}
+            </p>
+          </div>
         </div>
 
         {parties.length === 0 ? (
@@ -289,7 +311,10 @@ const Parties = () => {
       </div>
 
       {showAdd && (
-        <AddPartyModal onClose={() => setShowAdd(false)} onAdded={handleAdded} />
+        <PartyFormModal
+          onClose={() => setShowAdd(false)}
+          onSaved={handleAdded}
+        />
       )}
     </div>
   );

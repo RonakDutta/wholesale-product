@@ -36,6 +36,16 @@ exports.listParties = async (req, res) => {
     const params = [wholesalerId];
     let where = "pt.wholesaler_id = $1";
 
+    // Someone marked "not dealing with them any more" drops out of the book
+    // by default. Their sales and balance are untouched, and passing
+    // includeInactive brings them back into view.
+    const includeInactive =
+      String(req.query.includeInactive || "") === "1" ||
+      String(req.query.includeInactive || "").toLowerCase() === "true";
+    if (!includeInactive) {
+      where += " AND pt.status = 'active'";
+    }
+
     if (search) {
       params.push(`%${search}%`);
       where += ` AND (pt.name ILIKE $2 OR pt.business_name ILIKE $2 OR pt.phone ILIKE $2 OR pt.city ILIKE $2)`;
@@ -163,33 +173,38 @@ exports.updateParty = async (req, res) => {
     return res.status(400).json({ message: "Unknown status" });
   }
 
+  // Built one column at a time rather than with COALESCE, because COALESCE
+  // cannot express "clear this field". A wholesaler who empties the phone box
+  // means to remove a wrong number, and the old version silently kept it. A
+  // key that is absent is left alone; a key sent empty or null is cleared.
+  // Name is the exception, since a party must have one.
+  const sets = [];
+  const values = [id, wholesalerId];
+  const put = (column, value) => {
+    values.push(value);
+    sets.push(`${column} = $${values.length}`);
+  };
+
+  if (name !== undefined) put("name", clean(name));
+  if (businessName !== undefined) put("business_name", clean(businessName));
+  if (phone !== undefined) put("phone", clean(phone));
+  if (city !== undefined) put("city", clean(city));
+  if (address !== undefined) put("address", clean(address));
+  if (gstin !== undefined) put("gstin", clean(gstin));
+  if (notes !== undefined) put("notes", clean(notes));
+  if (status !== undefined) put("status", status);
+
+  if (sets.length === 0) {
+    return res.status(400).json({ message: "Nothing to update" });
+  }
+
   try {
-    // COALESCE so a partial update does not blank the fields it left out.
     const result = await pool.query(
-      `UPDATE parties SET
-         name          = COALESCE($3, name),
-         business_name = COALESCE($4, business_name),
-         phone         = COALESCE($5, phone),
-         city          = COALESCE($6, city),
-         address       = COALESCE($7, address),
-         gstin         = COALESCE($8, gstin),
-         notes         = COALESCE($9, notes),
-         status        = COALESCE($10, status),
-         updated_at    = CURRENT_TIMESTAMP
-       WHERE id = $1 AND wholesaler_id = $2
-       RETURNING *`,
-      [
-        id,
-        wholesalerId,
-        clean(name),
-        clean(businessName),
-        clean(phone),
-        clean(city),
-        clean(address),
-        clean(gstin),
-        clean(notes),
-        status ?? null,
-      ],
+      `UPDATE parties
+          SET ${sets.join(", ")}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1 AND wholesaler_id = $2
+        RETURNING *`,
+      values,
     );
 
     if (result.rows.length === 0) {

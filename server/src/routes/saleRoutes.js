@@ -3,6 +3,7 @@ const {
   createSale,
   listSales,
   getSaleById,
+  updateSale,
   updateSaleStatus,
   createInvoiceForSale,
   getInvoiceForSale,
@@ -19,6 +20,7 @@ router.use(authenticateToken, authorizeRoles("seller", "both"));
 router.get("/", listSales);
 router.post("/", createSale);
 router.get("/:id", getSaleById);
+router.put("/:id", updateSale);
 router.patch("/:id/status", updateSaleStatus);
 router.get("/:id/invoice", getInvoiceForSale);
 router.post("/:id/invoice", createInvoiceForSale);

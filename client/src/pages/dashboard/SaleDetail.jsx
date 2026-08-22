@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Check, Download, FileText, Truck, X } from "lucide-react";
+import { ArrowLeft, Check, Download, FileText, Pencil, Truck, X } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
 
@@ -148,6 +148,7 @@ const SaleDetail = () => {
   const received = payments.reduce((sum, p) => sum + Number(p.amount), 0);
   const due = Number(sale.total) - received;
   const actions = NEXT_ACTIONS[sale.status] || [];
+  const canEdit = sale.status !== "cancelled" && !invoice;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -186,7 +187,7 @@ const SaleDetail = () => {
             </Link>
           </div>
 
-          <div className="text-right">
+          <div className="w-full text-left sm:w-auto sm:text-right">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Bill total
             </p>
@@ -205,8 +206,20 @@ const SaleDetail = () => {
           </div>
         </div>
 
-        {actions.length > 0 && (
+        {(actions.length > 0 || canEdit) && (
           <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-5">
+            {/* Once a bill exists the sale is frozen: an invoice is a fixed
+                document and is corrected with a credit note, not by editing
+                what it was raised from. The server refuses either way. */}
+            {canEdit && (
+              <Link
+                to={`/seller/sales/${sale.id}/edit`}
+                className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+              >
+                <Pencil className="h-4 w-4" />
+                Edit
+              </Link>
+            )}
             {actions.map((action) => (
               <button
                 key={action.status}

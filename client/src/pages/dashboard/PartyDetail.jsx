@@ -155,7 +155,7 @@ const PartyDetail = () => {
             </div>
           </div>
 
-          <div className="text-right">
+          <div className="w-full text-left sm:w-auto sm:text-right">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Outstanding
             </p>

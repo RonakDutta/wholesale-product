@@ -131,6 +131,7 @@ const router = createBrowserRouter([
       // Before "sales/:id" so the word is not read as a sale id.
       { path: "sales/new", element: <RecordSale /> },
       { path: "sales/:id", element: <SaleDetail /> },
+      { path: "sales/:id/edit", element: <RecordSale /> },
       { path: "rates", element: <RateList /> },
       { path: "products", element: <MyProducts /> },
       { path: "products/new", element: <AddProduct /> },

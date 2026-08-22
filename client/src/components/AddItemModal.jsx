@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 import api from "../utils/axios";
 import { toast } from "sonner";
 
-export const UNITS = ["pcs", "dozen", "case", "mtr", "kg", "box", "bundle"];
+const UNITS = ["pcs", "dozen", "case", "mtr", "kg", "box", "bundle"];
 
 /**
  * Adds one line to the rate list. Only the name is required, because a
@@ -43,8 +43,8 @@ const AddItemModal = ({ onClose, onAdded }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 backdrop-blur-sm sm:items-center sm:p-4">
-      <div className="max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl bg-white shadow-2xl sm:max-w-lg sm:rounded-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+      <div className="flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-w-lg sm:rounded-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
           <h3 className="text-lg font-black text-espresso">Add item</h3>
           <button
             onClick={onClose}
@@ -55,7 +55,11 @@ const AddItemModal = ({ onClose, onAdded }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5">
+        <form
+          onSubmit={handleSubmit}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
           <div>
             <label
               htmlFor="item-name"
@@ -169,7 +173,9 @@ const AddItemModal = ({ onClose, onAdded }) => {
             </p>
           </div>
 
-          <div className="flex gap-3 pt-2">
+          </div>
+
+          <div className="flex shrink-0 gap-3 border-t border-slate-100 bg-white px-6 py-4">
             <button
               type="button"
               onClick={onClose}

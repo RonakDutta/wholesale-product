@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
@@ -31,8 +31,20 @@ const blankLine = () => ({
   hsnCode: null,
 });
 
+/**
+ * Records a sale, and edits one. The same form does both: the fields are
+ * identical, and a second copy is how the paise arithmetic on one side drifts
+ * from the other.
+ *
+ * Editing does not offer the customer or the money received. Moving a sale to
+ * another customer would move money between two khatas, and payments are
+ * recorded from the customer's own page. A sale that has been billed cannot
+ * be edited at all, which the server enforces.
+ */
 const RecordSale = () => {
   const navigate = useNavigate();
+  const { id: editingId } = useParams();
+  const editing = Boolean(editingId);
   const [searchParams] = useSearchParams();
 
   const [parties, setParties] = useState([]);
@@ -49,6 +61,7 @@ const RecordSale = () => {
   const [amountPaid, setAmountPaid] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [notes, setNotes] = useState("");
+  const [sale, setSale] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -71,13 +84,49 @@ const RecordSale = () => {
         console.error("Failed to load the rate list", error);
       }
 
+      if (editingId) {
+        try {
+          const { data } = await api.get(`/api/sales/${editingId}`);
+          if (alive) {
+            setSale(data.sale);
+            setPartyId(data.sale.party_id);
+            setSaleDate(String(data.sale.sale_date).slice(0, 10));
+            setNotes(data.sale.notes || "");
+            setDiscount(
+              Number(data.sale.discount) > 0
+                ? String(Number(data.sale.discount))
+                : "",
+            );
+            setLines(
+              data.lines.map((line) => ({
+                key: crypto.randomUUID(),
+                itemName: line.item_name,
+                quantity: String(Number(line.quantity)),
+                unit: line.unit || "pcs",
+                rate: String(Number(line.rate)),
+                moq: null,
+                hsnCode: line.hsn_code || null,
+              })),
+            );
+          }
+        } catch (error) {
+          if (alive) {
+            toast.error(
+              error.response?.status === 404
+                ? "That sale is not in your book."
+                : "Could not load this sale.",
+            );
+          }
+        }
+      }
+
       if (alive) setLoading(false);
     };
     load();
     return () => {
       alive = false;
     };
-  }, []);
+  }, [editingId]);
 
   const setLine = (key, field, value) =>
     setLines((prev) =>
@@ -146,28 +195,37 @@ const RecordSale = () => {
       return;
     }
 
+    const payload = {
+      saleDate,
+      discount: discount || 0,
+      notes,
+      lines: filled.map((line) => ({
+        itemName: line.itemName,
+        quantity: line.quantity,
+        unit: line.unit,
+        rate: line.rate || 0,
+        hsnCode: line.hsnCode || undefined,
+      })),
+    };
+
     setSaving(true);
     try {
-      const { data } = await api.post("/api/sales", {
-        partyId,
-        saleDate,
-        discount: discount || 0,
-        notes,
-        amountPaid: amountPaid || 0,
-        paymentMethod,
-        lines: filled.map((line) => ({
-          itemName: line.itemName,
-          quantity: line.quantity,
-          unit: line.unit,
-          rate: line.rate || 0,
-          hsnCode: line.hsnCode || undefined,
-        })),
-      });
-      toast.success(`${data.sale_number} recorded.`);
+      const { data } = editing
+        ? await api.put(`/api/sales/${editingId}`, payload)
+        : await api.post("/api/sales", {
+            ...payload,
+            partyId,
+            amountPaid: amountPaid || 0,
+            paymentMethod,
+          });
+      toast.success(
+        editing ? `${data.sale_number} saved.` : `${data.sale_number} recorded.`,
+      );
       navigate(`/seller/sales/${data.id}`, { replace: true });
     } catch (error) {
       toast.error(
-        error.response?.data?.message || "Could not record this sale.",
+        error.response?.data?.message ||
+          (editing ? "Could not save this sale." : "Could not record this sale."),
       );
       setSaving(false);
     }
@@ -211,10 +269,13 @@ const RecordSale = () => {
       </button>
 
       <div>
-        <h2 className="text-2xl font-black text-espresso">Record a sale</h2>
+        <h2 className="text-2xl font-black text-espresso">
+          {editing ? `Edit ${sale?.sale_number || "sale"}` : "Record a sale"}
+        </h2>
         <p className="mt-1 text-sm text-slate-500">
-          Write down what you sold and to whom. It goes straight onto that
-          customer's account.
+          {editing
+            ? "Fix what was written down. The customer's balance moves with it."
+            : "Write down what you sold and to whom. It goes straight onto that customer's account."}
         </p>
       </div>
 
@@ -227,20 +288,33 @@ const RecordSale = () => {
           >
             Customer <span className="text-clay">*</span>
           </label>
-          <select
-            id="sale-party"
-            value={partyId}
-            onChange={(e) => setPartyId(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
-          >
-            <option value="">Choose a customer</option>
-            {parties.map((party) => (
-              <option key={party.id} value={party.id}>
-                {party.name}
-                {party.business_name ? ` (${party.business_name})` : ""}
-              </option>
-            ))}
-          </select>
+          {editing ? (
+            <>
+              <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-600">
+                {sale?.party_name}
+                {sale?.party_business_name ? ` (${sale.party_business_name})` : ""}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                A sale cannot move to another customer. If this is the wrong
+                one, cancel it and record it again.
+              </p>
+            </>
+          ) : (
+            <select
+              id="sale-party"
+              value={partyId}
+              onChange={(e) => setPartyId(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+            >
+              <option value="">Choose a customer</option>
+              {parties.map((party) => (
+                <option key={party.id} value={party.id}>
+                  {party.name}
+                  {party.business_name ? ` (${party.business_name})` : ""}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div>
@@ -416,6 +490,17 @@ const RecordSale = () => {
           </div>
         </div>
 
+        {editing ? (
+          <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">
+              Money received
+            </h3>
+            <p className="text-xs text-slate-500">
+              Payments are not changed here. Record or correct them from the
+              customer's page, so the money and the bill stay separate.
+            </p>
+          </div>
+        ) : (
         <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">
             Money received now
@@ -461,6 +546,7 @@ const RecordSale = () => {
             </span>
           </div>
         </div>
+        )}
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -496,7 +582,7 @@ const RecordSale = () => {
             disabled={saving}
             className="rounded-lg bg-clay px-6 py-3 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-60"
           >
-            {saving ? "Saving..." : "Save sale"}
+            {saving ? "Saving..." : editing ? "Save changes" : "Save sale"}
           </button>
         </div>
       </div>

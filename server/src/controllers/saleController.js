@@ -373,3 +373,140 @@ exports.getInvoiceForSale = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+/**
+ * Changes a recorded sale. A typo in a bill silently corrupts a customer's
+ * balance, and until now it was permanent.
+ *
+ * Three things are deliberately not editable.
+ *
+ * The customer. Moving a sale to a different party would move money between
+ * two khatas and orphan any payment attached to it. If the wrong customer was
+ * picked, cancel the sale and record it again: the cancelled row stays, which
+ * is the honest history.
+ *
+ * A sale that has been billed. An invoice is a fixed document with a fixed
+ * number. Under GST you correct one with a credit note, not by rewriting it,
+ * and credit notes are launch phase work.
+ *
+ * The sale number and its status, which are not content.
+ */
+exports.updateSale = async (req, res) => {
+  const wholesalerId = req.user.id;
+  const { id } = req.params;
+  const { saleDate, discount, notes, lines: rawLines } = req.body;
+
+  const { lines, error } = buildLines(rawLines);
+  if (error) return res.status(400).json({ message: error });
+
+  const subtotalPaise = lines.reduce((sum, line) => sum + line.amountPaise, 0);
+  const discountPaise = Math.max(0, toPaise(discount));
+  if (discountPaise > subtotalPaise) {
+    return res
+      .status(400)
+      .json({ message: "Discount cannot be more than the total" });
+  }
+  const totalPaise = subtotalPaise - discountPaise;
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const existing = await client.query(
+      "SELECT id, status, sale_number FROM sales WHERE id = $1 AND wholesaler_id = $2 FOR UPDATE",
+      [id, wholesalerId],
+    );
+    if (existing.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ message: "Sale not found" });
+    }
+
+    const sale = existing.rows[0];
+    if (sale.status === "cancelled") {
+      await client.query("ROLLBACK");
+      return res
+        .status(400)
+        .json({ message: "A cancelled sale cannot be changed" });
+    }
+
+    const billed = await client.query(
+      "SELECT invoice_number FROM invoices WHERE sale_id = $1",
+      [id],
+    );
+    if (billed.rows.length > 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        message: `Bill ${billed.rows[0].invoice_number} has been raised for this sale, so it cannot be changed`,
+      });
+    }
+
+    // Editing the total down below what has already come in would leave the
+    // customer having overpaid a bill that no longer exists at that amount.
+    const receivedRow = await client.query(
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM party_payments WHERE sale_id = $1",
+      [id],
+    );
+    const receivedPaise = toPaise(receivedRow.rows[0].total);
+    if (totalPaise < receivedPaise) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        message: `₹${fromPaise(receivedPaise)} has already been received against this sale, so the total cannot go below that`,
+      });
+    }
+
+    await client.query(
+      `UPDATE sales SET
+         sale_date = COALESCE($2::date, sale_date),
+         subtotal  = $3,
+         discount  = $4,
+         total     = $5,
+         notes     = $6,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [
+        id,
+        clean(saleDate),
+        fromPaise(subtotalPaise),
+        fromPaise(discountPaise),
+        fromPaise(totalPaise),
+        clean(notes),
+      ],
+    );
+
+    // Lines are replaced wholesale. Nothing references a sale line, so there
+    // is nothing to preserve by trying to match them up one by one.
+    await client.query("DELETE FROM sale_lines WHERE sale_id = $1", [id]);
+    for (const line of lines) {
+      await client.query(
+        `INSERT INTO sale_lines
+           (sale_id, item_name, quantity, unit, rate, amount, hsn_code)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          id,
+          line.itemName,
+          line.quantity,
+          line.unit,
+          line.rate,
+          fromPaise(line.amountPaise),
+          line.hsnCode,
+        ],
+      );
+    }
+
+    await client.query("COMMIT");
+
+    const updated = await pool.query(
+      `SELECT s.*, p.name AS party_name FROM sales s
+         JOIN parties p ON p.id = s.party_id
+        WHERE s.id = $1`,
+      [id],
+    );
+    res.status(200).json(updated.rows[0]);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error updating sale:", err);
+    res.status(500).json({ message: "Server error" });
+  } finally {
+    client.release();
+  }
+};

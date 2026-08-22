@@ -1,3 +1,4 @@
+const pool = require("../config/db");
 const invoiceService = require("../services/invoiceService");
 const pdfService = require("../services/pdfService");
 const invoiceRepository = require("../repositories/invoiceRepository");
@@ -156,8 +157,30 @@ class InvoiceController {
     }
   }
 
+  /**
+   * Money against a bill raised from a sale is recorded on the customer, not
+   * here. Both used to be possible and they wrote to different tables, so a
+   * bill could read Paid while the customer's balance still showed the whole
+   * amount owing. This refuses rather than creating that split again.
+   *
+   * Marketplace invoices, which have no sale behind them, still use the old
+   * path because the customer book knows nothing about them.
+   */
   async recordPayment(req, res) {
     try {
+      const owned = await pool.query(
+        "SELECT sale_id, party_id FROM invoices WHERE id = $1 AND supplier_id = $2",
+        [req.params.id, req.user.id],
+      );
+      if (owned.rows.length > 0 && owned.rows[0].sale_id) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Record this payment on the customer's page. It updates their balance and this bill together.",
+          partyId: owned.rows[0].party_id,
+        });
+      }
+
       const result = await invoiceService.recordPayment(req.params.id, req.body, req.user.id, req.user.role);
       res.json({ success: true, ...result });
     } catch (err) {

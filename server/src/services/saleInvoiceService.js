@@ -218,17 +218,10 @@ class SaleInvoiceService {
         client,
       );
 
-      if (paid) {
-        await invoiceRepository.addPayment(
-          {
-            invoiceId: invoice.id,
-            amount: gst.grandTotal,
-            paymentMethod: "Recorded",
-            remarks: `Already received against sale ${sale.sale_number}`,
-          },
-          client,
-        );
-      }
+      // No payment row is written here. The money is already in
+      // party_payments, recorded against the sale. Writing it again into the
+      // invoice module's own payments table is what made a bill read Paid
+      // while the customer still owed the full amount.
 
       await client.query("COMMIT");
 
@@ -243,6 +236,66 @@ class SaleInvoiceService {
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * Brings an invoice's payment status back in line with the money ledger.
+   *
+   * There is one ledger, party_payments. The invoice module has its own
+   * payments table and used to be written to separately, which meant a bill
+   * could read Paid while the customer's balance still showed the full amount
+   * owing. Nothing writes that table for a sale invoice any more; this
+   * recomputes the status from what actually came in.
+   */
+  async syncInvoiceFromLedger(saleId, externalClient = null) {
+    const db = externalClient || pool;
+
+    const row = await db.query(
+      `SELECT i.id, i.grand_total, i.invoice_status,
+              COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
+                         WHERE pp.sale_id = i.sale_id), 0) AS received
+         FROM invoices i
+        WHERE i.sale_id = $1`,
+      [saleId],
+    );
+    if (row.rows.length === 0) return null;
+
+    const invoice = row.rows[0];
+    if (invoice.invoice_status === "Cancelled") return invoice;
+
+    const paid =
+      Number(invoice.received) >= Number(invoice.grand_total) &&
+      Number(invoice.grand_total) > 0;
+
+    const updated = await db.query(
+      `UPDATE invoices
+          SET payment_status = $2, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1 AND payment_status IS DISTINCT FROM $2
+        RETURNING *`,
+      [invoice.id, paid ? "Paid" : "Pending"],
+    );
+    return updated.rows[0] || invoice;
+  }
+
+  /**
+   * A cancelled sale must not leave a live bill behind it. The invoice is
+   * marked Cancelled rather than deleted, because an issued document is not
+   * something you erase, and the reports already exclude cancelled ones.
+   */
+  async cancelInvoiceForSale(saleId, wholesalerId, externalClient = null) {
+    const db = externalClient || pool;
+    const result = await db.query(
+      `UPDATE invoices i
+          SET invoice_status = 'Cancelled', updated_at = CURRENT_TIMESTAMP
+        FROM sales s
+        WHERE i.sale_id = s.id
+          AND i.sale_id = $1
+          AND s.wholesaler_id = $2
+          AND i.invoice_status <> 'Cancelled'
+        RETURNING i.invoice_number`,
+      [saleId, wholesalerId],
+    );
+    return result.rows[0]?.invoice_number || null;
   }
 
   async findBySaleId(saleId, wholesalerId) {

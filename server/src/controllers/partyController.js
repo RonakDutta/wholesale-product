@@ -1,4 +1,5 @@
 const pool = require("../config/db");
+const saleInvoiceService = require("../services/saleInvoiceService");
 
 /**
  * Parties are a wholesaler's own customer book. Every query in this file is
@@ -281,6 +282,18 @@ exports.recordPayment = async (req, res) => {
         clean(note),
       ],
     );
+
+    // Money against a billed sale has to move that bill's status too, or the
+    // invoice and the customer's balance start telling different stories.
+    if (clean(saleId)) {
+      try {
+        await saleInvoiceService.syncInvoiceFromLedger(saleId);
+      } catch (syncError) {
+        // The payment is recorded and that is what matters. A stale invoice
+        // status is recoverable; losing the payment is not.
+        console.error("Could not refresh the bill after payment:", syncError);
+      }
+    }
 
     res.status(201).json(result.rows[0]);
   } catch (err) {

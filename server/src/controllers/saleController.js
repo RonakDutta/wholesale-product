@@ -325,7 +325,22 @@ exports.updateSaleStatus = async (req, res) => {
       [status, id, wholesalerId],
     );
 
-    res.status(200).json(updated.rows[0]);
+    // A cancelled sale must not leave a live bill standing against the
+    // customer. The invoice is marked Cancelled, not deleted, because an
+    // issued document is not something you erase.
+    let cancelledInvoice = null;
+    if (status === "cancelled") {
+      try {
+        cancelledInvoice = await saleInvoiceService.cancelInvoiceForSale(
+          id,
+          wholesalerId,
+        );
+      } catch (cancelError) {
+        console.error("Could not cancel the bill for this sale:", cancelError);
+      }
+    }
+
+    res.status(200).json({ ...updated.rows[0], cancelledInvoice });
   } catch (err) {
     console.error("Error updating sale status:", err);
     res.status(500).json({ message: "Server error" });

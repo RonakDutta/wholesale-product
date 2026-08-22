@@ -44,9 +44,7 @@ const NAV = [
     icon: ShoppingBag,
     flag: "MARKETPLACE",
   },
-  // "Bills" is what a trader says. The route keeps its old name so
-  // existing links do not break.
-  { path: "/seller/invoices", label: "Bills", icon: FileText },
+  { path: "/seller/invoices", label: "Invoices", icon: FileText },
   { path: "/seller/messages", label: "Messages", icon: MessageSquare, badge: "unread" },
   {
     path: "/seller/promotions",

@@ -295,7 +295,27 @@ class InvoiceRepository {
 
     // Fetch payments
     const paymentsResult = await pool.query(
-      `SELECT * FROM payments WHERE invoice_id = $1 ORDER BY paid_at DESC`,
+      // A sale invoice's money lives in party_payments, the one ledger the
+      // customer's balance also reads. The old payments table is only still
+      // consulted for marketplace invoices, which have no sale behind them.
+      // Every column is cast, because party_payments.paid_on is a DATE while
+      // payments.paid_at is a TIMESTAMP, and an untyped NULL has no type for
+      // the union to agree on.
+      `SELECT pp.id::text AS id, pp.amount, pp.method AS payment_method,
+              pp.paid_on::timestamp AS paid_at,
+              pp.note AS remarks,
+              NULL::text AS transaction_id, NULL::text AS payment_reference
+         FROM party_payments pp
+         JOIN invoices i ON i.sale_id = pp.sale_id
+        WHERE i.id = $1
+        UNION ALL
+       SELECT p.id::text AS id, p.amount, p.payment_method,
+              p.paid_at::timestamp AS paid_at,
+              p.remarks, p.transaction_id::text, p.payment_reference::text
+         FROM payments p
+         JOIN invoices i2 ON i2.id = p.invoice_id
+        WHERE p.invoice_id = $1 AND i2.sale_id IS NULL
+        ORDER BY paid_at DESC`,
       [id]
     );
     invoice.payments = paymentsResult.rows;

@@ -73,14 +73,14 @@ const SaleDetail = () => {
         }
       }
 
-      // A 404 here is the normal case: most sales have no bill yet. Only a
+      // A 404 here is the normal case: most sales have no invoice yet. Only a
       // real failure is worth saying anything about.
       try {
         const res = await api.get(`/api/sales/${id}/invoice`);
         if (alive) setInvoice(res.data);
       } catch (error) {
         if (alive && error.response?.status !== 404) {
-          console.error("Could not check for a bill", error);
+          console.error("Could not check for an invoice", error);
         }
       }
 
@@ -97,10 +97,10 @@ const SaleDetail = () => {
     try {
       const { data: raised } = await api.post(`/api/sales/${id}/invoice`);
       setInvoice(raised);
-      toast.success(`Bill ${raised.invoice_number} is ready.`);
+      toast.success(`Invoice ${raised.invoice_number} is ready.`);
     } catch (error) {
       toast.error(
-        error.response?.data?.message || "Could not raise the bill.",
+        error.response?.data?.message || "Could not raise the invoice.",
       );
     }
     setBilling(false);
@@ -208,7 +208,7 @@ const SaleDetail = () => {
 
         {(actions.length > 0 || canEdit) && (
           <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-5">
-            {/* Once a bill exists the sale is frozen: an invoice is a fixed
+            {/* Once an invoice exists the sale is frozen: an invoice is a fixed
                 document and is corrected with a credit note, not by editing
                 what it was raised from. The server refuses either way. */}
             {canEdit && (
@@ -239,7 +239,7 @@ const SaleDetail = () => {
         )}
       </div>
 
-      {/* The bill. A cancelled sale cannot have one, so nothing is offered. */}
+      {/* The invoice. A cancelled sale cannot have one, so nothing is offered. */}
       {sale.status !== "cancelled" && (
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           {invoice ? (
@@ -253,8 +253,8 @@ const SaleDetail = () => {
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
                   {invoice.recipient_gstin
-                    ? `GST bill for ${invoice.recipient_name || sale.party_name}`
-                    : `Bill for ${invoice.recipient_name || sale.party_name}. Add their GST number to make it claimable.`}
+                    ? `GST invoice for ${invoice.recipient_name || sale.party_name}`
+                    : `Invoice for ${invoice.recipient_name || sale.party_name}. Add their GST number so they can claim input credit.`}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -265,7 +265,7 @@ const SaleDetail = () => {
                   className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
                 >
                   <Download className="h-4 w-4" />
-                  Open bill
+                  Open PDF
                 </a>
                 <Link
                   to={`/seller/invoices/${invoice.id}`}
@@ -279,11 +279,11 @@ const SaleDetail = () => {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-sm font-bold text-espresso">
-                  No bill raised for this sale
+                  No invoice raised for this sale
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
                   {sale.status === "draft"
-                    ? "Confirm the sale first, then you can raise its bill."
+                    ? "Confirm the sale first, then you can raise its invoice."
                     : "Raise it once and the number is fixed. It cannot be raised twice."}
                 </p>
               </div>
@@ -293,7 +293,7 @@ const SaleDetail = () => {
                 className="flex items-center gap-2 rounded-lg bg-clay px-4 py-2 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-50"
               >
                 <FileText className="h-4 w-4" />
-                {billing ? "Making bill..." : "Make bill"}
+                {billing ? "Making invoice..." : "Make invoice"}
               </button>
             </div>
           )}

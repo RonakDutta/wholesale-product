@@ -82,7 +82,7 @@ const StatusChip = ({ invoice }) => {
 };
 
 /**
- * The bills a wholesaler has issued.
+ * The invoices a wholesaler has issued.
  *
  * Rebuilt for 3.0. The marketplace version led with a row of export chips and
  * five filter controls before any bill was visible, called the customer
@@ -154,7 +154,7 @@ export default function Invoices() {
       } catch (err) {
         console.error("Error loading invoices:", err);
         if (alive) {
-          setError(err.response?.data?.message || "Could not load your bills.");
+          setError(err.response?.data?.message || "Could not load your invoices.");
         }
       }
       if (alive) setLoading(false);
@@ -177,7 +177,7 @@ export default function Invoices() {
         }
       } catch (err) {
         // The list is the page. Missing totals is not worth an error message.
-        console.error("Error loading bill totals:", err);
+        console.error("Error loading invoice totals:", err);
       }
     };
     load();
@@ -212,7 +212,7 @@ export default function Invoices() {
       if (filters.endDate) params.append("endDate", filters.endDate);
       await downloadFile(
         `/api/invoices/export/${format}?${params.toString()}`,
-        `bills.${format === "excel" ? "xlsx" : format}`,
+        `invoices.${format === "excel" ? "xlsx" : format}`,
       );
     } catch (err) {
       console.error("Export failed:", err);
@@ -225,9 +225,9 @@ export default function Invoices() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-black text-espresso">Bills</h2>
+          <h2 className="text-2xl font-black text-espresso">Invoices</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Every bill you have issued, and what is still to come in.
+            Every invoice you have issued, and what is still to come in.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -240,8 +240,8 @@ export default function Invoices() {
           <Link
             to="/seller/invoices/settings"
             className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:bg-slate-50"
-            title="Bill settings"
-            aria-label="Bill settings"
+            title="Invoice settings"
+            aria-label="Invoice settings"
           >
             <Settings className="h-4 w-4" />
           </Link>
@@ -278,7 +278,7 @@ export default function Invoices() {
               <input
                 value={filters.search}
                 onChange={(e) => setFilter({ search: e.target.value })}
-                placeholder="Search bill number or customer"
+                placeholder="Search invoice number or customer"
                 className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none transition-colors focus:border-clay"
               />
             </div>
@@ -334,13 +334,13 @@ export default function Invoices() {
               </select>
               <div>
                 <label
-                  htmlFor="bill-from"
+                  htmlFor="invoice-from"
                   className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400"
                 >
                   From
                 </label>
                 <input
-                  id="bill-from"
+                  id="invoice-from"
                   type="date"
                   value={filters.startDate}
                   onChange={(e) => setFilter({ startDate: e.target.value })}
@@ -349,13 +349,13 @@ export default function Invoices() {
               </div>
               <div>
                 <label
-                  htmlFor="bill-to"
+                  htmlFor="invoice-to"
                   className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400"
                 >
                   To
                 </label>
                 <input
-                  id="bill-to"
+                  id="invoice-to"
                   type="date"
                   value={filters.endDate}
                   onChange={(e) => setFilter({ endDate: e.target.value })}
@@ -388,9 +388,9 @@ export default function Invoices() {
         ) : invoices.length === 0 ? (
           <div className="px-6 py-16 text-center">
             <FileText className="mx-auto mb-3 h-10 w-10 text-slate-300" />
-            <p className="font-semibold text-espresso">No bills yet</p>
+            <p className="font-semibold text-espresso">No invoices yet</p>
             <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
-              Record a sale, then raise its bill from the sale page. The bill
+              Record a sale, then raise its invoice from the sale page. It
               carries the customer's GST number so they can claim input credit.
             </p>
             <Link
@@ -437,7 +437,7 @@ export default function Invoices() {
                 <thead className="border-b border-slate-100 bg-slate-50/50">
                   <tr>
                     <th className="px-6 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">
-                      Bill
+                      Invoice
                     </th>
                     <th className="px-3 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">
                       Customer

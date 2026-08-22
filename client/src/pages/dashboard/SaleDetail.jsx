@@ -239,8 +239,10 @@ const SaleDetail = () => {
         )}
       </div>
 
-      {/* The invoice. A cancelled sale cannot have one, so nothing is offered. */}
-      {sale.status !== "cancelled" && (
+      {/* A cancelled sale can still have an invoice behind it, cancelled with
+          it. Hiding the panel made an issued, numbered document vanish from
+          the screen with nothing saying what became of it. */}
+      {(sale.status !== "cancelled" || invoice) && (
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           {invoice ? (
             <div className="flex flex-wrap items-center justify-between gap-4">
@@ -250,11 +252,18 @@ const SaleDetail = () => {
                   <p className="text-sm font-bold text-espresso">
                     {invoice.invoice_number}
                   </p>
+                  {sale.status === "cancelled" && (
+                    <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                      Cancelled
+                    </span>
+                  )}
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
-                  {invoice.recipient_gstin
-                    ? `GST invoice for ${invoice.recipient_name || sale.party_name}`
-                    : `Invoice for ${invoice.recipient_name || sale.party_name}. Add their GST number so they can claim input credit.`}
+                  {sale.status === "cancelled"
+                    ? "Cancelled along with the sale. It stays here because an issued number cannot be reused."
+                    : invoice.recipient_gstin
+                      ? `GST invoice for ${invoice.recipient_name || sale.party_name}`
+                      : `Invoice for ${invoice.recipient_name || sale.party_name}. Add their GST number so they can claim input credit.`}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -289,7 +298,7 @@ const SaleDetail = () => {
               </div>
               <button
                 onClick={makeBill}
-                disabled={billing || sale.status === "draft"}
+                disabled={billing || sale.status === "draft" || sale.status === "cancelled"}
                 className="flex items-center gap-2 rounded-lg bg-clay px-4 py-2 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-50"
               >
                 <FileText className="h-4 w-4" />

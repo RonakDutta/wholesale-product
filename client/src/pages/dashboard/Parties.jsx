@@ -268,6 +268,17 @@ const Parties = () => {
                             Due
                           </p>
                         </>
+                      ) : due < 0 ? (
+                        // A cancelled sale they had already paid for leaves
+                        // them in credit. That is not the same as settled.
+                        <>
+                          <p className="text-sm font-black text-sky-700">
+                            ₹{money(Math.abs(due))}
+                          </p>
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-sky-700">
+                            In credit
+                          </p>
+                        </>
                       ) : party.last_sale_date ? (
                         <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600">
                           Settled

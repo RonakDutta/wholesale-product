@@ -157,17 +157,25 @@ const PartyDetail = () => {
 
           <div className="w-full text-left sm:w-auto sm:text-right">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              Outstanding
+              {due < 0 ? "They have paid extra" : "Outstanding"}
             </p>
             <p
               className={`text-3xl font-black ${
-                due > 0 ? "text-espresso" : "text-emerald-600"
+                due > 0
+                  ? "text-espresso"
+                  : due < 0
+                    ? "text-sky-700"
+                    : "text-emerald-600"
               }`}
             >
-              ₹{money(due)}
+              ₹{money(Math.abs(due))}
             </p>
             <p className="text-xs font-medium text-slate-500">
-              {due > 0 ? "Still to be received" : "Account settled"}
+              {due > 0
+                ? "Still to be received"
+                : due < 0
+                  ? "In credit with you"
+                  : "Account settled"}
             </p>
           </div>
         </div>

@@ -63,6 +63,16 @@ const SummaryCard = ({ label, value, hint, tone }) => (
 );
 
 const StatusChip = ({ invoice }) => {
+  // A cancelled invoice is cancelled first and foremost. Showing it as "Paid"
+  // because money once came in against the sale is how one turned up looking
+  // like a live paid bill.
+  if (invoice.invoice_status === "Cancelled") {
+    return (
+      <span className="rounded-full bg-slate-200 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+        Cancelled
+      </span>
+    );
+  }
   if (isOverdue(invoice)) {
     return (
       <span className="rounded-full bg-rose-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-rose-700">
@@ -112,6 +122,7 @@ export default function Invoices() {
 
   const [filters, setFilters] = useState({
     search: "",
+    invoiceStatus: "",
     paymentStatus: "",
     startDate: "",
     endDate: "",
@@ -193,6 +204,7 @@ export default function Invoices() {
     setFilters((prev) => ({
       ...prev,
       search: "",
+      invoiceStatus: "",
       paymentStatus: "",
       startDate: "",
       endDate: "",
@@ -200,6 +212,7 @@ export default function Invoices() {
     }));
 
   const activeFilters =
+    (filters.invoiceStatus ? 1 : 0) +
     (filters.paymentStatus ? 1 : 0) +
     (filters.startDate ? 1 : 0) +
     (filters.endDate ? 1 : 0);
@@ -322,15 +335,30 @@ export default function Invoices() {
 
           {showFilters && (
             <div className="mt-3 grid gap-2 border-t border-slate-200 pt-3 sm:grid-cols-4">
+              {/* Cancelled invoices are hidden by default by the query
+                  underneath, so without this there is no way to see one at
+                  all, and cancelling made an invoice simply vanish. */}
               <select
-                value={filters.paymentStatus}
-                onChange={(e) => setFilter({ paymentStatus: e.target.value })}
-                aria-label="Payment status"
+                value={
+                  filters.invoiceStatus === "Cancelled"
+                    ? "cancelled"
+                    : filters.paymentStatus
+                }
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFilter(
+                    value === "cancelled"
+                      ? { invoiceStatus: "Cancelled", paymentStatus: "" }
+                      : { invoiceStatus: "", paymentStatus: value },
+                  );
+                }}
+                aria-label="Show"
                 className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-clay"
               >
                 <option value="">Paid and unpaid</option>
                 <option value="Pending">Not paid</option>
                 <option value="Paid">Paid</option>
+                <option value="cancelled">Cancelled</option>
               </select>
               <div>
                 <label

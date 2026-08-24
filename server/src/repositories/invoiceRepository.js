@@ -291,8 +291,16 @@ class InvoiceRepository {
         swp.gstin AS supplier_gstin,
         swp.upi_id AS supplier_upi_id,
         swp.city AS supplier_city,
-        swp.country AS supplier_country
+        swp.country AS supplier_country,
+        -- See findInvoices. One row at most, by unique index.
+        cn.id AS credit_note_id,
+        cn.note_number AS credit_note_number,
+        cn.grand_total AS credited_amount,
+        cn.issue_date AS credited_on,
+        cn.reason AS credit_reason,
+        cn.reason_note AS credit_reason_note
       FROM invoices i
+      LEFT JOIN credit_notes cn ON cn.invoice_id = i.id
       LEFT JOIN orders o ON i.order_id = o.id
       LEFT JOIN users bu ON i.buyer_id = bu.id
       LEFT JOIN wholesaler_profiles bwp ON bu.id = bwp.user_id
@@ -502,12 +510,19 @@ class InvoiceRepository {
           ) AS buyer_name,
           COALESCE(swp.company_name, su.first_name || ' ' || su.last_name, 'Supplier') AS supplier_name,
           COALESCE(i.recipient_gstin, bwp.gstin) AS buyer_gstin,
-          swp.gstin AS supplier_gstin
+          swp.gstin AS supplier_gstin,
+          -- A credited invoice still reads Generated and, if the money had
+          -- come in, Paid. Without this the list shows a reversed bill as a
+          -- live one. At most one row joins: credit_notes has a unique index
+          -- on invoice_id, so this cannot multiply the result.
+          cn.note_number AS credit_note_number,
+          cn.grand_total AS credited_amount
         FROM invoices i
         LEFT JOIN users bu ON i.buyer_id = bu.id
         LEFT JOIN wholesaler_profiles bwp ON bu.id = bwp.user_id
         LEFT JOIN users su ON i.supplier_id = su.id
         LEFT JOIN wholesaler_profiles swp ON su.id = swp.user_id
+        LEFT JOIN credit_notes cn ON cn.invoice_id = i.id
         ${whereString}
         ORDER BY ${validSortBy} ${validSortOrder}
         LIMIT $${paramIndex++} OFFSET $${paramIndex++}

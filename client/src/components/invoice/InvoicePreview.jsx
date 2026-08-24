@@ -177,7 +177,7 @@ export default function InvoicePreview({ invoice, onClose, onSendEmail }) {
                     {item.hsn_code || "8504"}
                   </td>
                   <td className="py-2.5 px-3 text-center font-bold">
-                    {item.quantity}
+                    {Number(item.quantity)}
                   </td>
                   <td className="py-2.5 px-3 text-right">
                     ₹{Number(item.unit_price).toFixed(2)}

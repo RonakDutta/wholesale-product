@@ -169,9 +169,19 @@ class InvoiceController {
   async recordPayment(req, res) {
     try {
       const owned = await pool.query(
-        "SELECT sale_id, party_id FROM invoices WHERE id = $1 AND supplier_id = $2",
+        `SELECT i.sale_id, i.party_id, cn.note_number
+           FROM invoices i
+           LEFT JOIN credit_notes cn ON cn.invoice_id = i.id
+          WHERE i.id = $1 AND i.supplier_id = $2`,
         [req.params.id, req.user.id],
       );
+      // A reversed bill is not owed, so nothing can be received against it.
+      if (owned.rows.length > 0 && owned.rows[0].note_number) {
+        return res.status(400).json({
+          success: false,
+          message: `This bill was reversed by credit note ${owned.rows[0].note_number}, so nothing is owed on it.`,
+        });
+      }
       if (owned.rows.length > 0 && owned.rows[0].sale_id) {
         return res.status(400).json({
           success: false,

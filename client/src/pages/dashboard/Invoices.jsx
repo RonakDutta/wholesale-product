@@ -63,6 +63,19 @@ const SummaryCard = ({ label, value, hint, tone }) => (
 );
 
 const StatusChip = ({ invoice }) => {
+  // A reversed bill is reversed first and foremost. It keeps its own status,
+  // which is still Generated, and its payment status, which is still Paid if
+  // the money had come in, so without this it reads as a live paid bill.
+  if (invoice.credit_note_number) {
+    return (
+      <span
+        className="rounded-full bg-sky-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-sky-700"
+        title={`Reversed by credit note ${invoice.credit_note_number}`}
+      >
+        Credited
+      </span>
+    );
+  }
   // A cancelled invoice is cancelled first and foremost. Showing it as "Paid"
   // because money once came in against the sale is how one turned up looking
   // like a live paid bill.

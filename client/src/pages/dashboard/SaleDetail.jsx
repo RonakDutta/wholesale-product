@@ -1,6 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Check, Download, FileText, Pencil, Truck, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  Download,
+  FileText,
+  Pencil,
+  RotateCcw,
+  Truck,
+  X,
+} from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
 
@@ -56,13 +65,19 @@ const SaleDetail = () => {
   const [busy, setBusy] = useState(false);
   const [invoice, setInvoice] = useState(null);
   const [billing, setBilling] = useState(false);
+  // Set when the bill for this sale has been reversed. Kept beside the sale
+  // rather than inside it because it is a document in its own right.
+  const [creditNote, setCreditNote] = useState(null);
 
   useEffect(() => {
     let alive = true;
     const load = async () => {
       try {
         const res = await api.get(`/api/sales/${id}`);
-        if (alive) setData(res.data);
+        if (alive) {
+          setData(res.data);
+          setCreditNote(res.data.creditNote || null);
+        }
       } catch (error) {
         if (alive) {
           toast.error(
@@ -112,8 +127,17 @@ const SaleDetail = () => {
       const { data: updated } = await api.patch(`/api/sales/${id}/status`, {
         status,
       });
-      setData((prev) => ({ ...prev, sale: { ...prev.sale, ...updated } }));
-      toast.success(`Sale marked ${status}.`);
+      const { creditNote: raised, ...sale } = updated;
+      setData((prev) => ({ ...prev, sale: { ...prev.sale, ...sale } }));
+
+      // Cancelling a billed sale reverses the bill with a credit note. Saying
+      // so here matters: he expects the invoice to disappear, and it does not.
+      if (raised) {
+        setCreditNote(raised);
+        toast.success(`Sale cancelled. Credit note ${raised.note_number} raised.`);
+      } else {
+        toast.success(`Sale marked ${status}.`);
+      }
     } catch (error) {
       toast.error(
         error.response?.data?.message || "Could not update this sale.",
@@ -239,12 +263,13 @@ const SaleDetail = () => {
         )}
       </div>
 
-      {/* A cancelled sale can still have an invoice behind it, cancelled with
-          it. Hiding the panel made an issued, numbered document vanish from
-          the screen with nothing saying what became of it. */}
+      {/* A cancelled sale can still have an invoice behind it, reversed by a
+          credit note. Hiding the panel made an issued, numbered document
+          vanish from the screen with nothing saying what became of it. */}
       {(sale.status !== "cancelled" || invoice) && (
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           {invoice ? (
+            <>
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
@@ -252,15 +277,15 @@ const SaleDetail = () => {
                   <p className="text-sm font-bold text-espresso">
                     {invoice.invoice_number}
                   </p>
-                  {sale.status === "cancelled" && (
+                  {creditNote && (
                     <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                      Cancelled
+                      Credited
                     </span>
                   )}
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
-                  {sale.status === "cancelled"
-                    ? "Cancelled along with the sale. It stays here because an issued number cannot be reused."
+                  {creditNote
+                    ? "This bill has been reversed. It stays as it was issued, because a bill that has gone out cannot be rewritten."
                     : invoice.recipient_gstin
                       ? `GST invoice for ${invoice.recipient_name || sale.party_name}`
                       : `Invoice for ${invoice.recipient_name || sale.party_name}. Add their GST number so they can claim input credit.`}
@@ -284,6 +309,27 @@ const SaleDetail = () => {
                 </Link>
               </div>
             </div>
+
+            {/* The reversing document. Its own number, because the customer
+                needs it for his books as much as the wholesaler does. */}
+            {creditNote && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-sky-50 p-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <RotateCcw className="h-4 w-4 shrink-0 text-sky-700" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-sky-900">
+                      Credit note {creditNote.note_number}
+                    </p>
+                    <p className="mt-0.5 text-xs text-sky-800">
+                      ₹{money(creditNote.grand_total)} credited back against{" "}
+                      {invoice.invoice_number}. Give this to{" "}
+                      {sale.party_name} along with the original bill.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            </>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="min-w-0">

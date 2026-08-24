@@ -1,5 +1,6 @@
 const pool = require("../config/db");
 const saleInvoiceService = require("../services/saleInvoiceService");
+const creditNoteService = require("../services/creditNoteService");
 
 /**
  * Recording a sale is the wholesaler's core action. He is usually writing
@@ -262,7 +263,7 @@ exports.getSaleById = async (req, res) => {
       return res.status(404).json({ message: "Sale not found" });
     }
 
-    const [lines, payments] = await Promise.all([
+    const [lines, payments, creditNote] = await Promise.all([
       pool.query(
         `SELECT id, item_name, quantity, unit, rate, amount, hsn_code
            FROM sale_lines WHERE sale_id = $1 ORDER BY created_at ASC`,
@@ -273,12 +274,16 @@ exports.getSaleById = async (req, res) => {
            FROM party_payments WHERE sale_id = $1 ORDER BY paid_on DESC`,
         [id],
       ),
+      // Usually null. When it is not, the bill for this sale has been
+      // reversed and the page has to say so, or the invoice reads live.
+      creditNoteService.findBySaleId(id, wholesalerId),
     ]);
 
     res.status(200).json({
       sale: sale.rows[0],
       lines: lines.rows,
       payments: payments.rows,
+      creditNote,
     });
   } catch (err) {
     console.error("Error fetching sale:", err);
@@ -326,21 +331,34 @@ exports.updateSaleStatus = async (req, res) => {
     );
 
     // A cancelled sale must not leave a live bill standing against the
-    // customer. The invoice is marked Cancelled, not deleted, because an
-    // issued document is not something you erase.
-    let cancelledInvoice = null;
+    // customer. Voiding the invoice was the old answer and it was the wrong
+    // instrument: once a bill has been handed over, the way to reverse it is
+    // a credit note, which is a document of its own that the customer can put
+    // in his books too. The invoice stands. See creditNoteService.
+    let creditNote = null;
     if (status === "cancelled") {
       try {
-        cancelledInvoice = await saleInvoiceService.cancelInvoiceForSale(
-          id,
-          wholesalerId,
-        );
-      } catch (cancelError) {
-        console.error("Could not cancel the bill for this sale:", cancelError);
+        const invoice = await saleInvoiceService.findBySaleId(id, wholesalerId);
+        if (invoice) {
+          const result = await creditNoteService.createCreditNote({
+            invoiceId: invoice.id,
+            wholesalerId,
+            reason: "sale_cancelled",
+            reasonNote: `Sale ${updated.rows[0].sale_number} was cancelled`,
+          });
+          creditNote =
+            result.creditNote ||
+            (await creditNoteService.findByInvoiceId(invoice.id, wholesalerId));
+        }
+      } catch (creditError) {
+        // The sale is already cancelled and committed. Failing the whole
+        // request now would tell him it did not work when it did, so this is
+        // logged and the note is left to be raised by hand from the bill.
+        console.error("Could not raise a credit note for this sale:", creditError);
       }
     }
 
-    res.status(200).json({ ...updated.rows[0], cancelledInvoice });
+    res.status(200).json({ ...updated.rows[0], creditNote });
   } catch (err) {
     console.error("Error updating sale status:", err);
     res.status(500).json({ message: "Server error" });

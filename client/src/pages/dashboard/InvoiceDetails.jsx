@@ -1,6 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Download, Send, Bell, Eye, FileText } from "lucide-react";
+import {
+  ArrowLeft,
+  Bell,
+  Download,
+  Eye,
+  FileText,
+  RotateCcw,
+  Send,
+} from "lucide-react";
 import { toast } from "sonner";
 import axios from "../../utils/axios";
 import { downloadFile } from "../../utils/download";
@@ -8,6 +16,15 @@ import InvoiceStatusBadge from "../../components/invoice/InvoiceStatusBadge";
 import PaymentHistory from "../../components/invoice/PaymentHistory";
 import InvoiceTimeline from "../../components/invoice/InvoiceTimeline";
 import InvoicePreview from "../../components/invoice/InvoicePreview";
+
+// Plain English, not the stored code. A wholesaler reading his own bill
+// should not have to decode "rate_revised".
+const CREDIT_REASONS = {
+  sale_cancelled: "The sale was cancelled.",
+  goods_returned: "The goods came back.",
+  rate_revised: "The rate was corrected.",
+  other: "This bill has been reversed.",
+};
 
 export default function InvoiceDetails() {
   const { id } = useParams();
@@ -126,6 +143,9 @@ export default function InvoiceDetails() {
   const payments = invoice.payments || [];
   const logs = invoice.logs || [];
   const isPaid = (invoice.payment_status || "").toLowerCase() === "paid";
+  // Reversed by a credit note. The invoice's own two badges cannot say this:
+  // it is still Generated, and still Paid if the money had come in.
+  const isCredited = Boolean(invoice.credit_note_number);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -182,7 +202,8 @@ export default function InvoiceDetails() {
             <Send className="w-4 h-4" /> Send Email
           </button>
 
-          {!isPaid && (
+          {/* No chasing money for a bill that has been reversed. */}
+          {!isPaid && !isCredited && (
             <button
               onClick={handleSendReminder}
               className="px-3 py-2 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
@@ -192,6 +213,39 @@ export default function InvoiceDetails() {
           )}
         </div>
       </div>
+
+      {/* Says plainly that this bill no longer stands. Sits above everything
+          else because every number below it has been reversed. */}
+      {isCredited && (
+        <div className="flex flex-wrap items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4">
+          <RotateCcw className="mt-0.5 h-5 w-5 shrink-0 text-sky-700" />
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-sky-900">
+              Reversed by credit note {invoice.credit_note_number}
+            </p>
+            <p className="mt-1 text-xs text-sky-800">
+              {CREDIT_REASONS[invoice.credit_reason] ||
+                "This bill has been reversed."}{" "}
+              ₹
+              {Number(invoice.credited_amount || 0).toLocaleString("en-IN", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}{" "}
+              was credited back on{" "}
+              {invoice.credited_on
+                ? new Date(invoice.credited_on).toLocaleDateString("en-IN")
+                : "the same day"}
+              . The bill itself stays exactly as it was issued, because a bill
+              that has gone out cannot be rewritten.
+            </p>
+            {invoice.credit_reason_note && (
+              <p className="mt-1 text-xs italic text-sky-800/80">
+                {invoice.credit_reason_note}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Main Details Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -273,8 +327,10 @@ export default function InvoiceDetails() {
                       <td className="py-3 px-3 text-center text-slate-400 font-mono">
                         {item.hsn_code || "8504"}
                       </td>
+                      {/* Through Number: the column is NUMERIC(12,3), so it
+                          arrives as "2.500" and reads as a typo. */}
                       <td className="py-3 px-3 text-center font-bold">
-                        {item.quantity}
+                        {Number(item.quantity)}
                       </td>
                       <td className="py-3 px-3 text-right">
                         ₹{Number(item.unit_price).toFixed(2)}

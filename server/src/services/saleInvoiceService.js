@@ -277,26 +277,11 @@ class SaleInvoiceService {
     return updated.rows[0] || invoice;
   }
 
-  /**
-   * A cancelled sale must not leave a live bill behind it. The invoice is
-   * marked Cancelled rather than deleted, because an issued document is not
-   * something you erase, and the reports already exclude cancelled ones.
-   */
-  async cancelInvoiceForSale(saleId, wholesalerId, externalClient = null) {
-    const db = externalClient || pool;
-    const result = await db.query(
-      `UPDATE invoices i
-          SET invoice_status = 'Cancelled', updated_at = CURRENT_TIMESTAMP
-        FROM sales s
-        WHERE i.sale_id = s.id
-          AND i.sale_id = $1
-          AND s.wholesaler_id = $2
-          AND i.invoice_status <> 'Cancelled'
-        RETURNING i.invoice_number`,
-      [saleId, wholesalerId],
-    );
-    return result.rows[0]?.invoice_number || null;
-  }
+  // Cancelling a sale used to void its invoice here. It no longer does. An
+  // issued bill is reversed with a credit note, not by voiding it, so that
+  // job moved to creditNoteService. Voiding by hand is still possible from
+  // the invoice page, which is the right answer for a bill raised in error
+  // that never left the office.
 
   async findBySaleId(saleId, wholesalerId) {
     const result = await pool.query(

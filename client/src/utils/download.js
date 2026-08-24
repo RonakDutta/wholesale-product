@@ -23,7 +23,19 @@ export const downloadFile = async (url, filename, { params } = {}) => {
     link.remove();
     window.URL.revokeObjectURL(objectUrl);
   } catch (error) {
-    console.error(`Failed to download file [${filename}]:`, error);
-    throw error;
+    let message = error.message;
+    if (error.response?.data instanceof Blob) {
+      try {
+        const text = await error.response.data.text();
+        const json = JSON.parse(text);
+        if (json.message) message = json.message;
+      } catch {
+        // keep fallback message
+      }
+    }
+    console.error(`Failed to download file [${filename}]:`, message || error);
+    const err = new Error(message || "Failed to download file");
+    err.originalError = error;
+    throw err;
   }
 };

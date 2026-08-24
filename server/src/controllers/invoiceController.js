@@ -274,8 +274,8 @@ class InvoiceController {
       doc.moveDown(1.5);
 
       data.invoices.forEach((inv, i) => {
-        doc.fontSize(9).font("Helvetica-Bold").text(`${i + 1}. ${inv.invoice_number} | Buyer: ${inv.buyer_name}`);
-        doc.fontSize(8).font("Helvetica").text(`   Date: ${inv.issue_date ? new Date(inv.issue_date).toLocaleDateString() : 'N/A'} | Status: ${inv.invoice_status} | Payment: ${inv.payment_status} | Total: ₹${Number(inv.grand_total).toFixed(2)}`);
+        doc.fontSize(9).font("Helvetica-Bold").text(`${i + 1}. ${inv.invoice_number} | Buyer: ${inv.buyer_name || 'N/A'}`);
+        doc.fontSize(8).font("Helvetica").text(`   Date: ${inv.issue_date ? new Date(inv.issue_date).toLocaleDateString() : 'N/A'} | Status: ${inv.invoice_status} | Payment: ${inv.payment_status} | Total: Rs. ${Number(inv.grand_total || 0).toFixed(2)}`);
         doc.moveDown(0.5);
       });
 

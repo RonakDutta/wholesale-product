@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import api from "../../utils/axios";
+import { downloadFile } from "../../utils/download";
 import { toast } from "sonner";
 
 const money = (value) =>
@@ -68,6 +69,41 @@ const SaleDetail = () => {
   // Set when the bill for this sale has been reversed. Kept beside the sale
   // rather than inside it because it is a document in its own right.
   const [creditNote, setCreditNote] = useState(null);
+  const [downloading, setDownloading] = useState("");
+
+  const handleDownloadInvoice = async () => {
+    if (!invoice) return;
+    setDownloading("invoice");
+    try {
+      await downloadFile(
+        `/api/invoices/${invoice.id}/pdf`,
+        `${invoice.invoice_number || "Invoice"}.pdf`,
+      );
+      toast.success("Invoice downloaded");
+    } catch (err) {
+      console.error("Invoice download error:", err);
+      toast.error(err.message || "Could not download the invoice PDF");
+    } finally {
+      setDownloading("");
+    }
+  };
+
+  const handleDownloadCreditNote = async () => {
+    if (!creditNote) return;
+    setDownloading("creditNote");
+    try {
+      await downloadFile(
+        `/api/credit-notes/${creditNote.id}/pdf`,
+        `${creditNote.note_number || "credit-note"}.pdf`,
+      );
+      toast.success("Credit note downloaded");
+    } catch (err) {
+      console.error("Credit note download error:", err);
+      toast.error(err.message || "Could not download the credit note");
+    } finally {
+      setDownloading("");
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -292,15 +328,15 @@ const SaleDetail = () => {
                 </p>
               </div>
               <div className="flex gap-2">
-                <a
-                  href={`${api.defaults.baseURL}/api/invoices/${invoice.id}/pdf`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+                <button
+                  type="button"
+                  onClick={handleDownloadInvoice}
+                  disabled={downloading === "invoice"}
+                  className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
                 >
                   <Download className="h-4 w-4" />
-                  Open PDF
-                </a>
+                  {downloading === "invoice" ? "Downloading..." : "Open PDF"}
+                </button>
                 <Link
                   to={`/seller/invoices/${invoice.id}`}
                   className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
@@ -327,15 +363,15 @@ const SaleDetail = () => {
                     </p>
                   </div>
                 </div>
-                <a
-                  href={`${api.defaults.baseURL}/api/credit-notes/${creditNote.id}/pdf`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex shrink-0 items-center gap-2 rounded-lg border border-sky-300 bg-white px-4 py-2 text-sm font-bold text-sky-800 transition-colors hover:bg-sky-100"
+                <button
+                  type="button"
+                  onClick={handleDownloadCreditNote}
+                  disabled={downloading === "creditNote"}
+                  className="flex shrink-0 items-center gap-2 rounded-lg border border-sky-300 bg-white px-4 py-2 text-sm font-bold text-sky-800 transition-colors hover:bg-sky-100 disabled:opacity-50"
                 >
                   <Download className="h-4 w-4" />
-                  Open PDF
-                </a>
+                  {downloading === "creditNote" ? "Downloading..." : "Open PDF"}
+                </button>
               </div>
             )}
             </>

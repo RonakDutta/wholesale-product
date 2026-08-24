@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Download, RotateCcw, Search } from "lucide-react";
 import api from "../utils/axios";
+import { downloadFile } from "../utils/download";
 import { toast } from "sonner";
 
 const money = (value) =>
@@ -38,6 +39,23 @@ const CreditNotesPanel = () => {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [downloadingId, setDownloadingId] = useState(null);
+
+  const handleDownload = async (note) => {
+    setDownloadingId(note.id);
+    try {
+      await downloadFile(
+        `/api/credit-notes/${note.id}/pdf`,
+        `${note.note_number || "credit-note"}.pdf`,
+      );
+      toast.success("Credit note downloaded");
+    } catch (error) {
+      console.error("Credit note download failed:", error);
+      toast.error(error.message || "Could not download the credit note");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -153,15 +171,15 @@ const CreditNotesPanel = () => {
                 ₹{money(note.grand_total)}
               </p>
 
-              <a
-                href={`${api.defaults.baseURL}/api/credit-notes/${note.id}/pdf`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 sm:ml-0"
+              <button
+                type="button"
+                onClick={() => handleDownload(note)}
+                disabled={downloadingId === note.id}
+                className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 sm:ml-0"
               >
                 <Download className="h-3.5 w-3.5" />
-                PDF
-              </a>
+                {downloadingId === note.id ? "Downloading..." : "PDF"}
+              </button>
             </li>
           ))}
         </ul>

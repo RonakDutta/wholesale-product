@@ -1,7 +1,11 @@
+import { useState } from "react";
 import { X, Printer, Download, Send } from "lucide-react";
+import { toast } from "sonner";
+import { downloadFile } from "../../utils/download";
 import InvoiceStatusBadge from "./InvoiceStatusBadge";
 
 export default function InvoicePreview({ invoice, onClose, onSendEmail }) {
+  const [downloading, setDownloading] = useState(false);
   if (!invoice) return null;
 
   const isPaid = (invoice.payment_status || "").toLowerCase() === "paid";
@@ -9,6 +13,22 @@ export default function InvoicePreview({ invoice, onClose, onSendEmail }) {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPDF = async () => {
+    setDownloading(true);
+    try {
+      await downloadFile(
+        `/api/invoices/${invoice.id}/pdf`,
+        `${invoice.invoice_number || "Invoice"}.pdf`,
+      );
+      toast.success("Invoice downloaded");
+    } catch (err) {
+      console.error("Download PDF error:", err);
+      toast.error(err.message || "Could not download the invoice PDF");
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -33,14 +53,14 @@ export default function InvoicePreview({ invoice, onClose, onSendEmail }) {
               <Printer className="w-4 h-4" />
             </button>
 
-            <a
-              href={`/api/invoices/${invoice.id}/pdf`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
+            <button
+              type="button"
+              onClick={handleDownloadPDF}
+              disabled={downloading}
+              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs disabled:opacity-50"
             >
-              <Download className="w-4 h-4" /> PDF
-            </a>
+              <Download className="w-4 h-4" /> {downloading ? "Downloading..." : "PDF"}
+            </button>
 
             {onSendEmail && (
               <button

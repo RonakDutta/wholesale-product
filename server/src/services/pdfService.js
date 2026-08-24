@@ -58,10 +58,12 @@ class PDFService {
             `inline; filename=${invoice.invoice_number || "invoice"}.pdf`
           );
           doc.pipe(res);
+          doc.on("end", () => resolve());
         } else {
           doc.on("data", (chunk) => buffers.push(chunk));
           doc.on("end", () => resolve(Buffer.concat(buffers)));
         }
+        doc.on("error", (err) => reject(err));
 
         const isPaid = (invoice.payment_status || "").toLowerCase() === "paid";
         const isCancelled = (invoice.invoice_status || "").toLowerCase() === "cancelled";
@@ -292,10 +294,12 @@ class PDFService {
             `inline; filename=${note.note_number || "credit-note"}.pdf`,
           );
           doc.pipe(res);
+          doc.on("end", () => resolve());
         } else {
           doc.on("data", (chunk) => buffers.push(chunk));
           doc.on("end", () => resolve(Buffer.concat(buffers)));
         }
+        doc.on("error", (err) => reject(err));
 
         doc.save();
         doc.rotate(-45, { origin: [297, 421] });

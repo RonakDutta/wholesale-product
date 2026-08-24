@@ -140,7 +140,9 @@ class PDFService {
           doc.fillColor("#1e293b").fontSize(8).font("Helvetica");
           doc.text(item.product_name || "Product", 44, y + 5, { width: 170, height: 12, ellipsis: true });
           doc.text(item.hsn_code || "8504", 220, y + 5, { width: 45, align: "center" });
-          doc.text(String(item.quantity), 270, y + 5, { width: 40, align: "center" });
+          // Through Number first: the column is NUMERIC now, so pg hands back
+          // "2.500" and the bill would read 2.500 metres.
+          doc.text(String(Number(item.quantity)), 270, y + 5, { width: 40, align: "center" });
           doc.text(`₹${Number(item.unit_price).toFixed(2)}`, 315, y + 5, { width: 65, align: "right" });
           doc.text(`${item.gst_percent || 18}%`, 385, y + 5, { width: 45, align: "center" });
           doc.text(`₹${Number(item.tax_amount).toFixed(2)}`, 435, y + 5, { width: 55, align: "right" });

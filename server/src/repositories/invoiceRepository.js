@@ -68,12 +68,31 @@ async function ensureSchema(client = null) {
           product_id UUID REFERENCES products(id) ON DELETE SET NULL,
           product_name VARCHAR(255) NOT NULL,
           hsn_code VARCHAR(50) DEFAULT '8504',
-          quantity INTEGER NOT NULL CHECK (quantity > 0),
+          -- Not INTEGER. Cloth is sold by the metre and oil by the litre, and
+          -- an integer column made billing 2.5 metres fail outright.
+          quantity NUMERIC(12, 3) NOT NULL CHECK (quantity > 0),
           unit_price NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
           gst_percent NUMERIC(5, 2) DEFAULT 18.00,
           tax_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
           total NUMERIC(12, 2) NOT NULL DEFAULT 0.00
       );
+
+      -- Widens the column on databases created before it was NUMERIC. Guarded
+      -- rather than run flat, because an unconditional ALTER ... TYPE on every
+      -- boot risks rewriting the whole table each time. Sits after the CREATE
+      -- above: on a fresh database the table has to exist first, and a failure
+      -- here would abort the rest of this batch.
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+           WHERE table_name = 'invoice_items'
+             AND column_name = 'quantity'
+             AND data_type = 'integer'
+        ) THEN
+          ALTER TABLE invoice_items ALTER COLUMN quantity TYPE NUMERIC(12, 3);
+        END IF;
+      END $$;
 
       CREATE TABLE IF NOT EXISTS payments (
           id SERIAL PRIMARY KEY,

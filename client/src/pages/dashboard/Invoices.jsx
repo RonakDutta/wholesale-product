@@ -12,6 +12,7 @@ import {
 import { toast } from "sonner";
 import axios from "../../utils/axios";
 import { downloadFile } from "../../utils/download";
+import CreditNotesPanel from "../../components/CreditNotesPanel";
 
 const money = (value) =>
   Number(value || 0).toLocaleString("en-IN", {
@@ -132,6 +133,10 @@ export default function Invoices() {
   const [error, setError] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [exporting, setExporting] = useState("");
+  // Two documents, two lists. A credit note has its own number series and
+  // has to be totalled separately at the end of a month, so it is a tab
+  // rather than a filter on the bills.
+  const [tab, setTab] = useState("invoices");
 
   const [filters, setFilters] = useState({
     search: "",
@@ -274,7 +279,26 @@ export default function Invoices() {
         </div>
       </div>
 
-      {stats && (
+      <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1">
+        {[
+          ["invoices", "Bills issued"],
+          ["credit-notes", "Bills reversed"],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            onClick={() => setTab(value)}
+            className={`flex-1 rounded-lg px-4 py-2 text-sm font-bold transition-colors ${
+              tab === value
+                ? "bg-espresso text-cream"
+                : "text-slate-500 hover:bg-slate-50"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "invoices" && stats && (
         <div className="grid grid-cols-3 gap-2 sm:gap-4">
           <SummaryCard
             label="Still to come in"
@@ -296,6 +320,11 @@ export default function Invoices() {
         </div>
       )}
 
+      {tab === "credit-notes" ? (
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <CreditNotesPanel />
+        </div>
+      ) : (
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 bg-slate-50 px-4 py-3 sm:px-6">
           <div className="flex flex-wrap items-center gap-2">
@@ -566,6 +595,7 @@ export default function Invoices() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

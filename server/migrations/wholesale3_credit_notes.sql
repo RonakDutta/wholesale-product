@@ -30,6 +30,12 @@
 --    a rate correction, will relax that index and add a quantity to each line;
 --    the shape here is built so that is an addition rather than a rewrite.
 --
+-- RUN wholesale3_parties_and_sales.sql AND wholesale3_invoice_from_sale.sql
+-- FIRST. This file references sales, parties and invoices.sale_id. Run out of
+-- order it stops on "relation sales does not exist", which is loud rather than
+-- silent and costs nothing: every statement here is IF NOT EXISTS, so once the
+-- other two are in, run this one again and it completes.
+--
 -- Run by hand against Neon, like every other file in this directory.
 
 CREATE TABLE IF NOT EXISTS credit_note_sequences (

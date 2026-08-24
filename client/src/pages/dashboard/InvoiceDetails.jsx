@@ -16,6 +16,7 @@ import InvoiceStatusBadge from "../../components/invoice/InvoiceStatusBadge";
 import PaymentHistory from "../../components/invoice/PaymentHistory";
 import InvoiceTimeline from "../../components/invoice/InvoiceTimeline";
 import InvoicePreview from "../../components/invoice/InvoicePreview";
+import CreditNoteModal from "../../components/CreditNoteModal";
 
 // Plain English, not the stored code. A wholesaler reading his own bill
 // should not have to decode "rate_revised".
@@ -33,6 +34,7 @@ export default function InvoiceDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showPreview, setShowPreview] = useState(false);
+  const [showCredit, setShowCredit] = useState(false);
 
   const fetchInvoiceDetails = useCallback(async () => {
     try {
@@ -84,6 +86,18 @@ export default function InvoiceDetails() {
     } catch (err) {
       console.error("Download PDF error:", err);
       toast.error("Could not download the invoice PDF");
+    }
+  };
+
+  const handleDownloadCreditNote = async () => {
+    try {
+      await downloadFile(
+        `/api/credit-notes/${invoice.credit_note_id}/pdf`,
+        `${invoice.credit_note_number || "credit-note"}.pdf`,
+      );
+    } catch (err) {
+      console.error("Download credit note error:", err);
+      toast.error("Could not download the credit note");
     }
   };
 
@@ -211,6 +225,18 @@ export default function InvoiceDetails() {
               <Bell className="w-4 h-4" /> Send Reminder
             </button>
           )}
+
+          {/* The honest way to correct a bill that has gone out. A voided
+              invoice is only right for one raised in error that never left
+              the office, which is what the Cancelled status is still for. */}
+          {!isCredited && invoice.invoice_status !== "Cancelled" && (
+            <button
+              onClick={() => setShowCredit(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-espresso/70 transition-colors hover:bg-slate-100"
+            >
+              <RotateCcw className="w-4 h-4" /> Reverse this bill
+            </button>
+          )}
         </div>
       </div>
 
@@ -243,6 +269,13 @@ export default function InvoiceDetails() {
                 {invoice.credit_reason_note}
               </p>
             )}
+            <button
+              onClick={handleDownloadCreditNote}
+              className="mt-3 flex items-center gap-1.5 rounded-lg border border-sky-300 bg-white px-3 py-2 text-xs font-bold text-sky-800 transition-colors hover:bg-sky-100"
+            >
+              <Download className="h-4 w-4" />
+              Download credit note
+            </button>
           </div>
         </div>
       )}
@@ -325,7 +358,7 @@ export default function InvoiceDetails() {
                         {item.product_name}
                       </td>
                       <td className="py-3 px-3 text-center text-slate-400 font-mono">
-                        {item.hsn_code || "8504"}
+                        {item.hsn_code || "-"}
                       </td>
                       {/* Through Number: the column is NUMERIC(12,3), so it
                           arrives as "2.500" and reads as a typo. */}
@@ -426,6 +459,17 @@ export default function InvoiceDetails() {
           invoice={invoice}
           onClose={() => setShowPreview(false)}
           onSendEmail={handleSendEmail}
+        />
+      )}
+
+      {showCredit && (
+        <CreditNoteModal
+          invoice={invoice}
+          onClose={() => setShowCredit(false)}
+          onSaved={() => {
+            setShowCredit(false);
+            fetchInvoiceDetails();
+          }}
         />
       )}
     </div>

@@ -4,6 +4,7 @@ const {
   listCreditNotes,
   getCreditNote,
   getCreditNoteForInvoice,
+  getCreditNotePDF,
 } = require("../controllers/creditNoteController");
 const authenticateToken = require("../middlewares/authMiddleware");
 const authorizeRoles = require("../middlewares/roleMiddleware");
@@ -20,5 +21,6 @@ router.post("/", createCreditNote);
 // Registered before "/:id" so "by-invoice" is not swallowed as a note id.
 router.get("/by-invoice/:invoiceId", getCreditNoteForInvoice);
 router.get("/:id", getCreditNote);
+router.get("/:id/pdf", getCreditNotePDF);
 
 module.exports = router;

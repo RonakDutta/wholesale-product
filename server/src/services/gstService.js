@@ -88,7 +88,11 @@ class GSTService {
       const qty = Number(item.quantity) || 1;
       const unitPrice = Number(item.unitPrice) || 0;
       const gstPercent = Number(item.gstPercent ?? 18.00);
-      const hsnCode = item.hsnCode || "8504";
+      // No invented HSN. This used to default to 8504, which is the code for
+      // electrical transformers, so a bill for cotton shirting went out
+      // declaring it as transformers. A blank HSN on a tax document is a gap
+      // the wholesaler can fill in; a wrong one is a false statement.
+      const hsnCode = item.hsnCode || null;
 
       let lineTaxable = 0;
       let lineTaxAmount = 0;

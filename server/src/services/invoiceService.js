@@ -69,7 +69,9 @@ class InvoiceService {
           quantity: item.quantity,
           unitPrice: item.unit_price,
           gstPercent: settings.defaultTaxRate,
-          hsnCode: "8504",
+          // Marketplace orders carry no HSN, so the line goes out blank
+          // rather than declaring every product as electrical transformers.
+          hsnCode: item.hsn_code || null,
         })),
         discount: 0.00,
         shippingCharge: 0.00,

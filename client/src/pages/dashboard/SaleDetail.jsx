@@ -327,6 +327,15 @@ const SaleDetail = () => {
                     </p>
                   </div>
                 </div>
+                <a
+                  href={`${api.defaults.baseURL}/api/credit-notes/${creditNote.id}/pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex shrink-0 items-center gap-2 rounded-lg border border-sky-300 bg-white px-4 py-2 text-sm font-bold text-sky-800 transition-colors hover:bg-sky-100"
+                >
+                  <Download className="h-4 w-4" />
+                  Open PDF
+                </a>
               </div>
             )}
             </>

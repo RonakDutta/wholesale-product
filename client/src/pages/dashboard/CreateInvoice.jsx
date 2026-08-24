@@ -20,7 +20,7 @@ export default function CreateInvoice() {
   const [items, setItems] = useState([
     {
       productName: "",
-      hsnCode: "8504",
+      hsnCode: "",
       quantity: 1,
       unitPrice: 0,
       gstPercent: 18,
@@ -75,7 +75,7 @@ export default function CreateInvoice() {
       ...prev,
       {
         productName: "",
-        hsnCode: "8504",
+        hsnCode: "",
         quantity: 1,
         unitPrice: 0,
         gstPercent: defaultTaxRate,

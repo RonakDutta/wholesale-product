@@ -1,4 +1,5 @@
 const creditNoteService = require("../services/creditNoteService");
+const pdfService = require("../services/pdfService");
 
 /**
  * Credit notes are the wholesaler's own documents, so every route is scoped
@@ -67,6 +68,17 @@ exports.getCreditNote = async (req, res) => {
   } catch (err) {
     console.error("Error fetching credit note:", err);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+exports.getCreditNotePDF = async (req, res) => {
+  try {
+    const note = await creditNoteService.getCreditNote(req.params.id, req.user.id);
+    if (!note) return res.status(404).json({ message: "Credit note not found" });
+    await pdfService.generateCreditNotePDF(note, res);
+  } catch (err) {
+    console.error("Error generating credit note PDF:", err);
+    res.status(500).json({ message: "Could not generate the credit note" });
   }
 };
 

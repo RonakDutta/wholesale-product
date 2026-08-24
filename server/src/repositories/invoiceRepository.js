@@ -67,7 +67,8 @@ async function ensureSchema(client = null) {
           invoice_id UUID REFERENCES invoices(id) ON DELETE CASCADE,
           product_id UUID REFERENCES products(id) ON DELETE SET NULL,
           product_name VARCHAR(255) NOT NULL,
-          hsn_code VARCHAR(50) DEFAULT '8504',
+          -- No default. A wrong HSN on a tax document is worse than none.
+          hsn_code VARCHAR(50),
           -- Not INTEGER. Cloth is sold by the metre and oil by the litre, and
           -- an integer column made billing 2.5 metres fail outright.
           quantity NUMERIC(12, 3) NOT NULL CHECK (quantity > 0),
@@ -244,7 +245,7 @@ class InvoiceRepository {
           invoice.id,
           item.productId || null,
           item.productName,
-          item.hsnCode || "8504",
+          item.hsnCode || null,
           item.quantity,
           item.unitPrice,
           item.gstPercent || 18.00,
@@ -298,9 +299,14 @@ class InvoiceRepository {
         cn.grand_total AS credited_amount,
         cn.issue_date AS credited_on,
         cn.reason AS credit_reason,
-        cn.reason_note AS credit_reason_note
+        cn.reason_note AS credit_reason_note,
+        -- What this bill was raised from, when it was a recorded sale rather
+        -- than a marketplace order. Without it the PDF printed "Order Ref:
+        -- #N/A" on every 3.0 invoice.
+        sl.sale_number
       FROM invoices i
       LEFT JOIN credit_notes cn ON cn.invoice_id = i.id
+      LEFT JOIN sales sl ON sl.id = i.sale_id
       LEFT JOIN orders o ON i.order_id = o.id
       LEFT JOIN users bu ON i.buyer_id = bu.id
       LEFT JOIN wholesaler_profiles bwp ON bu.id = bwp.user_id

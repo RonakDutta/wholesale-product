@@ -174,7 +174,7 @@ export default function InvoicePreview({ invoice, onClose, onSendEmail }) {
                     {item.product_name}
                   </td>
                   <td className="py-2.5 px-3 text-center font-mono text-slate-500">
-                    {item.hsn_code || "8504"}
+                    {item.hsn_code || "-"}
                   </td>
                   <td className="py-2.5 px-3 text-center font-bold">
                     {Number(item.quantity)}

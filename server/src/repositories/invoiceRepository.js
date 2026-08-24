@@ -145,6 +145,69 @@ async function ensureSchema(client = null) {
   }
 }
 
+/**
+ * What of wholesale 3.0 this database actually has.
+ *
+ * Migrations in this repository are run by hand, so the code can be deployed
+ * hours or days before the SQL is run, and it can be pointed at a database
+ * that is still purely wholesale 2.0. The invoice module is shared: the
+ * marketplace and the sales book both read these queries. Referring to
+ * credit_notes or sales unconditionally meant that on a database without them
+ * the whole module died. The list came back empty, because findInvoices
+ * swallows its own errors, the detail page 404ed, the PDF failed, recording a
+ * payment failed, and the dashboard reported zero revenue, which is worse
+ * than an error because it looks like an answer.
+ *
+ * So the queries are assembled from what is present. Probed once and cached,
+ * the same way the schema check is. Every branch here is temporary: once the
+ * migrations are in, both sides are true and the query is the full one.
+ */
+let extras = null;
+
+async function schemaExtras(db = pool) {
+  if (extras) return extras;
+  try {
+    const result = await db.query(`
+      SELECT
+        to_regclass('public.credit_notes')   IS NOT NULL AS has_credit_notes,
+        to_regclass('public.party_payments') IS NOT NULL AS has_party_payments,
+        to_regclass('public.sales')          IS NOT NULL AS has_sales,
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'invoices' AND column_name = 'sale_id') AS has_sale_id,
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'invoices' AND column_name = 'recipient_name') AS has_recipient
+    `);
+    extras = result.rows[0];
+  } catch (err) {
+    // Assume the older shape. Being wrong this way loses the 3.0 columns on
+    // a page; being wrong the other way loses the page.
+    console.error("Could not probe for the 3.0 invoice columns:", err.message);
+    extras = {
+      has_credit_notes: false,
+      has_party_payments: false,
+      has_sales: false,
+      has_sale_id: false,
+      has_recipient: false,
+    };
+  }
+  return extras;
+}
+
+// Only meaningful in tests, where one process talks to more than one database.
+function resetSchemaExtras() {
+  extras = null;
+}
+
+// The recipient snapshot columns, or the plain buyer joins when the migration
+// that adds them has not been run.
+const recipientColumns = (has) => ({
+  name: has ? "i.recipient_name," : "",
+  phone: has ? "COALESCE(i.recipient_phone, bu.phone)" : "bu.phone",
+  company: has ? "COALESCE(i.recipient_name, bwp.company_name)" : "bwp.company_name",
+  gstin: has ? "COALESCE(i.recipient_gstin, bwp.gstin)" : "bwp.gstin",
+  city: has ? "COALESCE(i.recipient_city, bwp.city)" : "bwp.city",
+});
+
 class InvoiceRepository {
   /**
    * Atomically fetches and increments the sequence number for a given calendar year.
@@ -264,8 +327,11 @@ class InvoiceRepository {
    */
   async findInvoiceById(id) {
     await ensureSchema();
+    const has = await schemaExtras();
+    const r = recipientColumns(has.has_recipient);
+
     const query = `
-      SELECT 
+      SELECT
         i.*,
         o.order_number,
         -- An invoice raised from a sale stores who it was issued to on the
@@ -274,16 +340,16 @@ class InvoiceRepository {
         -- The snapshot wins wherever it exists; the joins remain for the
         -- older marketplace invoices that have no snapshot.
         COALESCE(
-          i.recipient_name,
+          ${r.name}
           bwp.company_name,
           bu.first_name || ' ' || bu.last_name,
           'Buyer'
         ) AS buyer_name,
         bu.email AS buyer_email,
-        COALESCE(i.recipient_phone, bu.phone) AS buyer_phone,
-        COALESCE(i.recipient_name, bwp.company_name) AS buyer_company,
-        COALESCE(i.recipient_gstin, bwp.gstin) AS buyer_gstin,
-        COALESCE(i.recipient_city, bwp.city) AS buyer_city,
+        ${r.phone} AS buyer_phone,
+        ${r.company} AS buyer_company,
+        ${r.gstin} AS buyer_gstin,
+        ${r.city} AS buyer_city,
         bwp.country AS buyer_country,
         COALESCE(su.first_name || ' ' || su.last_name, 'Supplier') AS supplier_name,
         su.email AS supplier_email,
@@ -292,21 +358,29 @@ class InvoiceRepository {
         swp.gstin AS supplier_gstin,
         swp.upi_id AS supplier_upi_id,
         swp.city AS supplier_city,
-        swp.country AS supplier_country,
+        swp.country AS supplier_country
+        ${
+          has.has_credit_notes
+            ? `,
         -- See findInvoices. One row at most, by unique index.
         cn.id AS credit_note_id,
         cn.note_number AS credit_note_number,
         cn.grand_total AS credited_amount,
         cn.issue_date AS credited_on,
         cn.reason AS credit_reason,
-        cn.reason_note AS credit_reason_note,
-        -- What this bill was raised from, when it was a recorded sale rather
-        -- than a marketplace order. Without it the PDF printed "Order Ref:
-        -- #N/A" on every 3.0 invoice.
-        sl.sale_number
+        cn.reason_note AS credit_reason_note`
+            : ""
+        }
+        ${
+          // What this bill was raised from, when it was a recorded sale rather
+          // than a marketplace order. Without it the PDF printed
+          // "Order Ref: #N/A" on every 3.0 invoice.
+          has.has_sales && has.has_sale_id ? `,
+        sl.sale_number` : ""
+        }
       FROM invoices i
-      LEFT JOIN credit_notes cn ON cn.invoice_id = i.id
-      LEFT JOIN sales sl ON sl.id = i.sale_id
+      ${has.has_credit_notes ? "LEFT JOIN credit_notes cn ON cn.invoice_id = i.id" : ""}
+      ${has.has_sales && has.has_sale_id ? "LEFT JOIN sales sl ON sl.id = i.sale_id" : ""}
       LEFT JOIN orders o ON i.order_id = o.id
       LEFT JOIN users bu ON i.buyer_id = bu.id
       LEFT JOIN wholesaler_profiles bwp ON bu.id = bwp.user_id
@@ -326,29 +400,42 @@ class InvoiceRepository {
     );
     invoice.items = itemsResult.rows;
 
-    // Fetch payments
+    // Fetch payments.
+    //
+    // A sale invoice's money lives in party_payments, the one ledger the
+    // customer's balance also reads. The old payments table is only still
+    // consulted for marketplace invoices, which have no sale behind them.
+    // Every column is cast, because party_payments.paid_on is a DATE while
+    // payments.paid_at is a TIMESTAMP, and an untyped NULL has no type for
+    // the union to agree on.
+    //
+    // On a database that has not had the 3.0 migrations run there is no
+    // party_payments and no sale_id, and every invoice is a marketplace one,
+    // so the second half of the union is the whole answer.
+    const oneLedger = has.has_party_payments && has.has_sale_id;
     const paymentsResult = await pool.query(
-      // A sale invoice's money lives in party_payments, the one ledger the
-      // customer's balance also reads. The old payments table is only still
-      // consulted for marketplace invoices, which have no sale behind them.
-      // Every column is cast, because party_payments.paid_on is a DATE while
-      // payments.paid_at is a TIMESTAMP, and an untyped NULL has no type for
-      // the union to agree on.
-      `SELECT pp.id::text AS id, pp.amount, pp.method AS payment_method,
-              pp.paid_on::timestamp AS paid_at,
-              pp.note AS remarks,
-              NULL::text AS transaction_id, NULL::text AS payment_reference
-         FROM party_payments pp
-         JOIN invoices i ON i.sale_id = pp.sale_id
-        WHERE i.id = $1
-        UNION ALL
-       SELECT p.id::text AS id, p.amount, p.payment_method,
-              p.paid_at::timestamp AS paid_at,
-              p.remarks, p.transaction_id::text, p.payment_reference::text
-         FROM payments p
-         JOIN invoices i2 ON i2.id = p.invoice_id
-        WHERE p.invoice_id = $1 AND i2.sale_id IS NULL
-        ORDER BY paid_at DESC`,
+      oneLedger
+        ? `SELECT pp.id::text AS id, pp.amount, pp.method AS payment_method,
+                  pp.paid_on::timestamp AS paid_at,
+                  pp.note AS remarks,
+                  NULL::text AS transaction_id, NULL::text AS payment_reference
+             FROM party_payments pp
+             JOIN invoices i ON i.sale_id = pp.sale_id
+            WHERE i.id = $1
+            UNION ALL
+           SELECT p.id::text AS id, p.amount, p.payment_method,
+                  p.paid_at::timestamp AS paid_at,
+                  p.remarks, p.transaction_id::text, p.payment_reference::text
+             FROM payments p
+             JOIN invoices i2 ON i2.id = p.invoice_id
+            WHERE p.invoice_id = $1 AND i2.sale_id IS NULL
+            ORDER BY paid_at DESC`
+        : `SELECT p.id::text AS id, p.amount, p.payment_method,
+                  p.paid_at::timestamp AS paid_at,
+                  p.remarks, p.transaction_id::text, p.payment_reference::text
+             FROM payments p
+            WHERE p.invoice_id = $1
+            ORDER BY paid_at DESC`,
       [id]
     );
     invoice.payments = paymentsResult.rows;
@@ -397,6 +484,8 @@ class InvoiceRepository {
     sortOrder = "DESC",
   }) {
     await ensureSchema();
+    const has = await schemaExtras();
+    const recipient = recipientColumns(has.has_recipient);
     try {
       const offset = (page - 1) * limit;
       const params = [];
@@ -431,9 +520,13 @@ class InvoiceRepository {
           bwp.company_name ILIKE $${paramIndex} OR
           su.first_name ILIKE $${paramIndex} OR
           swp.company_name ILIKE $${paramIndex} OR
-          bwp.gstin ILIKE $${paramIndex} OR
-          i.recipient_name ILIKE $${paramIndex} OR
-          i.recipient_gstin ILIKE $${paramIndex}
+          bwp.gstin ILIKE $${paramIndex}
+          ${
+            has.has_recipient
+              ? `OR i.recipient_name ILIKE $${paramIndex}
+              OR i.recipient_gstin ILIKE $${paramIndex}`
+              : ""
+          }
         )`);
         params.push(`%${search}%`);
         paramIndex++;
@@ -509,26 +602,31 @@ class InvoiceRepository {
           i.pdf_url,
           i.created_at,
           COALESCE(
-            i.recipient_name,
+            ${recipient.name}
             bwp.company_name,
             bu.first_name || ' ' || bu.last_name,
             'Buyer'
           ) AS buyer_name,
           COALESCE(swp.company_name, su.first_name || ' ' || su.last_name, 'Supplier') AS supplier_name,
-          COALESCE(i.recipient_gstin, bwp.gstin) AS buyer_gstin,
-          swp.gstin AS supplier_gstin,
-          -- A credited invoice still reads Generated and, if the money had
-          -- come in, Paid. Without this the list shows a reversed bill as a
-          -- live one. At most one row joins: credit_notes has a unique index
-          -- on invoice_id, so this cannot multiply the result.
+          ${recipient.gstin} AS buyer_gstin,
+          swp.gstin AS supplier_gstin
+          ${
+            // A credited invoice still reads Generated and, if the money had
+            // come in, Paid. Without this the list shows a reversed bill as a
+            // live one. At most one row joins: credit_notes has a unique index
+            // on invoice_id, so this cannot multiply the result.
+            has.has_credit_notes
+              ? `,
           cn.note_number AS credit_note_number,
-          cn.grand_total AS credited_amount
+          cn.grand_total AS credited_amount`
+              : ""
+          }
         FROM invoices i
         LEFT JOIN users bu ON i.buyer_id = bu.id
         LEFT JOIN wholesaler_profiles bwp ON bu.id = bwp.user_id
         LEFT JOIN users su ON i.supplier_id = su.id
         LEFT JOIN wholesaler_profiles swp ON su.id = swp.user_id
-        LEFT JOIN credit_notes cn ON cn.invoice_id = i.id
+        ${has.has_credit_notes ? "LEFT JOIN credit_notes cn ON cn.invoice_id = i.id" : ""}
         ${whereString}
         ORDER BY ${validSortBy} ${validSortOrder}
         LIMIT $${paramIndex++} OFFSET $${paramIndex++}
@@ -625,6 +723,8 @@ class InvoiceRepository {
    */
   async getDashboardStats(userId, role, side) {
     await ensureSchema();
+    const has = await schemaExtras();
+    const recipient = recipientColumns(has.has_recipient);
     try {
       const normRole = String(role || "").toLowerCase();
       const normSide = String(side || "").toLowerCase();
@@ -708,9 +808,9 @@ class InvoiceRepository {
           LIMIT 5
         `
         : `
-          SELECT 
+          SELECT
             COALESCE(
-              i.recipient_name,
+              ${recipient.name}
               bwp.company_name,
               bu.first_name || ' ' || bu.last_name,
               'Customer'
@@ -723,9 +823,11 @@ class InvoiceRepository {
           WHERE ${normRole === "admin" ? "1=1" : "i.supplier_id = $1"}
             AND i.invoice_status <> 'Cancelled'
             AND i.buyer_id IS DISTINCT FROM i.supplier_id
-          -- recipient_name is now part of the selected expression, so it
-          -- has to be grouped as well or Postgres rejects the whole query.
-          GROUP BY i.recipient_name, bwp.company_name, bu.first_name, bu.last_name
+          -- recipient_name is part of the selected expression, so it has to
+          -- be grouped as well or Postgres rejects the whole query. Dropping
+          -- it from the SELECT above without dropping it here would do the
+          -- same, which is why both come off the same flag.
+          GROUP BY ${has.has_recipient ? "i.recipient_name, " : ""}bwp.company_name, bu.first_name, bu.last_name
           ORDER BY total_amount DESC
           LIMIT 5
         `;
@@ -924,6 +1026,19 @@ class InvoiceRepository {
       [supplierId]
     );
     return result.rows;
+  }
+
+  /**
+   * Which parts of wholesale 3.0 this database has. Callers outside this file
+   * need it to decide whether a guard can apply at all.
+   */
+  async schemaExtras() {
+    return schemaExtras();
+  }
+
+  // Tests point one process at more than one database.
+  resetSchemaExtras() {
+    resetSchemaExtras();
   }
 }
 

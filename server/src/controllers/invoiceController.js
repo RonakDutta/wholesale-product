@@ -168,11 +168,20 @@ class InvoiceController {
    */
   async recordPayment(req, res) {
     try {
+      // Assembled from what this database has. On one that has not had the
+      // 3.0 migrations run there are no sale invoices and no credit notes, so
+      // neither guard below can apply, and asking for them would only turn
+      // recording a payment into a 400.
+      const has = await invoiceRepository.schemaExtras();
       const owned = await pool.query(
-        `SELECT i.sale_id, i.party_id, cn.note_number
-           FROM invoices i
-           LEFT JOIN credit_notes cn ON cn.invoice_id = i.id
-          WHERE i.id = $1 AND i.supplier_id = $2`,
+        has.has_sale_id
+          ? `SELECT i.sale_id, i.party_id${has.has_credit_notes ? ", cn.note_number" : ", NULL AS note_number"}
+               FROM invoices i
+               ${has.has_credit_notes ? "LEFT JOIN credit_notes cn ON cn.invoice_id = i.id" : ""}
+              WHERE i.id = $1 AND i.supplier_id = $2`
+          : `SELECT NULL AS sale_id, NULL AS party_id, NULL AS note_number
+               FROM invoices i
+              WHERE i.id = $1 AND i.supplier_id = $2`,
         [req.params.id, req.user.id],
       );
       // A reversed bill is not owed, so nothing can be received against it.

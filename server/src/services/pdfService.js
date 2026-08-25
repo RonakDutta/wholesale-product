@@ -515,10 +515,14 @@ class PDFService {
           res.setHeader("Content-Type", "application/pdf");
           res.setHeader("Content-Disposition", `inline; filename=Statement-${safeName}.pdf`);
           doc.pipe(res);
+          // Without this the promise never settles when streaming to a
+          // response, so the caller hangs. Same as the other two generators.
+          doc.on("end", () => resolve());
         } else {
           doc.on("data", (chunk) => buffers.push(chunk));
           doc.on("end", () => resolve(Buffer.concat(buffers)));
         }
+        doc.on("error", (err) => reject(err));
 
         const period =
           !from && !to

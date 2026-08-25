@@ -9,6 +9,7 @@ import {
   Wallet,
 } from "lucide-react";
 import api from "../../utils/axios";
+import { downloadFile } from "../../utils/download";
 import { toast } from "sonner";
 
 const money = (value) =>
@@ -84,6 +85,7 @@ const PartyStatement = () => {
   const [params, setParams] = useSearchParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
 
   const from = params.get("from") || "";
   const to = params.get("to") || "";
@@ -168,13 +170,25 @@ const PartyStatement = () => {
   const closing = Number(closingBalance);
   const digits = String(party.phone || "").replace(/\D/g, "");
 
-  const query = new URLSearchParams({
-    ...(from ? { from } : {}),
-    ...(to ? { to } : {}),
-  }).toString();
-  const pdfUrl = `${api.defaults.baseURL}/api/parties/${party.id}/statement/pdf${
-    query ? `?${query}` : ""
-  }`;
+  // Pulled through the authenticated axios instance rather than opened as a
+  // link. An /api path in an href resolves against the site origin and
+  // carries no Authorization header, so it comes back 401. See utils/download.
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      await downloadFile(
+        `/api/parties/${party.id}/statement/pdf`,
+        `Statement-${(party.business_name || party.name || "customer").replace(/[^A-Za-z0-9._-]/g, "_")}.pdf`,
+        { params: { ...(from ? { from } : {}), ...(to ? { to } : {}) } },
+      );
+      toast.success("Statement downloaded");
+    } catch (error) {
+      console.error("Statement download failed:", error);
+      toast.error(error.message || "Could not download the statement");
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   // A wa.me link carries text, not a file. There is no way to attach the PDF
   // from a browser, so this sends the figures and says where they came from,
@@ -240,15 +254,15 @@ const PartyStatement = () => {
         </div>
 
         <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-5">
-          <a
-            href={pdfUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 rounded-lg bg-espresso px-4 py-2 text-sm font-bold text-cream transition-colors hover:bg-clay"
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={downloading}
+            className="flex items-center gap-2 rounded-lg bg-espresso px-4 py-2 text-sm font-bold text-cream transition-colors hover:bg-clay disabled:opacity-60"
           >
             <Download className="h-4 w-4" />
-            Open PDF
-          </a>
+            {downloading ? "Preparing..." : "Download PDF"}
+          </button>
           {digits && (
             <a
               href={`https://wa.me/${digits}?text=${whatsappText}`}

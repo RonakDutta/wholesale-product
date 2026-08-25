@@ -175,17 +175,22 @@ exports.createSale = async (req, res) => {
 
     // Money handed over at the same time as the goods is the normal case,
     // so it is recorded here rather than forcing a second trip.
+    //
+    // Dated with the sale, not with today. A wholesaler writing up Monday's
+    // sales on Thursday would otherwise get a statement showing the goods on
+    // Monday and the cash on Thursday, when both changed hands together.
     if (paidPaise > 0) {
       await client.query(
         `INSERT INTO party_payments
-           (wholesaler_id, party_id, sale_id, amount, method)
-         VALUES ($1, $2, $3, $4, $5)`,
+           (wholesaler_id, party_id, sale_id, amount, method, paid_on)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
         [
           wholesalerId,
           partyId,
           saleId,
           fromPaise(paidPaise),
           paymentMethod || "cash",
+          sale.rows[0].sale_date,
         ],
       );
     }

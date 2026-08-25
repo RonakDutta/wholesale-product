@@ -57,6 +57,7 @@ const Promotions = lazy(() => import("./pages/dashboard/Promotions"));
 const Settings = lazy(() => import("./pages/dashboard/Settings"));
 const Parties = lazy(() => import("./pages/dashboard/Parties"));
 const PartyDetail = lazy(() => import("./pages/dashboard/PartyDetail"));
+const PartyStatement = lazy(() => import("./pages/dashboard/PartyStatement"));
 const Sales = lazy(() => import("./pages/dashboard/Sales"));
 const RecordSale = lazy(() => import("./pages/dashboard/RecordSale"));
 const SaleDetail = lazy(() => import("./pages/dashboard/SaleDetail"));
@@ -127,6 +128,7 @@ const router = createBrowserRouter([
       },
       { path: "customers", element: <Parties /> },
       { path: "customers/:id", element: <PartyDetail /> },
+      { path: "customers/:id/statement", element: <PartyStatement /> },
       { path: "sales", element: <Sales /> },
       // Before "sales/:id" so the word is not read as a sale id.
       { path: "sales/new", element: <RecordSale /> },

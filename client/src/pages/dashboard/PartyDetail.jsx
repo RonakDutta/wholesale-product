@@ -195,6 +195,16 @@ const PartyDetail = () => {
             <Wallet className="h-4 w-4" />
             Record payment
           </button>
+          {/* The page above shows the latest fifty of each. The statement is
+              the whole account over a period, with a running balance, which
+              is the thing you send when you want paying. */}
+          <Link
+            to={`/seller/customers/${party.id}/statement`}
+            className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+          >
+            <FileText className="h-4 w-4" />
+            Statement
+          </Link>
           <button
             onClick={() => setShowEdit(true)}
             className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"

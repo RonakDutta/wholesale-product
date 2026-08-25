@@ -302,6 +302,171 @@ exports.recordPayment = async (req, res) => {
   }
 };
 
+// Rupees are summed in paise. A statement is a running total down a column,
+// so a paisa lost per row shows up as a closing balance that disagrees with
+// the customer's own page, and that is the one number he will check.
+const toPaise = (rupees) => Math.round(Number(rupees || 0) * 100);
+const fromPaise = (paise) => Number((Number(paise || 0) / 100).toFixed(2));
+
+/**
+ * One customer's account over a date range: what he was carrying at the
+ * start, every bill and every payment since, and what he owes now.
+ *
+ * This is the thing a wholesaler sends on WhatsApp when he wants paying, so
+ * it has to reconcile exactly with the balance on the customer page. It is
+ * built from the same two facts that balance is: confirmed and delivered
+ * sales on one side, party_payments on the other.
+ *
+ * Cancelled and draft sales are left out, for the same reason they are left
+ * out of the balance. A draft is not yet a debt and a cancelled bill is not
+ * owed, so listing either would show the customer a figure he does not owe.
+ * A payment that was made against a sale later cancelled still appears,
+ * because the money really did change hands, and its line says so.
+ *
+ * Leaving `from` off means "since the beginning", which makes the opening
+ * balance zero rather than a number nobody can check.
+ */
+exports.getPartyStatement = async (req, res) => {
+  const wholesalerId = req.user.id;
+  const { id } = req.params;
+  const from = clean(req.query.from);
+  const to = clean(req.query.to);
+
+  const isDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+  if ((from && !isDate(from)) || (to && !isDate(to))) {
+    return res.status(400).json({ message: "Dates must be YYYY-MM-DD" });
+  }
+  if (from && to && from > to) {
+    return res.status(400).json({ message: "The From date is after the To date" });
+  }
+
+  try {
+    const party = await pool.query(
+      `SELECT pt.*, ${BALANCE_SELECT}
+         FROM parties pt
+        WHERE pt.id = $1 AND pt.wholesaler_id = $2`,
+      [id, wholesalerId],
+    );
+    if (party.rows.length === 0) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+
+    // Everything before the window, netted into one number.
+    const opening = from
+      ? await pool.query(
+          `SELECT
+             COALESCE((SELECT SUM(s.total) FROM sales s
+                        WHERE s.party_id = $1 AND s.wholesaler_id = $2
+                          AND s.status IN ('confirmed', 'delivered')
+                          AND s.sale_date < $3::date), 0) AS billed,
+             COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
+                        WHERE pp.party_id = $1 AND pp.wholesaler_id = $2
+                          AND pp.paid_on < $3::date), 0) AS received`,
+          [id, wholesalerId, from],
+        )
+      : null;
+
+    const openingPaise = opening
+      ? toPaise(opening.rows[0].billed) - toPaise(opening.rows[0].received)
+      : 0;
+
+    const [sales, payments] = await Promise.all([
+      pool.query(
+        `SELECT s.id, s.sale_number, s.sale_date AS on_date, s.total, s.created_at,
+                (SELECT COUNT(*) FROM sale_lines sl WHERE sl.sale_id = s.id) AS line_count
+           FROM sales s
+          WHERE s.party_id = $1 AND s.wholesaler_id = $2
+            AND s.status IN ('confirmed', 'delivered')
+            AND ($3::date IS NULL OR s.sale_date >= $3::date)
+            AND ($4::date IS NULL OR s.sale_date <= $4::date)
+          ORDER BY s.sale_date ASC, s.created_at ASC`,
+        [id, wholesalerId, from, to],
+      ),
+      pool.query(
+        `SELECT pp.id, pp.amount, pp.method, pp.paid_on AS on_date, pp.note,
+                pp.created_at, s.sale_number, s.status AS sale_status
+           FROM party_payments pp
+           LEFT JOIN sales s ON s.id = pp.sale_id
+          WHERE pp.party_id = $1 AND pp.wholesaler_id = $2
+            AND ($3::date IS NULL OR pp.paid_on >= $3::date)
+            AND ($4::date IS NULL OR pp.paid_on <= $4::date)
+          ORDER BY pp.paid_on ASC, pp.created_at ASC`,
+        [id, wholesalerId, from, to],
+      ),
+    ]);
+
+    const entries = [
+      ...sales.rows.map((row) => ({
+        kind: "sale",
+        id: row.id,
+        date: row.on_date,
+        createdAt: row.created_at,
+        ref: row.sale_number,
+        lineCount: Number(row.line_count),
+        debitPaise: toPaise(row.total),
+        creditPaise: 0,
+      })),
+      ...payments.rows.map((row) => ({
+        kind: "payment",
+        id: row.id,
+        date: row.on_date,
+        createdAt: row.created_at,
+        ref: row.sale_number,
+        method: row.method,
+        note: row.note,
+        // Worth saying on the line. Money against a bill that was later
+        // cancelled is why a customer can end up in credit, and without this
+        // the statement looks like a payment against nothing.
+        againstCancelled: row.sale_status === "cancelled",
+        debitPaise: 0,
+        creditPaise: toPaise(row.amount),
+      })),
+    ].sort(
+      (a, b) =>
+        new Date(a.date) - new Date(b.date) ||
+        new Date(a.createdAt) - new Date(b.createdAt),
+    );
+
+    let runningPaise = openingPaise;
+    let billedPaise = 0;
+    let receivedPaise = 0;
+    const rows = entries.map((entry) => {
+      runningPaise += entry.debitPaise - entry.creditPaise;
+      billedPaise += entry.debitPaise;
+      receivedPaise += entry.creditPaise;
+      return {
+        kind: entry.kind,
+        id: entry.id,
+        date: entry.date,
+        ref: entry.ref,
+        lineCount: entry.lineCount,
+        method: entry.method,
+        note: entry.note,
+        againstCancelled: entry.againstCancelled,
+        debit: fromPaise(entry.debitPaise),
+        credit: fromPaise(entry.creditPaise),
+        balance: fromPaise(runningPaise),
+      };
+    });
+
+    res.status(200).json({
+      party: party.rows[0],
+      from: from || null,
+      to: to || null,
+      openingBalance: fromPaise(openingPaise),
+      rows,
+      totals: {
+        billed: fromPaise(billedPaise),
+        received: fromPaise(receivedPaise),
+      },
+      closingBalance: fromPaise(runningPaise),
+    });
+  } catch (err) {
+    console.error("Error building statement:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 /**
  * Headline numbers for the customer book. Every value here is computed from
  * real rows. A wholesaler with no data sees zeroes, which is the truth.

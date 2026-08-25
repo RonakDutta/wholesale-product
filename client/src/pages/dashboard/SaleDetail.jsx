@@ -462,6 +462,17 @@ const SaleDetail = () => {
               </span>
             </div>
           )}
+          {/* Shown whenever there is tax, so the three numbers add up on the
+              page. Sales recorded before GST moved onto the sale have none,
+              and on those the row would only be a confusing zero. */}
+          {Number(sale.tax_amount) > 0 && (
+            <div className="flex justify-between">
+              <span className="text-slate-500">GST</span>
+              <span className="font-semibold text-espresso">
+                ₹{money(sale.tax_amount)}
+              </span>
+            </div>
+          )}
           <div className="flex justify-between border-t border-slate-100 pt-2">
             <span className="font-bold text-espresso">Bill total</span>
             <span className="text-lg font-black text-espresso">

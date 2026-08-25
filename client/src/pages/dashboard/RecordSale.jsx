@@ -29,6 +29,10 @@ const blankLine = () => ({
   // the line so a bill raised today keeps its HSN if the rate list changes.
   moq: null,
   hsnCode: null,
+  // Resolved when the item is picked, or left null to mean "use my default".
+  // The server resolves it the same way and is the authority; this is only
+  // so the total on screen is the total that gets saved.
+  gstPercent: null,
 });
 
 /**
@@ -62,6 +66,9 @@ const RecordSale = () => {
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [notes, setNotes] = useState("");
   const [sale, setSale] = useState(null);
+  // The wholesaler's own default GST rate, used for any line the rate list
+  // has no rate for. Falls back to 18 only until the settings arrive.
+  const [defaultGst, setDefaultGst] = useState(18);
 
   useEffect(() => {
     let alive = true;
@@ -74,7 +81,7 @@ const RecordSale = () => {
         if (alive) toast.error("Could not load your customer list.");
       }
 
-      // The rate list only fills in suggestions. A wholesaler who has not
+      // The product list only fills in suggestions. A wholesaler who has not
       // built one yet must still be able to record a sale by typing, so a
       // failure here is not worth telling him about.
       try {
@@ -82,6 +89,17 @@ const RecordSale = () => {
         if (alive) setItems(data || []);
       } catch (error) {
         console.error("Failed to load the products", error);
+      }
+
+      // His own default GST rate, for any line the product list has no rate
+      // for. The server resolves it the same way and is the authority; this
+      // is only so the total on screen is the total that gets saved.
+      try {
+        const { data } = await api.get("/api/invoices/settings");
+        const rate = Number(data?.settings?.defaultTaxRate);
+        if (alive && Number.isFinite(rate)) setDefaultGst(rate);
+      } catch (error) {
+        console.error("Failed to load the tax settings", error);
       }
 
       if (editingId) {
@@ -106,6 +124,10 @@ const RecordSale = () => {
                 rate: String(Number(line.rate)),
                 moq: null,
                 hsnCode: line.hsn_code || null,
+                gstPercent:
+                  line.gst_percent === null || line.gst_percent === undefined
+                    ? null
+                    : Number(line.gst_percent),
               })),
             );
           }
@@ -145,6 +167,10 @@ const RecordSale = () => {
               unit: UNITS.includes(item.unit) ? item.unit : line.unit,
               moq: item.moq === null ? null : Number(item.moq),
               hsnCode: item.hsn_code || null,
+              gstPercent:
+                item.gst_percent === null || item.gst_percent === undefined
+                  ? null
+                  : Number(item.gst_percent),
             }
           : line,
       ),
@@ -155,25 +181,44 @@ const RecordSale = () => {
       prev.length === 1 ? prev : prev.filter((line) => line.key !== key),
     );
 
+  // Mirrors the server. The rate a wholesaler quotes is before GST, so the
+  // tax goes on top and the customer owes the total below, not the subtotal.
+  // A discount comes off before the tax is worked out, and is spread across
+  // the lines in proportion because they can be taxed differently.
   const totals = useMemo(() => {
-    const subtotalPaise = lines.reduce((sum, line) => {
-      const qty = Number(line.quantity);
-      const rate = Number(line.rate);
-      if (!Number.isFinite(qty) || !Number.isFinite(rate)) return sum;
-      return sum + Math.round(toPaise(rate) * qty);
-    }, 0);
+    const priced = lines
+      .map((line) => {
+        const qty = Number(line.quantity);
+        const rate = Number(line.rate);
+        if (!Number.isFinite(qty) || !Number.isFinite(rate)) return null;
+        return {
+          amountPaise: Math.round(toPaise(rate) * qty),
+          gst: line.gstPercent ?? defaultGst,
+        };
+      })
+      .filter(Boolean);
 
+    const subtotalPaise = priced.reduce((sum, line) => sum + line.amountPaise, 0);
     const discountPaise = Math.min(
       Math.max(0, toPaise(discount)),
       subtotalPaise,
+    );
+    const taxedShare =
+      subtotalPaise > 0 ? 1 - discountPaise / subtotalPaise : 1;
+
+    const taxPaise = priced.reduce(
+      (sum, line) =>
+        sum + Math.round((line.amountPaise * taxedShare * Number(line.gst)) / 100),
+      0,
     );
 
     return {
       subtotal: fromPaise(subtotalPaise),
       discount: fromPaise(discountPaise),
-      total: fromPaise(subtotalPaise - discountPaise),
+      tax: fromPaise(taxPaise),
+      total: fromPaise(subtotalPaise - discountPaise + taxPaise),
     };
-  }, [lines, discount]);
+  }, [lines, discount, defaultGst]);
 
   const dueAfter = fromPaise(
     Math.max(0, toPaise(totals.total) - Math.max(0, toPaise(amountPaid))),
@@ -205,6 +250,7 @@ const RecordSale = () => {
         unit: line.unit,
         rate: line.rate || 0,
         hsnCode: line.hsnCode || undefined,
+        gstPercent: line.gstPercent ?? undefined,
       })),
     };
 
@@ -482,12 +528,27 @@ const RecordSale = () => {
             />
           </div>
 
+          {/* Shown separately because the rate he typed is before tax, and
+              the total underneath is what the customer actually pays. Seeing
+              only the two ends of that sum is how a wholesaler quotes one
+              number and bills another. */}
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-500">GST</span>
+            <span className="font-bold text-espresso">
+              ₹{money(totals.tax)}
+            </span>
+          </div>
+
           <div className="flex items-center justify-between border-t border-slate-100 pt-4">
             <span className="text-sm font-bold text-espresso">Bill total</span>
             <span className="text-xl font-black text-espresso">
               ₹{money(totals.total)}
             </span>
           </div>
+          <p className="text-xs text-slate-500">
+            Your rates are before GST, so the tax is added on top. This is what
+            the customer owes.
+          </p>
         </div>
 
         {editing ? (

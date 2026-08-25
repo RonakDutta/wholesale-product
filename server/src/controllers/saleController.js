@@ -1,6 +1,8 @@
 const pool = require("../config/db");
 const saleInvoiceService = require("../services/saleInvoiceService");
 const creditNoteService = require("../services/creditNoteService");
+const invoiceRepository = require("../repositories/invoiceRepository");
+const gstService = require("../services/gstService");
 
 /**
  * Recording a sale is the wholesaler's core action. He is usually writing
@@ -40,6 +42,61 @@ const nextSaleNumber = async (client, wholesalerId) => {
 };
 
 /**
+ * What a sale comes to, tax included.
+ *
+ * The rate a wholesaler quotes is BEFORE GST: "142 a metre" means the shop
+ * pays 142 plus tax. So the tax belongs on the sale, not only on the bill.
+ * The customer's khata is what he owes, and he owes the tax too.
+ *
+ * Run through gstService, the same function the invoice uses, rather than
+ * worked out separately here. Two implementations of the same sum drift, and
+ * the one thing that must never happen is a bill that disagrees with the sale
+ * it was raised from.
+ */
+const priceSale = (lines, discountPaise) =>
+  gstService.calculateGST({
+    items: lines.map((line) => ({
+      productName: line.itemName,
+      quantity: line.quantity,
+      unitPrice: line.rate,
+      gstPercent: line.gstPercent,
+      hsnCode: line.hsnCode || undefined,
+    })),
+    discount: fromPaise(discountPaise),
+    shippingCharge: 0,
+    isTaxInclusive: false,
+  });
+
+/**
+ * The GST rate for a line: what was typed on it, else what the rate list says
+ * for that item, else the wholesaler's own default.
+ *
+ * Resolved once when the sale is recorded and snapshot onto the line, so
+ * changing a default next year cannot restate a sale from this year.
+ */
+const resolveRates = async (client, wholesalerId, lines) => {
+  const settings = await invoiceRepository.getSettings(wholesalerId);
+  const fallback = Number(settings.defaultTaxRate ?? 18);
+
+  const named = lines.map((line) => line.itemName.toLowerCase());
+  const known = await client.query(
+    `SELECT lower(name) AS name, gst_percent FROM items
+      WHERE wholesaler_id = $1 AND gst_percent IS NOT NULL
+        AND lower(name) = ANY($2::text[])`,
+    [wholesalerId, named],
+  );
+  const byName = new Map(known.rows.map((row) => [row.name, Number(row.gst_percent)]));
+
+  return lines.map((line) => ({
+    ...line,
+    gstPercent:
+      line.gstPercent ??
+      byName.get(line.itemName.toLowerCase()) ??
+      fallback,
+  }));
+};
+
+/**
  * Validates and normalises the lines on a sale. Returns either an error
  * message or the cleaned lines with their amounts already worked out.
  */
@@ -63,11 +120,23 @@ const buildLines = (rawLines) => {
       return { error: `Enter a rate for ${itemName}` };
     }
 
+    // Only taken when it was actually sent. Undefined means "use the rate
+    // list, or my default"; zero is a real answer for an exempt item.
+    const rawRate = raw.gstPercent ?? raw.gst_percent;
+    let gstPercent;
+    if (rawRate !== undefined && rawRate !== null && String(rawRate).trim() !== "") {
+      gstPercent = Number(rawRate);
+      if (!Number.isFinite(gstPercent) || gstPercent < 0 || gstPercent > 100) {
+        return { error: `Enter a GST rate between 0 and 100 for ${itemName}` };
+      }
+    }
+
     lines.push({
       itemName,
       quantity,
       unit: clean(raw.unit),
       rate,
+      gstPercent,
       // Snapshot from the rate list, so editing an item later cannot change
       // the HSN printed on a bill already raised.
       hsnCode: clean(raw.hsnCode ?? raw.hsn_code),
@@ -110,14 +179,6 @@ exports.createSale = async (req, res) => {
       .status(400)
       .json({ message: "Discount cannot be more than the total" });
   }
-  const totalPaise = subtotalPaise - discountPaise;
-
-  const paidPaise = Math.max(0, toPaise(amountPaid));
-  if (paidPaise > totalPaise) {
-    return res
-      .status(400)
-      .json({ message: "Amount received cannot be more than the bill" });
-  }
 
   const client = await pool.connect();
   try {
@@ -133,14 +194,30 @@ exports.createSale = async (req, res) => {
       return res.status(404).json({ message: "Customer not found" });
     }
 
+    const priced = await resolveRates(client, wholesalerId, lines);
+    const gst = priceSale(priced, discountPaise);
+    const taxPaise = toPaise(gst.totalTax);
+    const totalPaise = toPaise(gst.grandTotal);
+
+    // Checked against the tax inclusive total, which is what the customer
+    // actually hands over. Against the pre-tax figure it would refuse money
+    // the shop had genuinely paid.
+    const paidPaise = Math.max(0, toPaise(amountPaid));
+    if (paidPaise > totalPaise) {
+      await client.query("ROLLBACK");
+      return res
+        .status(400)
+        .json({ message: "Amount received cannot be more than the bill" });
+    }
+
     const saleNumber = await nextSaleNumber(client, wholesalerId);
 
     const sale = await client.query(
       `INSERT INTO sales
          (wholesaler_id, party_id, sale_number, sale_date, source, status,
-          subtotal, discount, total, notes)
+          subtotal, discount, tax_amount, total, notes)
        VALUES ($1, $2, $3, COALESCE($4::date, CURRENT_DATE), 'wholesaler',
-               $5, $6, $7, $8, $9)
+               $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
         wholesalerId,
@@ -150,17 +227,18 @@ exports.createSale = async (req, res) => {
         saleStatus,
         fromPaise(subtotalPaise),
         fromPaise(discountPaise),
+        fromPaise(taxPaise),
         fromPaise(totalPaise),
         clean(notes),
       ],
     );
     const saleId = sale.rows[0].id;
 
-    for (const line of lines) {
+    for (const line of priced) {
       await client.query(
         `INSERT INTO sale_lines
-           (sale_id, item_name, quantity, unit, rate, amount, hsn_code)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+           (sale_id, item_name, quantity, unit, rate, amount, hsn_code, gst_percent)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
           saleId,
           line.itemName,
@@ -169,6 +247,7 @@ exports.createSale = async (req, res) => {
           line.rate,
           fromPaise(line.amountPaise),
           line.hsnCode,
+          line.gstPercent,
         ],
       );
     }
@@ -444,7 +523,6 @@ exports.updateSale = async (req, res) => {
       .status(400)
       .json({ message: "Discount cannot be more than the total" });
   }
-  const totalPaise = subtotalPaise - discountPaise;
 
   const client = await pool.connect();
   try {
@@ -484,6 +562,11 @@ exports.updateSale = async (req, res) => {
       "SELECT COALESCE(SUM(amount), 0) AS total FROM party_payments WHERE sale_id = $1",
       [id],
     );
+    const priced = await resolveRates(client, wholesalerId, lines);
+    const gst = priceSale(priced, discountPaise);
+    const taxPaise = toPaise(gst.totalTax);
+    const totalPaise = toPaise(gst.grandTotal);
+
     const receivedPaise = toPaise(receivedRow.rows[0].total);
     if (totalPaise < receivedPaise) {
       await client.query("ROLLBACK");
@@ -494,11 +577,12 @@ exports.updateSale = async (req, res) => {
 
     await client.query(
       `UPDATE sales SET
-         sale_date = COALESCE($2::date, sale_date),
-         subtotal  = $3,
-         discount  = $4,
-         total     = $5,
-         notes     = $6,
+         sale_date  = COALESCE($2::date, sale_date),
+         subtotal   = $3,
+         discount   = $4,
+         tax_amount = $5,
+         total      = $6,
+         notes      = $7,
          updated_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
       [
@@ -506,6 +590,7 @@ exports.updateSale = async (req, res) => {
         clean(saleDate),
         fromPaise(subtotalPaise),
         fromPaise(discountPaise),
+        fromPaise(taxPaise),
         fromPaise(totalPaise),
         clean(notes),
       ],
@@ -514,11 +599,11 @@ exports.updateSale = async (req, res) => {
     // Lines are replaced wholesale. Nothing references a sale line, so there
     // is nothing to preserve by trying to match them up one by one.
     await client.query("DELETE FROM sale_lines WHERE sale_id = $1", [id]);
-    for (const line of lines) {
+    for (const line of priced) {
       await client.query(
         `INSERT INTO sale_lines
-           (sale_id, item_name, quantity, unit, rate, amount, hsn_code)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+           (sale_id, item_name, quantity, unit, rate, amount, hsn_code, gst_percent)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
           id,
           line.itemName,
@@ -527,6 +612,7 @@ exports.updateSale = async (req, res) => {
           line.rate,
           fromPaise(line.amountPaise),
           line.hsnCode,
+          line.gstPercent,
         ],
       );
     }

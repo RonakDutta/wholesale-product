@@ -84,6 +84,28 @@ class GSTService {
     let subtotal = 0;
     let totalTax = 0;
 
+    // A discount reduces the taxable value, so it has to reduce the tax with
+    // it. The tax used to be worked out line by line on the full amount and
+    // the discount taken off afterwards, which charged GST on money the
+    // customer was never asked for. It went unnoticed while nothing set a
+    // discount; a sale can, and now that a sale computes its own tax the two
+    // would have disagreed with each other.
+    //
+    // Spread across the lines in proportion, because lines can be taxed at
+    // different rates and a lump discount belongs to all of them.
+    const grossTaxable = items.reduce((sum, item) => {
+      const qty = Number(item.quantity) || 1;
+      const unitPrice = Number(item.unitPrice) || 0;
+      const gstPercent = Number(item.gstPercent ?? 18.0);
+      const line = unitPrice * qty;
+      return sum + (isTaxInclusive ? line / (1 + gstPercent / 100) : line);
+    }, 0);
+    const netDiscountRequested = Math.max(0, Number(discount) || 0);
+    const taxedShare =
+      grossTaxable > 0
+        ? Math.max(0, 1 - Math.min(netDiscountRequested, grossTaxable) / grossTaxable)
+        : 1;
+
     const processedItems = items.map((item) => {
       const qty = Number(item.quantity) || 1;
       const unitPrice = Number(item.unitPrice) || 0;
@@ -102,11 +124,11 @@ class GSTService {
         // Price includes tax: Taxable = Total / (1 + Rate/100)
         lineTotal = Number((unitPrice * qty).toFixed(2));
         lineTaxable = Number((lineTotal / (1 + gstPercent / 100)).toFixed(2));
-        lineTaxAmount = Number((lineTotal - lineTaxable).toFixed(2));
+        lineTaxAmount = Number(((lineTaxable * taxedShare * gstPercent) / 100).toFixed(2));
       } else {
         // Price excludes tax: Taxable = UnitPrice * Qty
         lineTaxable = Number((unitPrice * qty).toFixed(2));
-        lineTaxAmount = Number(((lineTaxable * gstPercent) / 100).toFixed(2));
+        lineTaxAmount = Number(((lineTaxable * taxedShare * gstPercent) / 100).toFixed(2));
         lineTotal = Number((lineTaxable + lineTaxAmount).toFixed(2));
       }
 

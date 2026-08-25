@@ -11,17 +11,19 @@ const gstService = require("./gstService");
  * comes through here. Numbering, GST maths, the PDF and payment recording are
  * all the existing module's, unchanged.
  *
- * IMPORTANT, and worth confirming with a real wholesaler: the rates on a sale
- * are treated as TAX INCLUSIVE. A wholesaler quotes "142 a metre" and that is
- * what the shop pays him. If GST were added on top, the invoice total would
- * come out higher than the sale he recorded, and higher than the balance
- * sitting on that customer's account, so his khata would disagree with his
- * own bill. Backing the tax out of the quoted rate keeps the two the same
- * number. If the pilot says rates are quoted before tax, this flag and the
- * khata both have to move together.
+ * The rates on a sale are TAX EXCLUSIVE. This was a guess for a while and it
+ * was the wrong one; a real wholesaler has since confirmed that "142 a metre"
+ * means the shop pays 142 plus GST.
+ *
+ * The khata moved with it, which was the whole worry. A sale now works out
+ * its own tax and stores it, so sales.total is the tax inclusive figure the
+ * customer actually owes, and it equals this invoice's grand total. Both go
+ * through gstService with the same inputs, and the per line rate is read off
+ * the sale rather than from today's settings, so a bill can never disagree
+ * with the sale it was raised from.
  */
 
-const TAX_INCLUSIVE = true;
+const TAX_INCLUSIVE = false;
 
 const fullName = (first, last) =>
   [first, last].filter(Boolean).join(" ").trim() || null;
@@ -50,7 +52,7 @@ class SaleInvoiceService {
 
     const [lines, received] = await Promise.all([
       db.query(
-        `SELECT item_name, quantity, unit, rate, amount, hsn_code
+        `SELECT item_name, quantity, unit, rate, amount, hsn_code, gst_percent
            FROM sale_lines WHERE sale_id = $1 ORDER BY created_at ASC`,
         [saleId],
       ),
@@ -123,15 +125,32 @@ class SaleInvoiceService {
       const seller = supplier.rows[0] || {};
       const settings = await invoiceRepository.getSettings(wholesalerId);
 
+      // Sales recorded before GST moved onto the sale were entered under the
+      // old reading, where the quoted rate already included tax, and their
+      // totals are what those customers were told they owed. Billing one with
+      // tax added on top would hand over a bill higher than the balance on
+      // that customer's account. Every line written since carries a resolved
+      // rate, so a sale where no line has one is unambiguously an old one,
+      // and a genuinely tax free sale is not confused with it: its lines
+      // carry a real zero.
+      const legacyInclusive =
+        lines.length > 0 &&
+        lines.every((line) => line.gst_percent === null || line.gst_percent === undefined);
+
       const gst = gstService.calculateGST({
         items: lines.map((line) => ({
           productName: line.item_name,
           quantity: Number(line.quantity),
           unitPrice: Number(line.rate),
-          gstPercent: settings.defaultTaxRate,
-          // Falls back to the module's own default when the rate list had no
-          // HSN. That default is wrong for most trades and is why hsn_code
-          // exists on items and on the line.
+          // Off the line, not out of today's settings. The rate was resolved
+          // and snapshot when the sale was recorded, and the sale's total was
+          // worked out from it. Reading the setting here would let a default
+          // changed since then produce a bill that disagrees with the sale.
+          // Older lines, recorded before the column existed, have none.
+          gstPercent:
+            line.gst_percent !== null && line.gst_percent !== undefined
+              ? Number(line.gst_percent)
+              : settings.defaultTaxRate,
           hsnCode: line.hsn_code || undefined,
         })),
         discount: Number(sale.discount || 0),
@@ -139,7 +158,7 @@ class SaleInvoiceService {
         supplierLocation:
           seller.warehouse_state || seller.warehouse_city || seller.city || "Delhi",
         buyerLocation: sale.party_city || seller.city || "Delhi",
-        isTaxInclusive: TAX_INCLUSIVE,
+        isTaxInclusive: legacyInclusive ? true : TAX_INCLUSIVE,
       });
 
       const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(

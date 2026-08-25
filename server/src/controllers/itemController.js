@@ -47,7 +47,7 @@ exports.listItems = async (req, res) => {
 
     const result = await pool.query(
       `SELECT id, name, category, unit, pack_size, rate, moq, hsn_code,
-              notes, status, created_at
+              gst_percent, notes, status, created_at
          FROM items
         WHERE ${where}
         ORDER BY name ASC`,
@@ -84,7 +84,7 @@ exports.getItemById = async (req, res) => {
 
 exports.createItem = async (req, res) => {
   const wholesalerId = req.user.id;
-  const { name, category, unit, packSize, rate, moq, hsnCode, notes } =
+  const { name, category, unit, packSize, rate, moq, hsnCode, gstPercent, notes } =
     req.body;
 
   if (!clean(name)) {
@@ -103,8 +103,9 @@ exports.createItem = async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO items
-         (wholesaler_id, name, category, unit, pack_size, rate, moq, hsn_code, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         (wholesaler_id, name, category, unit, pack_size, rate, moq, hsn_code,
+          gst_percent, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
         wholesalerId,
@@ -115,6 +116,9 @@ exports.createItem = async (req, res) => {
         rateValue.toFixed(2),
         optionalNumber(moq),
         clean(hsnCode),
+        // Left null when not given, so the sale falls back to the wholesaler's
+        // default rather than being pinned to a guess.
+        optionalNumber(gstPercent),
         clean(notes),
       ],
     );
@@ -136,7 +140,7 @@ exports.createItem = async (req, res) => {
 exports.updateItem = async (req, res) => {
   const wholesalerId = req.user.id;
   const { id } = req.params;
-  const { name, category, unit, packSize, rate, moq, hsnCode, notes, status } =
+  const { name, category, unit, packSize, rate, moq, hsnCode, gstPercent, notes, status } =
     req.body;
 
   if (name !== undefined && !clean(name)) {
@@ -175,6 +179,7 @@ exports.updateItem = async (req, res) => {
   if (packSize !== undefined) put("pack_size", optionalNumber(packSize));
   if (moq !== undefined) put("moq", optionalNumber(moq));
   if (hsnCode !== undefined) put("hsn_code", clean(hsnCode));
+  if (gstPercent !== undefined) put("gst_percent", optionalNumber(gstPercent));
   if (notes !== undefined) put("notes", clean(notes));
   if (status !== undefined) put("status", status);
   if (rate !== undefined && rate !== null && String(rate).trim() !== "") {

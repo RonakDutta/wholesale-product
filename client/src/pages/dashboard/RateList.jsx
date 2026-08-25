@@ -80,8 +80,8 @@ const RateList = () => {
         const { data } = await api.get("/api/items");
         if (alive) setItems(data || []);
       } catch (error) {
-        console.error("Failed to load the rate list", error);
-        if (alive) toast.error("Could not load your rate list.");
+        console.error("Failed to load the products", error);
+        if (alive) toast.error("Could not load your products.");
       }
       if (alive) setLoading(false);
     };
@@ -130,7 +130,7 @@ const RateList = () => {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-espresso">Rate list</h2>
+          <h2 className="text-2xl font-black text-espresso">Products</h2>
           <p className="mt-1 text-sm text-slate-500">
             What you sell and what you charge. Only you can see this.
           </p>
@@ -164,7 +164,7 @@ const RateList = () => {
           <div className="px-6 py-16 text-center">
             <Package className="mx-auto mb-3 h-10 w-10 text-slate-300" />
             <p className="font-semibold text-espresso">
-              Your rate list is empty
+              You have not added any products yet
             </p>
             <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
               Put in what you sell and your rate for it. Once it is here you

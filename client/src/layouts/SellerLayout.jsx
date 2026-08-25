@@ -27,7 +27,7 @@ import { FEATURES } from "../config/features";
 const NAV = [
   { path: "/seller", label: "Overview", icon: LayoutDashboard, exact: true },
   { path: "/seller/customers", label: "Customers", icon: Users },
-  { path: "/seller/rates", label: "Rate list", icon: Package },
+  { path: "/seller/rates", label: "Products", icon: Package },
   // The marketplace listing screen, with its public and storefront visibility
   // picker. That concept does not exist in a closed network.
   {

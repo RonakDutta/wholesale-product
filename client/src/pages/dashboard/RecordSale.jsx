@@ -81,7 +81,7 @@ const RecordSale = () => {
         const { data } = await api.get("/api/items");
         if (alive) setItems(data || []);
       } catch (error) {
-        console.error("Failed to load the rate list", error);
+        console.error("Failed to load the products", error);
       }
 
       if (editingId) {

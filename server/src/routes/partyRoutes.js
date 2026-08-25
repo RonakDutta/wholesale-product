@@ -6,6 +6,7 @@ const {
   updateParty,
   getPartyStats,
   getPartyStatement,
+  getPartyStatementPDF,
   recordPayment,
 } = require("../controllers/partyController");
 const authenticateToken = require("../middlewares/authMiddleware");
@@ -25,5 +26,6 @@ router.get("/:id", getPartyById);
 router.put("/:id", updateParty);
 router.post("/:id/payments", recordPayment);
 router.get("/:id/statement", getPartyStatement);
+router.get("/:id/statement/pdf", getPartyStatementPDF);
 
 module.exports = router;

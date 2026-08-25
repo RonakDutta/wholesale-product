@@ -1,5 +1,6 @@
 const pool = require("../config/db");
 const saleInvoiceService = require("../services/saleInvoiceService");
+const pdfService = require("../services/pdfService");
 
 /**
  * Parties are a wholesaler's own customer book. Every query in this file is
@@ -326,21 +327,29 @@ const fromPaise = (paise) => Number((Number(paise || 0) / 100).toFixed(2));
  * Leaving `from` off means "since the beginning", which makes the opening
  * balance zero rather than a number nobody can check.
  */
-exports.getPartyStatement = async (req, res) => {
-  const wholesalerId = req.user.id;
-  const { id } = req.params;
-  const from = clean(req.query.from);
-  const to = clean(req.query.to);
+const isDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value);
 
-  const isDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+/**
+ * Validates the window and builds the statement. Shared by the screen and by
+ * the PDF, so the document and the page can never disagree.
+ *
+ * Returns { error } for anything the caller should refuse, otherwise the
+ * statement itself.
+ */
+const buildStatement = async (id, wholesalerId, rawFrom, rawTo) => {
+  const from = clean(rawFrom);
+  const to = clean(rawTo);
+
   if ((from && !isDate(from)) || (to && !isDate(to))) {
-    return res.status(400).json({ message: "Dates must be YYYY-MM-DD" });
+    return { error: { status: 400, message: "Dates must be YYYY-MM-DD" } };
   }
   if (from && to && from > to) {
-    return res.status(400).json({ message: "The From date is after the To date" });
+    return {
+      error: { status: 400, message: "The From date is after the To date" },
+    };
   }
 
-  try {
+  {
     const party = await pool.query(
       `SELECT pt.*, ${BALANCE_SELECT}
          FROM parties pt
@@ -348,7 +357,7 @@ exports.getPartyStatement = async (req, res) => {
       [id, wholesalerId],
     );
     if (party.rows.length === 0) {
-      return res.status(404).json({ message: "Customer not found" });
+      return { error: { status: 404, message: "Customer not found" } };
     }
 
     // Everything before the window, netted into one number.
@@ -449,21 +458,74 @@ exports.getPartyStatement = async (req, res) => {
       };
     });
 
-    res.status(200).json({
-      party: party.rows[0],
-      from: from || null,
-      to: to || null,
-      openingBalance: fromPaise(openingPaise),
-      rows,
-      totals: {
-        billed: fromPaise(billedPaise),
-        received: fromPaise(receivedPaise),
+    return {
+      statement: {
+        party: party.rows[0],
+        from: from || null,
+        to: to || null,
+        openingBalance: fromPaise(openingPaise),
+        rows,
+        totals: {
+          billed: fromPaise(billedPaise),
+          received: fromPaise(receivedPaise),
+        },
+        closingBalance: fromPaise(runningPaise),
       },
-      closingBalance: fromPaise(runningPaise),
-    });
+    };
+  }
+};
+
+exports.getPartyStatement = async (req, res) => {
+  try {
+    const result = await buildStatement(
+      req.params.id,
+      req.user.id,
+      req.query.from,
+      req.query.to,
+    );
+    if (result.error) {
+      return res.status(result.error.status).json({ message: result.error.message });
+    }
+    res.status(200).json(result.statement);
   } catch (err) {
     console.error("Error building statement:", err);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+/**
+ * The same statement as a document, so it can be handed over or sent on.
+ */
+exports.getPartyStatementPDF = async (req, res) => {
+  const wholesalerId = req.user.id;
+  try {
+    const result = await buildStatement(
+      req.params.id,
+      wholesalerId,
+      req.query.from,
+      req.query.to,
+    );
+    if (result.error) {
+      return res.status(result.error.status).json({ message: result.error.message });
+    }
+
+    const supplier = await pool.query(
+      `SELECT u.first_name, u.last_name, u.email, u.phone,
+              wp.company_name, wp.gstin, wp.city
+         FROM users u
+         LEFT JOIN wholesaler_profiles wp ON wp.user_id = u.id
+        WHERE u.id = $1`,
+      [wholesalerId],
+    );
+
+    await pdfService.generateStatementPDF(
+      result.statement,
+      supplier.rows[0] || {},
+      res,
+    );
+  } catch (err) {
+    console.error("Error generating statement PDF:", err);
+    res.status(500).json({ message: "Could not generate the statement" });
   }
 };
 

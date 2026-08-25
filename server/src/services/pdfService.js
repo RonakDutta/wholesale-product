@@ -18,6 +18,43 @@ const invoiceRepository = require("../repositories/invoiceRepository");
  */
 const rupees = (value) => `Rs.${Number(value || 0).toFixed(2)}`;
 
+// Spelled month, matching the screen. "13/5/2025" and "5/13/2025" are the
+// same nine characters and mean different days, and a statement is read by a
+// customer who did not choose the format.
+const dateOf = (value) =>
+  value
+    ? new Date(value).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    : "";
+
+const fullName = (first, last) =>
+  [first, last].filter(Boolean).join(" ").trim() || null;
+
+const METHOD_TEXT = {
+  cash: "Cash",
+  upi: "UPI",
+  bank: "Bank transfer",
+  cheque: "Cheque",
+  other: "Other",
+};
+
+// One line describing a statement entry, in the customer's language rather
+// than the database's.
+const particularsOf = (row) => {
+  if (row.kind === "sale") {
+    return `Bill ${row.ref || ""}`.trim();
+  }
+  const parts = [`Payment by ${METHOD_TEXT[row.method] || row.method || "cash"}`];
+  if (row.ref) {
+    parts.push(`against ${row.ref}${row.againstCancelled ? " (cancelled)" : ""}`);
+  }
+  if (row.note) parts.push(row.note);
+  return parts.join(" - ");
+};
+
 // Printed on the credit note. The stored code is for the database; the
 // customer reading the document gets a sentence.
 const CREDIT_REASON_TEXT = {
@@ -450,6 +487,165 @@ class PDFService {
       } catch (err) {
         console.error("Credit note PDF generation error:", err);
         if (res) res.status(500).send("Error generating credit note");
+        else reject(err);
+      }
+    });
+  }
+
+  /**
+   * One customer's account over a period, as a document.
+   *
+   * Unlike the invoice and the credit note this one has to paginate. Those
+   * are a handful of lines by nature; a year of trading with one shop is
+   * hundreds, and the existing single-page layout would have written them
+   * off the bottom of the paper. So rows are drawn in a loop that starts a
+   * new page when it runs out of room, and every page repeats the column
+   * headings and carries the balance forward, the way a ledger book does.
+   */
+  async generateStatementPDF(statement, supplier = {}, res = null) {
+    const { party, from, to, openingBalance, rows, totals, closingBalance } = statement;
+
+    return new Promise((resolve, reject) => {
+      try {
+        const doc = new PDFDocument({ size: "A4", margin: 36, bufferPages: true });
+        const buffers = [];
+
+        const safeName = String(party.name || "statement").replace(/[^A-Za-z0-9._-]/g, "_");
+        if (res) {
+          res.setHeader("Content-Type", "application/pdf");
+          res.setHeader("Content-Disposition", `inline; filename=Statement-${safeName}.pdf`);
+          doc.pipe(res);
+        } else {
+          doc.on("data", (chunk) => buffers.push(chunk));
+          doc.on("end", () => resolve(Buffer.concat(buffers)));
+        }
+
+        const period =
+          !from && !to
+            ? "Everything so far"
+            : from && to
+              ? `${dateOf(from)} to ${dateOf(to)}`
+              : from
+                ? `From ${dateOf(from)}`
+                : `Up to ${dateOf(to)}`;
+
+        const BOTTOM = 720;
+        let y = 0;
+
+        const header = () => {
+          doc.rect(36, 36, 523, 65).fill("#0f172a");
+          doc.fillColor("#ffffff").fontSize(20).font("Helvetica-Bold");
+          doc.text("STATEMENT OF ACCOUNT", 50, 48);
+          doc.fontSize(9).font("Helvetica").fillColor("#94a3b8");
+          doc.text(supplier.company_name || fullName(supplier.first_name, supplier.last_name) || "Supplier", 50, 72);
+          doc.fillColor("#ffffff").fontSize(11).font("Helvetica-Bold");
+          doc.text(party.business_name || party.name || "Customer", 300, 50, {
+            align: "right",
+            width: 245,
+          });
+          doc.fontSize(8).font("Helvetica").fillColor("#cbd5e1");
+          doc.text(period, 300, 68, { align: "right", width: 245 });
+          if (party.gstin) {
+            doc.text(`GSTIN: ${party.gstin}`, 300, 80, { align: "right", width: 245 });
+          }
+          y = 115;
+        };
+
+        const columns = () => {
+          doc.rect(36, y, 523, 20).fill("#0f172a");
+          doc.fillColor("#ffffff").fontSize(8).font("Helvetica-Bold");
+          doc.text("DATE", 44, y + 6, { width: 70 });
+          doc.text("PARTICULARS", 120, y + 6, { width: 210 });
+          doc.text("BILLED", 335, y + 6, { width: 70, align: "right" });
+          doc.text("RECEIVED", 410, y + 6, { width: 70, align: "right" });
+          doc.text("BALANCE", 485, y + 6, { width: 66, align: "right" });
+          y += 20;
+        };
+
+        const carried = (label, amount) => {
+          doc.rect(36, y, 523, 18).fill("#f1f5f9");
+          doc.fillColor("#334155").fontSize(8).font("Helvetica-Bold");
+          doc.text(label, 44, y + 5, { width: 300 });
+          doc.text(rupees(amount), 485, y + 5, { width: 66, align: "right" });
+          y += 18;
+        };
+
+        header();
+        columns();
+        carried("Balance brought forward", openingBalance);
+
+        let index = 0;
+        for (const row of rows) {
+          if (y > BOTTOM) {
+            doc.addPage();
+            header();
+            columns();
+            // A ledger that continues on a second sheet says where it left
+            // off, or the first line on the new page looks like an opening.
+            carried("Carried forward from the previous page", rows[index - 1].balance);
+          }
+
+          if (index % 2 === 0) doc.rect(36, y, 523, 18).fill("#f8fafc");
+          doc.fillColor("#1e293b").fontSize(8).font("Helvetica");
+          doc.text(dateOf(row.date), 44, y + 5, { width: 70 });
+          doc.text(particularsOf(row), 120, y + 5, { width: 210, height: 10, ellipsis: true });
+          doc.text(row.debit > 0 ? rupees(row.debit) : "", 335, y + 5, { width: 70, align: "right" });
+          doc.text(row.credit > 0 ? rupees(row.credit) : "", 410, y + 5, { width: 70, align: "right" });
+          doc.font("Helvetica-Bold").text(rupees(row.balance), 485, y + 5, { width: 66, align: "right" });
+          y += 18;
+          index += 1;
+        }
+
+        if (y > BOTTOM - 60) {
+          doc.addPage();
+          header();
+        }
+
+        y += 8;
+        doc.rect(36, y, 523, 1).fill("#cbd5e1");
+        y += 8;
+        doc.fillColor("#475569").fontSize(8).font("Helvetica");
+        doc.text("Total billed this period", 120, y, { width: 210 });
+        doc.text(rupees(totals.billed), 335, y, { width: 70, align: "right" });
+        y += 14;
+        doc.text("Total received this period", 120, y, { width: 210 });
+        doc.text(rupees(totals.received), 410, y, { width: 70, align: "right" });
+        y += 20;
+
+        doc.rect(36, y, 523, 24).fill("#0f172a");
+        doc.fillColor("#ffffff").fontSize(11).font("Helvetica-Bold");
+        doc.text(
+          Number(closingBalance) < 0 ? "IN CREDIT WITH US" : "BALANCE DUE",
+          44,
+          y + 7,
+        );
+        doc.text(rupees(Math.abs(Number(closingBalance))), 380, y + 7, {
+          width: 171,
+          align: "right",
+        });
+
+        const range = doc.bufferedPageRange();
+        for (let i = range.start; i < range.start + range.count; i++) {
+          doc.switchToPage(i);
+          const footerY = 750;
+          doc.rect(36, footerY, 523, 1).fill("#e2e8f0");
+          doc.fontSize(7).font("Helvetica").fillColor("#64748b");
+          doc.text(
+            "This is a statement of account, not a tax invoice. Please tell us if anything here does not match your books.",
+            36,
+            footerY + 8,
+            { width: 380 },
+          );
+          doc.text(`Page ${i + 1} of ${range.count}`, 400, footerY + 8, {
+            width: 159,
+            align: "right",
+          });
+        }
+
+        doc.end();
+      } catch (err) {
+        console.error("Statement PDF generation error:", err);
+        if (res) res.status(500).send("Error generating statement");
         else reject(err);
       }
     });

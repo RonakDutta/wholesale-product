@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, FileText, Receipt, Wallet } from "lucide-react";
+import {
+  ArrowLeft,
+  Download,
+  FileText,
+  MessageCircle,
+  Receipt,
+  Wallet,
+} from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
 
@@ -159,6 +166,35 @@ const PartyStatement = () => {
 
   const { party, rows, openingBalance, totals, closingBalance } = data;
   const closing = Number(closingBalance);
+  const digits = String(party.phone || "").replace(/\D/g, "");
+
+  const query = new URLSearchParams({
+    ...(from ? { from } : {}),
+    ...(to ? { to } : {}),
+  }).toString();
+  const pdfUrl = `${api.defaults.baseURL}/api/parties/${party.id}/statement/pdf${
+    query ? `?${query}` : ""
+  }`;
+
+  // A wa.me link carries text, not a file. There is no way to attach the PDF
+  // from a browser, so this sends the figures and says where they came from,
+  // and the PDF stays a separate button he can send himself. Promising to
+  // "send the statement" and delivering four lines would be a lie.
+  const whatsappText = encodeURIComponent(
+    [
+      `Statement of account - ${party.business_name || party.name}`,
+      periodLabel,
+      "",
+      `Brought forward: Rs.${money(openingBalance)}`,
+      `Billed: Rs.${money(totals.billed)}`,
+      `Received: Rs.${money(totals.received)}`,
+      closing < 0
+        ? `In credit with us: Rs.${money(Math.abs(closing))}`
+        : `Balance due: Rs.${money(closing)}`,
+      "",
+      `${rows.length} entr${rows.length === 1 ? "y" : "ies"} in this period. Tell us if anything does not match your books.`,
+    ].join("\n"),
+  );
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -204,6 +240,30 @@ const PartyStatement = () => {
         </div>
 
         <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-5">
+          <a
+            href={pdfUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 rounded-lg bg-espresso px-4 py-2 text-sm font-bold text-cream transition-colors hover:bg-clay"
+          >
+            <Download className="h-4 w-4" />
+            Open PDF
+          </a>
+          {digits && (
+            <a
+              href={`https://wa.me/${digits}?text=${whatsappText}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-50"
+              title="Sends the figures as a message. Send the PDF yourself if they want the full list."
+            >
+              <MessageCircle className="h-4 w-4" />
+              Send figures on WhatsApp
+            </a>
+          )}
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
           {RANGES.map((range) => (
             <button
               key={range.key}

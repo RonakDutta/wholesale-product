@@ -1,18 +1,35 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import LocationPicker from "../../components/LocationPicker";
 import {
   Building2,
-  ShieldCheck,
+  ChevronRight,
+  CreditCard,
+  FileText,
   Mail,
   MapPin,
-  CreditCard,
-  Save,
-  ShieldAlert,
   Phone,
+  Save,
+  Truck,
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../../utils/axios";
+import { FEATURES } from "../../config/features";
 
+/**
+ * The wholesaler's own details.
+ *
+ * Rebuilt for 3.0. The marketplace version led with a red "Verification
+ * Pending" banner promising that verified accounts get three times the
+ * inquiries. Nothing in the codebase ever sets is_verified to true, there is
+ * no admin console to do it from, and there are no inquiries in a closed
+ * network, so it was a red warning about a review that would never happen
+ * attached to a number nobody computes. It is gone.
+ *
+ * Everything left is a field that reaches a bill. The GSTIN, the phone and
+ * the UPI id are printed on the invoice, and the state below decides whether
+ * that invoice charges CGST and SGST or IGST.
+ */
 const Settings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -24,22 +41,22 @@ const Settings = () => {
     upiId: "",
     city: "",
     country: "India",
-    isVerified: false,
     warehouseAddress: "",
     warehouseCity: "",
     warehouseState: "",
     warehousePincode: "",
   });
-  // Exact dispatch point. Set once here rather than per product, because the
-  // warehouse belongs to the business, not to any single listing.
+  // The exact yard, for the delivery map. That map belongs to the marketplace
+  // order flow, which 3.0 has switched off, so the picker follows the flag.
   const [warehousePin, setWarehousePin] = useState(null);
 
-  // Fetch current profile on load
   useEffect(() => {
-    const fetchProfile = async () => {
+    let alive = true;
+    const load = async () => {
       try {
         const res = await api.get("/api/profile");
         const data = res.data;
+        if (!alive) return;
         setFormData({
           companyName: data.company_name || "",
           contactPhone: data.contact_phone || "",
@@ -48,7 +65,6 @@ const Settings = () => {
           upiId: data.upi_id || "",
           city: data.city || "",
           country: data.country || "India",
-          isVerified: data.is_verified || false,
           warehouseAddress: data.warehouse_address || "",
           warehouseCity: data.warehouse_city || "",
           warehouseState: data.warehouse_state || "",
@@ -58,13 +74,15 @@ const Settings = () => {
           setWarehousePin({ lat: Number(data.lat), lng: Number(data.lng) });
         }
       } catch (err) {
-        console.error(err);
-        toast.error("Failed to load profile data");
-      } finally {
-        setLoading(false);
+        console.error("Failed to load profile", err);
+        if (alive) toast.error("Could not load your details.");
       }
+      if (alive) setLoading(false);
     };
-    fetchProfile();
+    load();
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const handleChange = (e) => {
@@ -79,10 +97,10 @@ const Settings = () => {
         warehouseLat: warehousePin?.lat,
         warehouseLng: warehousePin?.lng,
       });
-      toast.success("Profile saved successfully! You are ready to sell.");
+      toast.success("Your details are saved.");
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to save profile");
+      console.error("Failed to save profile", err);
+      toast.error("Could not save your details.");
     } finally {
       setSaving(false);
     }
@@ -90,257 +108,293 @@ const Settings = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-[50vh]">
-        <div className="w-8 h-8 border-4 border-clay border-t-transparent rounded-full animate-spin"></div>
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-clay border-t-transparent" />
       </div>
     );
   }
 
+  const field =
+    "w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 outline-none transition-colors focus:border-clay focus:bg-white";
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       <div>
         <h2 className="text-2xl font-black text-espresso">Settings</h2>
-        <p className="text-sm text-slate-500 mt-1">
-          Manage your business profile and preferences.
+        <p className="mt-1 text-sm text-slate-500">
+          Your business details. These are what appear on every bill you raise.
         </p>
       </div>
 
-      <div className="space-y-6">
-        {/* Verification Status */}
-        <div
-          className={`bg-white border rounded-2xl shadow-sm overflow-hidden ${formData.isVerified ? "border-emerald-200" : "border-rose-200"}`}
-        >
-          <div
-            className={`p-5 border-b border-slate-100 flex items-center justify-between ${formData.isVerified ? "bg-emerald-50" : "bg-rose-50"}`}
-          >
-            <div className="flex items-center gap-3">
-              {formData.isVerified ? (
-                <ShieldCheck className="w-5 h-5 text-emerald-600" />
-              ) : (
-                <ShieldAlert className="w-5 h-5 text-rose-500" />
-              )}
-              <h3
-                className={`font-bold ${formData.isVerified ? "text-emerald-900" : "text-rose-900"}`}
-              >
-                {formData.isVerified
-                  ? "Verified Supplier"
-                  : "Verification Pending"}
-              </h3>
-            </div>
-          </div>
-          <div className="p-6">
-            <p className="text-sm text-slate-600 mb-5">
-              Verified accounts receive up to 3x more wholesale inquiries.
-              Ensure your GSTIN is accurate.
-            </p>
-            <div className="max-w-md border border-slate-200 rounded-lg p-4 bg-slate-50">
-              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
-                GSTIN Number
-              </label>
-              <input
-                type="text"
-                name="gstin"
-                value={formData.gstin}
-                onChange={handleChange}
-                placeholder="e.g. 22AAAAA0000A1Z5"
-                className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-sm outline-none focus:border-clay"
-              />
-            </div>
-          </div>
+      {/* Your business */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/60 p-5">
+          <Building2 className="h-5 w-5 text-slate-500" />
+          <h3 className="font-bold text-espresso">Your business</h3>
         </div>
-
-        {/* Business Profile */}
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="p-5 border-b border-slate-100 flex items-center gap-3 bg-slate-50/50">
-            <Building2 className="w-5 h-5 text-slate-500" />
-            <h3 className="font-bold text-espresso">
-              Business Profile (Required for Listing)
-            </h3>
-          </div>
-          <div className="p-6 space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-2">
-                  Company Name <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="companyName"
-                  value={formData.companyName}
-                  onChange={handleChange}
-                  placeholder="Your Business Name"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-slate-900 focus:border-clay focus:bg-white outline-none transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-2">
-                  Contact Phone <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    name="contactPhone"
-                    value={formData.contactPhone}
-                    onChange={handleChange}
-                    placeholder="+91 98765 43210"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-4 py-2.5 text-sm text-slate-900 focus:border-clay focus:bg-white outline-none transition-colors"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-2">
-                  Registered Email
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="email"
-                    value={formData.email}
-                    disabled
-                    className="w-full bg-slate-100 border border-slate-200 rounded-lg pl-9 pr-4 py-2.5 text-sm text-slate-500 cursor-not-allowed"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-2">
-                  City Location <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    name="city"
-                    value={formData.city}
-                    onChange={handleChange}
-                    placeholder="e.g. Delhi, Ahmedabad"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-4 py-2.5 text-sm text-slate-900 focus:border-clay focus:bg-white outline-none transition-colors"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Payment & Settlement */}
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="p-5 border-b border-slate-100 flex items-center gap-3 bg-slate-50/50">
-            <CreditCard className="w-5 h-5 text-slate-500" />
-            <h3 className="font-bold text-espresso">
-              Payment & Settlement (Required)
-            </h3>
-          </div>
-          <div className="p-6">
-            <p className="text-sm text-slate-600 mb-4">
-              Set up how you want to receive payments from buyers.
-            </p>
-            <div className="max-w-md">
-              <label className="block text-xs font-semibold text-slate-600 mb-2">
-                Merchant UPI ID <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="upiId"
-                value={formData.upiId}
-                onChange={handleChange}
-                placeholder="merchant@upi"
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-slate-900 focus:border-clay focus:bg-white outline-none transition-colors"
-              />
-            </div>
-          </div>
-        </div>
-
-
-        {/* Warehouse / dispatch point */}
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="p-5 border-b border-slate-100 bg-slate-50/60">
-            <h3 className="font-bold text-espresso">Warehouse</h3>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Where your consignments are dispatched from. This is the starting
-              point buyers see on the delivery map.
-            </p>
-          </div>
-
-          <div className="p-5 space-y-4">
+        <div className="space-y-5 p-5 sm:p-6">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                Street address
+              <label
+                htmlFor="settings-company"
+                className="mb-2 block text-xs font-semibold text-slate-600"
+              >
+                Business name <span className="text-rose-500">*</span>
               </label>
               <input
+                id="settings-company"
                 type="text"
-                name="warehouseAddress"
-                value={formData.warehouseAddress}
+                name="companyName"
+                value={formData.companyName}
                 onChange={handleChange}
-                placeholder="Godown / building, street"
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-slate-900 focus:border-clay focus:bg-white outline-none transition-colors"
+                placeholder="Ram Textiles"
+                className={field}
               />
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                  City
-                </label>
+            <div>
+              <label
+                htmlFor="settings-phone"
+                className="mb-2 block text-xs font-semibold text-slate-600"
+              >
+                Phone <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
+                  id="settings-phone"
                   type="text"
-                  name="warehouseCity"
-                  value={formData.warehouseCity}
+                  name="contactPhone"
+                  value={formData.contactPhone}
                   onChange={handleChange}
-                  placeholder="Nashik"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-slate-900 focus:border-clay focus:bg-white outline-none transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                  State
-                </label>
-                <input
-                  type="text"
-                  name="warehouseState"
-                  value={formData.warehouseState}
-                  onChange={handleChange}
-                  placeholder="Maharashtra"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-slate-900 focus:border-clay focus:bg-white outline-none transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                  Pincode
-                </label>
-                <input
-                  type="text"
-                  name="warehousePincode"
-                  value={formData.warehousePincode}
-                  onChange={handleChange}
-                  placeholder="422001"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-slate-900 focus:border-clay focus:bg-white outline-none transition-colors"
+                  placeholder="+91 98765 43210"
+                  className={`${field} pl-9`}
                 />
               </div>
             </div>
+          </div>
 
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <div>
+              <label
+                htmlFor="settings-email"
+                className="mb-2 block text-xs font-semibold text-slate-600"
+              >
+                Email you signed up with
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="settings-email"
+                  type="email"
+                  value={formData.email}
+                  disabled
+                  className="w-full cursor-not-allowed rounded-lg border border-slate-200 bg-slate-100 py-2.5 pl-9 pr-4 text-sm text-slate-500"
+                />
+              </div>
+            </div>
+            <div>
+              <label
+                htmlFor="settings-city"
+                className="mb-2 block text-xs font-semibold text-slate-600"
+              >
+                City
+              </label>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="settings-city"
+                  type="text"
+                  name="city"
+                  value={formData.city}
+                  onChange={handleChange}
+                  placeholder="Surat"
+                  className={`${field} pl-9`}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="max-w-md">
+            <label
+              htmlFor="settings-gstin"
+              className="mb-2 block text-xs font-semibold text-slate-600"
+            >
+              GST number
+            </label>
+            <input
+              id="settings-gstin"
+              type="text"
+              name="gstin"
+              value={formData.gstin}
+              onChange={handleChange}
+              placeholder="24AAAAA0000A1Z5"
+              className={field}
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              Printed on every bill. Your customers need it to claim their input
+              credit, so a wrong one costs them money.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Place of supply. Quietly the most load bearing block on the page. */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/60 p-5">
+          <Truck className="h-5 w-5 text-slate-500" />
+          <div>
+            <h3 className="font-bold text-espresso">Where you send goods from</h3>
+            <p className="mt-0.5 text-xs text-slate-500">
+              The state here decides whether a bill charges CGST and SGST, or
+              IGST. Leave it blank and your city above is used instead.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4 p-5 sm:p-6">
+          <div>
+            <label
+              htmlFor="settings-godown"
+              className="mb-2 block text-xs font-semibold text-slate-600"
+            >
+              Godown address
+            </label>
+            <input
+              id="settings-godown"
+              type="text"
+              name="warehouseAddress"
+              value={formData.warehouseAddress}
+              onChange={handleChange}
+              placeholder="Godown or building, street"
+              className={field}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+              <label
+                htmlFor="settings-wcity"
+                className="mb-2 block text-xs font-semibold text-slate-600"
+              >
+                City
+              </label>
+              <input
+                id="settings-wcity"
+                type="text"
+                name="warehouseCity"
+                value={formData.warehouseCity}
+                onChange={handleChange}
+                placeholder="Surat"
+                className={field}
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="settings-wstate"
+                className="mb-2 block text-xs font-semibold text-slate-600"
+              >
+                State
+              </label>
+              <input
+                id="settings-wstate"
+                type="text"
+                name="warehouseState"
+                value={formData.warehouseState}
+                onChange={handleChange}
+                placeholder="Gujarat"
+                className={field}
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="settings-wpin"
+                className="mb-2 block text-xs font-semibold text-slate-600"
+              >
+                Pincode
+              </label>
+              <input
+                id="settings-wpin"
+                type="text"
+                name="warehousePincode"
+                value={formData.warehousePincode}
+                onChange={handleChange}
+                placeholder="395002"
+                className={field}
+              />
+            </div>
+          </div>
+
+          {/* Only means something once a delivery has a map to show it on. */}
+          {FEATURES.MARKETPLACE && (
             <div className="border-t border-slate-100 pt-4">
               <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
                 Pin the exact yard
               </p>
               <LocationPicker value={warehousePin} onChange={setWarehousePin} />
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* Getting paid */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/60 p-5">
+          <CreditCard className="h-5 w-5 text-slate-500" />
+          <h3 className="font-bold text-espresso">Getting paid</h3>
+        </div>
+        <div className="p-5 sm:p-6">
+          <div className="max-w-md">
+            <label
+              htmlFor="settings-upi"
+              className="mb-2 block text-xs font-semibold text-slate-600"
+            >
+              UPI ID
+            </label>
+            <input
+              id="settings-upi"
+              type="text"
+              name="upiId"
+              value={formData.upiId}
+              onChange={handleChange}
+              placeholder="ramtextiles@upi"
+              className={field}
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              Turned into the QR code on your bills, so a customer can scan and
+              pay. Money that comes in still has to be recorded by you on the
+              customer's page. Nothing here checks a bank account.
+            </p>
           </div>
         </div>
+      </div>
 
-        {/* Action Bar */}
-        <div className="flex justify-end pt-2">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 px-8 py-3 rounded-lg text-sm font-bold text-white bg-espresso hover:bg-clay transition-colors shadow-sm disabled:opacity-70 cursor-pointer"
-          >
-            <Save className="w-4 h-4" />
-            {saving ? "Saving..." : "Save Profile"}
-          </button>
+      {/* The other half of settings, which lives with the invoices. */}
+      <Link
+        to="/seller/invoices/settings"
+        className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:bg-slate-50"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <FileText className="h-5 w-5 shrink-0 text-slate-500" />
+          <div className="min-w-0">
+            <p className="font-bold text-espresso">Bill numbering and terms</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              The prefix on your invoice numbers, how many days you give to pay,
+              your usual GST rate, and the notes printed at the bottom.
+            </p>
+          </div>
         </div>
+        <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
+      </Link>
+
+      <div className="flex justify-end pt-2">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex cursor-pointer items-center gap-2 rounded-lg bg-espresso px-8 py-3 text-sm font-bold text-cream shadow-sm transition-colors hover:bg-clay disabled:opacity-70"
+        >
+          <Save className="h-4 w-4" />
+          {saving ? "Saving..." : "Save"}
+        </button>
       </div>
     </div>
   );

@@ -122,9 +122,13 @@ class GSTService {
 
       if (isTaxInclusive) {
         // Price includes tax: Taxable = Total / (1 + Rate/100)
+        //
+        // The tax is the remainder, not the rate applied again. Recomputing
+        // it left the two halves a paisa short of the price they were split
+        // out of, so a sale of 3550 billed at 3549.99.
         lineTotal = Number((unitPrice * qty).toFixed(2));
         lineTaxable = Number((lineTotal / (1 + gstPercent / 100)).toFixed(2));
-        lineTaxAmount = Number(((lineTaxable * taxedShare * gstPercent) / 100).toFixed(2));
+        lineTaxAmount = Number(((lineTotal - lineTaxable) * taxedShare).toFixed(2));
       } else {
         // Price excludes tax: Taxable = UnitPrice * Qty
         lineTaxable = Number((unitPrice * qty).toFixed(2));

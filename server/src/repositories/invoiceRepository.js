@@ -175,7 +175,13 @@ async function schemaExtras(db = pool) {
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'invoices' AND column_name = 'sale_id') AS has_sale_id,
         EXISTS (SELECT 1 FROM information_schema.columns
-                 WHERE table_name = 'invoices' AND column_name = 'recipient_name') AS has_recipient
+                 WHERE table_name = 'invoices' AND column_name = 'recipient_name') AS has_recipient,
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'sales' AND column_name = 'tax_amount') AS has_sale_tax,
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'sale_lines' AND column_name = 'gst_percent') AS has_line_gst,
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'items' AND column_name = 'gst_percent') AS has_item_gst
     `);
     extras = result.rows[0];
   } catch (err) {
@@ -188,6 +194,9 @@ async function schemaExtras(db = pool) {
       has_sales: false,
       has_sale_id: false,
       has_recipient: false,
+      has_sale_tax: false,
+      has_line_gst: false,
+      has_item_gst: false,
     };
   }
   return extras;

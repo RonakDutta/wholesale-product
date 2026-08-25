@@ -35,6 +35,7 @@ class SaleInvoiceService {
    */
   async loadSale(saleId, wholesalerId, client) {
     const db = client || pool;
+    const has = await invoiceRepository.schemaExtras();
 
     const sale = await db.query(
       `SELECT s.*,
@@ -52,7 +53,11 @@ class SaleInvoiceService {
 
     const [lines, received] = await Promise.all([
       db.query(
-        `SELECT item_name, quantity, unit, rate, amount, hsn_code, gst_percent
+        // gst_percent arrives with wholesale3_tax_on_top.sql. Before that it
+        // is selected as NULL, which is exactly what the legacy check below
+        // is looking for, so an unmigrated database bills the old way.
+        `SELECT item_name, quantity, unit, rate, amount, hsn_code,
+                ${has.has_line_gst ? "gst_percent" : "NULL AS gst_percent"}
            FROM sale_lines WHERE sale_id = $1 ORDER BY created_at ASC`,
         [saleId],
       ),

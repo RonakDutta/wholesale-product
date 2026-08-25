@@ -78,6 +78,16 @@ const resolveRates = async (client, wholesalerId, lines) => {
   const settings = await invoiceRepository.getSettings(wholesalerId);
   const fallback = Number(settings.defaultTaxRate ?? 18);
 
+  // The rate list only carries a GST rate once the migration has been run.
+  // Until then every line falls back to the wholesaler's default.
+  const has = await invoiceRepository.schemaExtras();
+  if (!has.has_item_gst) {
+    return lines.map((line) => ({
+      ...line,
+      gstPercent: line.gstPercent ?? fallback,
+    }));
+  }
+
   const named = lines.map((line) => line.itemName.toLowerCase());
   const known = await client.query(
     `SELECT lower(name) AS name, gst_percent FROM items
@@ -194,10 +204,17 @@ exports.createSale = async (req, res) => {
       return res.status(404).json({ message: "Customer not found" });
     }
 
+    // Without the tax migration a sale has nowhere to put its tax, so it
+    // behaves exactly as it did before: the total is the pre tax figure, and
+    // the invoice backs the tax out of it. Half applying the new model would
+    // be worse than either, so this falls back whole.
+    const has = await invoiceRepository.schemaExtras();
     const priced = await resolveRates(client, wholesalerId, lines);
-    const gst = priceSale(priced, discountPaise);
-    const taxPaise = toPaise(gst.totalTax);
-    const totalPaise = toPaise(gst.grandTotal);
+    const gst = has.has_sale_tax ? priceSale(priced, discountPaise) : null;
+    const taxPaise = gst ? toPaise(gst.totalTax) : 0;
+    const totalPaise = gst
+      ? toPaise(gst.grandTotal)
+      : subtotalPaise - discountPaise;
 
     // Checked against the tax inclusive total, which is what the customer
     // actually hands over. Against the pre-tax figure it would refuse money
@@ -215,9 +232,9 @@ exports.createSale = async (req, res) => {
     const sale = await client.query(
       `INSERT INTO sales
          (wholesaler_id, party_id, sale_number, sale_date, source, status,
-          subtotal, discount, tax_amount, total, notes)
+          subtotal, discount, ${has.has_sale_tax ? "tax_amount," : ""} total, notes)
        VALUES ($1, $2, $3, COALESCE($4::date, CURRENT_DATE), 'wholesaler',
-               $5, $6, $7, $8, $9, $10)
+               $5, $6, $7, ${has.has_sale_tax ? "$8, $9, $10" : "$8, $9"})
        RETURNING *`,
       [
         wholesalerId,
@@ -227,7 +244,7 @@ exports.createSale = async (req, res) => {
         saleStatus,
         fromPaise(subtotalPaise),
         fromPaise(discountPaise),
-        fromPaise(taxPaise),
+        ...(has.has_sale_tax ? [fromPaise(taxPaise)] : []),
         fromPaise(totalPaise),
         clean(notes),
       ],
@@ -237,8 +254,9 @@ exports.createSale = async (req, res) => {
     for (const line of priced) {
       await client.query(
         `INSERT INTO sale_lines
-           (sale_id, item_name, quantity, unit, rate, amount, hsn_code, gst_percent)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+           (sale_id, item_name, quantity, unit, rate, amount, hsn_code
+            ${has.has_line_gst ? ", gst_percent" : ""})
+         VALUES ($1, $2, $3, $4, $5, $6, $7${has.has_line_gst ? ", $8" : ""})`,
         [
           saleId,
           line.itemName,
@@ -247,7 +265,7 @@ exports.createSale = async (req, res) => {
           line.rate,
           fromPaise(line.amountPaise),
           line.hsnCode,
-          line.gstPercent,
+          ...(has.has_line_gst ? [line.gstPercent] : []),
         ],
       );
     }
@@ -347,9 +365,13 @@ exports.getSaleById = async (req, res) => {
       return res.status(404).json({ message: "Sale not found" });
     }
 
+    const has = await invoiceRepository.schemaExtras();
     const [lines, payments, creditNote] = await Promise.all([
       pool.query(
-        `SELECT id, item_name, quantity, unit, rate, amount, hsn_code
+        // Carries the stored GST rate back to the edit form, so editing a
+        // sale reprices it exactly as it was priced.
+        `SELECT id, item_name, quantity, unit, rate, amount, hsn_code,
+                ${has.has_line_gst ? "gst_percent" : "NULL AS gst_percent"}
            FROM sale_lines WHERE sale_id = $1 ORDER BY created_at ASC`,
         [id],
       ),
@@ -562,10 +584,13 @@ exports.updateSale = async (req, res) => {
       "SELECT COALESCE(SUM(amount), 0) AS total FROM party_payments WHERE sale_id = $1",
       [id],
     );
+    const has = await invoiceRepository.schemaExtras();
     const priced = await resolveRates(client, wholesalerId, lines);
-    const gst = priceSale(priced, discountPaise);
-    const taxPaise = toPaise(gst.totalTax);
-    const totalPaise = toPaise(gst.grandTotal);
+    const gst = has.has_sale_tax ? priceSale(priced, discountPaise) : null;
+    const taxPaise = gst ? toPaise(gst.totalTax) : 0;
+    const totalPaise = gst
+      ? toPaise(gst.grandTotal)
+      : subtotalPaise - discountPaise;
 
     const receivedPaise = toPaise(receivedRow.rows[0].total);
     if (totalPaise < receivedPaise) {
@@ -580,9 +605,7 @@ exports.updateSale = async (req, res) => {
          sale_date  = COALESCE($2::date, sale_date),
          subtotal   = $3,
          discount   = $4,
-         tax_amount = $5,
-         total      = $6,
-         notes      = $7,
+         ${has.has_sale_tax ? "tax_amount = $5, total = $6, notes = $7" : "total = $5, notes = $6"},
          updated_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
       [
@@ -590,7 +613,7 @@ exports.updateSale = async (req, res) => {
         clean(saleDate),
         fromPaise(subtotalPaise),
         fromPaise(discountPaise),
-        fromPaise(taxPaise),
+        ...(has.has_sale_tax ? [fromPaise(taxPaise)] : []),
         fromPaise(totalPaise),
         clean(notes),
       ],
@@ -602,8 +625,9 @@ exports.updateSale = async (req, res) => {
     for (const line of priced) {
       await client.query(
         `INSERT INTO sale_lines
-           (sale_id, item_name, quantity, unit, rate, amount, hsn_code, gst_percent)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+           (sale_id, item_name, quantity, unit, rate, amount, hsn_code
+            ${has.has_line_gst ? ", gst_percent" : ""})
+         VALUES ($1, $2, $3, $4, $5, $6, $7${has.has_line_gst ? ", $8" : ""})`,
         [
           id,
           line.itemName,
@@ -612,7 +636,7 @@ exports.updateSale = async (req, res) => {
           line.rate,
           fromPaise(line.amountPaise),
           line.hsnCode,
-          line.gstPercent,
+          ...(has.has_line_gst ? [line.gstPercent] : []),
         ],
       );
     }

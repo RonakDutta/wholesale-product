@@ -1,4 +1,5 @@
 const pool = require("../config/db");
+const invoiceRepository = require("../repositories/invoiceRepository");
 
 /**
  * A wholesaler's rate list. Every query is scoped by the wholesaler id from
@@ -45,9 +46,15 @@ exports.listItems = async (req, res) => {
       where += ` AND status = $${params.length}`;
     }
 
+    // gst_percent only exists once wholesale3_tax_on_top.sql has been run.
+    // Asking for it unconditionally took the whole products screen down with
+    // a 500 on any database where it had not been.
+    const has = await invoiceRepository.schemaExtras();
+
     const result = await pool.query(
       `SELECT id, name, category, unit, pack_size, rate, moq, hsn_code,
-              gst_percent, notes, status, created_at
+              ${has.has_item_gst ? "gst_percent," : "NULL AS gst_percent,"}
+              notes, status, created_at
          FROM items
         WHERE ${where}
         ORDER BY name ASC`,
@@ -101,26 +108,35 @@ exports.createItem = async (req, res) => {
   }
 
   try {
+    const has = await invoiceRepository.schemaExtras();
+    const columns = [
+      "wholesaler_id", "name", "category", "unit", "pack_size", "rate", "moq",
+      "hsn_code",
+    ];
+    const values = [
+      wholesalerId,
+      clean(name),
+      clean(category),
+      unit || "pcs",
+      optionalNumber(packSize),
+      rateValue.toFixed(2),
+      optionalNumber(moq),
+      clean(hsnCode),
+    ];
+    if (has.has_item_gst) {
+      columns.push("gst_percent");
+      // Left null when not given, so the sale falls back to the wholesaler's
+      // default rather than being pinned to a guess.
+      values.push(optionalNumber(gstPercent));
+    }
+    columns.push("notes");
+    values.push(clean(notes));
+
     const result = await pool.query(
-      `INSERT INTO items
-         (wholesaler_id, name, category, unit, pack_size, rate, moq, hsn_code,
-          gst_percent, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO items (${columns.join(", ")})
+       VALUES (${columns.map((_, i) => `$${i + 1}`).join(", ")})
        RETURNING *`,
-      [
-        wholesalerId,
-        clean(name),
-        clean(category),
-        unit || "pcs",
-        optionalNumber(packSize),
-        rateValue.toFixed(2),
-        optionalNumber(moq),
-        clean(hsnCode),
-        // Left null when not given, so the sale falls back to the wholesaler's
-        // default rather than being pinned to a guess.
-        optionalNumber(gstPercent),
-        clean(notes),
-      ],
+      values,
     );
 
     res.status(201).json(result.rows[0]);
@@ -166,6 +182,9 @@ exports.updateItem = async (req, res) => {
   // A key that is absent is left alone; a key sent as empty or null is
   // cleared. Rate is the exception: it is NOT NULL, so an empty rate box
   // means "leave it", and zero is a real rate that must be storable.
+  // Same reason as the list and the insert: the column may not be there yet.
+  const has = await invoiceRepository.schemaExtras();
+
   const sets = [];
   const values = [id, wholesalerId];
   const put = (column, value) => {
@@ -179,7 +198,9 @@ exports.updateItem = async (req, res) => {
   if (packSize !== undefined) put("pack_size", optionalNumber(packSize));
   if (moq !== undefined) put("moq", optionalNumber(moq));
   if (hsnCode !== undefined) put("hsn_code", clean(hsnCode));
-  if (gstPercent !== undefined) put("gst_percent", optionalNumber(gstPercent));
+  if (gstPercent !== undefined && has.has_item_gst) {
+    put("gst_percent", optionalNumber(gstPercent));
+  }
   if (notes !== undefined) put("notes", clean(notes));
   if (status !== undefined) put("status", status);
   if (rate !== undefined && rate !== null && String(rate).trim() !== "") {

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import api from "../utils/axios";
 import { toast } from "sonner";
-
+//sale feature
 export const UNITS = ["pcs", "dozen", "case", "mtr", "kg", "box", "bundle"];
 
 /**

@@ -76,12 +76,29 @@ nothing shows, but the row exists and a competitor could list against it.
 Either accept that, or give private listings a product row that is flagged
 as not shareable. **Needs a decision.**
 
-**Stock.** Orders decrement `supplier_inventory.stock` at creation and credit
-it back on cancellation. Rate list items have no stock at all. Once they are
-the same table, does recording a hand written sale decrement stock? It
-should, if the same listing is also sold publicly, or the marketplace will
-sell goods that walked out of the godown yesterday. That is a new coupling
-and a new way to break a sale. **Needs a decision.**
+**Stock. DECIDED: hide it for now.** Orders decrement
+`supplier_inventory.stock` at creation and credit it back on cancellation.
+Rate list items have no stock at all. Eventually a hand written sale should
+decrement stock too, or the marketplace will sell goods that walked out of
+the godown yesterday. For now stock comes off the screens entirely and is
+revisited later.
+
+What "hide" has to mean, so this does not become a trap:
+
+- The column stays and keeps its values. Dropping it would lose counts that
+  are correct today and would have to be re-entered.
+- The order path keeps decrementing and crediting back. Turning that off
+  while orders still run would leave the numbers silently wrong, and
+  switching it back on later would need a stock take.
+- Stock disappears from the listing form, the listing list and the buyer
+  facing pages. Nothing shows "12 in stock" or "Out of stock".
+- The **out of stock check on ordering must be decided separately**: with
+  stock hidden, an order for 500 metres of something with 3 in stock either
+  goes through, or is refused with a message the buyer cannot act on because
+  he cannot see stock. Recommendation: let it through while hidden, since a
+  wholesaler in a closed network confirms orders by hand anyway.
+- This lands in Phase 1, when the marketplace comes back on, not before.
+  With `FEATURES.MARKETPLACE` off there is nowhere stock is currently shown.
 
 Nothing here rewrites history: `sale_lines` already snapshots the name, rate
 and HSN, so retiring `items` cannot change a bill already raised.
@@ -236,19 +253,80 @@ Collected from the code, not imagined.
    discards a half built order. It needs to become a saved draft per
    supplier before retailer ordering is usable.
 
+## 5a. Accounts, KYC and OTP
+
+**DECIDED: nobody browses without an account.** A visitor signs up, completes
+KYC, and then chooses to be a wholesaler or a retailer. That makes the
+catalogue queries simpler, since there is no anonymous case to serve, and it
+makes the closed network real rather than a setting.
+
+It also collides with one thing already agreed, and two of the three pieces
+are not straightforward. Recording it here so it is not discovered late.
+
+**The shared link cannot require a login.** A wholesaler sending his shop
+page or a product link to a shop over WhatsApp is the single most useful
+thing in this product. If that link lands on a login wall, the shop does not
+sign up, it phones him instead, and the feature is dead. The shop link has
+to stay readable by a stranger even when the rest of the catalogue does not.
+Suggested split: **browsing the catalogue needs an account, following a
+direct link does not.** The unlisted `/listing/:inventoryId` page already
+works this way, and its UUID is the secret.
+
+**Aadhaar KYC is not something we can just build.** Authenticating an Aadhaar
+number against UIDAI requires being a licensed KUA or AUA, or going through
+one. It is a regulated onboarding with contracts and audits, not an API key,
+and eKYC access has been restricted to specific categories of entity.
+Realistic options, in order of how quickly they can ship:
+
+1. **Collect and store nothing.** Ask for a GSTIN instead. It identifies a
+   business, it is already on every invoice, and its first two digits give
+   the state, which the tax head calculation needs anyway.
+2. **A third party KYC provider,** paid per verification, who holds the
+   licence. Normal for a startup and the usual route.
+3. **Direct UIDAI licensing.** Slow and probably not available to a company
+   at this stage.
+
+Storing Aadhaar numbers also brings obligations under the Aadhaar Act and the
+DPDP Act, and a masked or tokenised reference is expected rather than the raw
+number. Worth being sure it is needed before designing around it, because
+GSTIN may do the whole job.
+
+**Mobile OTP is not free, though it is cheap.** Sending SMS to Indian numbers
+requires the sender ID and every message template to be registered under
+TRAI's DLT regime, and messages are billed per send. Managed auth providers
+have free tiers that a pilot will fit inside, but the DLT registration is
+required regardless and takes time. WhatsApp OTP is worth pricing against SMS
+since these wholesalers are on WhatsApp already.
+
+None of this blocks the merge. It blocks the sign up screen, and it should be
+priced and decided before that screen is designed.
+
 ## 6. Open questions, for you
 
-1. Does a hand written sale decrement listing stock? (3.1)
-2. Do private listings get a shared `products` row, or a private one? (3.1)
-3. When an order becomes a sale, at which state? On payment, or on the
-   wholesaler accepting it?
-4. Does a retailer with an account see the same rates as a walk in customer,
-   or do we go straight to per customer rates?
-5. Do marketplace orders from strangers, people with no prior relationship,
-   land in the customer book too, or only from connected retailers?
-6. Is the marketplace public to anyone, or only to logged in retailers?
-   "Public and private" in the ask could mean either, and it changes the
-   catalogue queries.
+Answered so far: stock is hidden for now (3.1), and nobody browses without an
+account (5a). Still open:
+
+1. **Do private listings get a shared `products` row, or a private one?**
+   (3.1) Migrating a rate list into the shared catalogue publishes the names
+   of a wholesaler's range into space competitors can attach to, even though
+   the listings stay invisible.
+2. **When an order becomes a sale, at which state?** On payment, or on the
+   wholesaler accepting it? Earlier means the khata moves before he has
+   agreed to supply; later means a paid order sits outside the khata for a
+   while.
+3. **Does a retailer with an account see the same rates as everyone else?**
+   Or do we go straight to per customer rates? Per customer rates are the
+   thing wholesalers actually do, and building the catalogue without them
+   means rebuilding the price lookup later.
+4. **Do orders from strangers land in the customer book?** Someone with no
+   prior relationship who finds the shop page and orders: does a party get
+   created for him, or does he stay a marketplace buyer until the wholesaler
+   adopts him?
+5. **Can one account be both?** The `users.role` column already has a `both`
+   value and the code path exists. Does the KYC step let someone pick both,
+   or does that mean two accounts?
+6. **Does a shared link work without an account?** See 5a. This is the one
+   with a business consequence rather than a technical one.
 
 ## 7. Still outstanding from before this
 
@@ -264,3 +342,20 @@ touched by it.
 - Credit notes reverse a whole bill. Part returns need a quantity per line.
 - Nothing advances an order past `payment_completed` in the UI, so orders
   stall there. Harmless in a demo, fatal in a pilot with real deliveries.
+
+## 8. Raised, parked for later
+
+Noted so they are not lost, deliberately not planned yet.
+
+**Importing old invoices from a GSTIN.** A wholesaler's own filed returns are
+reachable through the GST system as GSTR-1 for what he sold and GSTR-2A or
+2B for what he bought, but only through a licensed GST Suvidha Provider,
+which is a paid procurement rather than a coding task. What comes back is
+also invoice level summary data, not line items, so it would rebuild
+customers and totals but not what was actually on each bill. Useful for
+opening balances, not for history. A CSV or Excel import will do more for
+less, and works for the wholesaler who was keeping a paper book.
+
+**The rest of GST compliance.** Rule 46 particulars on the PDF, place of
+supply, per HSN rates, GSTR-1 export, e-invoicing thresholds. Listed in
+`CLOSED_NETWORK_REDESIGN.md` and unchanged by this merge.

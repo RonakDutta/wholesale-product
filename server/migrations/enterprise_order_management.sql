@@ -177,6 +177,19 @@ CREATE TABLE IF NOT EXISTS shipments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Same as the notifications table: a shipments table from an older schema
+-- already exists on some databases, so the CREATE above does nothing and the
+-- index below fails on a column that was never added, aborting the rest of
+-- this file. Added one at a time so the file heals a table of any shape.
+ALTER TABLE shipments ADD COLUMN IF NOT EXISTS carrier VARCHAR(100);
+ALTER TABLE shipments ADD COLUMN IF NOT EXISTS shipping_address JSONB;
+ALTER TABLE shipments ADD COLUMN IF NOT EXISTS shipped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE shipments ADD COLUMN IF NOT EXISTS expected_delivery_date DATE;
+ALTER TABLE shipments ADD COLUMN IF NOT EXISTS actual_delivery_date DATE;
+ALTER TABLE shipments ADD COLUMN IF NOT EXISTS delivery_status VARCHAR(50) DEFAULT 'in_transit';
+ALTER TABLE shipments ADD COLUMN IF NOT EXISTS delivery_notes TEXT;
+ALTER TABLE shipments ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
 CREATE INDEX IF NOT EXISTS idx_shipments_order_id ON shipments(order_id);
 CREATE INDEX IF NOT EXISTS idx_shipments_tracking_number ON shipments(tracking_number);
 CREATE INDEX IF NOT EXISTS idx_shipments_delivery_status ON shipments(delivery_status);

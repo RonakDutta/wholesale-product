@@ -19,6 +19,23 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- A notifications table from an older schema already exists on some
+-- databases, so the CREATE above quietly does nothing and the index below
+-- fails on a column that was never added. Because that aborts the file, every
+-- statement after it is skipped, which is how notification_preferences came
+-- to be missing and the bell 500ed on every page.
+--
+-- Each column is added on its own so the file heals a table of any shape.
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS title VARCHAR(255);
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS message TEXT;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS notification_type VARCHAR(50);
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS channel VARCHAR(100);
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS reference_id uuid;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS reference_type VARCHAR(50);
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS priority VARCHAR(20) DEFAULT 'normal';
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT false;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id_is_read ON notifications(user_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);

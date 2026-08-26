@@ -1,372 +1,361 @@
-# Wholesale Product Marketplace
+# Vyapari, Wholesale Trade Platform
 
-A modern B2B wholesale marketplace platform designed for wholesalers/suppliers and retailers/buyers to connect, communicate, and purchase products. The platform enables bulk product discovery, supplier comparison, direct WhatsApp communication, and seamless order management.
+Vyapari is a B2B wholesale platform for Indian retailers and wholesalers. It
+supports product discovery, supplier storefronts, bulk ordering, UPI payment
+collection, GST invoicing, delivery tracking, messaging, and wholesale sales
+record keeping.
 
-## 🌟 Features
+The repository currently contains two connected product directions:
 
-### User Management & Authentication
-- **User Registration & Login**: Secure authentication system with role-based access
-- **Role-Based Access Control**: 
-  - **Buyer/Retailer**: Browse products, place orders, contact suppliers
-  - **Supplier/Wholesaler**: Add products, manage orders, receive buyer inquiries
-- **User Profiles**: Business information, contact details, and preferences
-- **JWT Authentication**: Secure token-based authentication with automatic token refresh
+- The marketplace workflow lets retailers browse active public listings,
+  choose a wholesaler, place an order, pay by UPI, and track delivery.
+- Wholesale 3.0 adds a wholesaler-first customer book, private rate list,
+  manual sales ledger, party payments, and sale-linked invoices.
 
-### Marketplace Features
-- **Responsive Homepage**: Modern marketplace layout with hero carousel and market alerts
-- **Product Discovery**: 
-  - Category-based browsing
-  - Advanced search functionality
-  - Verified supplier filtering
-  - Price sorting and comparison
-- **Product Details**:
-  - Bulk pricing and standard pricing tiers
-  - Minimum Order Quantity (MOQ) calculator
-  - Supplier verification badges
-  - Shipping information and specifications
-  - Multiple supplier comparison
-  - Real-time pricing updates
+## Features
 
-### Supplier Features
-- **Product Management**: Add, edit, and manage product listings
-- **Supplier Profiles**: Business information, trust scores, and verification status
-- **Order Management**: View and manage incoming orders
-- **WhatsApp Integration**: Direct buyer communication via WhatsApp
-- **Inventory Tracking**: Stock levels and availability management
+### Accounts and access
 
-### Buyer Features
-- **Cart Management**: Add products to cart with quantity management
-- **Wishlist**: Save favorite products for later
-- **Supplier Comparison**: Compare prices, MOQ, and shipping across suppliers
-- **Order Tracking**: View order status and history
-- **Direct Communication**: Contact suppliers via WhatsApp
+- Registration and login with JWT authentication.
+- Buyer, seller, both, and admin roles with protected routes.
+- Seller upgrade flow for an existing buyer account.
+- Buyer and wholesaler profiles with business details, GSTIN, contact data,
+  UPI ID, city, country, and warehouse address.
+- Role-aware buyer and wholesaler dashboards.
 
-### Dashboard Features
-- **Buyer Dashboard**: 
-  - Order overview and tracking
-  - Wishlist management
-  - Account settings
-- **Supplier Dashboard**:
-  - Product inventory management
-  - Order management and status updates
-  - Business analytics
-  - Message center
+### Product discovery and listings
 
-### Communication Features
-- **WhatsApp Integration**: 
-  - Direct supplier contact without exposing phone numbers
-  - Pre-filled messages with product information
-  - Secure communication channel
-- **Message Center**: In-platform messaging between buyers and suppliers
+- Responsive marketplace home page with hero content, categories, and market
+  promotions.
+- Product browsing, search results, category filtering, and product detail
+  pages.
+- Wholesaler profile and shop pages.
+- Product listings with price, optional discount price, minimum order quantity,
+  stock, shipping days, category, description, and images.
+- Listing visibility levels: `public`, `storefront`, and `private`.
+- Private listings can be shared through an unlisted UUID link.
+- Seller inventory create, edit, view, and delete operations.
+- Product image uploads through the configured Cloudinary client settings.
 
-### Order Management
-- **Order Creation**: Complete checkout flow with address validation
-- **Payment Integration**: Razorpay & Dynamic UPI QR code payment integration
-- **Order Status Tracking**: Real-time order status updates and driver tracking
-- **Order History**: Complete order history for both buyers and suppliers
+### Buyer tools
 
-### Invoice & Tax Compliance
-- **Automated GST Invoicing**: Auto-generates GST tax invoices with intra-state (CGST/SGST) and inter-state (IGST) support
-- **PDF Generation & Export**: Vector-quality downloadable PDF invoices with scannable UPI QR codes
-- **Payment Reconciliation**: Automatic status reconciliation and payment audit trails
-- **Financial Analytics**: Exportable CSV reports and tax breakdown summaries
+- Cart drawer with quantity updates and checkout preparation.
+- Wishlist management.
+- Delivery and billing address capture.
+- Order history, order detail pages, payment pages, and order success flow.
+- Supplier contact flow with WhatsApp-ready contact information where
+  configured.
+- Buyer notification center and unread notification indicators.
+- Verified-purchase product and seller reviews where the review workflow is
+  available.
 
-## 🛠 Tech Stack
+### Wholesaler tools
 
-### Frontend
-- **React.js**: UI framework with modern hooks and context API
-- **Vite**: Fast build tool and development server
-- **React Router DOM**: Client-side routing
-- **Tailwind CSS**: Utility-first CSS framework for styling
-- **GSAP**: Advanced animations and transitions
-- **Lucide React**: Modern icon library
-- **Axios**: HTTP client for API requests
-- **Sonner**: Toast notifications
-- **Context API**: State management for cart, wishlist, and authentication
+- Seller dashboard with overview, inventory, orders, invoices, promotions,
+  reports, settings, and message center.
+- Inventory stock and price management.
+- Incoming order list and order status updates.
+- Wholesaler profile and warehouse location management.
+- Shop page for active public and storefront listings.
+- Promotion and flash-sale management endpoints and seller screens where
+  enabled.
 
-### Backend
-- **Node.js**: JavaScript runtime
-- **Express.js**: Web application framework
-- **PostgreSQL**: Relational database for data persistence
-- **pg**: PostgreSQL client for Node.js
-- **JWT**: JSON Web Tokens for authentication
-- **bcryptjs**: Password hashing for security
-- **Razorpay**: Payment gateway integration
-- **CORS**: Cross-Origin Resource Sharing
-- **dotenv**: Environment variable management
-- **Nodemon**: Development server with auto-reload
+### Orders, payments, and fulfilment
 
-### Development Tools
-- **ESLint**: Code linting and formatting
-- **Concurrently**: Run multiple scripts simultaneously
-- **Git**: Version control
+- Multi-line orders containing products from one wholesaler.
+- Server-side price, stock, and MOQ resolution at checkout. Client-submitted
+  prices are not trusted.
+- Stock reservation during order creation and restoration on eligible
+  cancellation or abandoned payment paths.
+- Full payment and 50/50 installment payment plans.
+- Seller-configured UPI payment details and dynamic UPI QR payment data.
+- Buyer payment initiation and self-declared payment status updates. This
+  repository does not currently use a payment gateway such as Razorpay.
+- Validated order lifecycle with status history and timeline events, including
+  payment, processing, packing, shipping, delivery, cancellation, returns,
+  refunds, and replacement states.
+- Buyer returns and supplier/admin status management.
+- Packing slip generation.
+- Delivery tracking with warehouse coordinates, checkpoints, map support, and
+  shareable driver tracking links.
+- Installment payment reminders.
 
-## 📁 Project Structure
+### Invoices and GST
 
-```
+- Automatic invoice creation from eligible marketplace orders.
+- Manual invoice creation for wholesaler-managed sales.
+- Invoice numbering and per-seller invoice settings.
+- GST calculation with taxable amount, discount, shipping, total tax, CGST,
+  SGST, IGST, and rounding.
+- PDF tax invoice generation with invoice status watermark and UPI QR code.
+- Invoice detail, download, email, resend, payment recording, reminder, and
+  cancellation workflows.
+- Invoice audit logs.
+- Dashboard statistics and date-filtered reports.
+- CSV, Excel-compatible, and PDF summary exports.
+- Invoice support for both legacy order records and Wholesale 3.0 sales.
+
+### Messaging and notifications
+
+- Buyer-wholesaler in-app messaging backed by Socket.IO.
+- Conversation, message, unread-count, and message notification flows.
+- In-app notification center with notification preferences.
+- Optional email, SMS, WhatsApp, and push notification providers. These
+  integrations degrade quietly when their environment variables are absent.
+
+### Wholesale 3.0 management modules
+
+These modules provide a wholesaler-first sales management workflow alongside
+the older marketplace tables:
+
+- Private customer book using parties linked to one wholesaler.
+- Customer details including phone, address, GSTIN, notes, and status.
+- Wholesaler-owned items and rate list with unit, pack size, rate, MOQ, HSN,
+  notes, and active/inactive state.
+- Manual sale recording against a customer, including item lines, quantity,
+  rate, discount, notes, sale number, and sale status.
+- Sale detail and sale history.
+- Party payments using cash, UPI, bank, cheque, or other methods.
+- Running customer balance data through the sales and payment records.
+- Invoice creation from a recorded sale, with recipient details snapshotted on
+  the invoice.
+
+### Credit limit and Pay Later
+
+- Wholesalers can configure a credit limit, credit period, and account status
+  for each customer in their private customer book.
+- Credit status is recalculated from real balances: `active` below 80% usage,
+  `warning` from 80% through the limit, and `blocked` above the limit or when
+  manually blocked.
+- Eligible linked retailers can select Pay on Credit at checkout. Eligibility
+  is checked on the server against customer ownership, account status, and
+  available credit.
+- Credit orders create an invoice, due date, order payment state, and ledger
+  transaction in the same PostgreSQL transaction.
+- Every credit sale and payment is recorded in `credit_transactions`, with
+  balance-after snapshots, due dates, invoice/order references, and optional
+  idempotency keys.
+- Seller Credit accounts includes account search, balance summaries, ledger
+  history, limit and period editing, account blocking/reactivation, payment
+  collection, and CSV statements.
+- Buyer Credit Wallet shows limit, outstanding, available, overdue amount, due
+  date, usage, recent transactions, and PDF/CSV statement downloads.
+- Partial payments use row-level locking and cannot exceed the outstanding
+  balance. Duplicate payment requests with the same idempotency key are
+  ignored.
+- Due reminders run at server startup and every six hours for three days
+  before due, due today, three days overdue, and seven days overdue.
+- Credit analytics includes total outstanding, overdue totals, customers using
+  credit, and accounts-receivable aging buckets.
+
+## Technology
+
+### Client
+
+- React 19 and React DOM
+- Vite with Rolldown
+- React Router v7
+- Tailwind CSS v4
+- Axios
+- Socket.IO client
+- GSAP animations
+- MapLibre GL maps
+- Lucide React icons
+- QRCode React
+- Sonner notifications
+
+### Server
+
+- Node.js and Express 5
+- PostgreSQL, using the `pg` client
+- Socket.IO
+- JWT and bcryptjs authentication
+- PDFKit and QRCode for invoice documents
+- Multer for uploads
+- Nodemailer, SendGrid, Twilio, and Firebase Admin integrations
+- Nodemon for development
+
+## Project structure
+
+```text
 wholesale-product/
-├── client/                      # Frontend React application
-│   ├── public/                  # Static assets
+├── client/
+│   ├── public/                       Static assets
+│   └── src/
+│       ├── components/              Shared UI components
+│       ├── config/                  Feature flags and client config
+│       ├── context/                 Auth, cart, wishlist, socket, notifications
+│       ├── hooks/                   Reusable React hooks
+│       ├── layouts/                 Application and seller layouts
+│       ├── pages/                   Buyer, seller, auth, invoice, and tracking pages
+│       └── utils/                   Axios and client utilities
+├── server/
+│   ├── migrations/                  Hand-applied PostgreSQL migrations
 │   ├── src/
-│   │   ├── components/         # Reusable components
-│   │   │   ├── CartDrawer.jsx
-│   │   │   ├── CategorySlider.jsx
-│   │   │   ├── ContactVendorBtn.jsx
-│   │   │   ├── FilterBar.jsx
-│   │   │   ├── HeroCarousel.jsx
-│   │   │   ├── Navbar.jsx
-│   │   │   ├── ProductCard.jsx
-│   │   │   ├── SupplierComparison.jsx
-│   │   │   └── UserProfilePopup.jsx
-│   │   ├── context/            # Context providers
-│   │   │   ├── AuthContext.jsx
-│   │   │   ├── CartContext.jsx
-│   │   │   └── WishlistContext.jsx
-│   │   ├── layouts/            # Layout components
-│   │   │   ├── AuthLayout.jsx
-│   │   │   ├── DashboardLayout.jsx
-│   │   │   ├── InfoLayout.jsx
-│   │   │   └── MainLayout.jsx
-│   │   ├── pages/              # Page components
-│   │   │   ├── dashboard/      # Dashboard pages
-│   │   │   ├── BuyerDashboard.jsx
-│   │   │   ├── SupplierDashboard.jsx
-│   │   │   ├── Login.jsx
-│   │   │   ├── MarketplaceHome.jsx
-│   │   │   ├── ProductDetails.jsx
-│   │   │   ├── SearchResults.jsx
-│   │   │   ├── SignUp.jsx
-│   │   │   └── Wishlist.jsx
-│   │   ├── utils/              # Utility functions
-│   │   │   ├── axios.js
-│   │   │   ├── mockProducts.js
-│   │   │   └── supplierUtils.js
-│   │   ├── App.jsx             # Main app component
-│   │   ├── index.css           # Global styles
-│   │   └── main.jsx            # Entry point
-│   ├── index.html
-│   ├── package.json
-│   └── vite.config.js
-├── server/                     # Backend Express application
-│   ├── src/
-│   │   ├── config/             # Configuration files
-│   │   │   └── db.js           # Database configuration
-│   │   ├── controllers/        # Route controllers
-│   │   │   ├── authController.js
-│   │   │   ├── orderController.js
-│   │   │   ├── paymentController.js
-│   │   │   └── productController.js
-│   │   ├── middlewares/        # Custom middlewares
-│   │   │   └── authMiddleware.js
-│   │   ├── models/             # Database models
-│   │   │   ├── Order.js
-│   │   │   ├── Product.js
-│   │   │   └── User.js
-│   │   ├── routes/             # API routes
-│   │   │   ├── authRoutes.js
-│   │   │   ├── orderRoutes.js
-│   │   │   ├── paymentRoutes.js
-│   │   │   └── productRoutes.js
-│   │   ├── app.js              # Express app setup
-│   │   └── server.js           # Server entry point
-│   ├── .env                    # Environment variables
-│   ├── package.json
-│   └── nodemon.json
-├── .gitignore
-├── package.json                # Root package.json
-└── README.md                   # This file
+│   │   ├── config/                  Database configuration
+│   │   ├── controllers/             Request handlers and business logic
+│   │   ├── middlewares/             Authentication, roles, and validation
+│   │   ├── repositories/            Invoice persistence helpers
+│   │   ├── routes/                  API route modules
+│   │   └── services/                Orders, invoices, GST, tracking, notifications
+│   ├── storage/                     Generated invoice files
+│   └── tests/                       Node test runner tests
+├── docs/                            Product and redesign documentation
+└── README.md
 ```
 
-## 🚀 Getting Started
+## Requirements
 
-### Prerequisites
-- Node.js (v18 or higher)
-- PostgreSQL database
-- npm or yarn
+- Node.js 18 or newer
+- npm
+- PostgreSQL database, local or hosted such as Neon
+- Git
 
-### Installation
+## Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd wholesale-product
-   ```
+```bash
+git clone <repository-url>
+cd wholesale-product
+npm install
+npm install --prefix client
+npm install --prefix server
+```
 
-2. **Install root dependencies**
-   ```bash
-   npm install
-   ```
+## Environment variables
 
-3. **Install client dependencies**
-   ```bash
-   npm install --prefix client
-   ```
+Create `server/.env`:
 
-4. **Install server dependencies**
-   ```bash
-   npm install --prefix server
-   ```
+```env
+DATABASE_URL=postgresql://username:password@localhost:5432/wholesale_marketplace
+JWT_SECRET=replace-with-a-long-random-secret
+PORT=5000
 
-### Environment Setup
+# Optional service configuration
+SENDGRID_API_KEY=
+SENDGRID_FROM_EMAIL=
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_PHONE_NUMBER=
+FIREBASE_SERVICE_ACCOUNT_JSON=
+```
 
-1. **Configure server environment variables** (`server/.env`)
-   ```env
-   DATABASE_URL=postgresql://username:password@localhost:5432/database_name
-   PORT=5000
-   JWT_SECRET=your_jwt_secret_key
-   RAZORPAY_KEY_ID=your_razorpay_key_id
-   RAZORPAY_KEY_SECRET=your_razorpay_key_secret
-   ```
+Create `client/.env`:
 
-2. **Configure client environment variables** (`client/.env`)
-   ```env
-   VITE_API_BASE_URL=http://localhost:5000
-   VITE_RAZORPAY_KEY_ID=your_razorpay_key_id
-   ```
+```env
+VITE_API_BASE_URL=http://localhost:5000
+VITE_CLOUDINARY_CLOUD_NAME=
+VITE_CLOUDINARY_UPLOAD_PRESET=
+```
 
-### Database Setup
+The optional provider variables are only needed for the corresponding email,
+SMS, WhatsApp, push, or image-upload workflow. There is no Razorpay setup
+required by the current payment implementation.
 
-1. **Create PostgreSQL database**
-   ```sql
-   CREATE DATABASE wholesale_marketplace;
-   ```
+## Database setup
 
-2. **Run database migrations** (if available)
-   ```bash
-   # Or manually create tables using the schema in server/src/config/db.js
-   ```
+Create the PostgreSQL database, then apply the SQL files in
+`server/migrations/` against it. Migrations are not applied automatically when
+the server starts. Apply them in their rough date order and apply
+`z_fix_order_payment_status_constraint.sql` last.
 
-### Running the Application
+The Wholesale 3.0 functionality requires these migrations in addition to the
+base schema:
 
-1. **Start the full application** (both client and server)
-   ```bash
-   npm run dev
-   ```
+- `wholesale3_items.sql`
+- `wholesale3_parties_and_sales.sql`
+- `wholesale3_invoice_from_sale.sql`
+- `credit_limit_pay_later.sql`
 
-2. **Or start individually**
-   ```bash
-   # Terminal 1 - Server
-   cd server
-   npm run dev
+The credit migration must run after the order, invoice, and Wholesale 3.0
+tables exist. It updates the final order payment-status allow-list to include
+`credit_pending`; keep that value when applying the final
+`z_fix_order_payment_status_constraint.sql` migration.
 
-   # Terminal 2 - Client
-   cd client
-   npm run dev
-   ```
+## Running the application
 
-3. **Access the application**
-   - Frontend: http://localhost:5173
-   - Backend API: http://localhost:5000
+Run both applications from the repository root:
 
-## 🔄 User Workflows
+```bash
+npm run dev
+```
 
-### Supplier Workflow
- ```
- Registration → Business Profile Setup → Add Products → 
- Receive Orders → Manage Inventory → Communicate with Buyers
- ```
+Or run them separately:
 
-### Buyer Workflow
- ```
- Registration → Browse Products → Compare Suppliers → 
- Add to Cart/Wishlist → Place Order → Complete Payment → 
- Track Order → Contact Suppliers via WhatsApp
- ```
+```bash
+# Terminal 1
+cd server
+npm run dev
 
-## 🔐 Security Features
+# Terminal 2
+cd client
+npm run dev
+```
 
-- JWT-based authentication
-- Password hashing with bcrypt
-- Role-based access control
-- Input validation and sanitization
-- Secure payment verification with Razorpay
-- Protected API routes
-- Environment variable management
-- CORS configuration
+Default URLs:
 
-## 📊 API Endpoints
+- Client: `http://localhost:5173`
+- API: `http://localhost:5000`
 
-### Authentication
-- `POST /api/auth/register` - User registration
-- `POST /api/auth/login` - User login
-- `GET /api/auth/me` - Get current user
+## Useful commands
 
-### Products
-- `GET /api/products` - Get all products
-- `GET /api/products/:id` - Get product by ID
-- `POST /api/products` - Create product (Supplier only)
-- `GET /api/products/:id/contact` - Get WhatsApp contact link
+```bash
+npm run dev --prefix server
+npm run dev --prefix client
+npm run lint --prefix client
+npm run build --prefix client
+node --test server/tests/*.test.js
+```
 
-### Orders
-- `POST /api/orders/create` - Create new order
-- `GET /api/orders/my-orders` - Get buyer's orders
-- `GET /api/orders/supplier-orders` - Get supplier's orders
-- `PUT /api/orders/:id/status` - Update order status
+## API groups
 
-### Payments
-- `POST /api/payment/create-order` - Create Razorpay order
-- `POST /api/payment/verify` - Verify payment
+The Express API is mounted under `/api`:
 
-## 🎨 UI/UX Features
+| Group            | Purpose                                                         |
+| ---------------- | --------------------------------------------------------------- |
+| `/auth`          | Registration, login, current user, seller upgrade               |
+| `/products`      | Catalog, product details, shop pages, listings, inventory       |
+| `/dashboard`     | Seller dashboard data                                           |
+| `/profile`       | Wholesaler profile and warehouse settings                       |
+| `/orders`        | Create, view, pay, update, track, return, and document orders   |
+| `/messages`      | Conversations and in-app messages                               |
+| `/notifications` | Notification center and preferences                             |
+| `/promotions`    | Promotion and flash-sale operations                             |
+| `/reviews`       | Product and seller reviews                                      |
+| `/track`         | Public driver tracking links                                    |
+| `/invoices`      | Invoice management, GST documents, reports, and exports         |
+| `/parties`       | Wholesale customer book                                         |
+| `/items`         | Wholesaler-owned rate list                                      |
+| `/sales`         | Manual sales and sale payments                                  |
+| `/overview`      | Wholesale management overview                                   |
+| `/credit`        | Credit accounts, Pay on Credit, payments, statements, analytics |
 
-- **Responsive Design**: Mobile-first approach with Tailwind CSS
-- **Smooth Animations**: GSAP-powered transitions
-- **Modern Components**: Clean, reusable component architecture
-- **Loading States**: Skeleton loaders and spinners
-- **Error Handling**: User-friendly error messages
-- **Toast Notifications**: Real-time feedback with Sonner
-- **Accessibility**: WCAG compliant design principles
+Protected endpoints require the JWT returned by `/api/auth/login`.
 
-## 🐛 Troubleshooting
+## Current limitations and roadmap
 
-### Common Issues
+- The repository is transitioning from an open marketplace to a closed
+  wholesaler network. The older public marketplace tables and screens remain
+  while the new Wholesale 3.0 modules are introduced.
+- Cross-seller discovery and comparison still exist in legacy marketplace code,
+  but they are not the target direction for the closed-network redesign.
+- No current screen advances marketplace orders beyond
+  `payment_completed` into supplier fulfilment automatically. Supplier action
+  is still required.
+- Flash-sale creation is admin-only and there is no admin console in the
+  client.
+- Bulk import and retailer invite workflows are planned, not complete.
+- GST product HSN handling still needs product-specific HSN data throughout the
+  invoice pipeline before invoices should be treated as production tax
+  compliance documents.
+- Security and compliance hardening for the prototype is still pending.
 
-1. **Database Connection Error**
-   - Ensure PostgreSQL is running
-   - Check DATABASE_URL in server/.env
-   - Verify database credentials
+See `docs/PRODUCT_BLUEPRINT.md` for the original marketplace product context
+and `docs/CLOSED_NETWORK_REDESIGN.md` for the newer closed-network direction.
 
-2. **Port Already in Use**
-   - Change PORT in server/.env
-   - Or kill the process using the port
+## License
 
-3. **CORS Errors**
-   - Check CORS configuration in server/src/app.js
-   - Ensure frontend URL is allowed
-
-4. **Payment Integration Issues**
-   - Verify Razorpay credentials
-   - Check RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET
-
-## 📝 Development Notes
-
-- The project uses PostgreSQL instead of MongoDB for better relational data management
-- Authentication is JWT-based with role-based authorization
-- The frontend uses React Context API for state management
-- All API calls are made through a centralized Axios instance
-- The project follows a component-based architecture for better maintainability
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License.
-
-## 👥 Team
-
-- **Developers**: [Your Team Name]
-- **Project Type**: B2B Wholesale Marketplace Platform
-
-## 📞 Support
-
-For support and queries, please contact [your-email@example.com]
-
----
-
-**Built with ❤️ for the wholesale community**
+This project currently uses the ISC license declared in the package metadata.

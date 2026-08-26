@@ -16,6 +16,7 @@ const partyRoutes = require("./routes/partyRoutes");
 const saleRoutes = require("./routes/saleRoutes");
 const itemRoutes = require("./routes/itemRoutes");
 const overviewRoutes = require("./routes/overviewRoutes");
+const creditRoutes = require("./routes/creditRoutes");
 
 const app = express();
 
@@ -45,5 +46,6 @@ app.use("/api/parties", partyRoutes);
 app.use("/api/sales", saleRoutes);
 app.use("/api/items", itemRoutes);
 app.use("/api/overview", overviewRoutes);
+app.use("/api/credit", creditRoutes);
 
 module.exports = app;

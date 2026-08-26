@@ -18,9 +18,9 @@ UPDATE orders SET payment_status = lower(payment_status)
   WHERE payment_status IS NOT NULL;
 UPDATE orders SET payment_status = 'pending'
   WHERE payment_status IS NULL
-     OR payment_status NOT IN ('pending', 'payment_pending', 'paid', 'partial', 'partially_paid', 'failed', 'cod', 'refunded');
+    OR payment_status NOT IN ('pending', 'payment_pending', 'paid', 'partial', 'partially_paid', 'failed', 'cod', 'refunded', 'credit_pending');
 
 ALTER TABLE orders
   ADD CONSTRAINT chk_order_payment_status CHECK (payment_status IN (
-    'pending', 'payment_pending', 'paid', 'partial', 'partially_paid', 'failed', 'cod', 'refunded'
+    'pending', 'payment_pending', 'paid', 'partial', 'partially_paid', 'failed', 'cod', 'refunded', 'credit_pending'
   ));

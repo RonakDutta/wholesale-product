@@ -3,6 +3,7 @@ const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimelin
 const { geocodeOrderDestination } = require("../services/geocodingService");
 const invoiceService = require("../services/invoiceService");
 const pdfService = require("../services/pdfService");
+const creditService = require("../services/creditService");
 const {
   enqueueNotification,
   NOTIFICATION_CHANNELS,
@@ -212,7 +213,9 @@ const createOrder = async (req, res) => {
   } = req.body;
   // Only plans the server knows about. Anything else falls back to paying in
   // full rather than creating an order nobody can settle.
-  const plan = paymentPlan === "installment_50_50" ? "installment_50_50" : "full";
+  const plan = ["installment_50_50", "credit"].includes(paymentPlan)
+    ? paymentPlan
+    : "full";
   const buyerId = req.user?.id;
 
   if (!buyerId) {
@@ -341,8 +344,8 @@ const createOrder = async (req, res) => {
         0,
         subtotal,
         plan,
-        "payment_pending",
-        "pending",
+        plan === "credit" ? "payment_completed" : "payment_pending",
+        plan === "credit" ? "credit_pending" : "pending",
         JSON.stringify(deliveryAddress),
         JSON.stringify(billingAddress || deliveryAddress),
         String(deliveryAddress.phone || ""),
@@ -395,14 +398,52 @@ const createOrder = async (req, res) => {
     await client.query(
       `INSERT INTO order_status_history (order_id, status, previous_status, updated_by, updated_by_role, remarks)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [orderId, "payment_pending", null, buyerId, "buyer", "Order created"],
+      [
+        orderId,
+        plan === "credit" ? "payment_completed" : "payment_pending",
+        null,
+        buyerId,
+        "buyer",
+        plan === "credit" ? "Order placed on credit" : "Order created",
+      ],
     );
 
     await client.query(
       `INSERT INTO payment_transactions (order_id, amount, payment_method, payment_status, gateway_response)
        VALUES ($1, $2, $3, $4, $5)`,
-      [orderId, subtotal, paymentMethod, "pending", JSON.stringify({ method: paymentMethod })],
+      [
+        orderId,
+        subtotal,
+        plan === "credit" ? "credit" : paymentMethod,
+        plan === "credit" ? "credit_pending" : "pending",
+        JSON.stringify({ method: plan === "credit" ? "credit" : paymentMethod }),
+      ],
     );
+
+    let creditAccount = null;
+    if (plan === "credit") {
+      // Keep invoice creation and the account/ledger mutation in this same
+      // transaction. A credit order is not valid if either financial record
+      // cannot be written.
+      const invoice = await invoiceService.createInvoiceFromOrder(orderId, client);
+      creditAccount = await creditService.createCreditSale({
+        client,
+        sellerId: supplierId,
+        buyerId,
+        orderId,
+        amount: subtotal,
+        invoiceId: invoice.id,
+        idempotencyKey: `order:${orderId}`,
+      });
+      await client.query(
+        "UPDATE invoices SET due_date = $1, payment_status = 'Pending', invoice_status = 'Generated' WHERE id = $2",
+        [creditAccount.dueDate, invoice.id],
+      );
+      await client.query(
+        "UPDATE credit_transactions SET invoice_id = $1 WHERE id = $2",
+        [invoice.id, creditAccount.transaction.id],
+      );
+    }
 
     await client.query("COMMIT");
 
@@ -424,12 +465,21 @@ const createOrder = async (req, res) => {
       geocodeOrderDestination(orderId, deliveryAddress).catch(() => { });
     }
 
-    // Trigger automatic invoice creation in background
-    invoiceService.createInvoiceFromOrder(orderId).catch((invErr) => {
-      console.warn("Background invoice creation notice:", invErr.message);
-    });
+    if (plan !== "credit") {
+      // Non-credit orders retain the existing asynchronous invoice behavior.
+      invoiceService.createInvoiceFromOrder(orderId).catch((invErr) => {
+        console.warn("Background invoice creation notice:", invErr.message);
+      });
+    }
 
-    return res.status(201).json({ success: true, orderId, subtotal, itemCount: lines.length });
+    return res.status(201).json({
+      success: true,
+      orderId,
+      subtotal,
+      itemCount: lines.length,
+      paymentPlan: plan,
+      creditDueDate: creditAccount?.dueDate || null,
+    });
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("Order creation failed:", error);

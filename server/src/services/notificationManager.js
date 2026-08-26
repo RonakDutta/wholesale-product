@@ -20,6 +20,7 @@ const NOTIFICATION_TYPES = {
   inventory: "inventory",
   review: "review",
   auth: "auth",
+  credit: "credit",
 };
 
 const createNotificationRecord = async ({ userId, title, message, notificationType, channel, referenceId = null, referenceType = null, priority = "normal" }) => {

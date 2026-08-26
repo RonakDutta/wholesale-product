@@ -13,6 +13,7 @@ import {
   Store,
   Users,
   BarChart3,
+  CreditCard,
   Plus,
   ChevronLeft,
 } from "lucide-react";
@@ -45,7 +46,17 @@ const NAV = [
     flag: "MARKETPLACE",
   },
   { path: "/seller/invoices", label: "Invoices", icon: FileText },
-  { path: "/seller/messages", label: "Messages", icon: MessageSquare, badge: "unread" },
+  {
+    path: "/seller/credit-accounts",
+    label: "Credit accounts",
+    icon: CreditCard,
+  },
+  {
+    path: "/seller/messages",
+    label: "Messages",
+    icon: MessageSquare,
+    badge: "unread",
+  },
   {
     path: "/seller/promotions",
     label: "Promotions",
@@ -53,10 +64,9 @@ const NAV = [
     flag: "MARKETPLACE",
   },
   {
-    path: "/seller/analytics",
-    label: "Analytics",
+    path: "/seller/credit-analytics",
+    label: "Credit analytics",
     icon: BarChart3,
-    flag: "ANALYTICS",
   },
   { path: "/seller/settings", label: "Settings", icon: Settings },
 ].filter((item) => !item.flag || FEATURES[item.flag]);
@@ -84,7 +94,8 @@ const SellerLayout = () => {
       : location.pathname.startsWith(item.path);
 
   const companyName =
-    user?.companyName || `${user?.firstName || ""} ${user?.lastName || ""}`.trim();
+    user?.companyName ||
+    `${user?.firstName || ""} ${user?.lastName || ""}`.trim();
 
   return (
     <div className="font-dmsans flex h-dvh overflow-hidden bg-slate-100">
@@ -134,7 +145,7 @@ const SellerLayout = () => {
                 }`}
               >
                 <span className="flex items-center gap-3">
-                  <item.icon className="h-[18px] w-[18px]" />
+                  <item.icon className="h-4.5 w-4.5" />
                   {item.label}
                 </span>
                 {showBadge && (

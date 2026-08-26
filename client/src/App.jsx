@@ -42,6 +42,7 @@ import InvoiceSettings from "./pages/dashboard/InvoiceSettings";
 import WholesalerProfile from "./pages/WholesalerProfile";
 import SharedListing from "./pages/SharedListing";
 import DriverTracking from "./pages/DriverTracking";
+import CreditWallet from "./pages/CreditWallet";
 import NotFound from "./pages/NotFound";
 
 // Seller workspace is lazy-loaded: retailers never download this bundle.
@@ -62,6 +63,8 @@ const RecordSale = lazy(() => import("./pages/dashboard/RecordSale"));
 const SaleDetail = lazy(() => import("./pages/dashboard/SaleDetail"));
 const RateList = lazy(() => import("./pages/dashboard/RateList"));
 const Overview = lazy(() => import("./pages/dashboard/Overview"));
+const CreditAccounts = lazy(() => import("./pages/dashboard/CreditAccounts"));
+const CreditAnalytics = lazy(() => import("./pages/dashboard/CreditAnalytics"));
 
 const SellerFallback = () => (
   <div className="flex min-h-dvh items-center justify-center bg-slate-100">
@@ -112,6 +115,7 @@ const router = createBrowserRouter([
       { path: "messages/:vendorId", element: <Messages /> },
       { path: "orders", element: <MyOrders /> },
       { path: "notifications", element: <NotificationCenter /> },
+      { path: "credit-wallet", element: <CreditWallet /> },
       { path: "orders/:orderId", element: <OrderDetails /> },
     ],
   },
@@ -145,6 +149,8 @@ const router = createBrowserRouter([
       { path: "messages", element: <Messages /> },
       { path: "messages/:vendorId", element: <Messages /> },
       { path: "settings", element: <Settings /> },
+      { path: "credit-accounts", element: <CreditAccounts /> },
+      { path: "credit-analytics", element: <CreditAnalytics /> },
     ],
   },
   // Old dashboard links and bookmarks keep working.

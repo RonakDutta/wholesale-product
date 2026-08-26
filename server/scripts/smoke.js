@@ -57,7 +57,7 @@ const check = (cond, label, v) => { if (!cond) fails++;
   repo.resetSchemaExtras();
 
   const u = await testPool.query(`INSERT INTO users (first_name,last_name,email,role)
-    VALUES ('Ram','T','ram@${DB}.local','seller') RETURNING id`);
+    VALUES ('Ram','T',$1,'seller') RETURNING id`, [`ram+${Date.now()}@${DB}.local`]);
   const wid = u.rows[0].id;
   await testPool.query(`INSERT INTO wholesaler_profiles (user_id,company_name,gstin,city,warehouse_state)
     VALUES ($1,'Ram Textiles','24AAAAA0000A1Z5','Surat','Gujarat')`, [wid]);

@@ -120,6 +120,26 @@ in his book to the account they just made.
 Hard rule, unchanged: `parties.notes` is the wholesaler's private note about
 that customer and must never reach the retailer side.
 
+**DECIDED: a stranger who orders becomes a customer.** Someone who finds the
+shop page with no prior relationship gets a party in the book on his first
+order. No adoption step.
+
+That makes find or create load bearing, and it has to be written carefully
+once rather than repeated at each call site:
+
+- **Match on `user_id` first.** A registered buyer is the same customer every
+  time regardless of what he types at checkout.
+- **Then on phone,** to catch the case the wholesaler already had him in the
+  book from a walk in and is now seeing his first online order. Those two
+  rows must become one, not two balances for one shop.
+- **`parties` has a partial unique index on `(wholesaler_id, phone)`.** A
+  naive insert will violate it and 500 the checkout. This is the specific
+  thing that will break if find or create is written in a hurry.
+- **Name comes from the buyer's company name,** falling back to their user
+  name. It is the wholesaler's own book, so he can rename them afterwards;
+  the edit already exists.
+- Created parties are `active` and carry no notes.
+
 ### 3.3 Transactions: the order becomes the logistics, the sale becomes the commerce
 
 Recommended shape:
@@ -301,32 +321,71 @@ since these wholesalers are on WhatsApp already.
 None of this blocks the merge. It blocks the sign up screen, and it should be
 priced and decided before that screen is designed.
 
-## 6. Open questions, for you
+## 5b. Leaving room for what is coming
 
-Answered so far: stock is hidden for now (3.1), and nobody browses without an
-account (5a). Still open:
+The ask was to merge these two without closing doors. The doors worth
+holding open, and what holding them open costs now.
 
-1. **Do private listings get a shared `products` row, or a private one?**
-   (3.1) Migrating a rate list into the shared catalogue publishes the names
-   of a wholesaler's range into space competitors can attach to, even though
-   the listings stay invisible.
-2. **When an order becomes a sale, at which state?** On payment, or on the
-   wholesaler accepting it? Earlier means the khata moves before he has
-   agreed to supply; later means a paid order sits outside the khata for a
-   while.
-3. **Does a retailer with an account see the same rates as everyone else?**
-   Or do we go straight to per customer rates? Per customer rates are the
-   thing wholesalers actually do, and building the catalogue without them
-   means rebuilding the price lookup later.
-4. **Do orders from strangers land in the customer book?** Someone with no
-   prior relationship who finds the shop page and orders: does a party get
-   created for him, or does he stay a marketplace buyer until the wholesaler
-   adopts him?
-5. **Can one account be both?** The `users.role` column already has a `both`
-   value and the code path exists. Does the KYC step let someone pick both,
-   or does that mean two accounts?
-6. **Does a shared link work without an account?** See 5a. This is the one
-   with a business consequence rather than a technical one.
+**Per customer rates. DECIDED: later, one rate for everyone for now.** The
+cost of "later" is only low if the price is looked up in **one** place. If
+twenty queries each read `supplier_inventory.price` directly, adding a rate
+per customer means finding all twenty and getting every one right.
+
+So while building the merge: one function that answers "what does this
+customer pay for this listing", called by the catalogue, the order pad, the
+cart, the sale form and the invoice. Today it returns the listing price and
+nothing else. Later it looks for an override first. That is the difference
+between an afternoon and a fortnight, and it costs nothing to do now.
+
+The same seam serves the discounts and the promotions the marketplace
+already has, which today are applied in several different places.
+
+**Credit and khata limits.** Agreed earlier: terms negotiable per pair, warn
+on limit, and no interest. That is a column or two on `parties` and a check
+at sale time. Nothing in this merge should make it harder, and having every
+transaction reach the khata through one ledger is what makes it possible at
+all.
+
+**B2C.** Furthest out, and the reason to keep `parties` rather than assume
+every customer is a business: a party needs no GSTIN and no login, which is
+already what a retail buyer looks like.
+
+**The rule that keeps all three cheap:** every new query goes through the
+price seam, the khata, or the party. Nothing reads a price, a balance or a
+customer directly.
+
+Decided: stock hidden (3.1), accounts required to browse (5a), strangers
+become customers (3.2), one rate for everyone for now (5b).
+
+**Nothing left here blocks starting.** Phases 0 to 3 can be built on what has
+been decided. Of what remains, one is a business call and the rest have a
+sensible default that can simply be confirmed later, when the phase that
+needs it comes up.
+
+**The business call:**
+
+1. **Does a shared link work without an account?** A wholesaler WhatsApps his
+   shop page to a shop that has no account. Login wall, or readable? The
+   whole point of the link is reaching someone who is not a user yet.
+   Recommendation: browsing the catalogue needs an account, following a
+   direct link does not. See 5a.
+
+**Defaults, to confirm when reached:**
+
+2. **Private listings and the shared `products` row.** (3.1, Phase 4)
+   Default: private listings get their own product row, not a shared one, so
+   a wholesaler's range never appears in space a competitor can attach to.
+   Costs a little duplication in the catalogue; buys back the thing listing
+   visibility was built to protect in the first place.
+3. **Which order state mints the sale.** (3.3, Phase 5) Default: on
+   `supplier_accepted`, not on payment. The wholesaler has agreed to supply
+   by then, so the khata moves when the commitment is real. A paid but
+   unaccepted order shows as money received against no bill for a short
+   while, which is the honest picture.
+4. **Can one account be both wholesaler and retailer?** `users.role` already
+   has a `both` value and the code path exists. Default: yes, allowed, since
+   the code already supports it and a wholesaler buying from another
+   wholesaler is normal in this trade.
 
 ## 7. Still outstanding from before this
 

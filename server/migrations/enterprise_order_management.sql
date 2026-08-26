@@ -241,7 +241,7 @@ COMMENT ON COLUMN invoices.invoice_data IS 'Complete invoice data including buye
 -- =====================================================
 
 CREATE TABLE IF NOT EXISTS order_analytics (
-    idSERIAL PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     role VARCHAR(20) NOT NULL, -- 'buyer', 'supplier'
     period VARCHAR(20) NOT NULL, -- 'daily', 'weekly', 'monthly'

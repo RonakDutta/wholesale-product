@@ -14,33 +14,6 @@ const normalizeVisibility = (value, fallback = "public") => {
   return VISIBILITY_LEVELS.includes(level) ? level : fallback;
 };
 
-const toProductResponse = (row) => ({
-  id: row.id,
-  name: row.name,
-  category: row.category,
-  description: row.description,
-  image: row.image,
-  starting_price: row.price,
-  suppliers: [
-    {
-      id: row.inventory_id,
-      supplierId: row.supplier_id,
-      companyName: row.company_name,
-      image: row.listing_image || row.image,
-      price: row.price,
-      discountPrice: row.discount_price,
-      verified: row.is_verified,
-      moq: row.moq,
-      stock: row.stock,
-      shippingDays: row.shipping_days,
-      city: row.city,
-      country: row.country,
-      gstVerified: row.gst_verified ?? false,
-      contactPhone: row.contact_phone,
-    },
-  ],
-});
-
 // @desc    Add a product
 // @route   POST /api/products
 exports.addProduct = async (req, res) => {
@@ -127,7 +100,8 @@ exports.getPublicCatalog = async (req, res) => {
       JOIN supplier_inventory si ON p.id = si.product_id
       JOIN wholesaler_profiles wp ON si.supplier_id = wp.user_id
       WHERE si.status = 'Active' AND si.stock > 0 AND si.visibility = 'public'
-      ORDER BY p.id, si.created_at DESC
+      GROUP BY p.id, p.name, p.category, p.description, p.global_image_url
+      ORDER BY p.id DESC
     `;
     const result = await pool.query(query);
     res.status(200).json(result.rows.map(toProductResponse));
@@ -168,8 +142,7 @@ exports.getProductById = async (req, res) => {
       JOIN wholesaler_profiles wp ON si.supplier_id = wp.user_id
       WHERE p.id = $1 AND si.status = 'Active' AND si.stock > 0
         AND si.visibility = 'public'
-      ORDER BY si.created_at DESC
-      LIMIT 1
+      GROUP BY p.id, p.name, p.category, p.description, p.global_image_url
     `;
     const result = await pool.query(query, [id]);
 
@@ -191,6 +164,83 @@ exports.getProductById = async (req, res) => {
 
     const product = toProductResponse(result.rows[0]);
     product.reviewSummary = reviewSummary.rows[0];
+
+    // Per-supplier track record. These are counted from real orders and
+    // reviews, so a new seller honestly shows zero instead of a stock figure.
+    const supplierIds = [
+      ...new Set((product.suppliers || []).map((s) => s.supplierId)),
+    ].filter(Boolean);
+
+    if (supplierIds.length > 0) {
+      const statsById = new Map();
+
+      const fulfilment = await pool.query(
+        `SELECT COALESCE(o.supplier_id, si.supplier_id) AS supplier_id,
+                COUNT(*) FILTER (WHERE o.status IN ('delivered', 'completed')) AS fulfilled_orders
+         FROM orders o
+         LEFT JOIN supplier_inventory si ON si.id = o.inventory_item_id
+         WHERE COALESCE(o.supplier_id, si.supplier_id) = ANY($1::uuid[])
+         GROUP BY 1`,
+        [supplierIds],
+      );
+      fulfilment.rows.forEach((row) => {
+        statsById.set(row.supplier_id, {
+          fulfilledOrders: Number(row.fulfilled_orders) || 0,
+        });
+      });
+
+      // Counts what a visitor would actually find on the storefront, so the
+      // "view all N products" link never promises more than it shows.
+      // Private listings are excluded for the same reason.
+      const catalog = await pool.query(
+        `SELECT supplier_id,
+                COUNT(*) AS catalog_size,
+                COUNT(*) FILTER (WHERE visibility = 'storefront') AS exclusive_count
+         FROM supplier_inventory
+         WHERE supplier_id = ANY($1::uuid[])
+           AND status = 'Active'
+           AND visibility IN ('public', 'storefront')
+         GROUP BY supplier_id`,
+        [supplierIds],
+      );
+      catalog.rows.forEach((row) => {
+        const entry = statsById.get(row.supplier_id) || {};
+        entry.catalogSize = Number(row.catalog_size) || 0;
+        entry.exclusiveCount = Number(row.exclusive_count) || 0;
+        statsById.set(row.supplier_id, entry);
+      });
+
+      try {
+        const sellerRatings = await pool.query(
+          `SELECT seller_id,
+                  COALESCE(AVG(overall_experience), 0)::numeric(10,2) AS rating,
+                  COUNT(*) FILTER (WHERE status = 'active') AS reviews
+           FROM seller_reviews
+           WHERE seller_id = ANY($1::uuid[])
+           GROUP BY seller_id`,
+          [supplierIds],
+        );
+        sellerRatings.rows.forEach((row) => {
+          const entry = statsById.get(row.seller_id) || {};
+          entry.rating = Number(row.rating) || 0;
+          entry.reviews = Number(row.reviews) || 0;
+          statsById.set(row.seller_id, entry);
+        });
+      } catch (ratingErr) {
+        console.warn("Supplier rating query failed:", ratingErr.message);
+      }
+
+      product.suppliers = product.suppliers.map((supplier) => ({
+        fulfilledOrders: 0,
+        catalogSize: 0,
+        exclusiveCount: 0,
+        rating: 0,
+        reviews: 0,
+        ...supplier,
+        ...(statsById.get(supplier.supplierId) || {}),
+      }));
+    }
+
     res.status(200).json(product);
   } catch (err) {
     console.error(err);

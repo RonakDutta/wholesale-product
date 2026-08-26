@@ -12,6 +12,11 @@ const reviewRoutes = require("./routes/reviewRoutes");
 const trackRoutes = require("./routes/trackRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const partyRoutes = require("./routes/partyRoutes");
+const saleRoutes = require("./routes/saleRoutes");
+const itemRoutes = require("./routes/itemRoutes");
+const overviewRoutes = require("./routes/overviewRoutes");
+const creditRoutes = require("./routes/creditRoutes");
 
 const app = express();
 
@@ -36,5 +41,11 @@ app.use("/api/invoices", invoiceRoutes);
 // The notification bell in the navbar calls these on every page; without the
 // mount every request 404s.
 app.use("/api/notifications", notificationRoutes);
+// Wholesale 3.0: the wholesaler's own customer book.
+app.use("/api/parties", partyRoutes);
+app.use("/api/sales", saleRoutes);
+app.use("/api/items", itemRoutes);
+app.use("/api/overview", overviewRoutes);
+app.use("/api/credit", creditRoutes);
 
 module.exports = app;

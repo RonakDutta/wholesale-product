@@ -4,6 +4,7 @@ const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const pool = require("./config/db");
 const { setSocketServer } = require("./services/socketService");
+const { sendDueReminders } = require("./services/creditService");
 
 const httpServer = createServer(app);
 
@@ -73,4 +74,8 @@ const PORT = Number(process.env.PORT) || 5000;
 
 httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT} with Enterprise Invoice System initialized`);
+  sendDueReminders().catch((error) => console.warn("Credit reminders skipped:", error.message));
+  setInterval(() => {
+    sendDueReminders().catch((error) => console.warn("Credit reminders skipped:", error.message));
+  }, 6 * 60 * 60 * 1000).unref();
 });

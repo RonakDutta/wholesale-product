@@ -1,7 +1,7 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
-import { Box, Star, ArrowLeft } from "lucide-react";
+import { Box, ArrowLeft, Users, Receipt, Wallet } from "lucide-react";
 
 const AuthLayout = () => {
   const location = useLocation();
@@ -13,9 +13,6 @@ const AuthLayout = () => {
   const glowBlob1Ref = useRef(null);
   const glowBlob2Ref = useRef(null);
   const formContentRef = useRef(null);
-  const statSuppliersRef = useRef(null);
-  const statProductsRef = useRef(null);
-  const statRegionsRef = useRef(null);
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -28,28 +25,6 @@ const AuthLayout = () => {
     return () => ctx.revert();
   }, []);
 
-  useEffect(() => {
-    const animateCounter = (el, target, suffix = "") => {
-      if (!el.current) return;
-      const obj = { val: 0 };
-      gsap.to(obj, {
-        val: target,
-        duration: 2,
-        delay: 0.8,
-        ease: "power2.out",
-        onUpdate: () => {
-          if (el.current) {
-            el.current.textContent =
-              Math.floor(obj.val).toLocaleString("en-IN") + suffix;
-          }
-        },
-      });
-    };
-
-    animateCounter(statSuppliersRef, 240, "+");
-    animateCounter(statProductsRef, 500, "+");
-    animateCounter(statRegionsRef, 100, "+");
-  }, []);
 
   useEffect(() => {
     const container = shapesRef.current;
@@ -168,54 +143,57 @@ const AuthLayout = () => {
           style={{ opacity: 0, transform: "translateY(30px)" }}
         >
           <div className="text-clay/90 text-[10px] font-bold uppercase tracking-widest mb-4 font-inter">
-            B2B Wholesale Platform
+            For wholesalers
           </div>
 
           <h1 className="text-4xl xl:text-5xl font-black text-cream leading-[1.1] tracking-tight mb-5">
-            Source smarter.
+            Your customers.
             <br />
-            <span className="text-clay">Scale faster.</span>
+            Your sales.
+            <br />
+            <span className="text-clay">All in one place.</span>
           </h1>
           <p className="text-cream/60 text-sm leading-relaxed font-inter max-w-sm">
-            Bridge the gap between retail and wholesale. Connect with verified
-            suppliers, access competitive inventory, and settle instantly with
-            integrated UPI payments.
+            Keep your business out of a diary and off your phone's notes. Every
+            shop you sell to, every sale you make, and what each one still owes
+            you, all in one place.
           </p>
 
-          <div className="flex gap-8 mt-7">
-            <div>
-              <div
-                ref={statSuppliersRef}
-                className="text-cream font-dmsans text-2xl font-bold"
-              >
-                0
+          {/* Three things the product does, not three numbers. Counters here
+              were invented figures, and this product is sold on being an
+              honest record of a wholesaler's own business. */}
+          <div className="mt-8 space-y-4 max-w-sm">
+            {[
+              {
+                icon: Users,
+                title: "Your customer book",
+                body: "Every shop you sell to, in one list",
+              },
+              {
+                icon: Receipt,
+                title: "Every sale written down",
+                body: "What you sold, to whom, and when",
+              },
+              {
+                icon: Wallet,
+                title: "Know who owes what",
+                body: "A running balance for each customer",
+              },
+            ].map((item) => (
+              <div key={item.title} className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-clay/20">
+                  <item.icon className="h-4 w-4 text-clay" />
+                </div>
+                <div className="font-inter">
+                  <div className="text-cream text-[13px] font-semibold">
+                    {item.title}
+                  </div>
+                  <div className="text-cream/50 text-xs mt-0.5">
+                    {item.body}
+                  </div>
+                </div>
               </div>
-              <div className="text-cream/50 font-inter text-xs font-medium mt-0.5">
-                Verified Suppliers
-              </div>
-            </div>
-            <div>
-              <div
-                ref={statProductsRef}
-                className="text-cream font-dmsans text-2xl font-bold"
-              >
-                0
-              </div>
-              <div className="text-cream/50 font-inter text-xs font-medium mt-0.5">
-                Products Listed
-              </div>
-            </div>
-            <div>
-              <div
-                ref={statRegionsRef}
-                className="text-cream font-dmsans text-2xl font-bold"
-              >
-                0
-              </div>
-              <div className="text-cream/50 font-inter text-xs font-medium mt-0.5">
-                Regions Covered
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
@@ -223,30 +201,17 @@ const AuthLayout = () => {
           className="relative z-10 brand-bottom"
           style={{ opacity: 0, transform: "translateY(25px)" }}
         >
+          {/* This replaced an invented customer quote. We have no customers to
+              quote yet, so this says where the product actually is instead. */}
           <div className="bg-cream/5 border border-cream/10 rounded-xl p-5 backdrop-blur-sm max-w-md">
-            <div className="flex items-center gap-1 mb-3">
-              {[...Array(5)].map((_, i) => (
-                <Star key={i} className="w-3.5 h-3.5 text-clay fill-clay" />
-              ))}
+            <div className="text-clay text-[10px] font-bold uppercase tracking-widest mb-2 font-inter">
+              Early access
             </div>
-            <p className="text-cream/70 text-xs leading-relaxed italic font-inter mb-3">
-              &ldquo;Finding reliable suppliers used to take weeks. However by
-              using this app, we connect directly with top wholesalers in
-              minutes.&rdquo;
+            <p className="text-cream/70 text-xs leading-relaxed font-inter">
+              We are building this alongside a small group of wholesalers, and
+              adding what they ask for. If something is missing or does not fit
+              how you work, tell us and it gets looked at.
             </p>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-clay/30 flex items-center justify-center text-cream text-xs font-bold">
-                RK
-              </div>
-              <div className="font-inter">
-                <div className="text-cream text-[12.5px] font-semibold">
-                  Rajesh Kumar
-                </div>
-                <div className="text-cream/50 text-[10px]">
-                  Head of Procurement, PackRight India
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>

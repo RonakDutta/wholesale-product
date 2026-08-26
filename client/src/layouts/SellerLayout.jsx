@@ -11,21 +11,65 @@ import {
   Menu,
   X,
   Store,
+  Users,
+  BarChart3,
+  CreditCard,
+  Plus,
   ChevronLeft,
 } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useUnread } from "../context/UnreadContext";
+import { FEATURES } from "../config/features";
 
+// Wholesale 3.0 nav. "Customers" sits second because the customer book is the
+// thing a wholesaler opens the app for. The marketplace-era entries are kept
+// but only shown when the marketplace flag is on, so nothing is deleted.
 const NAV = [
   { path: "/seller", label: "Overview", icon: LayoutDashboard, exact: true },
-  { path: "/seller/products", label: "Products", icon: Package },
-  { path: "/seller/orders", label: "Orders", icon: ShoppingBag },
+  { path: "/seller/customers", label: "Customers", icon: Users },
+  { path: "/seller/rates", label: "Rate list", icon: Package },
+  // The marketplace listing screen, with its public and storefront visibility
+  // picker. That concept does not exist in a closed network.
+  {
+    path: "/seller/products",
+    label: "Listings",
+    icon: Package,
+    flag: "MARKETPLACE",
+  },
+  { path: "/seller/sales", label: "Sales", icon: ShoppingBag },
+  // Marketplace orders, which are a different thing from a recorded sale.
+  {
+    path: "/seller/orders",
+    label: "Orders",
+    icon: ShoppingBag,
+    flag: "MARKETPLACE",
+  },
   { path: "/seller/invoices", label: "Invoices", icon: FileText },
-  { path: "/seller/messages", label: "Messages", icon: MessageSquare, badge: "unread" },
-  { path: "/seller/promotions", label: "Promotions", icon: Sparkles },
+  {
+    path: "/seller/credit-accounts",
+    label: "Credit accounts",
+    icon: CreditCard,
+  },
+  {
+    path: "/seller/messages",
+    label: "Messages",
+    icon: MessageSquare,
+    badge: "unread",
+  },
+  {
+    path: "/seller/promotions",
+    label: "Promotions",
+    icon: Sparkles,
+    flag: "MARKETPLACE",
+  },
+  {
+    path: "/seller/credit-analytics",
+    label: "Credit analytics",
+    icon: BarChart3,
+  },
   { path: "/seller/settings", label: "Settings", icon: Settings },
-];
+].filter((item) => !item.flag || FEATURES[item.flag]);
 
 const SellerLayout = () => {
   const location = useLocation();
@@ -50,7 +94,8 @@ const SellerLayout = () => {
       : location.pathname.startsWith(item.path);
 
   const companyName =
-    user?.companyName || `${user?.firstName || ""} ${user?.lastName || ""}`.trim();
+    user?.companyName ||
+    `${user?.firstName || ""} ${user?.lastName || ""}`.trim();
 
   return (
     <div className="font-dmsans flex h-dvh overflow-hidden bg-slate-100">
@@ -100,7 +145,7 @@ const SellerLayout = () => {
                 }`}
               >
                 <span className="flex items-center gap-3">
-                  <item.icon className="h-[18px] w-[18px]" />
+                  <item.icon className="h-4.5 w-4.5" />
                   {item.label}
                 </span>
                 {showBadge && (
@@ -115,8 +160,10 @@ const SellerLayout = () => {
 
         <div className="shrink-0 border-t border-white/10 p-3">
           {/* The buyer-facing shop page, not a dashboard screen, so it sits
-              with the other ways out rather than in the nav list above. */}
-          {user?.id && (
+              with the other ways out rather than in the nav list above.
+              Both of these belong to the marketplace, which is switched off
+              in 3.0, so they follow the same flag. */}
+          {FEATURES.MARKETPLACE && user?.id && (
             <Link
               to={`/wholesaler/${user.id}`}
               className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-cream/60 transition-colors hover:bg-white/5 hover:text-cream"
@@ -126,13 +173,15 @@ const SellerLayout = () => {
               My shop page
             </Link>
           )}
-          <Link
-            to="/"
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-cream/60 transition-colors hover:bg-white/5 hover:text-cream"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Back to marketplace
-          </Link>
+          {FEATURES.MARKETPLACE && (
+            <Link
+              to="/"
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-cream/60 transition-colors hover:bg-white/5 hover:text-cream"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Back to marketplace
+            </Link>
+          )}
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-rose-300 transition-colors hover:bg-rose-500/10 hover:text-rose-200"
@@ -164,12 +213,14 @@ const SellerLayout = () => {
             </div>
           </div>
 
+          {/* Recording a sale is the thing a wholesaler does every day, so it
+              is one tap away from every screen. */}
           <Link
-            to="/seller/products/new"
+            to="/seller/sales/new"
             className="flex shrink-0 items-center gap-2 rounded-lg bg-espresso px-3 py-2 text-xs font-bold text-cream transition-colors hover:bg-clay"
           >
-            <Store className="h-4 w-4" />
-            <span className="hidden sm:inline">Add product</span>
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Record sale</span>
           </Link>
         </header>
 

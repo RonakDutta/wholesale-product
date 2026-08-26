@@ -142,7 +142,7 @@ const Login = () => {
           Welcome back
         </h2>
         <p className="text-slate-500 text-sm mt-1 font-dmsans">
-          Sign in to your supplier dashboard
+          Sign in to your business
         </p>
       </div>
 

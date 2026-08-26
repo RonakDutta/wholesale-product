@@ -1,0 +1,507 @@
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import api from "../../utils/axios";
+import { toast } from "sonner";
+import ItemPicker from "../../components/ItemPicker";
+
+const UNITS = ["pcs", "dozen", "case", "mtr", "kg", "box", "bundle"];
+
+const money = (value) =>
+  Number(value || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+// Same paise arithmetic as the server, so the total on screen and the total
+// that gets saved cannot drift apart on an odd rate.
+const toPaise = (rupees) => Math.round(Number(rupees || 0) * 100);
+const fromPaise = (paise) => Number((Number(paise || 0) / 100).toFixed(2));
+
+const blankLine = () => ({
+  key: crypto.randomUUID(),
+  itemName: "",
+  quantity: "",
+  unit: "pcs",
+  rate: "",
+  // Carried from the rate list when an item is picked. moq only drives the
+  // warning below and is never sent. hsnCode is sent, and is snapshot onto
+  // the line so a bill raised today keeps its HSN if the rate list changes.
+  moq: null,
+  hsnCode: null,
+});
+
+const RecordSale = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const [parties, setParties] = useState([]);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const [partyId, setPartyId] = useState(searchParams.get("party") || "");
+  const [saleDate, setSaleDate] = useState(
+    () => new Date().toISOString().slice(0, 10),
+  );
+  const [lines, setLines] = useState([blankLine()]);
+  const [discount, setDiscount] = useState("");
+  const [amountPaid, setAmountPaid] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const { data } = await api.get("/api/parties");
+        if (alive) setParties(data || []);
+      } catch (error) {
+        console.error("Failed to load customers", error);
+        if (alive) toast.error("Could not load your customer list.");
+      }
+
+      // The rate list only fills in suggestions. A wholesaler who has not
+      // built one yet must still be able to record a sale by typing, so a
+      // failure here is not worth telling him about.
+      try {
+        const { data } = await api.get("/api/items");
+        if (alive) setItems(data || []);
+      } catch (error) {
+        console.error("Failed to load the rate list", error);
+      }
+
+      if (alive) setLoading(false);
+    };
+    load();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const setLine = (key, field, value) =>
+    setLines((prev) =>
+      prev.map((line) => (line.key === key ? { ...line, [field]: value } : line)),
+    );
+
+  // Picking from the rate list fills several fields at once.
+  const fillFromItem = (key, item) =>
+    setLines((prev) =>
+      prev.map((line) =>
+        line.key === key
+          ? {
+              ...line,
+              itemName: item.name,
+              rate: String(Number(item.rate)),
+              unit: UNITS.includes(item.unit) ? item.unit : line.unit,
+              moq: item.moq === null ? null : Number(item.moq),
+              hsnCode: item.hsn_code || null,
+            }
+          : line,
+      ),
+    );
+
+  const removeLine = (key) =>
+    setLines((prev) =>
+      prev.length === 1 ? prev : prev.filter((line) => line.key !== key),
+    );
+
+  const totals = useMemo(() => {
+    const subtotalPaise = lines.reduce((sum, line) => {
+      const qty = Number(line.quantity);
+      const rate = Number(line.rate);
+      if (!Number.isFinite(qty) || !Number.isFinite(rate)) return sum;
+      return sum + Math.round(toPaise(rate) * qty);
+    }, 0);
+
+    const discountPaise = Math.min(
+      Math.max(0, toPaise(discount)),
+      subtotalPaise,
+    );
+
+    return {
+      subtotal: fromPaise(subtotalPaise),
+      discount: fromPaise(discountPaise),
+      total: fromPaise(subtotalPaise - discountPaise),
+    };
+  }, [lines, discount]);
+
+  const dueAfter = fromPaise(
+    Math.max(0, toPaise(totals.total) - Math.max(0, toPaise(amountPaid))),
+  );
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!partyId) {
+      toast.error("Choose a customer.");
+      return;
+    }
+
+    const filled = lines.filter(
+      (line) => line.itemName.trim() && Number(line.quantity) > 0,
+    );
+    if (filled.length === 0) {
+      toast.error("Add at least one item with a quantity.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { data } = await api.post("/api/sales", {
+        partyId,
+        saleDate,
+        discount: discount || 0,
+        notes,
+        amountPaid: amountPaid || 0,
+        paymentMethod,
+        lines: filled.map((line) => ({
+          itemName: line.itemName,
+          quantity: line.quantity,
+          unit: line.unit,
+          rate: line.rate || 0,
+          hsnCode: line.hsnCode || undefined,
+        })),
+      });
+      toast.success(`${data.sale_number} recorded.`);
+      navigate(`/seller/sales/${data.id}`, { replace: true });
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message || "Could not record this sale.",
+      );
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-clay border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (parties.length === 0) {
+    return (
+      <div className="mx-auto max-w-lg py-20 text-center">
+        <p className="font-semibold text-espresso">Add a customer first</p>
+        <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">
+          A sale is always to somebody. Add the shop you sold to, then come
+          back here.
+        </p>
+        <button
+          onClick={() => navigate("/seller/customers")}
+          className="mt-5 rounded-lg bg-clay px-5 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso"
+        >
+          Go to my customers
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mx-auto max-w-4xl space-y-6 pb-28">
+      <button
+        type="button"
+        onClick={() => navigate(-1)}
+        className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-500 transition-colors hover:text-clay"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </button>
+
+      <div>
+        <h2 className="text-2xl font-black text-espresso">Record a sale</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Write down what you sold and to whom. It goes straight onto that
+          customer's account.
+        </p>
+      </div>
+
+      {/* Who and when */}
+      <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-2">
+        <div>
+          <label
+            htmlFor="sale-party"
+            className="mb-1.5 block text-sm font-bold text-espresso"
+          >
+            Customer <span className="text-clay">*</span>
+          </label>
+          <select
+            id="sale-party"
+            value={partyId}
+            onChange={(e) => setPartyId(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+          >
+            <option value="">Choose a customer</option>
+            {parties.map((party) => (
+              <option key={party.id} value={party.id}>
+                {party.name}
+                {party.business_name ? ` (${party.business_name})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label
+            htmlFor="sale-date"
+            className="mb-1.5 block text-sm font-bold text-espresso"
+          >
+            Date
+          </label>
+          <input
+            id="sale-date"
+            type="date"
+            value={saleDate}
+            onChange={(e) => setSaleDate(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+          />
+        </div>
+      </div>
+
+      {/* The lines. Dense on purpose: this is a bill book, not a shopping cart. */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 bg-slate-50 px-5 py-3">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">
+            Items
+          </h3>
+        </div>
+
+        <div className="divide-y divide-slate-100">
+          {lines.map((line, index) => {
+            const amount = fromPaise(
+              Math.round(toPaise(line.rate) * Number(line.quantity || 0)),
+            );
+            // A note, not a rule. Nothing enforces a minimum, and a wholesaler
+            // undercutting his own is his business, but he should see it.
+            const belowMoq =
+              line.moq > 0 &&
+              Number(line.quantity) > 0 &&
+              Number(line.quantity) < line.moq;
+            return (
+              <div key={line.key} className="p-4 sm:px-5">
+                <div className="flex items-start gap-3">
+                  <span className="mt-2.5 w-4 shrink-0 text-xs font-bold text-slate-300">
+                    {index + 1}
+                  </span>
+
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <ItemPicker
+                      value={line.itemName}
+                      items={items}
+                      placeholder="Item name"
+                      onChange={(name) => setLine(line.key, "itemName", name)}
+                      onPick={(item) => fillFromItem(line.key, item)}
+                    />
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <input
+                        value={line.quantity}
+                        onChange={(e) =>
+                          setLine(line.key, "quantity", e.target.value)
+                        }
+                        inputMode="decimal"
+                        placeholder="Qty"
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-colors focus:border-clay"
+                      />
+                      <select
+                        value={line.unit}
+                        onChange={(e) =>
+                          setLine(line.key, "unit", e.target.value)
+                        }
+                        className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm outline-none transition-colors focus:border-clay"
+                      >
+                        {UNITS.map((unit) => (
+                          <option key={unit} value={unit}>
+                            {unit}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        value={line.rate}
+                        onChange={(e) =>
+                          setLine(line.key, "rate", e.target.value)
+                        }
+                        inputMode="decimal"
+                        placeholder="Rate"
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-colors focus:border-clay"
+                      />
+                    </div>
+
+                    {belowMoq && (
+                      <p className="text-xs font-semibold text-amber-600">
+                        You usually do not sell less than {line.moq}{" "}
+                        {line.unit} of this.
+                      </p>
+                    )}
+
+                    {/* On a phone the amount sits under the inputs. Keeping it
+                        in its own column squeezed qty, unit and rate down to
+                        about thirty pixels each, which was unusable. */}
+                    <p className="text-right text-sm font-black text-espresso sm:hidden">
+                      {amount > 0 ? `₹${money(amount)}` : ""}
+                    </p>
+                  </div>
+
+                  <div className="hidden w-24 shrink-0 pt-2 text-right sm:block">
+                    <p className="text-sm font-black text-espresso">
+                      {amount > 0 ? `₹${money(amount)}` : "-"}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => removeLine(line.key)}
+                    disabled={lines.length === 1}
+                    className="mt-1.5 shrink-0 rounded-lg p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400"
+                    aria-label={`Remove line ${index + 1}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="border-t border-slate-100 p-4 sm:px-5">
+          <button
+            type="button"
+            onClick={() => setLines((prev) => [...prev, blankLine()])}
+            className="flex items-center gap-2 rounded-lg border border-dashed border-slate-300 px-4 py-2 text-sm font-bold text-slate-500 transition-colors hover:border-clay hover:text-clay"
+          >
+            <Plus className="h-4 w-4" />
+            Add another item
+          </button>
+        </div>
+      </div>
+
+      {/* Money */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">
+            Bill
+          </h3>
+
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-500">Items total</span>
+            <span className="font-bold text-espresso">
+              ₹{money(totals.subtotal)}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <label
+              htmlFor="sale-discount"
+              className="text-sm text-slate-500"
+            >
+              Less discount
+            </label>
+            <input
+              id="sale-discount"
+              value={discount}
+              onChange={(e) => setDiscount(e.target.value)}
+              inputMode="decimal"
+              placeholder="0"
+              className="w-28 rounded-lg border border-slate-200 px-3 py-1.5 text-right text-sm outline-none transition-colors focus:border-clay"
+            />
+          </div>
+
+          <div className="flex items-center justify-between border-t border-slate-100 pt-4">
+            <span className="text-sm font-bold text-espresso">Bill total</span>
+            <span className="text-xl font-black text-espresso">
+              ₹{money(totals.total)}
+            </span>
+          </div>
+        </div>
+
+        <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">
+            Money received now
+          </h3>
+          <p className="text-xs text-slate-500">
+            Leave this empty if they will pay later. Whatever is left shows up
+            on their account.
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              value={amountPaid}
+              onChange={(e) => setAmountPaid(e.target.value)}
+              inputMode="decimal"
+              placeholder="0"
+              aria-label="Amount received"
+              className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+            />
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              aria-label="Payment method"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+            >
+              <option value="cash">Cash</option>
+              <option value="upi">UPI</option>
+              <option value="bank">Bank transfer</option>
+              <option value="cheque">Cheque</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div className="flex items-center justify-between border-t border-slate-100 pt-4">
+            <span className="text-sm font-bold text-espresso">
+              They will still owe
+            </span>
+            <span
+              className={`text-xl font-black ${
+                dueAfter > 0 ? "text-amber-600" : "text-emerald-600"
+              }`}
+            >
+              ₹{money(dueAfter)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <label
+          htmlFor="sale-notes"
+          className="mb-1.5 block text-sm font-bold text-espresso"
+        >
+          Note
+        </label>
+        <textarea
+          id="sale-notes"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          placeholder="Anything you want to remember about this sale"
+          className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+        />
+      </div>
+
+      {/* Sticky, because the total is what he checks before saving */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:left-64">
+        <div className="mx-auto flex max-w-4xl items-center justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Bill total
+            </p>
+            <p className="text-lg font-black text-espresso">
+              ₹{money(totals.total)}
+            </p>
+          </div>
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-lg bg-clay px-6 py-3 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-60"
+          >
+            {saving ? "Saving..." : "Save sale"}
+          </button>
+        </div>
+      </div>
+    </form>
+  );
+};
+
+export default RecordSale;

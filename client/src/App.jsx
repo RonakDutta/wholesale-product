@@ -17,8 +17,9 @@ import AuthLayout from "./layouts/AuthLayout";
 import InfoLayout from "./layouts/InfoLayout";
 
 import RequireRole from "./components/RequireRole";
+import { FEATURES } from "./config/features";
 
-import MarketplaceHome from "./pages/MarketplaceHome";
+import Home from "./pages/Home";
 import ProductDetails from "./pages/ProductDetails";
 import Wishlist from "./pages/Wishlist";
 import SignUp from "./pages/SignUp";
@@ -41,6 +42,7 @@ import InvoiceSettings from "./pages/dashboard/InvoiceSettings";
 import WholesalerProfile from "./pages/WholesalerProfile";
 import SharedListing from "./pages/SharedListing";
 import DriverTracking from "./pages/DriverTracking";
+import CreditWallet from "./pages/CreditWallet";
 import NotFound from "./pages/NotFound";
 
 // Seller workspace is lazy-loaded: retailers never download this bundle.
@@ -54,6 +56,15 @@ const EditProduct = lazy(() => import("./pages/dashboard/EditProduct"));
 const Orders = lazy(() => import("./pages/dashboard/Orders"));
 const Promotions = lazy(() => import("./pages/dashboard/Promotions"));
 const Settings = lazy(() => import("./pages/dashboard/Settings"));
+const Parties = lazy(() => import("./pages/dashboard/Parties"));
+const PartyDetail = lazy(() => import("./pages/dashboard/PartyDetail"));
+const Sales = lazy(() => import("./pages/dashboard/Sales"));
+const RecordSale = lazy(() => import("./pages/dashboard/RecordSale"));
+const SaleDetail = lazy(() => import("./pages/dashboard/SaleDetail"));
+const RateList = lazy(() => import("./pages/dashboard/RateList"));
+const Overview = lazy(() => import("./pages/dashboard/Overview"));
+const CreditAccounts = lazy(() => import("./pages/dashboard/CreditAccounts"));
+const CreditAnalytics = lazy(() => import("./pages/dashboard/CreditAnalytics"));
 
 const SellerFallback = () => (
   <div className="flex min-h-dvh items-center justify-center bg-slate-100">
@@ -70,6 +81,20 @@ const SellerArea = () => (
   </RequireRole>
 );
 
+// Marketplace-only screens. Kept in the tree and still compiled, but not
+// routable while FEATURES.MARKETPLACE is off. Flipping the flag brings the
+// whole browsing side back with no other change.
+const MARKETPLACE_ROUTES = [
+  { path: "product/:id", element: <ProductDetails /> },
+  { path: "wholesaler/:id", element: <WholesalerProfile /> },
+  { path: "wishlist", element: <Wishlist /> },
+  { path: "search", element: <SearchResults /> },
+  { path: "checkout", element: <Checkout /> },
+  { path: "payment/:orderId", element: <Payment /> },
+  { path: "order-success", element: <OrderSuccess /> },
+  { path: "retail-dashboard", element: <RetailDashboard /> },
+];
+
 const router = createBrowserRouter([
   {
     path: "*",
@@ -81,28 +106,36 @@ const router = createBrowserRouter([
     path: "/",
     element: <MainLayout />,
     children: [
-      { index: true, element: <MarketplaceHome /> },
-      { path: "product/:id", element: <ProductDetails /> },
-      { path: "wholesaler/:id", element: <WholesalerProfile /> },
+      { index: true, element: <Home /> },
+      ...(FEATURES.MARKETPLACE ? MARKETPLACE_ROUTES : []),
+      // A share link is reached by its URL, not by browsing, so it survives
+      // the marketplace being switched off.
       { path: "listing/:inventoryId", element: <SharedListing /> },
-      { path: "wishlist", element: <Wishlist /> },
-      { path: "search", element: <SearchResults /> },
       { path: "messages", element: <Messages /> },
       { path: "messages/:vendorId", element: <Messages /> },
-      { path: "checkout", element: <Checkout /> },
-      { path: "payment/:orderId", element: <Payment /> },
-      { path: "order-success", element: <OrderSuccess /> },
       { path: "orders", element: <MyOrders /> },
       { path: "notifications", element: <NotificationCenter /> },
+      { path: "credit-wallet", element: <CreditWallet /> },
       { path: "orders/:orderId", element: <OrderDetails /> },
-      { path: "retail-dashboard", element: <RetailDashboard /> },
     ],
   },
   {
     path: "/seller",
     element: <SellerArea />,
     children: [
-      { index: true, element: <DashboardOverview /> },
+      // The marketplace dashboard reported a buyer rating and a listing
+      // count. It is kept behind the flag rather than deleted.
+      {
+        index: true,
+        element: FEATURES.MARKETPLACE ? <DashboardOverview /> : <Overview />,
+      },
+      { path: "customers", element: <Parties /> },
+      { path: "customers/:id", element: <PartyDetail /> },
+      { path: "sales", element: <Sales /> },
+      // Before "sales/:id" so the word is not read as a sale id.
+      { path: "sales/new", element: <RecordSale /> },
+      { path: "sales/:id", element: <SaleDetail /> },
+      { path: "rates", element: <RateList /> },
       { path: "products", element: <MyProducts /> },
       { path: "products/new", element: <AddProduct /> },
       { path: "products/edit/:id", element: <EditProduct /> },
@@ -116,6 +149,8 @@ const router = createBrowserRouter([
       { path: "messages", element: <Messages /> },
       { path: "messages/:vendorId", element: <Messages /> },
       { path: "settings", element: <Settings /> },
+      { path: "credit-accounts", element: <CreditAccounts /> },
+      { path: "credit-analytics", element: <CreditAnalytics /> },
     ],
   },
   // Old dashboard links and bookmarks keep working.

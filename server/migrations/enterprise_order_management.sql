@@ -288,21 +288,11 @@ COMMENT ON COLUMN return_requests.replacement_order_id IS 'New order ID if repla
 -- 7. CREATE INVOICES TABLE
 -- =====================================================
 
-CREATE TABLE IF NOT EXISTS invoices (
-    id SERIAL PRIMARY KEY,
-    order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-    invoice_number VARCHAR(50) UNIQUE NOT NULL,
-    invoice_data JSONB NOT NULL, -- Complete invoice data as JSON
-    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_invoices_order_id ON invoices(order_id);
-CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number);
-
-COMMENT ON TABLE invoices IS 'Generated invoices for orders';
-COMMENT ON COLUMN invoices.invoice_number IS 'Unique invoice number (auto-generated)';
-COMMENT ON COLUMN invoices.invoice_data IS 'Complete invoice data including buyer, supplier, items, totals';
+-- The invoices table is NOT defined here. enterprise_invoice_module.sql owns
+-- it, and its shape is entirely different: real money columns rather than one
+-- invoice_data JSONB blob. This file used to declare a competing version,
+-- which never ran because of a syntax error earlier in the file, and would
+-- have started failing the moment that was fixed.
 
 -- =====================================================
 -- 8. CREATE ORDER ANALYTICS TABLE (PRE-COMPUTED STATS)
@@ -357,25 +347,9 @@ COMMENT ON COLUMN order_analytics.top_products IS 'Top products as JSON array';
 -- 9. CREATE NOTIFICATIONS TABLE
 -- =====================================================
 
-CREATE TABLE IF NOT EXISTS notifications (
-    id SERIAL PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    notification_type VARCHAR(50) NOT NULL, -- 'order_created', 'order_accepted', 'order_cancelled', etc.
-    title VARCHAR(255) NOT NULL,
-    message TEXT NOT NULL,
-    data JSONB, -- Additional data related to notification
-    is_read BOOLEAN DEFAULT false,
-    read_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
-CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
-
-COMMENT ON TABLE notifications IS 'User notifications for order events';
-COMMENT ON COLUMN notifications.notification_type IS 'Type of notification event';
-COMMENT ON COLUMN notifications.data IS 'Additional context data (order_id, product_id, etc.)';
+-- The notifications table is NOT defined here either. notification_system.sql
+-- owns it, with reference_id and reference_type where this version had a
+-- single data column.
 
 -- =====================================================
 -- 10. CREATE INVENTORY LOG TABLE (COMPLETE AUDIT TRAIL)
@@ -442,27 +416,6 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Function to generate unique invoice number
-CREATE OR REPLACE FUNCTION generate_invoice_number()
-RETURNS VARCHAR(50) AS $$
-DECLARE
-    invoice_num VARCHAR(50);
-    timestamp_part VARCHAR(20);
-    random_part VARCHAR(10);
-BEGIN
-    timestamp_part := TO_CHAR(CURRENT_TIMESTAMP, 'YYYYMMDDHH24MISS');
-    random_part := LPAD(FLOOR(RANDOM() * 10000)::TEXT, 4, '0');
-    invoice_num := 'INV' || timestamp_part || random_part;
-    
-    -- Ensure uniqueness
-    WHILE EXISTS (SELECT 1 FROM invoices WHERE invoice_number = invoice_num) LOOP
-        random_part := LPAD(FLOOR(RANDOM() * 10000)::TEXT, 4, '0');
-        invoice_num := 'INV' || timestamp_part || random_part;
-    END LOOP;
-    
-    RETURN invoice_num;
-END;
-$$ LANGUAGE plpgsql;
-
 -- Function to validate order status transitions
 CREATE OR REPLACE FUNCTION validate_order_status_transition(
     current_status VARCHAR(50),
@@ -528,26 +481,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_generate_order_number ON orders;
 CREATE TRIGGER trg_generate_order_number
     BEFORE INSERT ON orders
     FOR EACH ROW
     EXECUTE FUNCTION trigger_generate_order_number();
 
 -- Trigger to auto-generate invoice number on insert
-CREATE OR REPLACE FUNCTION trigger_generate_invoice_number()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF NEW.invoice_number IS NULL OR NEW.invoice_number = '' THEN
-        NEW.invoice_number := generate_invoice_number();
-    END IF;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_generate_invoice_number
-    BEFORE INSERT ON invoices
-    FOR EACH ROW
-    EXECUTE FUNCTION trigger_generate_invoice_number();
 
 -- Trigger to auto-update updated_at timestamp
 CREATE OR REPLACE FUNCTION trigger_update_updated_at()
@@ -558,21 +498,29 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_update_orders_updated_at ON orders;
+DROP TRIGGER IF EXISTS trg_update_orders_updated_at ON orders;
 CREATE TRIGGER trg_update_orders_updated_at
     BEFORE UPDATE ON orders
     FOR EACH ROW
     EXECUTE FUNCTION trigger_update_updated_at();
 
+DROP TRIGGER IF EXISTS trg_update_invoices_updated_at ON invoices;
+DROP TRIGGER IF EXISTS trg_update_invoices_updated_at ON invoices;
 CREATE TRIGGER trg_update_invoices_updated_at
     BEFORE UPDATE ON invoices
     FOR EACH ROW
     EXECUTE FUNCTION trigger_update_updated_at();
 
+DROP TRIGGER IF EXISTS trg_update_return_requests_updated_at ON return_requests;
+DROP TRIGGER IF EXISTS trg_update_return_requests_updated_at ON return_requests;
 CREATE TRIGGER trg_update_return_requests_updated_at
     BEFORE UPDATE ON return_requests
     FOR EACH ROW
     EXECUTE FUNCTION trigger_update_updated_at();
 
+DROP TRIGGER IF EXISTS trg_update_order_analytics_updated_at ON order_analytics;
+DROP TRIGGER IF EXISTS trg_update_order_analytics_updated_at ON order_analytics;
 CREATE TRIGGER trg_update_order_analytics_updated_at
     BEFORE UPDATE ON order_analytics
     FOR EACH ROW

@@ -95,6 +95,17 @@ CREATE TABLE IF NOT EXISTS order_status_history (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Heals order_status_history when it already exists in an older shape. The CREATE above
+-- then does nothing, and anything below naming a missing column aborts
+-- the rest of this file.
+ALTER TABLE order_status_history ADD COLUMN IF NOT EXISTS order_id UUID;
+ALTER TABLE order_status_history ADD COLUMN IF NOT EXISTS status VARCHAR(50);
+ALTER TABLE order_status_history ADD COLUMN IF NOT EXISTS previous_status VARCHAR(50);
+ALTER TABLE order_status_history ADD COLUMN IF NOT EXISTS updated_by UUID;
+ALTER TABLE order_status_history ADD COLUMN IF NOT EXISTS updated_by_role VARCHAR(20);
+ALTER TABLE order_status_history ADD COLUMN IF NOT EXISTS remarks TEXT;
+ALTER TABLE order_status_history ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
 CREATE INDEX IF NOT EXISTS idx_order_history_order_id ON order_status_history(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_history_created_at ON order_status_history(created_at DESC);
 
@@ -121,6 +132,19 @@ CREATE TABLE IF NOT EXISTS order_items (
     total_price DECIMAL(12,2) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Heals order_items when it already exists in an older shape. The CREATE above
+-- then does nothing, and anything below naming a missing column aborts
+-- the rest of this file.
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS order_id UUID;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS product_id UUID;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS supplier_id UUID;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS product_name VARCHAR(255);
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS quantity INTEGER;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS unit_price DECIMAL(10,2);
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS discount_price DECIMAL(10,2);
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS total_price DECIMAL(12,2);
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items(product_id);
@@ -149,6 +173,20 @@ CREATE TABLE IF NOT EXISTS payment_transactions (
     gateway_response JSONB, -- Store gateway response for reference
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Heals payment_transactions when it already exists in an older shape. The CREATE above
+-- then does nothing, and anything below naming a missing column aborts
+-- the rest of this file.
+ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS order_id UUID;
+ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS transaction_id VARCHAR(100);
+ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS amount DECIMAL(12,2);
+ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50);
+ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50);
+ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS payment_date TIMESTAMP;
+ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS refund_amount DECIMAL(12,2) DEFAULT 0;
+ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS refund_date TIMESTAMP;
+ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS gateway_response JSONB;
+ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
 CREATE INDEX IF NOT EXISTS idx_payment_transactions_order_id ON payment_transactions(order_id);
 CREATE INDEX IF NOT EXISTS idx_payment_transactions_transaction_id ON payment_transactions(transaction_id);
@@ -220,6 +258,23 @@ CREATE TABLE IF NOT EXISTS return_requests (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Heals return_requests when it already exists in an older shape. The CREATE above
+-- then does nothing, and anything below naming a missing column aborts
+-- the rest of this file.
+ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS order_id UUID;
+ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS order_item_id INTEGER;
+ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS requested_by UUID;
+ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS return_type VARCHAR(50);
+ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS reason TEXT;
+ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending';
+ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS processed_by UUID;
+ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP;
+ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS refund_amount DECIMAL(12,2);
+ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS replacement_order_id UUID;
+ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS admin_notes TEXT;
+ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
 CREATE INDEX IF NOT EXISTS idx_return_requests_order_id ON return_requests(order_id);
 CREATE INDEX IF NOT EXISTS idx_return_requests_requested_by ON return_requests(requested_by);
 CREATE INDEX IF NOT EXISTS idx_return_requests_status ON return_requests(status);
@@ -273,6 +328,25 @@ CREATE TABLE IF NOT EXISTS order_analytics (
     UNIQUE(user_id, role, period, period_start, period_end)
 );
 
+-- Heals order_analytics when it already exists in an older shape. The CREATE above
+-- then does nothing, and anything below naming a missing column aborts
+-- the rest of this file.
+ALTER TABLE order_analytics ADD COLUMN IF NOT EXISTS user_id UUID;
+ALTER TABLE order_analytics ADD COLUMN IF NOT EXISTS role VARCHAR(20);
+ALTER TABLE order_analytics ADD COLUMN IF NOT EXISTS period VARCHAR(20);
+ALTER TABLE order_analytics ADD COLUMN IF NOT EXISTS period_start DATE;
+ALTER TABLE order_analytics ADD COLUMN IF NOT EXISTS period_end DATE;
+ALTER TABLE order_analytics ADD COLUMN IF NOT EXISTS total_orders INTEGER DEFAULT 0;
+ALTER TABLE order_analytics ADD COLUMN IF NOT EXISTS total_revenue DECIMAL(15,2) DEFAULT 0;
+ALTER TABLE order_analytics ADD COLUMN IF NOT EXISTS pending_orders INTEGER DEFAULT 0;
+ALTER TABLE order_analytics ADD COLUMN IF NOT EXISTS completed_orders INTEGER DEFAULT 0;
+ALTER TABLE order_analytics ADD COLUMN IF NOT EXISTS cancelled_orders INTEGER DEFAULT 0;
+ALTER TABLE order_analytics ADD COLUMN IF NOT EXISTS returned_orders INTEGER DEFAULT 0;
+ALTER TABLE order_analytics ADD COLUMN IF NOT EXISTS average_order_value DECIMAL(12,2) DEFAULT 0;
+ALTER TABLE order_analytics ADD COLUMN IF NOT EXISTS top_products JSONB;
+ALTER TABLE order_analytics ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE order_analytics ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
 CREATE INDEX IF NOT EXISTS idx_order_analytics_user_id ON order_analytics(user_id);
 CREATE INDEX IF NOT EXISTS idx_order_analytics_period ON order_analytics(period, period_start);
 
@@ -319,6 +393,19 @@ CREATE TABLE IF NOT EXISTS inventory_log (
     reason TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Heals inventory_log when it already exists in an older shape. The CREATE above
+-- then does nothing, and anything below naming a missing column aborts
+-- the rest of this file.
+ALTER TABLE inventory_log ADD COLUMN IF NOT EXISTS inventory_id UUID;
+ALTER TABLE inventory_log ADD COLUMN IF NOT EXISTS order_id UUID;
+ALTER TABLE inventory_log ADD COLUMN IF NOT EXISTS user_id UUID;
+ALTER TABLE inventory_log ADD COLUMN IF NOT EXISTS action VARCHAR(50);
+ALTER TABLE inventory_log ADD COLUMN IF NOT EXISTS quantity_change INTEGER;
+ALTER TABLE inventory_log ADD COLUMN IF NOT EXISTS previous_stock INTEGER;
+ALTER TABLE inventory_log ADD COLUMN IF NOT EXISTS new_stock INTEGER;
+ALTER TABLE inventory_log ADD COLUMN IF NOT EXISTS reason TEXT;
+ALTER TABLE inventory_log ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
 CREATE INDEX IF NOT EXISTS idx_inventory_log_inventory_id ON inventory_log(inventory_id);
 CREATE INDEX IF NOT EXISTS idx_inventory_log_order_id ON inventory_log(order_id);

@@ -1,4 +1,5 @@
 const pool = require("../config/db");
+const { fromPaise, toPaise } = require("../utils/money");
 const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange } = require("../services/orderStatusService");
 const { geocodeOrderDestination } = require("../services/geocodingService");
 const invoiceService = require("../services/invoiceService");
@@ -11,8 +12,6 @@ const {
 
 // Money is handled in paise so that splitting a bill never loses or invents a
 // fraction of a rupee.
-const toPaise = (rupees) => Math.round(Number(rupees || 0) * 100);
-const fromPaise = (paise) => Number((Number(paise || 0) / 100).toFixed(2));
 
 // A part-paid order still owes money, so "can this be paid" cannot be asked of
 // the lifecycle alone: an order can sit at payment_completed, or even be

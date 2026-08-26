@@ -1,4 +1,5 @@
 const pool = require("../config/db");
+const { clean, fromPaise, toPaise } = require("../utils/money");
 const saleInvoiceService = require("../services/saleInvoiceService");
 const creditNoteService = require("../services/creditNoteService");
 const invoiceRepository = require("../repositories/invoiceRepository");
@@ -13,17 +14,6 @@ const gstService = require("../services/gstService");
  * the request body is checked against that scope before anything is written,
  * so a sale can never be attached to somebody else's customer.
  */
-
-// Rupee amounts are summed in paise. A 3 line bill of odd amounts loses a
-// paisa per line in floating point, and a wholesaler notices a total that is
-// one rupee off.
-const toPaise = (rupees) => Math.round(Number(rupees || 0) * 100);
-const fromPaise = (paise) => Number((Number(paise || 0) / 100).toFixed(2));
-
-const clean = (value) => {
-  const text = String(value ?? "").trim();
-  return text === "" ? null : text;
-};
 
 /**
  * Takes the next number in this wholesaler's own series. Must be called

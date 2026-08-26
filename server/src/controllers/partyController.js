@@ -1,4 +1,5 @@
 const pool = require("../config/db");
+const { clean, fromPaise, toPaise } = require("../utils/money");
 const saleInvoiceService = require("../services/saleInvoiceService");
 const pdfService = require("../services/pdfService");
 
@@ -24,11 +25,6 @@ const BALANCE_SELECT = `
     SELECT SUM(pp.amount) FROM party_payments pp WHERE pp.party_id = pt.id
   ), 0) AS outstanding
 `;
-
-const clean = (value) => {
-  const text = String(value ?? "").trim();
-  return text === "" ? null : text;
-};
 
 exports.listParties = async (req, res) => {
   const wholesalerId = req.user.id;
@@ -306,8 +302,6 @@ exports.recordPayment = async (req, res) => {
 // Rupees are summed in paise. A statement is a running total down a column,
 // so a paisa lost per row shows up as a closing balance that disagrees with
 // the customer's own page, and that is the one number he will check.
-const toPaise = (rupees) => Math.round(Number(rupees || 0) * 100);
-const fromPaise = (paise) => Number((Number(paise || 0) / 100).toFixed(2));
 
 /**
  * One customer's account over a date range: what he was carrying at the

@@ -3,6 +3,7 @@ const QRCode = require("qrcode");
 const fs = require("fs");
 const path = require("path");
 const invoiceRepository = require("../repositories/invoiceRepository");
+const { fullName } = require("../utils/money");
 
 /**
  * Money, as it can actually be printed.
@@ -29,9 +30,6 @@ const dateOf = (value) =>
         year: "numeric",
       })
     : "";
-
-const fullName = (first, last) =>
-  [first, last].filter(Boolean).join(" ").trim() || null;
 
 const METHOD_TEXT = {
   cash: "Cash",

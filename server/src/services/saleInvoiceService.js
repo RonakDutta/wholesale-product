@@ -1,4 +1,5 @@
 const pool = require("../config/db");
+const { fullName } = require("../utils/money");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const invoiceNumberService = require("./invoiceNumberService");
 const gstService = require("./gstService");
@@ -25,8 +26,6 @@ const gstService = require("./gstService");
 
 const TAX_INCLUSIVE = false;
 
-const fullName = (first, last) =>
-  [first, last].filter(Boolean).join(" ").trim() || null;
 
 class SaleInvoiceService {
   /**

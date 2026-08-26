@@ -1,4 +1,5 @@
 const pool = require("../config/db");
+const { clean, optionalNumber } = require("../utils/money");
 const invoiceRepository = require("../repositories/invoiceRepository");
 
 /**
@@ -12,21 +13,10 @@ const invoiceRepository = require("../repositories/invoiceRepository");
 
 const UNITS = ["pcs", "dozen", "case", "mtr", "kg", "box", "bundle"];
 
-const clean = (value) => {
-  const text = String(value ?? "").trim();
-  return text === "" ? null : text;
-};
 
 // Returns the number, or null for anything that is not a usable one. Blank
 // is a legitimate answer for pack size and MOQ, so it maps to null rather
 // than to zero.
-const optionalNumber = (value) => {
-  if (value === undefined || value === null || String(value).trim() === "") {
-    return null;
-  }
-  const number = Number(value);
-  return Number.isFinite(number) && number >= 0 ? number : null;
-};
 
 exports.listItems = async (req, res) => {
   const wholesalerId = req.user.id;

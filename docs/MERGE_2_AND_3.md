@@ -362,13 +362,19 @@ been decided. Of what remains, one is a business call and the rest have a
 sensible default that can simply be confirmed later, when the phase that
 needs it comes up.
 
-**The business call:**
+**DECIDED: a shared link opens without an account.** Browsing the catalogue
+needs one; following a direct link does not. So `/wholesaler/:id` and
+`/listing/:inventoryId` stay readable by a stranger, and everything else
+sits behind the login.
 
-1. **Does a shared link work without an account?** A wholesaler WhatsApps his
-   shop page to a shop that has no account. Login wall, or readable? The
-   whole point of the link is reaching someone who is not a user yet.
-   Recommendation: browsing the catalogue needs an account, following a
-   direct link does not. See 5a.
+Two things that follows from, worth building in from the start:
+
+- Those two pages must not leak anything the catalogue would have hidden. A
+  shop page shows only `public` and `storefront` listings; a listing page
+  shows exactly the one listing whose UUID was given, whatever its
+  visibility, because the UUID is the secret.
+- Both need a clear way in for the visitor who now wants to order. That is
+  the sign up funnel, and this link is the top of it.
 
 **Defaults, to confirm when reached:**
 

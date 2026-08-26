@@ -5,6 +5,46 @@ can be checked rather than believed.
 
 Ordered by what it costs to leave alone, not by how easy it is to fix.
 
+## 0. The migrations cannot build a database from scratch
+
+Found by pointing the runner at an empty database. `migrations/` contains
+only patches: `ALTER TABLE orders`, `ALTER TABLE supplier_inventory`,
+`fix_uuid_column_types`, and so on. **Nothing in the repository creates
+`orders`, `order_items`, `supplier_inventory`, `products` or
+`order_status_history` in the first place.** They were created by an original
+schema that was never committed.
+
+What that costs:
+
+- A new environment cannot be stood up. Every dev or staging database has to
+  be cloned from production.
+- The merge is going to need throwaway databases to test against, and there
+  is no way to make one.
+- A new developer cannot run the project at all without a dump from someone.
+
+**The fix is one command against the live database, not a week of
+archaeology:**
+
+```
+pg_dump --schema-only --no-owner --no-privileges "$DATABASE_URL" \
+  > server/migrations/000_baseline.sql
+```
+
+Committing that gives an exact baseline, and the existing patch migrations
+then apply on top of it in order. Guessing at the original shape by reading
+the code would be slower and wrong in places.
+
+Two things were already fixed while finding this, in
+`6ac62ac`:
+
+- `enterprise_order_management.sql` had `idSERIAL PRIMARY KEY`, a missing
+  space, which is a syntax error that made Postgres reject the whole file.
+  None of its eight tables were ever created by the runner. Unnoticed
+  because these are normally pasted into a console one at a time.
+- The runner made a single alphabetical pass, so a file could fail purely
+  because its dependency sorted after it. It now makes passes until nothing
+  new succeeds, which is safe because every migration here is idempotent.
+
 ## 1. Correctness, worst first
 
 ### 1.1 Invoice numbers are shared across every wholesaler

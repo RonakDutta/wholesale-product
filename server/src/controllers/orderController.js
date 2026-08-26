@@ -1,4 +1,5 @@
 const pool = require("../config/db");
+const { FEATURES } = require("../config/features");
 const { fromPaise, toPaise } = require("../utils/money");
 const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange } = require("../services/orderStatusService");
 const { geocodeOrderDestination } = require("../services/geocodingService");
@@ -284,7 +285,8 @@ const createOrder = async (req, res) => {
       if (quantity < inv.moq) {
         throw new Error(`${inv.product_name} has a minimum order quantity of ${inv.moq}.`);
       }
-      if (inv.stock < quantity) {
+      // Only enforced when stock counts are believed. See config/features.
+      if (FEATURES.STOCK_TRACKING && inv.stock < quantity) {
         throw new Error(`${inv.product_name} only has ${inv.stock} left in stock.`);
       }
 
@@ -378,15 +380,20 @@ const createOrder = async (req, res) => {
         ],
       );
 
-      // Guarded so two concurrent checkouts cannot oversell the same listing.
+      // Still decremented while stock is hidden, so a wholesaler who keeps
+      // real counts keeps them moving and switching tracking back on does not
+      // need a stock take. The guard against overselling only applies when
+      // the counts are believed; without it a listing that never had a count
+      // simply goes negative, which reads as "we do not know".
       const stockUpdate = await client.query(
-        `UPDATE supplier_inventory
-         SET stock = stock - $1
-         WHERE id = $2 AND stock >= $1
-         RETURNING id`,
+        FEATURES.STOCK_TRACKING
+          ? `UPDATE supplier_inventory SET stock = stock - $1
+              WHERE id = $2 AND stock >= $1 RETURNING id`
+          : `UPDATE supplier_inventory SET stock = stock - $1
+              WHERE id = $2 RETURNING id`,
         [line.quantity, line.inventoryId],
       );
-      if (stockUpdate.rows.length === 0) {
+      if (FEATURES.STOCK_TRACKING && stockUpdate.rows.length === 0) {
         throw new Error(`${line.productName} went out of stock while checking out.`);
       }
     }

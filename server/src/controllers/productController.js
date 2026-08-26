@@ -1,4 +1,13 @@
 const pool = require("../config/db");
+const { FEATURES } = require("../config/features");
+
+/**
+ * Hides a sold out listing from the catalogue, but only while stock counts
+ * are believed. With stock hidden, a listing created since carries a count of
+ * zero, and this clause would have hidden every one of them from search and
+ * from the shop page. See config/features.
+ */
+const IN_STOCK = FEATURES.STOCK_TRACKING ? "AND si.stock > 0" : "";
 
 // Where a listing is allowed to appear. See migrations/listing_visibility.sql.
 //   public      catalogue, search, comparison, and the storefront
@@ -101,7 +110,8 @@ exports.getPublicCatalog = async (req, res) => {
       FROM products p
       JOIN supplier_inventory si ON p.id = si.product_id
       JOIN wholesaler_profiles wp ON si.supplier_id = wp.user_id
-      WHERE si.status = 'Active' AND si.stock > 0 AND si.visibility = 'public'
+      WHERE si.status = 'Active' AND si.visibility = 'public'
+        ${IN_STOCK}
       GROUP BY p.id, p.name, p.category, p.description, p.global_image_url
       ORDER BY p.id DESC
     `;
@@ -146,7 +156,8 @@ exports.getProductById = async (req, res) => {
       FROM products p
       JOIN supplier_inventory si ON p.id = si.product_id
       JOIN wholesaler_profiles wp ON si.supplier_id = wp.user_id
-      WHERE p.id = $1 AND si.status = 'Active' AND si.stock > 0
+      WHERE p.id = $1 AND si.status = 'Active'
+        ${IN_STOCK}
         AND si.visibility = 'public'
       GROUP BY p.id, p.name, p.category, p.description, p.global_image_url
     `;

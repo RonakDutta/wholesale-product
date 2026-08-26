@@ -130,7 +130,6 @@ const MyProducts = () => {
 
     if (filter === "Active" && item.status !== "Active") return false;
     if (filter === "Draft" && item.status !== "Draft") return false;
-    if (filter === "Low Stock" && item.stock >= 50) return false;
     if (filter === "Shop page" && item.visibility !== "storefront")
       return false;
     if (filter === "Link only" && item.visibility !== "private") return false;
@@ -155,7 +154,7 @@ const MyProducts = () => {
         <div>
           <h2 className="text-2xl font-black text-espresso">My Products</h2>
           <p className="text-sm text-slate-500 mt-1">
-            Manage your products, your shop page and your stock.
+            Manage your products and what your shop page shows.
             {storefrontCount > 0 && (
               <span className="text-clay font-semibold">
                 {" "}
@@ -188,7 +187,7 @@ const MyProducts = () => {
 
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0">
-          {["All", "Active", "Draft", "Low Stock", "Shop page", "Link only"].map((tab) => (
+          {["All", "Active", "Draft", "Shop page", "Link only"].map((tab) => (
             <button
               key={tab}
               onClick={() => setFilter(tab)}
@@ -280,22 +279,13 @@ const MyProducts = () => {
                         )}
                       </div>
                     </td>
+                    {/* Stock is hidden until it is properly implemented. The
+                        column and the order path still maintain it, so this
+                        is a screen change and not a data one. */}
                     <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-1.5">
-                          <div
-                            className={`w-2 h-2 rounded-full ${item.stock > 50 ? "bg-emerald-500" : item.stock > 0 ? "bg-amber-500" : "bg-rose-500"}`}
-                          ></div>
-                          <span
-                            className={`font-bold ${item.stock === 0 ? "text-rose-600" : "text-slate-700"}`}
-                          >
-                            {item.stock} in stock
-                          </span>
-                        </div>
-                        <span className="text-[11px] text-slate-500 font-medium">
-                          MOQ: {item.moq}
-                        </span>
-                      </div>
+                      <span className="text-[11px] font-medium text-slate-500">
+                        MOQ: {item.moq}
+                      </span>
                     </td>
                     <td className="px-6 py-4">
                       {(() => {

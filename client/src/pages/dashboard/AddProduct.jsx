@@ -562,21 +562,6 @@ const AddProduct = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-2">
-                Current Stock Capacity
-              </label>
-              <input
-                type="number"
-                name="stock"
-                required
-                min="0"
-                value={formData.stock}
-                onChange={handleChange}
-                className="w-full bg-slate-50 border border-slate-200 focus:border-clay focus:ring-1 focus:ring-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900 transition-colors"
-                placeholder="5000"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-2">
                 Estimated Shipping (Days)
               </label>
               <input

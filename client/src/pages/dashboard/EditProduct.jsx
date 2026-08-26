@@ -162,7 +162,7 @@ const EditProduct = () => {
         <div>
           <h2 className="text-2xl font-black text-espresso">Edit Listing</h2>
           <p className="text-sm text-slate-500 font-medium mt-1">
-            Update your pricing, stock, or status for this product.
+            Update your pricing or status for this product.
           </p>
         </div>
       </div>
@@ -307,20 +307,6 @@ const EditProduct = () => {
                 onChange={handleChange}
                 className="w-full bg-clay/5 border border-clay/20 focus:border-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900"
                 placeholder="Optional"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-2">
-                Current Stock Capacity
-              </label>
-              <input
-                type="number"
-                name="stock"
-                required
-                min="0"
-                value={formData.stock}
-                onChange={handleChange}
-                className="w-full bg-slate-50 border border-slate-200 focus:border-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900"
               />
             </div>
             <div>

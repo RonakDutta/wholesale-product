@@ -46,9 +46,6 @@ import NotFound from "./pages/NotFound";
 
 // Seller workspace is lazy-loaded: retailers never download this bundle.
 const SellerLayout = lazy(() => import("./layouts/SellerLayout"));
-const DashboardOverview = lazy(
-  () => import("./pages/dashboard/DashboardOverview"),
-);
 const MyProducts = lazy(() => import("./pages/dashboard/MyProducts"));
 const AddProduct = lazy(() => import("./pages/dashboard/AddProduct"));
 const EditProduct = lazy(() => import("./pages/dashboard/EditProduct"));
@@ -120,12 +117,10 @@ const router = createBrowserRouter([
     path: "/seller",
     element: <SellerArea />,
     children: [
-      // The marketplace dashboard reported a buyer rating and a listing
-      // count. It is kept behind the flag rather than deleted.
-      {
-        index: true,
-        element: FEATURES.MARKETPLACE ? <DashboardOverview /> : <Overview />,
-      },
+      // Always the 3.0 overview, marketplace or not. The old dashboard
+      // reported a buyer rating and a listing count, which is not what a
+      // wholesaler opens this for.
+      { index: true, element: <Overview /> },
       { path: "customers", element: <Parties /> },
       { path: "customers/:id", element: <PartyDetail /> },
       { path: "customers/:id/statement", element: <PartyStatement /> },

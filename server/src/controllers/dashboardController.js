@@ -1,4 +1,8 @@
 const pool = require("../config/db");
+const { FEATURES } = require("../config/features");
+
+// See productController: a zero count means "unknown" while stock is hidden.
+const IN_STOCK = FEATURES.STOCK_TRACKING ? " AND stock > 0" : "";
 
 exports.getInventory = async (req, res) => {
   const supplierId = req.user.id;
@@ -47,7 +51,7 @@ exports.getDashboardStats = async (req, res) => {
       `SELECT
          COUNT(*) FILTER (WHERE status = 'Active')                      AS active_listings,
          COUNT(*) FILTER (WHERE status = 'Active' AND stock <= 0)       AS out_of_stock,
-         COUNT(*) FILTER (WHERE status = 'Active' AND stock > 0
+         COUNT(*) FILTER (WHERE status = 'Active'${IN_STOCK}
                           AND stock < GREATEST(moq, 1))                 AS low_stock,
          COALESCE(SUM(stock * price) FILTER (WHERE status = 'Active'), 0) AS stock_value
        FROM supplier_inventory WHERE supplier_id = $1`,

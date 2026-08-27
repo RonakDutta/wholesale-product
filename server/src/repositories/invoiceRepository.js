@@ -181,7 +181,10 @@ async function schemaExtras(db = pool) {
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'sale_lines' AND column_name = 'gst_percent') AS has_line_gst,
         EXISTS (SELECT 1 FROM information_schema.columns
-                 WHERE table_name = 'items' AND column_name = 'gst_percent') AS has_item_gst
+                 WHERE table_name = 'items' AND column_name = 'gst_percent') AS has_item_gst,
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'supplier_inventory'
+                   AND column_name = 'gst_percent') AS has_listing_billing
     `);
     extras = result.rows[0];
   } catch (err) {
@@ -197,6 +200,7 @@ async function schemaExtras(db = pool) {
       has_sale_tax: false,
       has_line_gst: false,
       has_item_gst: false,
+      has_listing_billing: false,
     };
   }
   return extras;

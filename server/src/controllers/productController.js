@@ -1,5 +1,7 @@
 const pool = require("../config/db");
 const { FEATURES } = require("../config/features");
+const { clean, optionalNumber } = require("../utils/money");
+const invoiceRepository = require("../repositories/invoiceRepository");
 
 /**
  * Hides a sold out listing from the catalogue, but only while stock counts
@@ -38,6 +40,11 @@ exports.addProduct = async (req, res) => {
     shippingDays,
     imageUrl,
     visibility,
+    unit,
+    packSize,
+    hsnCode,
+    gstPercent,
+    notes,
   } = req.body;
   const supplierId = req.user.id;
 
@@ -52,10 +59,28 @@ exports.addProduct = async (req, res) => {
       finalProductId = newProduct.rows[0].id;
     }
 
+    // The billing columns arrive with wholesale3_listing_billing_fields.sql.
+    // Until it has been run a product can still be listed, it just carries no
+    // unit or tax rate, which is what the older shape always did.
+    const has = await invoiceRepository.schemaExtras();
+    const billingColumns = has.has_listing_billing
+      ? ", unit, pack_size, hsn_code, gst_percent, notes"
+      : "";
+    const billingValues = has.has_listing_billing ? ", $10, $11, $12, $13, $14" : "";
+    const billingParams = has.has_listing_billing
+      ? [
+          clean(unit) || "pcs",
+          optionalNumber(packSize),
+          clean(hsnCode),
+          optionalNumber(gstPercent),
+          clean(notes),
+        ]
+      : [];
+
     await pool.query(
       `INSERT INTO supplier_inventory
-      (supplier_id, product_id, price, discount_price, moq, stock, shipping_days, image_url, status, visibility)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Active', $9)`,
+      (supplier_id, product_id, price, discount_price, moq, stock, shipping_days, image_url, status, visibility${billingColumns})
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Active', $9${billingValues})`,
       [
         supplierId,
         finalProductId,
@@ -66,6 +91,7 @@ exports.addProduct = async (req, res) => {
         shippingDays,
         imageUrl,
         normalizeVisibility(visibility),
+        ...billingParams,
       ],
     );
 
@@ -488,6 +514,11 @@ exports.updateInventoryItem = async (req, res) => {
     imageUrl,
     status,
     visibility,
+    unit,
+    packSize,
+    hsnCode,
+    gstPercent,
+    notes,
   } = req.body;
 
   try {
@@ -504,6 +535,27 @@ exports.updateInventoryItem = async (req, res) => {
       }
     }
 
+    // See addProduct: these columns only exist once the migration has run.
+    // COALESCE throughout, so a screen that sends only the price leaves
+    // everything else exactly as the wholesaler set it.
+    const has = await invoiceRepository.schemaExtras();
+    const billingSet = has.has_listing_billing
+      ? `, unit = COALESCE($11, unit),
+           pack_size = COALESCE($12, pack_size),
+           hsn_code = COALESCE($13, hsn_code),
+           gst_percent = COALESCE($14, gst_percent),
+           notes = COALESCE($15, notes)`
+      : "";
+    const billingParams = has.has_listing_billing
+      ? [
+          clean(unit),
+          optionalNumber(packSize),
+          clean(hsnCode),
+          optionalNumber(gstPercent),
+          clean(notes),
+        ]
+      : [];
+
     const result = await pool.query(
       `UPDATE supplier_inventory
        SET price = COALESCE($1, price),
@@ -513,7 +565,7 @@ exports.updateInventoryItem = async (req, res) => {
            shipping_days = COALESCE($5, shipping_days),
            image_url = COALESCE($6, image_url),
            status = COALESCE($7, status),
-           visibility = COALESCE($8, visibility)
+           visibility = COALESCE($8, visibility)${billingSet}
        WHERE id = $9 AND supplier_id = $10
        RETURNING *`,
       [
@@ -527,6 +579,7 @@ exports.updateInventoryItem = async (req, res) => {
         nextVisibility,
         id,
         supplierId,
+        ...billingParams,
       ],
     );
 

@@ -1,6 +1,7 @@
 const pool = require("../config/db");
 const { FEATURES } = require("../config/features");
-const { fromPaise, toPaise } = require("../utils/money");
+const { clean, fromPaise, fullName, toPaise } = require("../utils/money");
+const { findOrCreateParty, hasPartyLink } = require("../services/partyService");
 const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange } = require("../services/orderStatusService");
 const { geocodeOrderDestination } = require("../services/geocodingService");
 const invoiceService = require("../services/invoiceService");
@@ -321,19 +322,47 @@ const createOrder = async (req, res) => {
     const totalQuantity = lines.reduce((sum, l) => sum + l.quantity, 0);
     const maxShippingDays = Math.max(...lines.map((l) => Number(l.shippingDays) || 7));
 
+    // The buyer joins this wholesaler's customer book, so one man has one
+    // page and one balance whether he ordered through the shop or the
+    // wholesaler wrote him down by hand. Skipped, without failing checkout,
+    // on a database where the customer book migration has not been run.
+    let partyId = null;
+    const partyLinked = await hasPartyLink(client);
+    if (partyLinked) {
+      const buyer = await client.query(
+        "SELECT first_name, last_name, phone FROM users WHERE id = $1",
+        [buyerId],
+      );
+      const b = buyer.rows[0] || {};
+      const party = await findOrCreateParty(client, {
+        wholesalerId: supplierId,
+        userId: buyerId,
+        // The name on the delivery address is who the goods are actually for,
+        // so it beats the account name when the two differ.
+        name: clean(deliveryAddress.name) || fullName(b.first_name, b.last_name),
+        phone: clean(deliveryAddress.phone) || clean(b.phone),
+        city: clean(deliveryAddress.city),
+        address: clean(deliveryAddress.street || deliveryAddress.address),
+      });
+      partyId = party.id;
+    }
+
+    // party_id is named only when the column is really there, so an order
+    // still saves on a database that is behind on migrations.
     const orderResult = await client.query(
       `INSERT INTO orders (
-        buyer_id, supplier_id, inventory_item_id, quantity,
+        buyer_id, supplier_id, ${partyLinked ? "party_id," : ""} inventory_item_id, quantity,
         total_amount, subtotal, amount_paid, remaining_amount, payment_plan,
         status, payment_status,
         delivery_address, billing_address, contact_phone, notes,
         order_number, expected_delivery_date, updated_at
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, CURRENT_TIMESTAMP)
+       VALUES (${Array.from({ length: partyLinked ? 18 : 17 }, (_, i) => `$${i + 1}`).join(", ")}, CURRENT_TIMESTAMP)
        RETURNING id`,
       [
         buyerId,
         supplierId,
+        ...(partyLinked ? [partyId] : []),
         // kept for backwards compatibility with single-item readers
         lines[0].inventoryId,
         totalQuantity,

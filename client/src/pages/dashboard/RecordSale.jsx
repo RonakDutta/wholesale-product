@@ -84,9 +84,22 @@ const RecordSale = () => {
       // The product list only fills in suggestions. A wholesaler who has not
       // built one yet must still be able to record a sale by typing, so a
       // failure here is not worth telling him about.
+      //
+      // This reads the one product list, the same rows the Products screen
+      // shows. It used to read the separate rate list, which meant a product
+      // added in the shop could not be picked on a bill.
       try {
-        const { data } = await api.get("/api/items");
-        if (alive) setItems(data || []);
+        const { data } = await api.get("/api/dashboard/inventory");
+        if (alive) {
+          setItems(
+            (data || [])
+              // A product he has stopped selling is noise in a picker.
+              .filter((row) => row.status === "Active")
+              // The listing calls it price. Everything downstream of the
+              // picker calls it rate, and they are the same number.
+              .map((row) => ({ ...row, rate: row.price })),
+          );
+        }
       } catch (error) {
         console.error("Failed to load the products", error);
       }

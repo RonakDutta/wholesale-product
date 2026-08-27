@@ -27,16 +27,11 @@ import { FEATURES } from "../config/features";
 const NAV = [
   { path: "/seller", label: "Overview", icon: LayoutDashboard, exact: true },
   { path: "/seller/customers", label: "Customers", icon: Users },
-  { path: "/seller/rates", label: "Products", icon: Package },
-  // What is in his public shop, which is a different list from his own
-  // products until the two are merged. Named for what a wholesaler sees on
-  // the shop page rather than "Listings", which meant nothing to him.
-  {
-    path: "/seller/products",
-    label: "Shop listings",
-    icon: Store,
-    flag: "MARKETPLACE",
-  },
+  // One list. It used to be two, his own rate list and his shop listings,
+  // which meant the same thing to him and differed only in which half of the
+  // row each screen could show. Where a product is shown is now a control on
+  // the product itself, which is where he looks for it.
+  { path: "/seller/products", label: "Products", icon: Package },
   { path: "/seller/sales", label: "Sales", icon: ShoppingBag },
   // Marketplace orders, which are a different thing from a recorded sale.
   {

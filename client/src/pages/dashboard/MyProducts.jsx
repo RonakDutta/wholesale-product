@@ -18,28 +18,41 @@ import { useAuth } from "../../context/AuthContext";
 import { toast } from "sonner";
 import ProductThumb from "../../components/ProductThumb";
 
-// Matches the visibility column on supplier_inventory. Kept compact here
-// because it renders inside a table cell.
-const VISIBILITY_BADGES = {
-  public: {
+// Matches the visibility column on supplier_inventory. Plain English, because
+// the people reading this are traders, not shopkeepers of the internet.
+const VISIBILITY_OPTIONS = [
+  {
+    value: "public",
     label: "Everyone",
     icon: Globe,
     className: "bg-sky-50 text-sky-700 border-sky-200",
     title: "Buyers can find this in search, next to other sellers",
   },
-  storefront: {
+  {
+    value: "storefront",
     label: "Shop page",
     icon: Store,
     className: "bg-clay/10 text-clay border-clay/20",
     title: "Not in search. Buyers see it only on your shop page",
   },
-  private: {
+  {
+    value: "private",
     label: "Link only",
     icon: Lock,
     className: "bg-slate-100 text-slate-600 border-slate-200",
     title: "Hidden from the site. Only people you send the link to can see it",
   },
-};
+];
+
+const VISIBILITY_BY_VALUE = Object.fromEntries(
+  VISIBILITY_OPTIONS.map((o) => [o.value, o]),
+);
+
+// Trailing zeros read badly: a pack size of 20.000 should show as 20.
+const trim = (value) =>
+  value === null || value === undefined || value === ""
+    ? ""
+    : String(Number(value));
 
 // The link a wholesaler sends on WhatsApp. It opens the product on its own
 // page, which works for a hidden listing too because the page is reached by
@@ -47,9 +60,131 @@ const VISIBILITY_BADGES = {
 const shareUrlFor = (inventoryId) =>
   `${window.location.origin}/listing/${inventoryId}`;
 
+/**
+ * The rate, editable where it is shown.
+ *
+ * Changing prices is something a wholesaler does across many products at
+ * once, so making him open a form per product would make the screen useless.
+ * Saves on blur, and only when the number actually changed.
+ *
+ * It sends the price alone. The endpoint leaves every other column as it
+ * stands, so editing a rate cannot disturb what the shop shows.
+ */
+const RateCell = ({ item, onSaved }) => {
+  const [value, setValue] = useState(String(Number(item.price)));
+  const [saving, setSaving] = useState(false);
+
+  const reset = () => setValue(String(Number(item.price)));
+
+  const commit = async () => {
+    const next = value.trim();
+    if (next === "" || Number(next) === Number(item.price)) return reset();
+    if (!Number.isFinite(Number(next)) || Number(next) < 0) {
+      toast.error("Enter a valid rate.");
+      return reset();
+    }
+
+    setSaving(true);
+    try {
+      const { data } = await api.put(`/api/products/inventory/${item.id}`, {
+        price: next,
+      });
+      onSaved(data);
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Could not save the rate.");
+      reset();
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <span className="text-sm text-slate-400">₹</span>
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") {
+            reset();
+            e.currentTarget.blur();
+          }
+        }}
+        disabled={saving}
+        inputMode="decimal"
+        aria-label={`Rate for ${item.name}`}
+        className="w-24 rounded-lg border border-transparent bg-slate-50 px-2 py-1.5 text-right text-sm font-bold text-espresso outline-none transition-colors hover:border-slate-200 focus:border-clay focus:bg-white disabled:opacity-50"
+      />
+    </div>
+  );
+};
+
+/**
+ * Where this product is shown, changed in place.
+ *
+ * A badge would only report it. Deciding what the shop shows is the thing a
+ * wholesaler comes to this screen to do, so it is a control, not a label.
+ */
+const VisibilityCell = ({ item, onSaved }) => {
+  const [saving, setSaving] = useState(false);
+  const current = VISIBILITY_BY_VALUE[item.visibility] || VISIBILITY_OPTIONS[0];
+  const CurrentIcon = current.icon;
+
+  const change = async (visibility) => {
+    if (visibility === item.visibility) return;
+    setSaving(true);
+    try {
+      const { data } = await api.put(`/api/products/inventory/${item.id}`, {
+        visibility,
+      });
+      onSaved(data);
+      toast.success(
+        `${item.name} is now shown to: ${VISIBILITY_BY_VALUE[visibility].label}`,
+      );
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message || "Could not change where this shows.",
+      );
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div
+      className={`relative inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${current.className} ${saving ? "opacity-50" : ""}`}
+      title={current.title}
+    >
+      <CurrentIcon className="h-3 w-3 shrink-0" />
+      {current.label}
+      {/* The select sits invisibly on top so the badge itself is the control.
+          Native on purpose: it is the one picker that works properly on a
+          cheap Android phone. */}
+      <select
+        value={item.visibility || "public"}
+        disabled={saving}
+        onChange={(e) => change(e.target.value)}
+        aria-label={`Where ${item.name} is shown`}
+        className="absolute inset-0 cursor-pointer opacity-0"
+      >
+        {VISIBILITY_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+};
+
 const MyProducts = () => {
   const { user } = useAuth();
   const [copiedId, setCopiedId] = useState(null);
+  const [inventory, setInventory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filter, setFilter] = useState("All");
+  const navigate = useNavigate();
 
   const handleCopyLink = async (item) => {
     const url = shareUrlFor(item.id);
@@ -66,15 +201,13 @@ const MyProducts = () => {
   };
 
   const handleWhatsApp = (item) => {
-    const text = `${item.name} - ₹${item.price}. Minimum order ${item.moq}. ${shareUrlFor(item.id)}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+    const text = `${item.name} - ₹${item.price}. Minimum order ${trim(item.moq)} ${item.unit || ""}. ${shareUrlFor(item.id)}`;
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(text)}`,
+      "_blank",
+      "noopener",
+    );
   };
-
-  const [inventory, setInventory] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filter, setFilter] = useState("All");
-  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchInventory = async () => {
@@ -91,10 +224,19 @@ const MyProducts = () => {
     fetchInventory();
   }, []);
 
+  // The endpoint returns the listing row, which has no product name on it, so
+  // the row that was already on screen supplies the parts it does not carry.
+  const applyUpdate = (updated) =>
+    setInventory((prev) =>
+      prev.map((item) =>
+        item.id === updated.id ? { ...item, ...updated } : item,
+      ),
+    );
+
   const handleDelete = async (inventoryId) => {
     if (
       !window.confirm(
-        "Are you sure you want to remove this listing? If you have active orders, it will be marked as 'Draft' instead of deleted.",
+        "Are you sure you want to remove this product? If you have active orders, it will be marked as 'Draft' instead of deleted.",
       )
     )
       return;
@@ -112,11 +254,11 @@ const MyProducts = () => {
         toast.success(data.message);
       } else {
         setInventory((prev) => prev.filter((item) => item.id !== inventoryId));
-        toast.success("Listing removed successfully");
+        toast.success("Product removed successfully");
       }
     } catch (error) {
       console.error("Failed to delete", error);
-      toast.error("Could not remove listing. Please try again.");
+      toast.error("Could not remove product. Please try again.");
     }
   };
 
@@ -136,30 +278,31 @@ const MyProducts = () => {
     return true;
   });
 
-  const storefrontCount = inventory.filter(
-    (item) => item.visibility === "storefront" && item.status === "Active",
+  const hiddenCount = inventory.filter(
+    (item) => item.visibility === "private" && item.status === "Active",
   ).length;
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="w-8 h-8 border-4 border-clay border-t-transparent rounded-full animate-spin"></div>
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-clay border-t-transparent"></div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="mx-auto max-w-6xl space-y-6">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h2 className="text-2xl font-black text-espresso">My Products</h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Manage your products and what your shop page shows.
-            {storefrontCount > 0 && (
-              <span className="text-clay font-semibold">
+          <h2 className="text-2xl font-black text-espresso">Products</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Everything you sell, and who can see it. Your rates here are used
+            when you make a bill.
+            {hiddenCount > 0 && (
+              <span className="font-semibold text-clay">
                 {" "}
-                {storefrontCount} listing{storefrontCount === 1 ? "" : "s"}{" "}
-                shown only on your shop page.
+                {hiddenCount} product{hiddenCount === 1 ? " is" : "s are"} not
+                on the site. Send the link to show {hiddenCount === 1 ? "it" : "them"}.
               </span>
             )}
           </p>
@@ -168,30 +311,30 @@ const MyProducts = () => {
           {user?.id && (
             <Link
               to={`/wholesaler/${user.id}`}
-              className="flex items-center justify-center gap-2 border border-slate-200 bg-white text-slate-700 px-4 py-2.5 rounded-lg text-sm font-bold hover:border-clay hover:text-clay transition-colors"
+              className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:border-clay hover:text-clay"
               title="See your shop page the way buyers see it"
             >
-              <ExternalLink className="w-4 h-4" />
+              <ExternalLink className="h-4 w-4" />
               My Shop Page
             </Link>
           )}
           <Link
             to="/seller/products/new"
-            className="flex items-center justify-center gap-2 bg-clay text-cream px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm hover:bg-espresso transition-colors"
+            className="flex items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-clay px-5 py-2.5 text-sm font-bold text-cream shadow-sm transition-colors hover:bg-espresso"
           >
-            <Plus className="w-4 h-4" />
-            Add New Product
+            <Plus className="h-4 w-4 shrink-0" />
+            Add Product
           </Link>
         </div>
       </div>
 
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0">
+      <div className="flex flex-col items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row">
+        <div className="flex w-full items-center gap-2 overflow-x-auto pb-2 sm:w-auto sm:pb-0">
           {["All", "Active", "Draft", "Shop page", "Link only"].map((tab) => (
             <button
               key={tab}
               onClick={() => setFilter(tab)}
-              className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${
+              className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-bold transition-colors ${
                 filter === tab
                   ? "bg-slate-100 text-espresso"
                   : "text-slate-500 hover:bg-slate-50"
@@ -201,39 +344,133 @@ const MyProducts = () => {
             </button>
           ))}
         </div>
-        <div className="relative w-full sm:w-72 shrink-0">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+        <div className="relative w-full shrink-0 sm:w-72">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search inventory..."
+            placeholder="Search your products..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:border-clay outline-none"
+            className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-4 text-sm outline-none focus:border-clay"
           />
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      {/* Phone gets cards, not a table. Seven columns on a 390px screen means
+          the rate and the shop switch sit off the right edge behind a
+          sideways scroll, and those are the two things he came to change. */}
+      <div className="space-y-3 sm:hidden">
+        {displayedInventory.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500 shadow-sm">
+            {inventory.length === 0
+              ? "Nothing here yet. Add what you sell and your rate for it, and you will not have to type the rate again on every bill."
+              : "No products found."}
+          </div>
+        ) : (
+          displayedInventory.map((item) => (
+            <div
+              key={item.id}
+              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+            >
+              <div className="flex items-start gap-3">
+                <ProductThumb src={item.image} alt={item.name} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-espresso">
+                    {item.name}
+                  </p>
+                  <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    {item.unit || "pcs"}
+                    {item.pack_size ? ` · pack of ${trim(item.pack_size)}` : ""}
+                    {item.moq ? ` · min ${trim(item.moq)}` : ""}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                    item.status === "Active"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {item.status}
+                </span>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <RateCell item={item} onSaved={applyUpdate} />
+                <VisibilityCell item={item} onSaved={applyUpdate} />
+              </div>
+
+              <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                <span className="text-[11px] font-medium text-slate-400">
+                  {item.hsn_code ? `HSN ${item.hsn_code}` : "No HSN"}
+                  {item.gst_percent !== null && item.gst_percent !== undefined
+                    ? ` · GST ${trim(item.gst_percent)}%`
+                    : ""}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleWhatsApp(item)}
+                    className="rounded-md p-2 text-emerald-600 hover:bg-emerald-50"
+                    title="Send this product on WhatsApp"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleCopyLink(item)}
+                    className="rounded-md p-2 text-slate-500 hover:bg-clay/10 hover:text-clay"
+                    title="Copy the link to this product"
+                  >
+                    {copiedId === item.id ? (
+                      <Check className="h-4 w-4 text-emerald-600" />
+                    ) : (
+                      <LinkIcon className="h-4 w-4" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => navigate(`/seller/products/edit/${item.id}`)}
+                    className="rounded-md p-2 text-slate-500 hover:bg-clay/10 hover:text-clay"
+                    title="Edit product"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    className="rounded-md p-2 text-rose-500 hover:bg-rose-50"
+                    title="Delete product"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:block">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-slate-50 border-b border-slate-100">
+          <table className="w-full whitespace-nowrap text-left text-sm">
+            <thead className="border-b border-slate-100 bg-slate-50">
               <tr>
-                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-slate-500">
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">
                   Product
                 </th>
-                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-slate-500">
-                  Pricing (₹)
+                <th className="px-3 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Rate
                 </th>
-                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-slate-500">
-                  Inventory
+                <th className="px-3 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Minimum
                 </th>
-                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-slate-500">
-                  Shown In
+                <th className="px-3 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Tax
                 </th>
-                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-slate-500">
+                <th className="px-3 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Shown to
+                </th>
+                <th className="px-3 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">
                   Status
                 </th>
-                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-slate-500 text-right">
+                <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-slate-500">
                   Actions
                 </th>
               </tr>
@@ -241,72 +478,68 @@ const MyProducts = () => {
             <tbody className="divide-y divide-slate-100">
               {displayedInventory.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan="6"
-                    className="px-6 py-10 text-center text-slate-500"
-                  >
-                    No products found.
+                  <td colSpan="7" className="px-6 py-10 text-center text-slate-500">
+                    {inventory.length === 0
+                      ? "Nothing here yet. Add what you sell and your rate for it, and you will not have to type the rate again on every bill."
+                      : "No products found."}
                   </td>
                 </tr>
               ) : (
                 displayedInventory.map((item) => (
                   <tr
                     key={item.id}
-                    className="hover:bg-slate-50/50 transition-colors group"
+                    className="group transition-colors hover:bg-slate-50/50"
                   >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <ProductThumb src={item.image} alt={item.name} />
                         <div>
-                          <p className="font-bold text-espresso text-sm max-w-50 sm:max-w-xs truncate">
+                          <p className="max-w-50 truncate text-sm font-bold text-espresso sm:max-w-xs">
                             {item.name}
                           </p>
-                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mt-0.5">
-                            {item.category}
+                          <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                            {item.unit || "pcs"}
+                            {item.pack_size
+                              ? ` · pack of ${trim(item.pack_size)}`
+                              : ""}
+                            {item.category ? ` · ${item.category}` : ""}
                           </p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-espresso">
-                          ₹{item.price}
+                    <td className="px-3 py-4">
+                      <RateCell item={item} onSaved={applyUpdate} />
+                      {item.discount_price && (
+                        <span className="mt-0.5 ml-5 block w-fit rounded bg-clay/10 px-1.5 text-[10px] font-semibold text-clay">
+                          Bulk: ₹{item.discount_price}
                         </span>
-                        {item.discount_price && (
-                          <span className="text-[10px] font-semibold text-clay bg-clay/10 w-fit px-1.5 rounded mt-0.5">
-                            Bulk: ₹{item.discount_price}
-                          </span>
-                        )}
-                      </div>
+                      )}
                     </td>
-                    {/* Stock is hidden until it is properly implemented. The
-                        column and the order path still maintain it, so this
-                        is a screen change and not a data one. */}
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-4">
                       <span className="text-[11px] font-medium text-slate-500">
-                        MOQ: {item.moq}
+                        {item.moq ? `${trim(item.moq)} ${item.unit || ""}` : "-"}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      {(() => {
-                        const badge =
-                          VISIBILITY_BADGES[item.visibility] ||
-                          VISIBILITY_BADGES.public;
-                        const BadgeIcon = badge.icon;
-                        return (
-                          <span
-                            title={badge.title}
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wider ${badge.className}`}
-                          >
-                            <BadgeIcon className="w-3 h-3" />
-                            {badge.label}
-                          </span>
-                        );
-                      })()}
+                    {/* Blank is honest here. An HSN code or a tax rate the
+                        wholesaler has not given is not something to guess at,
+                        because it goes on a tax document. */}
+                    <td className="px-3 py-4">
+                      <div className="flex flex-col text-[11px] font-medium text-slate-500">
+                        <span>{item.hsn_code || "-"}</span>
+                        {item.gst_percent !== null &&
+                          item.gst_percent !== undefined && (
+                            <span className="text-slate-400">
+                              GST {trim(item.gst_percent)}%
+                            </span>
+                          )}
+                      </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-4">
+                      <VisibilityCell item={item} onSaved={applyUpdate} />
+                    </td>
+                    <td className="px-3 py-4">
                       <span
-                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
                           item.status === "Active"
                             ? "bg-emerald-100 text-emerald-700"
                             : "bg-slate-100 text-slate-600"
@@ -316,27 +549,28 @@ const MyProducts = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      {/* Always visible, not hover-only: for a "Link only" product the
-                            share button is the single way to put it in front of a buyer,
-                            so it must not be hidden until the mouse arrives. */}
+                      {/* Always visible, not hover-only: for a "Link only"
+                          product the share button is the single way to put it
+                          in front of a buyer, so it must not be hidden until
+                          the mouse arrives. */}
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => handleWhatsApp(item)}
-                          className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 bg-slate-50 lg:bg-transparent rounded-md transition-colors"
+                          className="rounded-md bg-slate-50 p-2 text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700 lg:bg-transparent"
                           title="Send this product on WhatsApp"
                         >
-                          <MessageCircle className="w-4 h-4" />
+                          <MessageCircle className="h-4 w-4" />
                         </button>
 
                         <button
                           onClick={() => handleCopyLink(item)}
-                          className="p-2 text-slate-500 hover:text-clay hover:bg-clay/10 bg-slate-50 lg:bg-transparent rounded-md transition-colors"
+                          className="rounded-md bg-slate-50 p-2 text-slate-500 transition-colors hover:bg-clay/10 hover:text-clay lg:bg-transparent"
                           title="Copy the link to this product"
                         >
                           {copiedId === item.id ? (
-                            <Check className="w-4 h-4 text-emerald-600" />
+                            <Check className="h-4 w-4 text-emerald-600" />
                           ) : (
-                            <LinkIcon className="w-4 h-4" />
+                            <LinkIcon className="h-4 w-4" />
                           )}
                         </button>
 
@@ -344,18 +578,18 @@ const MyProducts = () => {
                           onClick={() =>
                             navigate(`/seller/products/edit/${item.id}`)
                           }
-                          className="p-2 text-slate-500 hover:text-clay hover:bg-clay/10 bg-slate-50 lg:bg-transparent rounded-md transition-colors"
-                          title="Edit Product"
+                          className="rounded-md bg-slate-50 p-2 text-slate-500 transition-colors hover:bg-clay/10 hover:text-clay lg:bg-transparent"
+                          title="Edit product"
                         >
-                          <Edit className="w-4 h-4" />
+                          <Edit className="h-4 w-4" />
                         </button>
 
                         <button
                           onClick={() => handleDelete(item.id)}
-                          className="p-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 bg-rose-50/50 lg:bg-transparent rounded-md transition-colors"
-                          title="Delete Product"
+                          className="rounded-md bg-rose-50/50 p-2 text-rose-500 transition-colors hover:bg-rose-50 hover:text-rose-700 lg:bg-transparent"
+                          title="Delete product"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </td>
@@ -366,6 +600,10 @@ const MyProducts = () => {
           </table>
         </div>
       </div>
+
+      <p className="text-center text-xs text-slate-400">
+        Tap a rate to change it. It saves as soon as you move away.
+      </p>
     </div>
   );
 };

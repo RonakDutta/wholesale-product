@@ -58,7 +58,6 @@ const PartyStatement = lazy(() => import("./pages/dashboard/PartyStatement"));
 const Sales = lazy(() => import("./pages/dashboard/Sales"));
 const RecordSale = lazy(() => import("./pages/dashboard/RecordSale"));
 const SaleDetail = lazy(() => import("./pages/dashboard/SaleDetail"));
-const RateList = lazy(() => import("./pages/dashboard/RateList"));
 const Overview = lazy(() => import("./pages/dashboard/Overview"));
 
 const SellerFallback = () => (
@@ -129,7 +128,10 @@ const router = createBrowserRouter([
       { path: "sales/new", element: <RecordSale /> },
       { path: "sales/:id", element: <SaleDetail /> },
       { path: "sales/:id/edit", element: <RecordSale /> },
-      { path: "rates", element: <RateList /> },
+      // The rate list is now one list with the shop listings. The old address
+      // keeps working so a bookmark or an old link does not land on "not
+      // found".
+      { path: "rates", element: <Navigate to="/seller/products" replace /> },
       { path: "products", element: <MyProducts /> },
       { path: "products/new", element: <AddProduct /> },
       { path: "products/edit/:id", element: <EditProduct /> },

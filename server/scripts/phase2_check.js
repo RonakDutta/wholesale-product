@@ -32,8 +32,11 @@ const check = (cond, label, v) => { if (!cond) fails++;
 
 const q = (sql, args) => testPool.query(sql, args);
 const stamp = Date.now();
+// password_hash is NOT NULL on the real users table. Not a real hash: this
+// account is never logged into, only ordered as.
 const mkUser = async (role, phone) => (await q(
-  `INSERT INTO users (first_name,last_name,email,role,phone) VALUES ($1,'T',$2,$3,$4) RETURNING id`,
+  `INSERT INTO users (first_name,last_name,email,role,phone,password_hash)
+   VALUES ($1,'T',$2,$3,$4,'x') RETURNING id`,
   [role === "seller" ? "Ram" : "Kishan", `${role}+${stamp}+${Math.random()}@x.local`, role, phone],
 )).rows[0].id;
 
@@ -111,16 +114,19 @@ const mkUser = async (role, phone) => (await q(
   check(p3?.notes === "Slow payer, chase him", "his private note survives the order", { notes: p3?.notes });
   check(await bookSize() === 2, "no duplicate created", { n: await bookSize() });
 
-  // 4. A buyer with no phone anywhere still gets a row, and two such buyers
-  // do not collapse into one just because both have a null phone.
-  const ghost1 = await mkUser("buyer", null);
-  const ghost2 = await mkUser("buyer", null);
-  const o4 = await place(ghost1, { name: "No Phone One", city: "Surat" });
-  const o5 = await place(ghost2, { name: "No Phone Two", city: "Surat" });
-  check(o4.statusCode === 201 && o5.statusCode === 201, "phoneless buyers can order", {});
+  // 4. Two different buyers must not collapse into one customer. users.phone
+  // is NOT NULL on the real schema, so a buyer with no phone at all cannot
+  // occur; what can occur is two buyers who leave the delivery phone blank,
+  // and they have to fall back to their own numbers and stay apart.
+  const other1 = await mkUser("buyer", "9700000001");
+  const other2 = await mkUser("buyer", "9700000002");
+  const o4 = await place(other1, { name: "Blank Phone One", city: "Surat" });
+  const o5 = await place(other2, { name: "Blank Phone Two", city: "Surat" });
+  check(o4.statusCode === 201 && o5.statusCode === 201, "buyers with no delivery phone can order", {});
   const p4 = await partyOf(o4.body.orderId);
   const p5 = await partyOf(o5.body.orderId);
-  check(p4 && p5 && String(p4.id) !== String(p5.id), "two phoneless buyers stay separate", {});
+  check(p4 && p5 && String(p4.id) !== String(p5.id), "two such buyers stay separate", {});
+  check(p4?.phone === "9700000001", "falls back to the account's phone", { phone: p4?.phone });
   check(await bookSize() === 4, "book has four entries", { n: await bookSize() });
 
   // 5. A second wholesaler's book must not see the first one's customers.

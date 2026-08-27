@@ -412,13 +412,19 @@ const createOrder = async (req, res) => {
       // Still decremented while stock is hidden, so a wholesaler who keeps
       // real counts keeps them moving and switching tracking back on does not
       // need a stock take. The guard against overselling only applies when
-      // the counts are believed; without it a listing that never had a count
-      // simply goes negative, which reads as "we do not know".
+      // the counts are believed.
+      //
+      // The floor is not cosmetic. supplier_inventory carries
+      // CHECK (stock >= 0), and every listing created since stock came off
+      // the screens has a count of zero, so an unfloored decrement makes the
+      // constraint reject the row and the buyer gets a 400 on the checkout
+      // button for every new product. Stopping at zero is also the honest
+      // reading of a count nobody maintains.
       const stockUpdate = await client.query(
         FEATURES.STOCK_TRACKING
           ? `UPDATE supplier_inventory SET stock = stock - $1
               WHERE id = $2 AND stock >= $1 RETURNING id`
-          : `UPDATE supplier_inventory SET stock = stock - $1
+          : `UPDATE supplier_inventory SET stock = GREATEST(stock - $1, 0)
               WHERE id = $2 RETURNING id`,
         [line.quantity, line.inventoryId],
       );

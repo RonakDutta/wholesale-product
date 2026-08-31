@@ -522,10 +522,7 @@ exports.updateInventoryItem = async (req, res) => {
   } = req.body;
 
   try {
-    // Left null when the client sends nothing, so COALESCE keeps the listing
-    // where it already is. An unknown value is rejected rather than silently
-    // moving the listing somewhere the wholesaler did not choose.
-    let nextVisibility = null;
+    let nextVisibility;
     if (visibility !== undefined && visibility !== null && visibility !== "") {
       nextVisibility = normalizeVisibility(visibility, null);
       if (!nextVisibility) {
@@ -535,52 +532,59 @@ exports.updateInventoryItem = async (req, res) => {
       }
     }
 
-    // See addProduct: these columns only exist once the migration has run.
-    // COALESCE throughout, so a screen that sends only the price leaves
-    // everything else exactly as the wholesaler set it.
-    const has = await invoiceRepository.schemaExtras();
-    const billingSet = has.has_listing_billing
-      ? `, unit = COALESCE($11, unit),
-           pack_size = COALESCE($12, pack_size),
-           hsn_code = COALESCE($13, hsn_code),
-           gst_percent = COALESCE($14, gst_percent),
-           notes = COALESCE($15, notes)`
-      : "";
-    const billingParams = has.has_listing_billing
-      ? [
-          clean(unit),
-          optionalNumber(packSize),
-          clean(hsnCode),
-          optionalNumber(gstPercent),
-          clean(notes),
-        ]
-      : [];
+    /**
+     * Only the columns the caller actually sent are written.
+     *
+     * This used to COALESCE every column against itself, which kept a screen
+     * that sends one field from blanking the rest, but it also meant null
+     * read as "leave alone" and an emptied box could never clear anything: a
+     * wholesaler could put an HSN code on a product and had no way to take a
+     * wrong one off again.
+     *
+     * Absent from the body means leave alone. Present and null means clear.
+     * The product screen sends one key when a rate is edited in place, and
+     * the edit form sends the lot, and both come out right.
+     */
+    const sent = (key) => Object.prototype.hasOwnProperty.call(req.body, key);
+    const sets = [];
+    const params = [];
+    const put = (column, value) => {
+      params.push(value);
+      sets.push(`${column} = $${params.length}`);
+    };
 
+    if (sent("price")) put("price", price);
+    if (sent("bulkPrice")) put("discount_price", bulkPrice);
+    if (sent("moq")) put("moq", moq);
+    if (sent("stock")) put("stock", stock);
+    if (sent("shippingDays")) put("shipping_days", shippingDays);
+    if (sent("imageUrl")) put("image_url", imageUrl);
+    if (sent("status")) put("status", status);
+    if (nextVisibility) put("visibility", nextVisibility);
+
+    // See addProduct: these columns only exist once the migration has run.
+    const has = await invoiceRepository.schemaExtras();
+    if (has.has_listing_billing) {
+      // Unit has no "none": a product is sold by something, so a blank here
+      // is a caller not mentioning it rather than a wholesaler clearing it.
+      if (sent("unit") && clean(unit)) put("unit", clean(unit));
+      if (sent("packSize")) put("pack_size", optionalNumber(packSize));
+      if (sent("hsnCode")) put("hsn_code", clean(hsnCode));
+      if (sent("gstPercent")) put("gst_percent", optionalNumber(gstPercent));
+      if (sent("notes")) put("notes", clean(notes));
+    }
+
+    if (sets.length === 0) {
+      return res.status(400).json({ message: "Nothing to update." });
+    }
+
+    params.push(id, supplierId);
     const result = await pool.query(
       `UPDATE supplier_inventory
-       SET price = COALESCE($1, price),
-           discount_price = COALESCE($2, discount_price),
-           moq = COALESCE($3, moq),
-           stock = COALESCE($4, stock),
-           shipping_days = COALESCE($5, shipping_days),
-           image_url = COALESCE($6, image_url),
-           status = COALESCE($7, status),
-           visibility = COALESCE($8, visibility)${billingSet}
-       WHERE id = $9 AND supplier_id = $10
-       RETURNING *`,
-      [
-        price,
-        bulkPrice,
-        moq,
-        stock,
-        shippingDays,
-        imageUrl,
-        status,
-        nextVisibility,
-        id,
-        supplierId,
-        ...billingParams,
-      ],
+          SET ${sets.join(", ")}
+        WHERE id = $${params.length - 1} AND supplier_id = $${params.length}
+        RETURNING *`,
+      params,
     );
 
     if (result.rows.length === 0) {

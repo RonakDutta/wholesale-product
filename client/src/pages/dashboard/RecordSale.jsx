@@ -5,7 +5,9 @@ import api from "../../utils/axios";
 import { toast } from "sonner";
 import ItemPicker from "../../components/ItemPicker";
 
-const UNITS = ["pcs", "dozen", "case", "mtr", "kg", "box", "bundle"];
+// Short values on purpose here: this select sits beside the quantity box on a
+// phone, where "Kilogram (kg)" would not fit.
+import { UNIT_VALUES as UNITS } from "../../constants/products";
 
 const money = (value) =>
   Number(value || 0).toLocaleString("en-IN", {

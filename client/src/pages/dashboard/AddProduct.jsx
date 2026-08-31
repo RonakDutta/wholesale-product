@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import api from "../../utils/axios";
 import VisibilityPicker from "../../components/VisibilityPicker";
+import { UNITS, GST_RATES } from "../../constants/products";
 
 const AddProduct = () => {
   const navigate = useNavigate();
@@ -27,10 +28,16 @@ const AddProduct = () => {
     price: "",
     moq: "",
     bulkPrice: "",
-    bulkQuantity: "",
     stock: "",
     shippingDays: "",
     visibility: "public",
+    // What a bill needs. Blank is allowed: a wholesaler who does not know a
+    // product's HSN code yet should still be able to list it, and a guessed
+    // code on a tax document is worse than none.
+    unit: "pcs",
+    packSize: "",
+    hsnCode: "",
+    gstPercent: "",
   });
 
   // 'undecided'
@@ -219,6 +226,13 @@ const AddProduct = () => {
         shippingDays: Number(formData.shippingDays),
         imageUrl: imageUrl,
         visibility: formData.visibility,
+        unit: formData.unit,
+        // Blank means "not given", which is a real answer and must not become
+        // a zero on a bill.
+        packSize: formData.packSize === "" ? null : Number(formData.packSize),
+        hsnCode: formData.hsnCode.trim() || null,
+        gstPercent:
+          formData.gstPercent === "" ? null : Number(formData.gstPercent),
       };
 
       await api.post("/api/products", payload);
@@ -471,69 +485,146 @@ const AddProduct = () => {
           )}
         </div>
 
-        {/* Pricing Matrix */}
+        {/* Rate and minimum */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 mb-4">
-            B2B Pricing Matrix
+            Your rate
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-2">
-                Base Price (₹ per unit)
+                Rate (₹ per {formData.unit || "unit"})
               </label>
               <input
                 type="number"
                 name="price"
+                step="any"
                 required
                 min="1"
                 value={formData.price}
                 onChange={handleChange}
                 className="w-full bg-slate-50 border border-slate-200 focus:border-clay focus:ring-1 focus:ring-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900 transition-colors"
-                placeholder="45"
+                placeholder="142"
               />
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-2">
-                Minimum Order Quantity (MOQ)
+                Smallest quantity you will sell
               </label>
               <input
                 type="number"
                 name="moq"
+                step="any"
                 required
                 min="1"
                 value={formData.moq}
                 onChange={handleChange}
                 className="w-full bg-slate-50 border border-slate-200 focus:border-clay focus:ring-1 focus:ring-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900 transition-colors"
-                placeholder="500"
+                placeholder="10"
               />
             </div>
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-xs font-semibold text-clay mb-2">
-                Bulk Price (₹ per unit)
+                Bulk rate (₹ per {formData.unit || "unit"}), optional
               </label>
               <input
                 type="number"
                 name="bulkPrice"
+                step="any"
                 min="1"
                 value={formData.bulkPrice}
                 onChange={handleChange}
                 className="w-full bg-clay/5 border border-clay/20 focus:border-clay focus:ring-1 focus:ring-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900 transition-colors"
-                placeholder="42"
+                placeholder="138"
               />
+              {/* There used to be a separate "bulk quantity trigger" box here.
+                  Nothing read it: the server charges the bulk rate once the
+                  order reaches the minimum above, so the box was a number the
+                  wholesaler typed and the system threw away. */}
+              <p className="mt-2 text-xs text-slate-500">
+                Charged automatically once someone orders{" "}
+                {formData.moq ? `${formData.moq} ` : "the minimum "}
+                {formData.moq ? `${formData.unit || ""} ` : ""}
+                or more.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* What a bill needs */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 mb-1">
+            For your bills
+          </h3>
+          <p className="mb-4 text-xs text-slate-500">
+            Used when you make a bill for this product. You can leave the HSN
+            code and GST blank and add them later.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-2">
+                Sold by
+              </label>
+              <select
+                name="unit"
+                value={formData.unit}
+                onChange={handleChange}
+                className="w-full bg-slate-50 border border-slate-200 focus:border-clay focus:ring-1 focus:ring-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900 transition-colors"
+              >
+                {UNITS.map((u) => (
+                  <option key={u.value} value={u.value}>
+                    {u.label}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-clay mb-2">
-                Bulk Quantity Trigger
+              <label className="block text-xs font-semibold text-slate-600 mb-2">
+                How many in one pack, optional
               </label>
               <input
                 type="number"
-                name="bulkQuantity"
-                min="1"
-                value={formData.bulkQuantity}
+                name="packSize"
+                min="0"
+                step="any"
+                value={formData.packSize}
                 onChange={handleChange}
-                className="w-full bg-clay/5 border border-clay/20 focus:border-clay focus:ring-1 focus:ring-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900 transition-colors"
-                placeholder="1000"
+                className="w-full bg-slate-50 border border-slate-200 focus:border-clay focus:ring-1 focus:ring-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900 transition-colors"
+                placeholder="100"
               />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-2">
+                HSN code, optional
+              </label>
+              <input
+                type="text"
+                name="hsnCode"
+                inputMode="numeric"
+                maxLength={20}
+                value={formData.hsnCode}
+                onChange={handleChange}
+                className="w-full bg-slate-50 border border-slate-200 focus:border-clay focus:ring-1 focus:ring-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900 transition-colors"
+                placeholder="5208"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-2">
+                GST rate, optional
+              </label>
+              <select
+                name="gstPercent"
+                value={formData.gstPercent}
+                onChange={handleChange}
+                className="w-full bg-slate-50 border border-slate-200 focus:border-clay focus:ring-1 focus:ring-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900 transition-colors"
+              >
+                <option value="">Use my usual rate</option>
+                {GST_RATES.map((rate) => (
+                  <option key={rate} value={rate}>
+                    {rate}%
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>

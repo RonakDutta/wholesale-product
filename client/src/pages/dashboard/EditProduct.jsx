@@ -4,6 +4,7 @@ import { ArrowLeft, UploadCloud, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import api from "../../utils/axios";
 import VisibilityPicker from "../../components/VisibilityPicker";
+import { UNITS, GST_RATES } from "../../constants/products";
 
 const EditProduct = () => {
   const { id } = useParams();
@@ -22,6 +23,10 @@ const EditProduct = () => {
     shippingDays: "",
     status: "Active",
     visibility: "public",
+    unit: "pcs",
+    packSize: "",
+    hsnCode: "",
+    gstPercent: "",
   });
 
   const [imageFile, setImageFile] = useState(null);
@@ -41,14 +46,32 @@ const EditProduct = () => {
           globalImage: data.global_image_url,
         });
 
+        // Postgres hands numerics back as strings, and as the string it
+        // stored: "5.00", not "5". A select whose options are 5 and 12 finds
+        // no match for "5.00" and quietly falls back to its first option, so
+        // the form showed "use my usual rate" for a product that had 5% on
+        // it, and saving then wrote that blank back. Same for a pack size of
+        // "100.000". Numbers have to be normalised before they meet a form.
+        const num = (value) =>
+          value === null || value === undefined || value === ""
+            ? ""
+            : String(Number(value));
+
         setFormData({
-          price: data.price,
-          moq: data.moq,
-          bulkPrice: data.discount_price || "",
-          stock: data.stock,
-          shippingDays: data.shipping_days,
+          price: num(data.price),
+          moq: num(data.moq),
+          bulkPrice: num(data.discount_price),
+          stock: num(data.stock),
+          shippingDays: num(data.shipping_days),
           status: data.status,
           visibility: data.visibility || "public",
+          // Null is "not given" and has to stay an empty box, not a zero.
+          // These are absent entirely on a database that has not had the
+          // billing migration run, which reads the same way.
+          unit: data.unit || "pcs",
+          packSize: num(data.pack_size),
+          hsnCode: data.hsn_code ?? "",
+          gstPercent: num(data.gst_percent),
         });
 
         setExistingImage(data.image_url);
@@ -129,6 +152,13 @@ const EditProduct = () => {
         status: formData.status,
         visibility: formData.visibility,
         imageUrl: imageUrl,
+        unit: formData.unit,
+        // Sent even when blank. The endpoint takes a present null as "clear
+        // this", which is how a wrong HSN code gets removed again.
+        packSize: formData.packSize === "" ? null : Number(formData.packSize),
+        hsnCode: formData.hsnCode.trim() || null,
+        gstPercent:
+          formData.gstPercent === "" ? null : Number(formData.gstPercent),
       };
 
       await api.put(`/api/products/inventory/${id}`, payload);
@@ -274,6 +304,7 @@ const EditProduct = () => {
               <input
                 type="number"
                 name="price"
+                step="any"
                 required
                 min="1"
                 value={formData.price}
@@ -288,6 +319,7 @@ const EditProduct = () => {
               <input
                 type="number"
                 name="moq"
+                step="any"
                 required
                 min="1"
                 value={formData.moq}
@@ -302,6 +334,7 @@ const EditProduct = () => {
               <input
                 type="number"
                 name="bulkPrice"
+                step="any"
                 min="1"
                 value={formData.bulkPrice}
                 onChange={handleChange}
@@ -322,6 +355,84 @@ const EditProduct = () => {
                 onChange={handleChange}
                 className="w-full bg-slate-50 border border-slate-200 focus:border-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900"
               />
+            </div>
+          </div>
+        </div>
+
+        {/* What a bill needs */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 mb-1">
+            For your bills
+          </h3>
+          <p className="mb-4 text-xs text-slate-500">
+            Used when you make a bill for this product. Leave the HSN code or
+            GST blank to take one off again.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-2">
+                Sold by
+              </label>
+              <select
+                name="unit"
+                value={formData.unit}
+                onChange={handleChange}
+                className="w-full bg-slate-50 border border-slate-200 focus:border-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900"
+              >
+                {UNITS.map((u) => (
+                  <option key={u.value} value={u.value}>
+                    {u.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-2">
+                How many in one pack
+              </label>
+              <input
+                type="number"
+                name="packSize"
+                min="0"
+                step="any"
+                value={formData.packSize}
+                onChange={handleChange}
+                className="w-full bg-slate-50 border border-slate-200 focus:border-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900"
+                placeholder="Optional"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-2">
+                HSN code
+              </label>
+              <input
+                type="text"
+                name="hsnCode"
+                inputMode="numeric"
+                maxLength={20}
+                value={formData.hsnCode}
+                onChange={handleChange}
+                className="w-full bg-slate-50 border border-slate-200 focus:border-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900"
+                placeholder="Optional"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-2">
+                GST rate
+              </label>
+              <select
+                name="gstPercent"
+                value={formData.gstPercent}
+                onChange={handleChange}
+                className="w-full bg-slate-50 border border-slate-200 focus:border-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900"
+              >
+                <option value="">Use my usual rate</option>
+                {GST_RATES.map((rate) => (
+                  <option key={rate} value={rate}>
+                    {rate}%
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>

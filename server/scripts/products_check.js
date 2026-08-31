@@ -51,6 +51,26 @@ const check = (c, l, v) => { if (!c) fails++; console.log(`  ${c?"PASS":"FAIL"} 
   const vis = await call(products.updateInventoryItem, { user, params: { id: row.id }, body: { visibility: "public" } });
   check(vis.statusCode === 200 && vis.body.visibility === "public", "shop switch works", { v: vis.body?.visibility });
 
+  // Clearing. This was impossible before: COALESCE read a null as "leave
+  // alone", so a wrong HSN code could be put on a product and never taken off.
+  const cleared = await call(products.updateInventoryItem, { user, params: { id: row.id },
+    body: { hsnCode: null, gstPercent: null, packSize: null } });
+  // Without the billing columns there is genuinely nothing this request can
+  // set, and saying so is better than reporting a save that stored nothing.
+  check(cleared.statusCode === (has.has_listing_billing ? 200 : 400),
+    "clearing accepted where supported", { s: cleared.statusCode });
+  const blank = ((await call(dash.getInventory, { user })).body || [])[0] || {};
+  if (has.has_listing_billing) {
+    check(blank.hsn_code === null && blank.gst_percent === null && blank.pack_size === null,
+      "a wrong HSN or GST can be removed", { hsn: blank.hsn_code, gst: blank.gst_percent, pack: blank.pack_size });
+    check(blank.unit === "mtr", "unit survives clearing the rest", { unit: blank.unit });
+  }
+  check(Number(blank.price) === 155, "clearing did not touch the rate", { price: blank.price });
+
+  // An empty body must not silently succeed having done nothing.
+  const empty = await call(products.updateInventoryItem, { user, params: { id: row.id }, body: {} });
+  check(empty.statusCode === 400, "empty update refused", { s: empty.statusCode });
+
   console.log(fails ? `\n${fails} FAILED` : "\nall good");
   await p.end();
   process.exit(fails ? 1 : 0);

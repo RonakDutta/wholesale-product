@@ -7,7 +7,20 @@ const pool = require("../config/db");
  * including inventory synchronization and timeline tracking.
  */
 
-// Define complete order status flow
+/**
+ * Every status an order can be in, and what it is allowed to become.
+ *
+ * This is the authority. Nothing should write orders.status without asking
+ * validateStatusTransition first, and nothing should write a status that is
+ * not a key here.
+ *
+ * This map used to repeat four keys: payment_completed, return_approved,
+ * replacement_requested and replacement_issued each appeared twice. A later
+ * entry silently wins in an object literal, so half the lines a reader could
+ * find were dead, and anyone editing the first payment_completed would have
+ * watched their change do nothing. The pairs were identical, so removing the
+ * second of each changed no behaviour. Do not let them back in.
+ */
 const ORDER_STATUS_FLOW = {
   pending: ['payment_pending', 'cancelled'],
   payment_pending: ['payment_completed', 'payment_failed', 'cancelled'],
@@ -26,15 +39,12 @@ const ORDER_STATUS_FLOW = {
   replacement_requested: ['replacement_issued'],
   replacement_issued: ['completed'],
   return_completed: ['refunded'],
-  cancelled: [], // Terminal state
-  refunded: [], // Terminal state
   failed_delivery: ['out_for_delivery', 'cancelled'],
+  // Terminal. Nothing follows these.
+  cancelled: [],
+  refunded: [],
   payment_failed: [],
-  payment_completed: ['supplier_accepted', 'cancelled'],
-  return_rejected: [],
-  return_approved: ['return_completed', 'replacement_requested'],
-  replacement_requested: ['replacement_issued'],
-  replacement_issued: ['completed']
+  return_rejected: []
 };
 
 // Define status that can be cancelled by buyer

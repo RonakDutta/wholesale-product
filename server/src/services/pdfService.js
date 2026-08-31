@@ -45,6 +45,11 @@ const particularsOf = (row) => {
   if (row.kind === "sale") {
     return `Bill ${row.ref || ""}`.trim();
   }
+  // Owed exactly like a bill, but named as what the customer actually did, so
+  // he can match the line against the order on his phone.
+  if (row.kind === "order") {
+    return `Shop order ${row.ref || ""}`.trim();
+  }
   const parts = [`Payment by ${METHOD_TEXT[row.method] || row.method || "cash"}`];
   if (row.ref) {
     parts.push(`against ${row.ref}${row.againstCancelled ? " (cancelled)" : ""}`);

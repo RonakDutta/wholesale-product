@@ -172,7 +172,93 @@ const hasPartyLink = async (client) => {
   return partyLinkReady;
 };
 
-// For tests, which build a schema after the module is already loaded.
-const resetPartyLink = () => { partyLinkReady = null; };
+/**
+ * Can a marketplace payment be written into the khata yet?
+ *
+ * Separate from hasPartyLink because the two migrations are separate: a
+ * database can know which customer an order belongs to without yet being able
+ * to record that customer's payments in one ledger.
+ */
+let ledgerReady = null;
 
-module.exports = { findOrCreateParty, phoneKey, hasPartyLink, resetPartyLink };
+const hasLedgerLink = async (client) => {
+  if (ledgerReady !== null) return ledgerReady;
+  try {
+    const probe = await client.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'party_payments'
+           AND column_name = 'payment_transaction_id'
+       ) AS ready`,
+    );
+    ledgerReady = Boolean(probe.rows[0]?.ready) && (await hasPartyLink(client));
+  } catch {
+    ledgerReady = false;
+  }
+  return ledgerReady;
+};
+
+/**
+ * Put money that came in through the shop into the customer's khata.
+ *
+ * The khata is one ledger: cash the wholesaler wrote down and a UPI payment a
+ * retailer made on his phone have to sit in the same column, or the customer
+ * page answers "how much does he owe me" with only half the story.
+ *
+ * Does nothing, rather than failing, when the order has no customer or the
+ * migration has not been run. A payment must never be lost because the
+ * bookkeeping could not keep up, and orders.amount_paid is still the record
+ * of what was actually taken.
+ *
+ * Idempotent through the unique index on payment_transaction_id: a buyer
+ * double clicking "I have paid", a retried request, and the backfill all land
+ * on the same transaction and only the first one writes.
+ *
+ * @returns {Promise<boolean>} whether a new ledger row was written
+ */
+const recordOrderPayment = async (client, details) => {
+  const {
+    orderId,
+    partyId,
+    wholesalerId,
+    amount,
+    method = "upi",
+    transactionId = null,
+    paidOn = null,
+    note = null,
+  } = details;
+
+  if (!partyId || !wholesalerId || !orderId) return false;
+  if (!(Number(amount) > 0)) return false;
+  if (!(await hasLedgerLink(client))) return false;
+
+  // party_payments.method is a CHECK list. A marketplace payment method that
+  // is not on it becomes 'other' rather than failing the whole payment.
+  const known = ["cash", "upi", "bank", "cheque", "other"];
+  const safeMethod = known.includes(String(method)) ? String(method) : "other";
+
+  const written = await client.query(
+    `INSERT INTO party_payments
+       (wholesaler_id, party_id, order_id, payment_transaction_id,
+        amount, method, paid_on, note)
+     VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::date, CURRENT_DATE), $8)
+     ON CONFLICT (payment_transaction_id) WHERE payment_transaction_id IS NOT NULL
+     DO NOTHING
+     RETURNING id`,
+    [wholesalerId, partyId, orderId, transactionId, amount, safeMethod, paidOn, note],
+  );
+  return written.rows.length > 0;
+};
+
+// For tests, which build a schema after the module is already loaded.
+const resetPartyLink = () => { partyLinkReady = null; ledgerReady = null; };
+
+module.exports = {
+  findOrCreateParty,
+  phoneKey,
+  hasPartyLink,
+  hasLedgerLink,
+  recordOrderPayment,
+  resetPartyLink,
+};

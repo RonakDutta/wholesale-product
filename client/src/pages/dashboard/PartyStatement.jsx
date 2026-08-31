@@ -6,6 +6,7 @@ import {
   FileText,
   MessageCircle,
   Receipt,
+  ShoppingBag,
   Wallet,
 } from "lucide-react";
 import api from "../../utils/axios";
@@ -488,6 +489,24 @@ const METHOD_LABELS = {
 };
 
 const Particulars = ({ row }) => {
+  // An order the customer placed through the shop. Owed exactly like a sale,
+  // but named as what he did, so he recognises it on his own statement.
+  if (row.kind === "order") {
+    return (
+      <span className="flex items-center gap-2">
+        <ShoppingBag className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+        <span className="text-sm font-semibold text-espresso">
+          {row.ref || "Shop order"}
+        </span>
+        {row.lineCount > 0 && (
+          <span className="text-xs text-slate-400">
+            {row.lineCount} item{row.lineCount === 1 ? "" : "s"}
+          </span>
+        )}
+      </span>
+    );
+  }
+
   if (row.kind === "sale") {
     return (
       <span className="flex items-center gap-2">

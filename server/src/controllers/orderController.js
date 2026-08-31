@@ -1,7 +1,11 @@
 const pool = require("../config/db");
 const { FEATURES } = require("../config/features");
 const { clean, fromPaise, fullName, toPaise } = require("../utils/money");
-const { findOrCreateParty, hasPartyLink } = require("../services/partyService");
+const {
+  findOrCreateParty,
+  hasPartyLink,
+  recordOrderPayment,
+} = require("../services/partyService");
 const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange } = require("../services/orderStatusService");
 const { geocodeOrderDestination } = require("../services/geocodingService");
 const invoiceService = require("../services/invoiceService");
@@ -646,9 +650,13 @@ const updatePaymentStatus = async (req, res) => {
     if (!accessCheck) return;
 
     await client.query("BEGIN");
+    // party_id is only there once the customer book migration has run, and
+    // naming a column that does not exist would take the payment screen down.
+    const partyColumn = (await hasPartyLink(client)) ? "party_id" : "NULL AS party_id";
     const orderRes = await client.query(
-      `SELECT id, buyer_id, status, payment_status, total_amount, amount_paid,
-              remaining_amount, payment_plan, quantity
+      `SELECT id, buyer_id, supplier_id, order_number, status, payment_status,
+              total_amount, amount_paid, remaining_amount, payment_plan, quantity,
+              ${partyColumn}
          FROM orders WHERE id = $1 FOR UPDATE`,
       [orderId],
     );
@@ -773,6 +781,7 @@ const updatePaymentStatus = async (req, res) => {
     if (paidNow <= 0) throw new Error("There is nothing left to pay on this order.");
     const paidNowRupees = fromPaise(paidNow);
 
+    let created = null;
     if (session) {
       await client.query(
         `UPDATE payment_transactions
@@ -782,14 +791,15 @@ const updatePaymentStatus = async (req, res) => {
         [paidNowRupees, upiTransactionReference || null, session.id],
       );
     } else {
-      await client.query(
+      created = await client.query(
         `INSERT INTO payment_transactions
            (order_id, buyer_id, supplier_id, amount, payment_method, payment_status,
             installment_number, payment_type, upi_transaction_reference,
             gateway_response, payment_date, created_at)
          SELECT $1, o.buyer_id, o.supplier_id, $2, $3, 'completed', $4, $5, $6, $7,
                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-           FROM orders o WHERE o.id = $1`,
+           FROM orders o WHERE o.id = $1
+         RETURNING id`,
         [orderId, paidNowRupees, paymentMethod, due.installmentNumber, due.paymentType,
          upiTransactionReference || null, JSON.stringify({ method: paymentMethod })],
       );
@@ -819,6 +829,20 @@ const updatePaymentStatus = async (req, res) => {
         [nextOrderStatus, orderId],
       );
     }
+
+    // The same money, in the wholesaler's khata. Without this the customer
+    // page answers "how much does he owe me" using hand written sales only,
+    // so a retailer who paid half a large order through the shop still showed
+    // his full old balance.
+    await recordOrderPayment(client, {
+      orderId,
+      partyId: order.party_id,
+      wholesalerId: order.supplier_id,
+      amount: paidNowRupees,
+      method: paymentMethod,
+      transactionId: session ? session.id : created?.rows[0]?.id || null,
+      note: `Order ${order.order_number || orderId}, instalment ${due.installmentNumber}`,
+    });
 
     await client.query(
       `INSERT INTO order_status_history (order_id, status, previous_status, updated_by, updated_by_role, remarks)

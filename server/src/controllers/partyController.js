@@ -1,6 +1,7 @@
 const pool = require("../config/db");
 const { clean, fromPaise, toPaise } = require("../utils/money");
 const saleInvoiceService = require("../services/saleInvoiceService");
+const { hasPartyLink } = require("../services/partyService");
 const pdfService = require("../services/pdfService");
 
 /**
@@ -12,14 +13,69 @@ const pdfService = require("../services/pdfService");
  * private per wholesaler and does not need a login.
  */
 
-// Outstanding is what has been billed minus what has come in. Cancelled sales
-// are not owed, so they are left out of the billed side. Drafts are excluded
-// too: a sale nobody has confirmed is not yet a debt.
-const BALANCE_SELECT = `
+/**
+ * The order statuses that mean a marketplace order is really owed.
+ *
+ * An order is a request before it is a debt. A basket abandoned at the
+ * payment screen must not appear in a customer's khata, and neither must one
+ * that was cancelled, refunded, or whose goods have come back.
+ *
+ * So the debt starts at payment_completed, the point where money has actually
+ * moved, and survives the return states until the goods are physically
+ * returned. return_rejected stays owed on purpose: the wholesaler refused the
+ * return, so the customer still owes for the goods he has.
+ *
+ * Kept as a list of what is NOT owed rather than what is, because a status
+ * added later is far more likely to be another step of a live order than
+ * another way for one to die, and the safer default is to count it.
+ */
+const ORDER_NOT_OWED = [
+  "pending",
+  "payment_pending",
+  "payment_failed",
+  "cancelled",
+  "refunded",
+  "return_completed",
+];
+
+/**
+ * What this customer owes: everything billed to him, minus everything he has
+ * paid, whichever way the business came in.
+ *
+ * Cancelled sales are not owed, so they are left out of the billed side.
+ * Drafts are excluded too: a sale nobody has confirmed is not yet a debt.
+ *
+ * Marketplace orders sit on the billed side beside hand written sales, and
+ * the money that came in against them sits in party_payments beside the cash
+ * the wholesaler wrote down. Before this, a retailer could pay half of a
+ * large order through the shop and his customer page would still show the
+ * full old balance, because the two halves of the business kept separate
+ * books.
+ *
+ * NOTE for the order to sale bridge: once an accepted order also writes a
+ * sale, the same money would be counted on both sides of this. Whatever adds
+ * that bridge has to either drop the orders term here or exclude the orders
+ * that have produced a sale. There is no column linking the two yet, so
+ * there is nothing to exclude on today.
+ */
+// Inlined rather than bound, because this fragment is pasted into three
+// queries that each number their own parameters. These are constants defined
+// three lines up, never anything a caller sent.
+const NOT_OWED_SQL = ORDER_NOT_OWED.map((s) => `'${s}'`).join(", ");
+
+const balanceSelect = (hasOrderParty) => `
   COALESCE((
     SELECT SUM(s.total) FROM sales s
      WHERE s.party_id = pt.id AND s.status IN ('confirmed', 'delivered')
   ), 0)
+  ${
+    hasOrderParty
+      ? `+ COALESCE((
+    SELECT SUM(o.total_amount) FROM orders o
+     WHERE o.party_id = pt.id AND o.status NOT IN (${NOT_OWED_SQL})
+  ), 0)`
+      : ""
+  }
   -
   COALESCE((
     SELECT SUM(pp.amount) FROM party_payments pp WHERE pp.party_id = pt.id
@@ -49,13 +105,14 @@ exports.listParties = async (req, res) => {
       where += ` AND (pt.name ILIKE $2 OR pt.business_name ILIKE $2 OR pt.phone ILIKE $2 OR pt.city ILIKE $2)`;
     }
 
+    const hasOrders = await hasPartyLink(pool);
     const result = await pool.query(
       `SELECT
          pt.id, pt.name, pt.business_name, pt.phone, pt.city, pt.gstin,
          pt.status, pt.created_at,
          (SELECT MAX(s.sale_date) FROM sales s
            WHERE s.party_id = pt.id AND s.status <> 'cancelled') AS last_sale_date,
-         ${BALANCE_SELECT}
+         ${balanceSelect(hasOrders)}
        FROM parties pt
        WHERE ${where}
        ORDER BY pt.name ASC`,
@@ -74,8 +131,9 @@ exports.getPartyById = async (req, res) => {
   const { id } = req.params;
 
   try {
+    const hasOrders = await hasPartyLink(pool);
     const result = await pool.query(
-      `SELECT pt.*, ${BALANCE_SELECT}
+      `SELECT pt.*, ${balanceSelect(hasOrders)}
          FROM parties pt
         WHERE pt.id = $1 AND pt.wholesaler_id = $2`,
       [id, wholesalerId],
@@ -344,8 +402,9 @@ const buildStatement = async (id, wholesalerId, rawFrom, rawTo) => {
   }
 
   {
+    const hasOrders = await hasPartyLink(pool);
     const party = await pool.query(
-      `SELECT pt.*, ${BALANCE_SELECT}
+      `SELECT pt.*, ${balanceSelect(hasOrders)}
          FROM parties pt
         WHERE pt.id = $1 AND pt.wholesaler_id = $2`,
       [id, wholesalerId],
@@ -354,14 +413,25 @@ const buildStatement = async (id, wholesalerId, rawFrom, rawTo) => {
       return { error: { status: 404, message: "Customer not found" } };
     }
 
-    // Everything before the window, netted into one number.
+    // Everything before the window, netted into one number. Marketplace
+    // orders are on the billed side here for the same reason they are on the
+    // customer page: this statement is what the wholesaler sends when he
+    // wants paying, and it has to reconcile with the page exactly.
     const opening = from
       ? await pool.query(
           `SELECT
              COALESCE((SELECT SUM(s.total) FROM sales s
                         WHERE s.party_id = $1 AND s.wholesaler_id = $2
                           AND s.status IN ('confirmed', 'delivered')
-                          AND s.sale_date < $3::date), 0) AS billed,
+                          AND s.sale_date < $3::date), 0)
+             ${
+               hasOrders
+                 ? `+ COALESCE((SELECT SUM(o.total_amount) FROM orders o
+                        WHERE o.party_id = $1 AND o.supplier_id = $2
+                          AND o.status NOT IN (${NOT_OWED_SQL})
+                          AND o.created_at::date < $3::date), 0)`
+                 : ""
+             } AS billed,
              COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
                         WHERE pp.party_id = $1 AND pp.wholesaler_id = $2
                           AND pp.paid_on < $3::date), 0) AS received`,
@@ -373,7 +443,7 @@ const buildStatement = async (id, wholesalerId, rawFrom, rawTo) => {
       ? toPaise(opening.rows[0].billed) - toPaise(opening.rows[0].received)
       : 0;
 
-    const [sales, payments] = await Promise.all([
+    const [sales, payments, marketOrders] = await Promise.all([
       pool.query(
         `SELECT s.id, s.sale_number, s.sale_date AS on_date, s.total, s.created_at,
                 (SELECT COUNT(*) FROM sale_lines sl WHERE sl.sale_id = s.id) AS line_count
@@ -396,6 +466,23 @@ const buildStatement = async (id, wholesalerId, rawFrom, rawTo) => {
           ORDER BY pp.paid_on ASC, pp.created_at ASC`,
         [id, wholesalerId, from, to],
       ),
+      // Orders the customer placed through the shop. They read as a line on
+      // the statement exactly like a sale does, because to the man being
+      // billed they are the same thing: goods he took and owes for.
+      hasOrders
+        ? pool.query(
+            `SELECT o.id, o.order_number, o.created_at::date AS on_date,
+                    o.total_amount AS total, o.created_at,
+                    (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) AS line_count
+               FROM orders o
+              WHERE o.party_id = $1 AND o.supplier_id = $2
+                AND o.status NOT IN (${NOT_OWED_SQL})
+                AND ($3::date IS NULL OR o.created_at::date >= $3::date)
+                AND ($4::date IS NULL OR o.created_at::date <= $4::date)
+              ORDER BY o.created_at ASC`,
+            [id, wholesalerId, from, to],
+          )
+        : { rows: [] },
     ]);
 
     const entries = [
@@ -405,6 +492,19 @@ const buildStatement = async (id, wholesalerId, rawFrom, rawTo) => {
         date: row.on_date,
         createdAt: row.created_at,
         ref: row.sale_number,
+        lineCount: Number(row.line_count),
+        debitPaise: toPaise(row.total),
+        creditPaise: 0,
+      })),
+      ...marketOrders.rows.map((row) => ({
+        // Marked as an order rather than a sale so the screen can say where
+        // it came from. A customer looking at his own statement should be
+        // able to recognise the order he placed on his phone.
+        kind: "order",
+        id: row.id,
+        date: row.on_date,
+        createdAt: row.created_at,
+        ref: row.order_number,
         lineCount: Number(row.line_count),
         debitPaise: toPaise(row.total),
         creditPaise: 0,

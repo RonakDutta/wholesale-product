@@ -44,19 +44,48 @@ async function run() {
   let failures = new Map();
 
   const client = await pool.connect();
+
+  /**
+   * The baseline builds an empty database. It is not a migration.
+   *
+   * 000_baseline.sql is a snapshot of the live schema taken on one day, and a
+   * later migration is free to drop something it describes. Once that happens
+   * the snapshot can no longer be replayed: the drop takes the constraints on
+   * that column with it, the baseline tries to add them back, and the run ends
+   * with "column credit_status does not exist" on a database that is in fact
+   * perfectly up to date.
+   *
+   * So it runs only when there is nothing there to migrate. On a database that
+   * already has tables it is skipped, which is the honest reading of what it
+   * is for.
+   */
+  const populated = await client.query(
+    `SELECT EXISTS (
+       SELECT 1 FROM pg_tables WHERE schemaname = 'public'
+     ) AS any_tables`,
+  );
+  const isBaseline = (file) => /^000[_-]/.test(file);
+  const skipped = populated.rows[0].any_tables ? pending.filter(isBaseline) : [];
+  if (skipped.length > 0) {
+    pending = pending.filter((f) => !isBaseline(f));
+    for (const file of skipped) {
+      console.log(`  skipped  ${file}`);
+      console.log("           the database already has tables, so there is nothing to build");
+    }
+  }
   // Filled by the notice listener while a file runs, drained after it.
   let notices = [];
   client.on("notice", (n) => {
-    // Postgres reports "already exists, skipping" as a notice too, and that is
-    // the sound of an idempotent migration doing its job on a database that
-    // has seen it before. Printing every one buries the messages a person
-    // actually has to read, so the routine ones are dropped:
-    //   42P07 relation exists   42701 column exists   42710 object exists
-    //   42P06 schema exists     42704 does not exist, skipping
-    const ROUTINE = ["42P07", "42701", "42710", "42P06", "42704"];
-    if (n.severity === "NOTICE" && !ROUTINE.includes(n.code)) {
-      notices.push(n.message);
-    }
+    // "Already exists, skipping" and "does not exist, skipping" are the sound
+    // of an idempotent migration doing its job on a database that has seen it
+    // before. Printing every one buries the messages a person has to read.
+    //
+    // Filtered by message, not by code, because DROP ... IF EXISTS reports
+    // itself as 00000, successful completion, which is also what a migration's
+    // own RAISE NOTICE comes back as. The code cannot tell them apart.
+    if (n.severity !== "NOTICE") return;
+    if (/(already exists|does not exist), skipping$/.test(n.message || "")) return;
+    notices.push(n.message);
   });
 
   for (let pass = 1; pending.length > 0 && pass <= 5; pass++) {
@@ -94,7 +123,10 @@ async function run() {
   client.release();
   await pool.end();
 
-  console.log(`\n${applied.length} of ${all.length} migrations applied.`);
+  console.log(
+    `\n${applied.length} of ${all.length - skipped.length} migrations applied` +
+      (skipped.length > 0 ? `, ${skipped.length} skipped.` : "."),
+  );
   if (failures.size > 0) {
     console.error("\nStill failing:");
     for (const [file, message] of failures) {

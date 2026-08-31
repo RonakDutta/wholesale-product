@@ -168,6 +168,8 @@ class SaleInvoiceService {
       const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(
         client,
         settings.prefix,
+        null,
+        wholesalerId,
       );
 
       const issueDate = new Date(sale.sale_date || Date.now());

@@ -80,10 +80,12 @@ class InvoiceService {
         isTaxInclusive: false,
       });
 
-      // Generate sequential invoice number (PREFIX-YYYY-XXXXXX)
+      // Sequential within this wholesaler's own run, not the platform's.
       const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(
         client,
         settings.prefix,
+        null,
+        order.supplier_id,
       );
 
       const issueDate = new Date();
@@ -347,6 +349,8 @@ class InvoiceService {
       const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(
         client,
         settings.prefix,
+        null,
+        supplierId,
       );
 
       const invoiceData = {

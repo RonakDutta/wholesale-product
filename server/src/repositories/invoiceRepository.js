@@ -184,7 +184,10 @@ async function schemaExtras(db = pool) {
                  WHERE table_name = 'items' AND column_name = 'gst_percent') AS has_item_gst,
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'supplier_inventory'
-                   AND column_name = 'gst_percent') AS has_listing_billing
+                   AND column_name = 'gst_percent') AS has_listing_billing,
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'invoice_sequences'
+                   AND column_name = 'wholesaler_id') AS has_invoice_sequence_owner
     `);
     extras = result.rows[0];
   } catch (err) {
@@ -201,6 +204,7 @@ async function schemaExtras(db = pool) {
       has_line_gst: false,
       has_item_gst: false,
       has_listing_billing: false,
+      has_invoice_sequence_owner: false,
     };
   }
   return extras;
@@ -225,16 +229,43 @@ class InvoiceRepository {
   /**
    * Atomically fetches and increments the sequence number for a given calendar year.
    */
-  async getNextSequenceNumber(client, year) {
+  /**
+   * The next invoice number in one wholesaler's own run.
+   *
+   * Per wholesaler, not per platform. The counter used to be keyed on the year
+   * alone, so Ram's bills came out 000001, 000003, 000009 with another firm's
+   * invoices filling the gaps, and the size of each gap told him how much
+   * business everybody else had done. Rule 46(b) wants a consecutive serial
+   * number per supplier, and a gap is exactly what gets asked about.
+   *
+   * Falls back to the shared counter on a database where the migration has not
+   * been run, because an invoice that cannot be numbered is an invoice that
+   * cannot be raised.
+   */
+  async getNextSequenceNumber(client, year, wholesalerId = null) {
     await ensureSchema(client);
     const dbClient = client || pool;
+    const has = await schemaExtras();
+
+    if (!has.has_invoice_sequence_owner || !wholesalerId) {
+      const result = await dbClient.query(
+        `INSERT INTO invoice_sequences (year, last_number)
+         VALUES ($1, 1)
+         ON CONFLICT (year)
+         DO UPDATE SET last_number = invoice_sequences.last_number + 1
+         RETURNING last_number`,
+        [year]
+      );
+      return result.rows[0].last_number;
+    }
+
     const result = await dbClient.query(
-      `INSERT INTO invoice_sequences (year, last_number)
-       VALUES ($1, 1)
-       ON CONFLICT (year)
+      `INSERT INTO invoice_sequences (wholesaler_id, year, last_number)
+       VALUES ($1, $2, 1)
+       ON CONFLICT (wholesaler_id, year)
        DO UPDATE SET last_number = invoice_sequences.last_number + 1
        RETURNING last_number`,
-      [year]
+      [wholesalerId, year]
     );
     return result.rows[0].last_number;
   }

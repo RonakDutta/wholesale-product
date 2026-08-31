@@ -11,6 +11,30 @@ const invoiceRepository = require("../repositories/invoiceRepository");
  */
 const IN_STOCK = FEATURES.STOCK_TRACKING ? "AND si.stock > 0" : "";
 
+/**
+ * How a listing reaches the seller behind it.
+ *
+ * LEFT, and this matters more than it looks. These joins used to be inner, so
+ * a wholesaler who had signed up but not filled in his business details had
+ * every one of his listings vanish from search, from the product page and
+ * from the shop page. No error, no empty state, no way for him to tell: the
+ * products simply were not there. A new seller's first hour is exactly when
+ * his profile is least likely to be complete.
+ *
+ * users is joined too so there is always a name to show. A person who has not
+ * named his firm yet still has his own name, and "Ramesh Kumar" is a better
+ * answer than hiding his stock.
+ */
+const SELLER_JOIN = `
+      JOIN users su ON su.id = si.supplier_id
+      LEFT JOIN wholesaler_profiles wp ON wp.user_id = si.supplier_id`;
+
+// The firm's name if he has given one, otherwise his own.
+const SELLER_NAME = `
+      COALESCE(NULLIF(btrim(wp.company_name), ''),
+               NULLIF(btrim(su.first_name || ' ' || COALESCE(su.last_name, '')), ''),
+               'Wholesaler')`;
+
 // Where a listing is allowed to appear. See migrations/listing_visibility.sql.
 //   public      catalogue, search, comparison, and the storefront
 //   storefront  the wholesaler's own page only, never the shared catalogue
@@ -125,17 +149,17 @@ exports.getPublicCatalog = async (req, res) => {
           json_build_object(
             'id', si.id,
             'supplierId', si.supplier_id,
-            'companyName', wp.company_name,
+            'companyName', ${SELLER_NAME},
             'price', si.price,
             'discountPrice', si.discount_price,
-            'verified', wp.is_verified,
+            'verified', COALESCE(wp.is_verified, false),
             'moq', si.moq,
             'stock', si.stock
           )
         ) as suppliers
       FROM products p
       JOIN supplier_inventory si ON p.id = si.product_id
-      JOIN wholesaler_profiles wp ON si.supplier_id = wp.user_id
+      ${SELLER_JOIN}
       WHERE si.status = 'Active' AND si.visibility = 'public'
         ${IN_STOCK}
       GROUP BY p.id, p.name, p.category, p.description, p.global_image_url
@@ -165,23 +189,23 @@ exports.getProductById = async (req, res) => {
           json_build_object(
             'id', si.id,
             'supplierId', si.supplier_id,
-            'companyName', wp.company_name,
+            'companyName', ${SELLER_NAME},
             'image', COALESCE(si.image_url, p.global_image_url),
             'price', si.price,
             'discountPrice', si.discount_price,
-            'verified', wp.is_verified,
+            'verified', COALESCE(wp.is_verified, false),
             'moq', si.moq,
             'stock', si.stock,
             'shippingDays', si.shipping_days,
             'city', wp.city,
             'country', wp.country,
             'gstVerified', (wp.gstin IS NOT NULL AND wp.gstin <> ''),
-            'contactPhone', wp.contact_phone
+            'contactPhone', COALESCE(wp.contact_phone, su.phone)
           )
         ) as suppliers
       FROM products p
       JOIN supplier_inventory si ON p.id = si.product_id
-      JOIN wholesaler_profiles wp ON si.supplier_id = wp.user_id
+      ${SELLER_JOIN}
       WHERE p.id = $1 AND si.status = 'Active'
         ${IN_STOCK}
         AND si.visibility = 'public'
@@ -716,12 +740,11 @@ exports.contactSupplier = async (req, res) => {
         p.name as product_name,
         si.supplier_id,
         wp.contact_phone,
-        wp.company_name,
-        u.phone as user_phone
+        ${SELLER_NAME} AS company_name,
+        su.phone as user_phone
       FROM products p
       JOIN supplier_inventory si ON p.id = si.product_id
-      JOIN wholesaler_profiles wp ON si.supplier_id = wp.user_id
-      JOIN users u ON si.supplier_id = u.id
+      ${SELLER_JOIN}
       WHERE p.id = $1 AND si.status = 'Active' AND si.visibility <> 'private'
     `;
 

@@ -148,6 +148,26 @@ const mkUser = async (role, phone) => (await q(
   check(debits.length === 1, "the goods appear once on the statement",
     { lines: debits.map(d => `${d.kind} ${d.ref} ${d.debit}`) });
 
+  // A bill must never ask for more than the customer was charged. The shop
+  // price is the whole price, so the tax comes out of it rather than going on
+  // top; billing 2205 for a 2100 order asked a man who had paid in full for
+  // another 105.
+  const repo = require("../src/repositories/invoiceRepository");
+  const saleInvoiceService = require("../src/services/saleInvoiceService");
+  repo.resetSchemaExtras();
+  const { invoice } = await saleInvoiceService.createInvoiceFromSale(sale.id, wid);
+  check(Number(invoice.grand_total) === orderTotal,
+    "the bill asks for exactly what he was charged",
+    { bill: invoice.grand_total, order: orderTotal });
+  check(
+    Math.abs(
+      Number(invoice.taxable_amount) + Number(invoice.total_tax) - orderTotal,
+    ) < 0.01,
+    "tax is taken out of the price, not added to it",
+    { taxable: invoice.taxable_amount, gst: invoice.total_tax, total: invoice.grand_total },
+  );
+  check(Number(invoice.total_tax) > 0, "GST is still declared on the bill", { gst: invoice.total_tax });
+
   // Once packed, a driver link is allowed.
   for (const s of ["processing", "packed"]) {
     await call(orders.updateOrderStatus, { user: seller, params: { orderId }, body: { status: s } });

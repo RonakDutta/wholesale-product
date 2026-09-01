@@ -77,7 +77,25 @@ class InvoiceService {
         shippingCharge: 0.00,
         supplierLocation,
         buyerLocation,
-        isTaxInclusive: false,
+        /**
+         * The shop price is the whole price.
+         *
+         * A buyer who saw 142 a metre and pressed pay was charged 2100 for
+         * ten metres and a dupatta, and that is all he will ever be asked
+         * for. Adding tax on top here made the bill say 2205: the customer
+         * had already paid in full and the invoice asked him for 105 more,
+         * and the customer page and the bill disagreed by exactly the tax.
+         *
+         * So the tax comes out of the price rather than going on top. The
+         * wholesaler still declares and remits the same GST; it is taken from
+         * what he collected instead of being billed afterwards.
+         *
+         * This is the opposite of a hand written sale, where the rate a
+         * wholesaler quotes is understood to be before tax. The difference is
+         * real and not an inconsistency to tidy away: a rate quoted across a
+         * counter is pre-tax, and a price on a shop page is what you pay.
+         */
+        isTaxInclusive: true,
       });
 
       // Sequential within this wholesaler's own run, not the platform's.

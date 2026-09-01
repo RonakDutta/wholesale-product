@@ -141,6 +141,16 @@ class SaleInvoiceService {
         lines.length > 0 &&
         lines.every((line) => line.gst_percent === null || line.gst_percent === undefined);
 
+      // A sale raised from a shop order is priced the way the shop prices
+      // things: the buyer paid the listed amount at checkout and that is all
+      // he will be asked for. Adding tax on top would bill him past what he
+      // has already paid and make this invoice disagree with his khata.
+      //
+      // A sale the wholesaler typed himself follows the other convention: the
+      // rate he quotes is before tax. Same table, two honest meanings, told
+      // apart by where the sale came from.
+      const fromShop = Boolean(sale.order_id);
+
       const gst = gstService.calculateGST({
         items: lines.map((line) => ({
           productName: line.item_name,
@@ -162,7 +172,7 @@ class SaleInvoiceService {
         supplierLocation:
           seller.warehouse_state || seller.warehouse_city || seller.city || "Delhi",
         buyerLocation: sale.party_city || seller.city || "Delhi",
-        isTaxInclusive: legacyInclusive ? true : TAX_INCLUSIVE,
+        isTaxInclusive: fromShop || legacyInclusive ? true : TAX_INCLUSIVE,
       });
 
       const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(

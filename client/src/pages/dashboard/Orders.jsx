@@ -1,13 +1,16 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Filter, Eye, Clock, Download } from "lucide-react";
+import { Search, Eye, Clock, ArrowRight, Truck } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
+import DispatchModal from "../../components/DispatchModal";
 import {
   ORDER_TABS,
   formatOrderStatus,
   getOrderStatusStyle,
   matchesOrderTab,
+  getNextStep,
+  needsAction,
 } from "../../utils/orderStatus";
 
 const Orders = () => {
@@ -16,6 +19,9 @@ const Orders = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("All Orders");
   const [searchQuery, setSearchQuery] = useState("");
+  // The order id currently being advanced, so only its own button waits.
+  const [working, setWorking] = useState(null);
+  const [dispatching, setDispatching] = useState(null);
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -31,6 +37,41 @@ const Orders = () => {
     };
     fetchOrders();
   }, []);
+
+  const applyStatus = (orderId, status) =>
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, status } : o)),
+    );
+
+  /**
+   * Move one order to its next step.
+   *
+   * The row updates from what the server accepted, not from what the button
+   * hoped for. A wholesaler with the page open on two phones would otherwise
+   * see a step succeed locally that the server had refused.
+   */
+  const advance = async (order) => {
+    const step = getNextStep(order.status);
+    if (!step) return;
+    if (step.dispatch) {
+      setDispatching(order);
+      return;
+    }
+
+    setWorking(order.id);
+    try {
+      await api.patch(`/api/orders/${order.id}/status`, { status: step.to });
+      applyStatus(order.id, step.to);
+      toast.success(`${order.order_number || "Order"}: ${step.label.toLowerCase()} done.`);
+    } catch (err) {
+      toast.error(
+        err.response?.data?.message ||
+          "Could not update this order. Refresh and try again.",
+      );
+    } finally {
+      setWorking(null);
+    }
+  };
 
   const tabs = ORDER_TABS.map((t) => t.label);
 
@@ -48,6 +89,8 @@ const Orders = () => {
     return matchesTab && matchesSearch;
   });
 
+  const waitingCount = orders.filter((o) => needsAction(o.status)).length;
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -61,17 +104,22 @@ const Orders = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-espresso">
-            Order Management
-          </h2>
+          <h2 className="text-2xl font-black text-espresso">Orders</h2>
+          {/* The count that matters is not how many orders exist, it is how
+              many are waiting on him. */}
           <p className="text-sm text-slate-500 mt-1">
-            Track and manage your B2B wholesale orders.
+            {waitingCount > 0 ? (
+              <>
+                <span className="font-bold text-clay">
+                  {waitingCount} order{waitingCount === 1 ? "" : "s"}
+                </span>{" "}
+                waiting for you.
+              </>
+            ) : (
+              "Nothing waiting on you right now."
+            )}
           </p>
         </div>
-        <button className="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors cursor-pointer">
-          <Download className="w-4 h-4" />
-          Export CSV
-        </button>
       </div>
 
       {/* Filters and Search */}
@@ -92,25 +140,100 @@ const Orders = () => {
           ))}
         </div>
 
+        {/* There was a funnel button here that did nothing at all, and an
+            Export CSV button beside the heading that did nothing either. The
+            tabs above are the filter. */}
         <div className="flex items-center gap-3 w-full lg:w-auto">
           <div className="relative w-full sm:w-64 shrink-0">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search Order ID or Buyer..."
+              placeholder="Search order number or buyer..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:border-clay focus:ring-1 focus:ring-clay outline-none transition-all"
             />
           </div>
-          <button className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-500 hover:text-clay hover:bg-clay/5 transition-colors cursor-pointer">
-            <Filter className="w-4 h-4" />
-          </button>
         </div>
       </div>
 
+      {/* Phone gets cards. Five columns on a 390px screen put the action
+          button off the right edge behind a sideways scroll, and this is the
+          screen a wholesaler uses standing in his godown with one hand. */}
+      <div className="space-y-3 sm:hidden">
+        {displayedOrders.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500 shadow-sm">
+            No orders found.
+          </div>
+        ) : (
+          displayedOrders.map((order) => {
+            const step = getNextStep(order.status);
+            const busy = working === order.id;
+            const Icon = step?.dispatch ? Truck : ArrowRight;
+            return (
+              <div
+                key={order.id}
+                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-mono text-sm font-bold text-espresso">
+                      {order.order_number || `ORD-${order.id}`}
+                    </p>
+                    <p className="mt-0.5 truncate text-sm font-bold text-slate-800">
+                      {order.buyer}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-slate-500">
+                      {order.product}
+                      {order.item_count > 1 && (
+                        <span className="text-slate-400">
+                          {" "}+ {order.item_count - 1} more
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded border px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${getStatusStyle(order.status)}`}
+                  >
+                    {formatOrderStatus(order.status)}
+                  </span>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                  <div>
+                    <span className="text-base font-bold text-clay">
+                      ₹{Number(order.amount).toLocaleString("en-IN")}
+                    </span>
+                    <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      {order.qty} units
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => navigate(`/orders/${order.id}`)}
+                    className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700"
+                  >
+                    View
+                  </button>
+                </div>
+
+                {step && (
+                  <button
+                    onClick={() => advance(order)}
+                    disabled={busy}
+                    className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-clay px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-60"
+                  >
+                    <Icon className="h-4 w-4" />
+                    {busy ? "Saving..." : step.label}
+                  </button>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
       {/* Orders Table */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div className="hidden bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden sm:block">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-slate-50 border-b border-slate-100">
@@ -199,13 +322,35 @@ const Orders = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => navigate(`/orders/${order.id}`)}
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-lg border border-slate-200 transition-colors cursor-pointer"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        View
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        {/* One button, the next real step. Nothing shows when
+                            the order is waiting on the buyer to pay or is
+                            already finished, because there is nothing he can
+                            do to it. */}
+                        {(() => {
+                          const step = getNextStep(order.status);
+                          if (!step) return null;
+                          const busy = working === order.id;
+                          const Icon = step.dispatch ? Truck : ArrowRight;
+                          return (
+                            <button
+                              onClick={() => advance(order)}
+                              disabled={busy}
+                              className="inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-clay px-3 py-2 text-xs font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-60"
+                            >
+                              <Icon className="h-3.5 w-3.5" />
+                              {busy ? "Saving..." : step.label}
+                            </button>
+                          );
+                        })()}
+                        <button
+                          onClick={() => navigate(`/orders/${order.id}`)}
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          View
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -214,6 +359,14 @@ const Orders = () => {
           </table>
         </div>
       </div>
+
+      {dispatching && (
+        <DispatchModal
+          order={dispatching}
+          onClose={() => setDispatching(null)}
+          onDispatched={applyStatus}
+        />
+      )}
     </div>
   );
 };

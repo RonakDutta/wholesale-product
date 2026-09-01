@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import api from "../utils/axios";
 import { useSocket } from "../context/SocketContext";
 import DeliveryMap from "./DeliveryMap";
+import { canSendOut } from "../utils/orderStatus";
 
 /**
  * Delivery tracking for one order. The retailer reads it; the wholesaler can
@@ -159,7 +160,7 @@ const CheckpointForm = ({ orderId, onAdded, onClose }) => {
  * Live location without the wholesaler typing coordinates: generate a link,
  * send it to whoever is driving, and their taps become checkpoints.
  */
-const DriverLinkPanel = ({ orderId }) => {
+const DriverLinkPanel = ({ orderId, status }) => {
   const [link, setLink] = useState(null);
   const [creating, setCreating] = useState(false);
   const [driverName, setDriverName] = useState("");
@@ -198,6 +199,24 @@ const DriverLinkPanel = ({ orderId }) => {
       toast.error("Could not copy - select the link manually");
     }
   };
+
+  // Before the goods are packed there is nothing to follow, and the link
+  // would expire before it was any use. Say so plainly instead of offering a
+  // button that the server will refuse.
+  if (!canSendOut(status)) {
+    return (
+      <div className="mb-4 rounded-xl border border-sage/30 bg-sage/5 p-4">
+        <p className="mb-1 flex items-center gap-2 text-sm font-bold text-espresso">
+          <Radio className="h-4 w-4 text-espresso/30" />
+          Live location from the driver
+        </p>
+        <p className="text-xs leading-relaxed text-espresso/50">
+          Pack this order first. Once it is packed you can make a link, send it
+          to whoever is driving, and your customer can follow the delivery.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mb-4 rounded-xl border border-sage/30 bg-white p-4">
@@ -355,7 +374,7 @@ const OrderTracking = ({ orderId }) => {
         </div>
       )}
 
-      {canRecord && <DriverLinkPanel orderId={orderId} />}
+      {canRecord && <DriverLinkPanel orderId={orderId} status={data.status} />}
 
       {showForm && (
         <div className="mb-4">

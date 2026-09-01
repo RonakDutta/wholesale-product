@@ -2,6 +2,7 @@ const pool = require("../config/db");
 const { clean, fromPaise, toPaise } = require("../utils/money");
 const saleInvoiceService = require("../services/saleInvoiceService");
 const { hasPartyLink } = require("../services/partyService");
+const { hasSaleLink } = require("../services/orderSaleService");
 const pdfService = require("../services/pdfService");
 
 /**
@@ -52,18 +53,27 @@ const ORDER_NOT_OWED = [
  * full old balance, because the two halves of the business kept separate
  * books.
  *
- * NOTE for the order to sale bridge: once an accepted order also writes a
- * sale, the same money would be counted on both sides of this. Whatever adds
- * that bridge has to either drop the orders term here or exclude the orders
- * that have produced a sale. There is no column linking the two yet, so
- * there is nothing to exclude on today.
+ * An accepted order now also writes a sale, so the same goods would otherwise
+ * be counted on both sides of this and every marketplace customer would show
+ * double what he owes. The orders term therefore skips any order that has
+ * produced a sale: the sale is the commercial record from that point, and the
+ * order is only fulfilment. An order not yet accepted has no sale, so it is
+ * still counted here on its own.
  */
 // Inlined rather than bound, because this fragment is pasted into three
 // queries that each number their own parameters. These are constants defined
 // three lines up, never anything a caller sent.
 const NOT_OWED_SQL = ORDER_NOT_OWED.map((s) => `'${s}'`).join(", ");
 
-const balanceSelect = (hasOrderParty) => `
+// sales.order_id only exists once the bridge migration has run. Naming it
+// before then takes the customer page down with a 500, which is how this
+// module has broken twice before.
+const bridgedGuard = (hasBridge) =>
+  hasBridge
+    ? "AND NOT EXISTS (SELECT 1 FROM sales s2 WHERE s2.order_id = o.id)"
+    : "";
+
+const balanceSelect = (hasOrderParty, hasBridge) => `
   COALESCE((
     SELECT SUM(s.total) FROM sales s
      WHERE s.party_id = pt.id AND s.status IN ('confirmed', 'delivered')
@@ -73,6 +83,7 @@ const balanceSelect = (hasOrderParty) => `
       ? `+ COALESCE((
     SELECT SUM(o.total_amount) FROM orders o
      WHERE o.party_id = pt.id AND o.status NOT IN (${NOT_OWED_SQL})
+       ${bridgedGuard(hasBridge)}
   ), 0)`
       : ""
   }
@@ -106,13 +117,14 @@ exports.listParties = async (req, res) => {
     }
 
     const hasOrders = await hasPartyLink(pool);
+    const hasBridge = await hasSaleLink(pool);
     const result = await pool.query(
       `SELECT
          pt.id, pt.name, pt.business_name, pt.phone, pt.city, pt.gstin,
          pt.status, pt.created_at,
          (SELECT MAX(s.sale_date) FROM sales s
            WHERE s.party_id = pt.id AND s.status <> 'cancelled') AS last_sale_date,
-         ${balanceSelect(hasOrders)}
+         ${balanceSelect(hasOrders, hasBridge)}
        FROM parties pt
        WHERE ${where}
        ORDER BY pt.name ASC`,
@@ -132,8 +144,9 @@ exports.getPartyById = async (req, res) => {
 
   try {
     const hasOrders = await hasPartyLink(pool);
+    const hasBridge = await hasSaleLink(pool);
     const result = await pool.query(
-      `SELECT pt.*, ${balanceSelect(hasOrders)}
+      `SELECT pt.*, ${balanceSelect(hasOrders, hasBridge)}
          FROM parties pt
         WHERE pt.id = $1 AND pt.wholesaler_id = $2`,
       [id, wholesalerId],
@@ -403,8 +416,9 @@ const buildStatement = async (id, wholesalerId, rawFrom, rawTo) => {
 
   {
     const hasOrders = await hasPartyLink(pool);
+    const hasBridge = await hasSaleLink(pool);
     const party = await pool.query(
-      `SELECT pt.*, ${balanceSelect(hasOrders)}
+      `SELECT pt.*, ${balanceSelect(hasOrders, hasBridge)}
          FROM parties pt
         WHERE pt.id = $1 AND pt.wholesaler_id = $2`,
       [id, wholesalerId],
@@ -429,6 +443,7 @@ const buildStatement = async (id, wholesalerId, rawFrom, rawTo) => {
                  ? `+ COALESCE((SELECT SUM(o.total_amount) FROM orders o
                         WHERE o.party_id = $1 AND o.supplier_id = $2
                           AND o.status NOT IN (${NOT_OWED_SQL})
+                          ${bridgedGuard(hasBridge)}
                           AND o.created_at::date < $3::date), 0)`
                  : ""
              } AS billed,
@@ -477,6 +492,9 @@ const buildStatement = async (id, wholesalerId, rawFrom, rawTo) => {
                FROM orders o
               WHERE o.party_id = $1 AND o.supplier_id = $2
                 AND o.status NOT IN (${NOT_OWED_SQL})
+                -- Once accepted it appears as its sale instead, so listing it
+                -- here as well would show the customer the same goods twice.
+                ${bridgedGuard(hasBridge)}
                 AND ($3::date IS NULL OR o.created_at::date >= $3::date)
                 AND ($4::date IS NULL OR o.created_at::date <= $4::date)
               ORDER BY o.created_at ASC`,

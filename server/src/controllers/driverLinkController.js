@@ -34,6 +34,46 @@ const loadLink = async (token) => {
   return { link };
 };
 
+/**
+ * When an order is far enough along to be handed to a driver.
+ *
+ * A live tracking link on an order still sitting at "payment received" is
+ * wrong twice over. The goods have not been packed, so there is nothing for
+ * anyone to follow, and the link is a working key: whoever holds it can start
+ * reporting a phone as the vehicle for an order that has not left the shop.
+ * The link also expires on a timer, so one made days early is dead by the time
+ * the goods actually move.
+ *
+ * Allowed from "packed", where a wholesaler is genuinely arranging transport,
+ * through to the delivery attempt. failed_delivery is included so a second
+ * attempt can be sent out with a fresh link.
+ */
+const DISPATCHABLE = new Set([
+  "packed",
+  "ready_for_pickup",
+  "shipped",
+  "in_transit",
+  "out_for_delivery",
+  "failed_delivery",
+]);
+
+// What to tell a wholesaler who asks too early or too late. Lifecycle names
+// mean nothing to him, so the message talks about the goods.
+const notDispatchableReason = (status) => {
+  switch (status) {
+    case "delivered":
+    case "completed":
+      return "This order has already been delivered.";
+    case "cancelled":
+    case "refunded":
+    case "payment_failed":
+    case "return_completed":
+      return "This order is closed, so it cannot be sent out.";
+    default:
+      return "Pack this order first. You can make a driver link once it is packed and ready to go.";
+  }
+};
+
 /** Wholesaler creates a link for one of their orders. */
 const createLink = async (req, res) => {
   const { orderId } = req.params;
@@ -41,7 +81,7 @@ const createLink = async (req, res) => {
 
   try {
     const order = await pool.query(
-      "SELECT id, supplier_id FROM orders WHERE id = $1",
+      "SELECT id, supplier_id, status FROM orders WHERE id = $1",
       [orderId],
     );
     if (order.rows.length === 0) {
@@ -51,6 +91,16 @@ const createLink = async (req, res) => {
       return res
         .status(403)
         .json({ success: false, message: "Only the supplier can create a driver link" });
+    }
+
+    const status = order.rows[0].status;
+    if (!DISPATCHABLE.has(status)) {
+      return res.status(409).json({
+        success: false,
+        code: "ORDER_NOT_READY_TO_SEND",
+        status,
+        message: notDispatchableReason(status),
+      });
     }
 
     // Replace any live link so an old one cannot keep reporting.

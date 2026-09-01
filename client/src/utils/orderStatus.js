@@ -167,3 +167,27 @@ export const getNextStep = (status) => NEXT_STEP[normalize(status)] || null;
  * but how many are waiting on him.
  */
 export const needsAction = (status) => Boolean(getNextStep(status));
+
+/**
+ * Whether this order is far enough along to hand to a driver.
+ *
+ * A tracking link on an order still at "payment received" is wrong twice
+ * over: nothing has been packed so there is nothing to follow, and the link is
+ * a working key that lets whoever holds it report a phone as the vehicle. It
+ * also expires on a timer, so one made days early is dead by the time the
+ * goods move.
+ *
+ * The server enforces this and refuses anything else. This copy exists so the
+ * screen can explain rather than let him press a button and be told no.
+ */
+const DISPATCHABLE = [
+  "packed",
+  "ready_for_pickup",
+  "shipped",
+  "in_transit",
+  "out_for_delivery",
+  // A second attempt after a failed delivery needs a fresh link.
+  "failed_delivery",
+];
+
+export const canSendOut = (status) => DISPATCHABLE.includes(normalize(status));

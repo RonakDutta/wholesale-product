@@ -6,6 +6,7 @@ const {
   hasPartyLink,
   recordOrderPayment,
 } = require("../services/partyService");
+const { createSaleFromOrder } = require("../services/orderSaleService");
 const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange } = require("../services/orderStatusService");
 const { geocodeOrderDestination } = require("../services/geocodingService");
 const invoiceService = require("../services/invoiceService");
@@ -996,6 +997,31 @@ const updateOrderStatus = async (req, res) => {
       `UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
       [status, orderId],
     );
+
+    // Accepting is the moment the order becomes business. It goes into the
+    // sales book here, and from there the invoice, the statement and the
+    // credit note all work on it without any of them being taught about
+    // orders. Before this, an order was fulfilment only and never reached the
+    // book at all.
+    //
+    // Its own transaction, and its own try. A sales book that could not be
+    // written is worth a line in the log and a backfill later; it is not
+    // worth refusing a wholesaler's acceptance of an order.
+    if (status === "supplier_accepted") {
+      const saleClient = await pool.connect();
+      try {
+        await saleClient.query("BEGIN");
+        await createSaleFromOrder(saleClient, orderId);
+        await saleClient.query("COMMIT");
+      } catch (saleErr) {
+        await saleClient.query("ROLLBACK");
+        console.warn(
+          `Order ${orderId} accepted but not written to the sales book: ${saleErr.message}`,
+        );
+      } finally {
+        saleClient.release();
+      }
+    }
 
     await recordStatusChange(orderId, status, previousStatus, userId, userRole, remarks || `Status updated to ${status}`);
     res.json({ success: true, message: "Order status updated" });

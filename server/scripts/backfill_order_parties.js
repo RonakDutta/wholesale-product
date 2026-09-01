@@ -37,7 +37,10 @@ const addressPart = (raw, key) => {
   try {
     if (!(await hasPartyLink(client))) {
       console.error(
-        "orders.party_id is missing. Run migrations/wholesale3_order_party.sql first.",
+        "This database has not had the latest migrations run.\n" +
+          "  Run this first, from the server folder:\n" +
+          "      npm run migrate\n" +
+          "  then try this again.",
       );
       process.exitCode = 1;
       return;

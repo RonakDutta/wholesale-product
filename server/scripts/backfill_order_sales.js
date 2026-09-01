@@ -54,7 +54,10 @@ const ACCEPTED = [
   try {
     if (!(await hasSaleLink(client))) {
       console.error(
-        "sales.order_id is missing. Run migrations/wholesale3_order_to_sale.sql first.",
+        "This database has not had the latest migrations run.\n" +
+          "  Run this first, from the server folder:\n" +
+          "      npm run migrate\n" +
+          "  then try this again.",
       );
       process.exitCode = 1;
       return;

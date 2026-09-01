@@ -30,8 +30,10 @@ const DRY = process.argv.includes("--dry");
   try {
     if (!(await hasLedgerLink(client))) {
       console.error(
-        "party_payments is not ready. Run migrations/wholesale3_one_ledger.sql " +
-          "and migrations/wholesale3_order_party.sql first.",
+        "This database has not had the latest migrations run.\n" +
+          "  Run this first, from the server folder:\n" +
+          "      npm run migrate\n" +
+          "  then try this again.",
       );
       process.exitCode = 1;
       return;

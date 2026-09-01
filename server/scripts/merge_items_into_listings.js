@@ -59,7 +59,10 @@ const ready = async (client) => {
     }
     if (!schema.has_source) {
       console.error(
-        "supplier_inventory.source_item_id is missing. Run migrations/wholesale3_listing_billing_fields.sql first.",
+        "This database has not had the latest migrations run.\n" +
+          "  Run this first, from the server folder:\n" +
+          "      npm run migrate\n" +
+          "  then try this again.",
       );
       process.exitCode = 1;
       return;

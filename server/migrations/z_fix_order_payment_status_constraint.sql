@@ -22,5 +22,5 @@ UPDATE orders SET payment_status = 'pending'
 
 ALTER TABLE orders
   ADD CONSTRAINT chk_order_payment_status CHECK (payment_status IN (
-    'pending', 'payment_pending', 'paid', 'partial', 'partially_paid', 'failed', 'cod', 'refunded'
+    'pending', 'payment_pending', 'credit_pending', 'paid', 'partial', 'partially_paid', 'failed', 'cod', 'refunded'
   ));

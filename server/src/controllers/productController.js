@@ -241,41 +241,49 @@ exports.getProductById = async (req, res) => {
     if (supplierIds.length > 0) {
       const statsById = new Map();
 
-      const fulfilment = await pool.query(
-        `SELECT COALESCE(o.supplier_id, si.supplier_id) AS supplier_id,
-                COUNT(*) FILTER (WHERE o.status IN ('delivered', 'completed')) AS fulfilled_orders
-         FROM orders o
-         LEFT JOIN supplier_inventory si ON si.id = o.inventory_item_id
-         WHERE COALESCE(o.supplier_id, si.supplier_id) = ANY($1::uuid[])
-         GROUP BY 1`,
-        [supplierIds],
-      );
-      fulfilment.rows.forEach((row) => {
-        statsById.set(row.supplier_id, {
-          fulfilledOrders: Number(row.fulfilled_orders) || 0,
+      try {
+        const fulfilment = await pool.query(
+          `SELECT COALESCE(o.supplier_id, si.supplier_id) AS supplier_id,
+                  COUNT(*) FILTER (WHERE o.status IN ('delivered', 'completed')) AS fulfilled_orders
+           FROM orders o
+           LEFT JOIN supplier_inventory si ON si.id = o.inventory_item_id
+           WHERE COALESCE(o.supplier_id, si.supplier_id) = ANY($1::uuid[])
+           GROUP BY 1`,
+          [supplierIds],
+        );
+        fulfilment.rows.forEach((row) => {
+          statsById.set(row.supplier_id, {
+            fulfilledOrders: Number(row.fulfilled_orders) || 0,
+          });
         });
-      });
+      } catch (fulfilmentErr) {
+        console.warn("Supplier fulfilment stats query failed:", fulfilmentErr.message);
+      }
 
       // Counts what a visitor would actually find on the storefront, so the
       // "view all N products" link never promises more than it shows.
       // Private listings are excluded for the same reason.
-      const catalog = await pool.query(
-        `SELECT supplier_id,
-                COUNT(*) AS catalog_size,
-                COUNT(*) FILTER (WHERE visibility = 'storefront') AS exclusive_count
-         FROM supplier_inventory
-         WHERE supplier_id = ANY($1::uuid[])
-           AND status = 'Active'
-           AND visibility IN ('public', 'storefront')
-         GROUP BY supplier_id`,
-        [supplierIds],
-      );
-      catalog.rows.forEach((row) => {
-        const entry = statsById.get(row.supplier_id) || {};
-        entry.catalogSize = Number(row.catalog_size) || 0;
-        entry.exclusiveCount = Number(row.exclusive_count) || 0;
-        statsById.set(row.supplier_id, entry);
-      });
+      try {
+        const catalog = await pool.query(
+          `SELECT supplier_id,
+                  COUNT(*) AS catalog_size,
+                  COUNT(*) FILTER (WHERE visibility = 'storefront') AS exclusive_count
+           FROM supplier_inventory
+           WHERE supplier_id = ANY($1::uuid[])
+             AND status = 'Active'
+             AND visibility IN ('public', 'storefront')
+           GROUP BY supplier_id`,
+          [supplierIds],
+        );
+        catalog.rows.forEach((row) => {
+          const entry = statsById.get(row.supplier_id) || {};
+          entry.catalogSize = Number(row.catalog_size) || 0;
+          entry.exclusiveCount = Number(row.exclusive_count) || 0;
+          statsById.set(row.supplier_id, entry);
+        });
+      } catch (catalogErr) {
+        console.warn("Supplier catalog counts query failed:", catalogErr.message);
+      }
 
       try {
         const sellerRatings = await pool.query(

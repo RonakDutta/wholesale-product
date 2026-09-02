@@ -1,6 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, MapPin, Phone, User, ShoppingBag, IndianRupee, CreditCard } from "lucide-react";
+import {
+  ArrowLeft,
+  MapPin,
+  Phone,
+  User,
+  ShoppingBag,
+  IndianRupee,
+  CreditCard,
+} from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { toast } from "sonner";
 import api from "../utils/axios";
@@ -10,8 +18,9 @@ const Checkout = () => {
   const navigate = useNavigate();
   const { items, subtotal, clearCart } = useCart();
   const [loading, setLoading] = useState(false);
-  const [paymentPlan, setPaymentPlan] = useState("full"); // 'full' or 'installment_50_50'
-  
+  const [creditEligibility, setCreditEligibility] = useState(null);
+  const [paymentPlan, setPaymentPlan] = useState("full");
+
   const [addressForm, setAddressForm] = useState({
     name: "",
     phone: "",
@@ -21,18 +30,31 @@ const Checkout = () => {
     city: "",
     state: "",
     country: "India",
-    pincode: ""
+    pincode: "",
   });
 
   const [errors, setErrors] = useState({});
   const [pin, setPin] = useState(null);
+
+  useEffect(() => {
+    const supplierId = items[0]?.sellerId;
+    if (!supplierId) return;
+    api
+      .get(
+        `/api/credit/eligibility?supplierId=${encodeURIComponent(supplierId)}`,
+      )
+      .then(({ data }) => setCreditEligibility(data))
+      .catch(() => setCreditEligibility({ eligible: false }));
+  }, [items]);
 
   if (items.length === 0) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <ShoppingBag className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-slate-800 mb-2">Your cart is empty</h2>
+          <h2 className="text-xl font-bold text-slate-800 mb-2">
+            Your cart is empty
+          </h2>
           <button
             onClick={() => navigate("/")}
             className="text-clay font-semibold hover:underline cursor-pointer"
@@ -46,21 +68,26 @@ const Checkout = () => {
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!addressForm.name.trim()) newErrors.name = "Name is required";
     if (!addressForm.phone.trim()) newErrors.phone = "Phone is required";
-    if (!addressForm.house.trim()) newErrors.house = "House/Building number is required";
-    if (!addressForm.street.trim()) newErrors.street = "Street address is required";
+    if (!addressForm.house.trim())
+      newErrors.house = "House/Building number is required";
+    if (!addressForm.street.trim())
+      newErrors.street = "Street address is required";
     if (!addressForm.area.trim()) newErrors.area = "Area is required";
     if (!addressForm.city.trim()) newErrors.city = "City is required";
     if (!addressForm.state.trim()) newErrors.state = "State is required";
     if (!addressForm.country.trim()) newErrors.country = "Country is required";
     if (!addressForm.pincode.trim()) newErrors.pincode = "Pincode is required";
-    
-    if (addressForm.phone && !/^\d{10}$/.test(addressForm.phone.replace(/\s/g, ""))) {
+
+    if (
+      addressForm.phone &&
+      !/^\d{10}$/.test(addressForm.phone.replace(/\s/g, ""))
+    ) {
       newErrors.phone = "Please enter a valid 10-digit phone number";
     }
-    
+
     if (addressForm.pincode && !/^\d{6}$/.test(addressForm.pincode)) {
       newErrors.pincode = "Please enter a valid 6-digit pincode";
     }
@@ -71,9 +98,9 @@ const Checkout = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setAddressForm(prev => ({ ...prev, [name]: value }));
+    setAddressForm((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: "" }));
+      setErrors((prev) => ({ ...prev, [name]: "" }));
     }
   };
 
@@ -112,12 +139,14 @@ const Checkout = () => {
     }
   };
 
-  const initialAmount = paymentPlan === "installment_50_50" 
-    ? Number((subtotal * 0.5).toFixed(2)) 
-    : subtotal;
-  const remainingAmount = paymentPlan === "installment_50_50"
-    ? Number((subtotal - initialAmount).toFixed(2))
-    : subtotal;
+  const initialAmount =
+    paymentPlan === "installment_50_50"
+      ? Number((subtotal * 0.5).toFixed(2))
+      : subtotal;
+  const remainingAmount =
+    paymentPlan === "installment_50_50"
+      ? Number((subtotal - initialAmount).toFixed(2))
+      : subtotal;
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
@@ -132,7 +161,9 @@ const Checkout = () => {
           </button>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Checkout</h1>
-            <p className="text-sm text-slate-500">Complete your order details</p>
+            <p className="text-sm text-slate-500">
+              Complete your order details
+            </p>
           </div>
         </div>
 
@@ -143,7 +174,9 @@ const Checkout = () => {
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
               <div className="flex items-center gap-3 mb-6">
                 <MapPin className="w-5 h-5 text-clay" />
-                <h2 className="text-lg font-bold text-slate-900">Delivery Address</h2>
+                <h2 className="text-lg font-bold text-slate-900">
+                  Delivery Address
+                </h2>
               </div>
 
               <div className="space-y-4">
@@ -165,7 +198,11 @@ const Checkout = () => {
                         }`}
                       />
                     </div>
-                    {errors.name && <p className="text-xs text-rose-500 mt-1">{errors.name}</p>}
+                    {errors.name && (
+                      <p className="text-xs text-rose-500 mt-1">
+                        {errors.name}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -185,13 +222,18 @@ const Checkout = () => {
                         }`}
                       />
                     </div>
-                    {errors.phone && <p className="text-xs text-rose-500 mt-1">{errors.phone}</p>}
+                    {errors.phone && (
+                      <p className="text-xs text-rose-500 mt-1">
+                        {errors.phone}
+                      </p>
+                    )}
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    House/Building Number <span className="text-rose-500">*</span>
+                    House/Building Number{" "}
+                    <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -203,7 +245,9 @@ const Checkout = () => {
                       errors.house ? "border-rose-300" : "border-slate-200"
                     }`}
                   />
-                  {errors.house && <p className="text-xs text-rose-500 mt-1">{errors.house}</p>}
+                  {errors.house && (
+                    <p className="text-xs text-rose-500 mt-1">{errors.house}</p>
+                  )}
                 </div>
 
                 <div>
@@ -220,7 +264,11 @@ const Checkout = () => {
                       errors.street ? "border-rose-300" : "border-slate-200"
                     }`}
                   />
-                  {errors.street && <p className="text-xs text-rose-500 mt-1">{errors.street}</p>}
+                  {errors.street && (
+                    <p className="text-xs text-rose-500 mt-1">
+                      {errors.street}
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -238,7 +286,11 @@ const Checkout = () => {
                         errors.area ? "border-rose-300" : "border-slate-200"
                       }`}
                     />
-                    {errors.area && <p className="text-xs text-rose-500 mt-1">{errors.area}</p>}
+                    {errors.area && (
+                      <p className="text-xs text-rose-500 mt-1">
+                        {errors.area}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -255,7 +307,11 @@ const Checkout = () => {
                         errors.city ? "border-rose-300" : "border-slate-200"
                       }`}
                     />
-                    {errors.city && <p className="text-xs text-rose-500 mt-1">{errors.city}</p>}
+                    {errors.city && (
+                      <p className="text-xs text-rose-500 mt-1">
+                        {errors.city}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -274,7 +330,11 @@ const Checkout = () => {
                         errors.state ? "border-rose-300" : "border-slate-200"
                       }`}
                     />
-                    {errors.state && <p className="text-xs text-rose-500 mt-1">{errors.state}</p>}
+                    {errors.state && (
+                      <p className="text-xs text-rose-500 mt-1">
+                        {errors.state}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -291,7 +351,11 @@ const Checkout = () => {
                         errors.country ? "border-rose-300" : "border-slate-200"
                       }`}
                     />
-                    {errors.country && <p className="text-xs text-rose-500 mt-1">{errors.country}</p>}
+                    {errors.country && (
+                      <p className="text-xs text-rose-500 mt-1">
+                        {errors.country}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -308,7 +372,11 @@ const Checkout = () => {
                         errors.pincode ? "border-rose-300" : "border-slate-200"
                       }`}
                     />
-                    {errors.pincode && <p className="text-xs text-rose-500 mt-1">{errors.pincode}</p>}
+                    {errors.pincode && (
+                      <p className="text-xs text-rose-500 mt-1">
+                        {errors.pincode}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -329,13 +397,16 @@ const Checkout = () => {
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
               <div className="flex items-center gap-3 mb-2">
                 <CreditCard className="w-5 h-5 text-clay" />
-                <h2 className="text-lg font-bold text-slate-900">Payment Option</h2>
+                <h2 className="text-lg font-bold text-slate-900">
+                  Payment Option
+                </h2>
               </div>
               <p className="text-xs text-slate-500 mb-4">
-                Choose your preferred payment method. Selecting installments does NOT alter the total order amount.
+                Choose your preferred payment method. Selecting installments
+                does NOT alter the total order amount.
               </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {/* Pay Full Amount */}
                 <div
                   onClick={() => setPaymentPlan("full")}
@@ -347,16 +418,28 @@ const Checkout = () => {
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <span className="font-bold text-sm text-slate-900 block">Pay Full Amount</span>
-                      <span className="text-xs text-slate-500">Pay 100% now</span>
+                      <span className="font-bold text-sm text-slate-900 block">
+                        Pay Full Amount
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        Pay 100% now
+                      </span>
                     </div>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentPlan === "full" ? "border-clay bg-clay" : "border-slate-300"}`}>
-                      {paymentPlan === "full" && <div className="w-2 h-2 rounded-full bg-white" />}
+                    <div
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentPlan === "full" ? "border-clay bg-clay" : "border-slate-300"}`}
+                    >
+                      {paymentPlan === "full" && (
+                        <div className="w-2 h-2 rounded-full bg-white" />
+                      )}
                     </div>
                   </div>
                   <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center">
-                    <span className="text-xs text-slate-600 font-medium">Pay Now</span>
-                    <span className="text-base font-bold text-slate-900">₹{subtotal.toLocaleString("en-IN")}</span>
+                    <span className="text-xs text-slate-600 font-medium">
+                      Pay Now
+                    </span>
+                    <span className="text-base font-bold text-slate-900">
+                      ₹{subtotal.toLocaleString("en-IN")}
+                    </span>
                   </div>
                 </div>
 
@@ -372,26 +455,79 @@ const Checkout = () => {
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-sm text-slate-900">Pay in 2 Installments</span>
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">50 / 50</span>
+                        <span className="font-bold text-sm text-slate-900">
+                          Pay in 2 Installments
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                          50 / 50
+                        </span>
                       </div>
-                      <span className="text-xs text-slate-500">Pay 50% now, 50% later</span>
+                      <span className="text-xs text-slate-500">
+                        Pay 50% now, 50% later
+                      </span>
                     </div>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentPlan === "installment_50_50" ? "border-clay bg-clay" : "border-slate-300"}`}>
-                      {paymentPlan === "installment_50_50" && <div className="w-2 h-2 rounded-full bg-white" />}
+                    <div
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentPlan === "installment_50_50" ? "border-clay bg-clay" : "border-slate-300"}`}
+                    >
+                      {paymentPlan === "installment_50_50" && (
+                        <div className="w-2 h-2 rounded-full bg-white" />
+                      )}
                     </div>
                   </div>
                   <div className="mt-3 pt-3 border-t border-slate-100 space-y-1">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-600 font-medium">Pay 50% Now</span>
-                      <span className="font-bold text-clay">₹{initialAmount.toLocaleString("en-IN")}</span>
+                      <span className="text-slate-600 font-medium">
+                        Pay 50% Now
+                      </span>
+                      <span className="font-bold text-clay">
+                        ₹{initialAmount.toLocaleString("en-IN")}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-slate-500">Remaining 50%</span>
-                      <span className="font-semibold text-slate-700">₹{remainingAmount.toLocaleString("en-IN")}</span>
+                      <span className="font-semibold text-slate-700">
+                        ₹{remainingAmount.toLocaleString("en-IN")}
+                      </span>
                     </div>
                   </div>
                 </div>
+
+                {creditEligibility?.eligible && (
+                  <div
+                    onClick={() => setPaymentPlan("credit")}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                      paymentPlan === "credit"
+                        ? "border-clay bg-clay/5 shadow-sm"
+                        : "border-slate-200 hover:border-slate-300 bg-white"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <span className="font-bold text-sm text-slate-900 block">
+                          Pay on Credit
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          Pay within your agreed credit period
+                        </span>
+                      </div>
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentPlan === "credit" ? "border-clay bg-clay" : "border-slate-300"}`}
+                      >
+                        {paymentPlan === "credit" && (
+                          <div className="w-2 h-2 rounded-full bg-white" />
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center">
+                      <span className="text-xs text-slate-600 font-medium">
+                        Due later
+                      </span>
+                      <span className="text-base font-bold text-slate-900">
+                        ₹{subtotal.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -401,16 +537,22 @@ const Checkout = () => {
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 sticky top-24">
               <div className="flex items-center gap-3 mb-6">
                 <ShoppingBag className="w-5 h-5 text-clay" />
-                <h2 className="text-lg font-bold text-slate-900">Order Summary</h2>
+                <h2 className="text-lg font-bold text-slate-900">
+                  Order Summary
+                </h2>
               </div>
 
               <div className="space-y-4 mb-6">
                 {items.map((item) => {
-                  const unitPrice = item.bulkQuantity && item.quantity >= item.bulkQuantity
-                    ? item.bulkPrice
-                    : item.price;
+                  const unitPrice =
+                    item.bulkQuantity && item.quantity >= item.bulkQuantity
+                      ? item.bulkPrice
+                      : item.price;
                   return (
-                    <div key={item.id} className="flex gap-3 pb-4 border-b border-slate-100">
+                    <div
+                      key={item.id}
+                      className="flex gap-3 pb-4 border-b border-slate-100"
+                    >
                       <img
                         src={item.image}
                         alt={item.name}
@@ -420,11 +562,18 @@ const Checkout = () => {
                         <h3 className="text-sm font-semibold text-slate-900 truncate">
                           {item.name}
                         </h3>
-                        <p className="text-xs text-slate-500">{item.vendorName}</p>
+                        <p className="text-xs text-slate-500">
+                          {item.vendorName}
+                        </p>
                         <div className="flex items-center justify-between mt-1">
-                          <span className="text-xs text-slate-600">Qty: {item.quantity}</span>
+                          <span className="text-xs text-slate-600">
+                            Qty: {item.quantity}
+                          </span>
                           <span className="text-sm font-bold text-clay">
-                            ₹{(unitPrice * item.quantity).toLocaleString("en-IN")}
+                            ₹
+                            {(unitPrice * item.quantity).toLocaleString(
+                              "en-IN",
+                            )}
                           </span>
                         </div>
                       </div>
@@ -435,11 +584,29 @@ const Checkout = () => {
 
               <div className="border-t border-slate-200 pt-4 space-y-3">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-semibold text-slate-600">Total Order Amount</span>
-                  <span className="font-bold text-slate-900">₹{subtotal.toLocaleString("en-IN")}</span>
+                  <span className="font-semibold text-slate-600">
+                    Total Order Amount
+                  </span>
+                  <span className="font-bold text-slate-900">
+                    ₹{subtotal.toLocaleString("en-IN")}
+                  </span>
                 </div>
 
-                {paymentPlan === "installment_50_50" ? (
+                {paymentPlan === "credit" ? (
+                  <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200 space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-bold text-emerald-700">
+                        Pay later
+                      </span>
+                      <span className="text-lg font-black text-emerald-700">
+                        ₹{subtotal.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    <p className="text-xs text-emerald-700">
+                      Your wholesaler will confirm the due date on the invoice.
+                    </p>
+                  </div>
+                ) : paymentPlan === "installment_50_50" ? (
                   <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-1.5">
                     <div className="flex items-center justify-between text-sm">
                       <span className="font-bold text-clay">Pay Now (50%)</span>
@@ -452,7 +619,9 @@ const Checkout = () => {
                     </div>
                     <div className="flex items-center justify-between text-xs text-slate-600 border-t border-slate-200 pt-1.5">
                       <span>Remaining Amount</span>
-                      <span className="font-semibold">₹{remainingAmount.toLocaleString("en-IN")}</span>
+                      <span className="font-semibold">
+                        ₹{remainingAmount.toLocaleString("en-IN")}
+                      </span>
                     </div>
                   </div>
                 ) : (
@@ -472,7 +641,11 @@ const Checkout = () => {
                   disabled={loading}
                   className="w-full bg-clay text-white text-sm font-bold py-3 rounded-lg hover:bg-clay/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  {loading ? "Creating Order..." : "Proceed to Payment"}
+                  {loading
+                    ? "Creating Order..."
+                    : paymentPlan === "credit"
+                      ? "Place Credit Order"
+                      : "Proceed to Payment"}
                 </button>
 
                 <p className="text-xs text-slate-500 text-center">

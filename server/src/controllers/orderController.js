@@ -10,6 +10,7 @@ const { createSaleFromOrder } = require("../services/orderSaleService");
 const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange } = require("../services/orderStatusService");
 const { geocodeOrderDestination } = require("../services/geocodingService");
 const invoiceService = require("../services/invoiceService");
+const creditService = require("../services/creditService");
 const pdfService = require("../services/pdfService");
 const {
   enqueueNotification,
@@ -218,7 +219,7 @@ const createOrder = async (req, res) => {
   } = req.body;
   // Only plans the server knows about. Anything else falls back to paying in
   // full rather than creating an order nobody can settle.
-  const plan = paymentPlan === "installment_50_50" ? "installment_50_50" : "full";
+  const plan = ["installment_50_50", "credit"].includes(paymentPlan) ? paymentPlan : "full";
   const buyerId = req.user?.id;
 
   if (!buyerId) {
@@ -377,7 +378,7 @@ const createOrder = async (req, res) => {
         subtotal,
         plan,
         "payment_pending",
-        "pending",
+        plan === "credit" ? "credit_pending" : "pending",
         JSON.stringify(deliveryAddress),
         JSON.stringify(billingAddress || deliveryAddress),
         String(deliveryAddress.phone || ""),
@@ -391,6 +392,16 @@ const createOrder = async (req, res) => {
     );
 
     const orderId = orderResult.rows[0].id;
+
+    if (plan === "credit") {
+      if (!partyId) throw new Error("This customer is not linked to the wholesaler.");
+      await creditService.recordCreditSale(client, {
+        sellerId: supplierId,
+        partyId,
+        orderId,
+        amount: subtotal,
+      });
+    }
 
     for (const line of lines) {
       await client.query(
@@ -444,11 +455,13 @@ const createOrder = async (req, res) => {
       [orderId, "payment_pending", null, buyerId, "buyer", "Order created"],
     );
 
-    await client.query(
-      `INSERT INTO payment_transactions (order_id, amount, payment_method, payment_status, gateway_response)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [orderId, subtotal, paymentMethod, "pending", JSON.stringify({ method: paymentMethod })],
-    );
+    if (plan !== "credit") {
+      await client.query(
+        `INSERT INTO payment_transactions (order_id, amount, payment_method, payment_status, gateway_response)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [orderId, subtotal, paymentMethod, "pending", JSON.stringify({ method: paymentMethod })],
+      );
+    }
 
     await client.query("COMMIT");
 

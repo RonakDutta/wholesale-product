@@ -42,6 +42,7 @@ import InvoiceSettings from "./pages/dashboard/InvoiceSettings";
 import WholesalerProfile from "./pages/WholesalerProfile";
 import SharedListing from "./pages/SharedListing";
 import DriverTracking from "./pages/DriverTracking";
+import CreditWallet from "./pages/CreditWallet";
 import NotFound from "./pages/NotFound";
 
 // Seller workspace is lazy-loaded: retailers never download this bundle.
@@ -59,6 +60,7 @@ const Sales = lazy(() => import("./pages/dashboard/Sales"));
 const RecordSale = lazy(() => import("./pages/dashboard/RecordSale"));
 const SaleDetail = lazy(() => import("./pages/dashboard/SaleDetail"));
 const Overview = lazy(() => import("./pages/dashboard/Overview"));
+const CreditAccounts = lazy(() => import("./pages/dashboard/CreditAccounts"));
 
 const SellerFallback = () => (
   <div className="flex min-h-dvh items-center justify-center bg-slate-100">
@@ -110,6 +112,7 @@ const router = createBrowserRouter([
       { path: "orders", element: <MyOrders /> },
       { path: "notifications", element: <NotificationCenter /> },
       { path: "orders/:orderId", element: <OrderDetails /> },
+      { path: "credit-wallet", element: <CreditWallet /> },
     ],
   },
   {
@@ -123,6 +126,7 @@ const router = createBrowserRouter([
       { path: "customers", element: <Parties /> },
       { path: "customers/:id", element: <PartyDetail /> },
       { path: "customers/:id/statement", element: <PartyStatement /> },
+      { path: "credit", element: <CreditAccounts /> },
       { path: "sales", element: <Sales /> },
       // Before "sales/:id" so the word is not read as a sale id.
       { path: "sales/new", element: <RecordSale /> },

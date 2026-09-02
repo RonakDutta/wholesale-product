@@ -15,6 +15,7 @@ import {
   BarChart3,
   Plus,
   ChevronLeft,
+  CreditCard,
 } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -27,6 +28,7 @@ import { FEATURES } from "../config/features";
 const NAV = [
   { path: "/seller", label: "Overview", icon: LayoutDashboard, exact: true },
   { path: "/seller/customers", label: "Customers", icon: Users },
+  { path: "/seller/credit", label: "Credit Accounts", icon: CreditCard },
   // One list. It used to be two, his own rate list and his shop listings,
   // which meant the same thing to him and differed only in which half of the
   // row each screen could show. Where a product is shown is now a control on
@@ -41,7 +43,12 @@ const NAV = [
     flag: "MARKETPLACE",
   },
   { path: "/seller/invoices", label: "Invoices", icon: FileText },
-  { path: "/seller/messages", label: "Messages", icon: MessageSquare, badge: "unread" },
+  {
+    path: "/seller/messages",
+    label: "Messages",
+    icon: MessageSquare,
+    badge: "unread",
+  },
   {
     path: "/seller/promotions",
     label: "Promotions",
@@ -80,7 +87,8 @@ const SellerLayout = () => {
       : location.pathname.startsWith(item.path);
 
   const companyName =
-    user?.companyName || `${user?.firstName || ""} ${user?.lastName || ""}`.trim();
+    user?.companyName ||
+    `${user?.firstName || ""} ${user?.lastName || ""}`.trim();
 
   return (
     <div className="font-dmsans flex h-dvh overflow-hidden bg-slate-100">

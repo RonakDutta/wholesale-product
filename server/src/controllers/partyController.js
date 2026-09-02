@@ -3,6 +3,7 @@ const { clean, fromPaise, toPaise } = require("../utils/money");
 const saleInvoiceService = require("../services/saleInvoiceService");
 const { hasPartyLink } = require("../services/partyService");
 const { hasSaleLink } = require("../services/orderSaleService");
+const { checkGstin } = require("../utils/gstin");
 const pdfService = require("../services/pdfService");
 
 /**
@@ -188,6 +189,30 @@ exports.getPartyById = async (req, res) => {
   }
 };
 
+/**
+ * A GST number that is present has to be a real one.
+ *
+ * Blank is fine: most small retailers are not registered, and insisting would
+ * make the customer book unusable. But a number that IS entered goes onto
+ * invoices, and a mistyped one there is the wholesaler's problem at filing
+ * time, not the typist's. The check is arithmetic on the number itself, so it
+ * costs nothing and needs no account anywhere.
+ *
+ * Returns the tidied number to store, or sends the error and returns
+ * undefined.
+ */
+const gstinToStore = (raw, res) => {
+  if (raw === undefined) return undefined;
+  const value = clean(raw);
+  if (!value) return null;
+  const result = checkGstin(value);
+  if (!result.ok) {
+    res.status(400).json({ message: result.reason });
+    return undefined;
+  }
+  return result.gstin;
+};
+
 exports.createParty = async (req, res) => {
   const wholesalerId = req.user.id;
   const { name, businessName, phone, city, address, gstin, notes } = req.body;
@@ -195,6 +220,9 @@ exports.createParty = async (req, res) => {
   if (!clean(name)) {
     return res.status(400).json({ message: "Name is required" });
   }
+
+  const gstinValue = gstin === undefined ? null : gstinToStore(gstin, res);
+  if (gstinValue === undefined) return;
 
   try {
     const result = await pool.query(
@@ -209,7 +237,7 @@ exports.createParty = async (req, res) => {
         clean(phone),
         clean(city),
         clean(address),
-        clean(gstin),
+        gstinValue,
         clean(notes),
       ],
     );
@@ -259,7 +287,11 @@ exports.updateParty = async (req, res) => {
   if (phone !== undefined) put("phone", clean(phone));
   if (city !== undefined) put("city", clean(city));
   if (address !== undefined) put("address", clean(address));
-  if (gstin !== undefined) put("gstin", clean(gstin));
+  if (gstin !== undefined) {
+    const gstinValue = gstinToStore(gstin, res);
+    if (gstinValue === undefined) return;
+    put("gstin", gstinValue);
+  }
   if (notes !== undefined) put("notes", clean(notes));
   if (status !== undefined) put("status", status);
 

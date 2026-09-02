@@ -64,14 +64,14 @@ const check = (cond, label, v) => { if (!cond) fails++;
     [`ram+${Date.now()}@${DB}.local`, `9${String(Date.now()).slice(-9)}`]);
   const wid = u.rows[0].id;
   await testPool.query(`INSERT INTO wholesaler_profiles (user_id,company_name,gstin,city,warehouse_state)
-    VALUES ($1,'Ram Textiles','24AAAAA0000A1Z5','Surat','Gujarat')`, [wid]);
+    VALUES ($1,'Ram Textiles','24AAAAA0000A1Z8','Surat','Gujarat')`, [wid]);
   const user = { id: wid, role: "seller" };
 
   const it = await call(items.createItem, { user, body: { name: "Cotton shirting", unit: "mtr", rate: 142, hsnCode: "5208", gstPercent: 5 } });
   check(it.statusCode === 201, "create product", { s: it.statusCode });
   check((await call(items.listItems, { user, query: {} })).statusCode === 200, "list products", {});
 
-  const p = await call(parties.createParty, { user, body: { name: "Kishan Cloth House", city: "Surat", gstin: "24BBBBB1111B1Z5", phone: "9820011223" } });
+  const p = await call(parties.createParty, { user, body: { name: "Kishan Cloth House", city: "Surat", gstin: "24BBBBB1111B1ZT", phone: "9820011223" } });
   check(p.statusCode === 201, "create customer", { s: p.statusCode });
 
   const s = await call(sales.createSale, { user, body: { partyId: p.body.id, status: "confirmed",

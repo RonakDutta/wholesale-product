@@ -199,7 +199,17 @@ exports.getProductById = async (req, res) => {
             'shippingDays', si.shipping_days,
             'city', wp.city,
             'country', wp.country,
-            'gstVerified', (wp.gstin IS NOT NULL AND wp.gstin <> ''),
+            -- A buyer is being told something about a seller here, so it has
+            -- to be true. It used to be "the box is not empty", which meant
+            -- typing anything at all earned the badge. This is the number's
+            -- own shape, which is the same rule the server now enforces when
+            -- one is saved; it catches the rows written before it did.
+            --
+            -- It still is NOT verification against the GST portal. Nothing
+            -- free will tell us that, so the screens say "GST registered",
+            -- never "verified".
+            'gstVerified',
+              (wp.gstin ~ '^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$'),
             'contactPhone', COALESCE(wp.contact_phone, su.phone)
           )
         ) as suppliers
@@ -409,7 +419,12 @@ exports.getWholesalerById = async (req, res) => {
          wp.city,
          wp.country,
          wp.is_verified,
-         wp.gst_verified,
+         -- wholesaler_profiles.gst_verified is a boolean nothing has ever
+         -- written, so it is false for everybody and this chip never showed,
+         -- while the comparison screen showed it to anyone with a non empty
+         -- box. Two screens, the same fact, wrong in opposite directions.
+         -- Both now read the number's own shape.
+         (wp.gstin ~ '^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$') AS gst_verified,
          wp.years_in_business,
          wp.contact_phone,
          u.created_at AS member_since

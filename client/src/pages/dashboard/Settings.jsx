@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 import api from "../../utils/axios";
 import { FEATURES } from "../../config/features";
+import { gstinFeedback } from "../../utils/gstin";
 
 /**
  * The wholesaler's own details.
@@ -89,7 +90,24 @@ const Settings = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const gst = gstinFeedback(formData.gstin);
+
+  // The first two digits of a GST number ARE the state, and the state is what
+  // decides whether a bill charges CGST plus SGST or IGST. If the two disagree
+  // one of them is wrong, and getting it wrong is a filing problem rather than
+  // a display one. Said as a warning, not a block: a man may genuinely be
+  // registered in one state and despatching from a godown in another.
+  const declaredState = (formData.warehouseState || formData.city || "").trim();
+  const stateMismatch =
+    gst.state === "good" &&
+    declaredState &&
+    gst.stateName.toLowerCase() !== declaredState.toLowerCase();
+
   const handleSave = async () => {
+    if (formData.gstin.trim() && gst.state !== "good") {
+      toast.error("Please check your GST number, or clear it.");
+      return;
+    }
     setSaving(true);
     try {
       await api.put("/api/profile", {
@@ -100,7 +118,9 @@ const Settings = () => {
       toast.success("Your details are saved.");
     } catch (err) {
       console.error("Failed to save profile", err);
-      toast.error("Could not save your details.");
+      // The server says which field it refused and why. Replacing that with
+      // "Could not save your details" leaves a person retyping at random.
+      toast.error(err.response?.data?.message || "Could not save your details.");
     } finally {
       setSaving(false);
     }
@@ -227,13 +247,35 @@ const Settings = () => {
               name="gstin"
               value={formData.gstin}
               onChange={handleChange}
-              placeholder="24AAAAA0000A1Z5"
-              className={field}
+              placeholder="24AAACC1206D1ZM"
+              className={
+                gst.state === "bad"
+                  ? `${field} border-rose-300 focus:border-rose-400`
+                  : field
+              }
             />
-            <p className="mt-2 text-xs text-slate-500">
-              Printed on every bill. Your customers need it to claim their input
-              credit, so a wrong one costs them money.
+            <p
+              className={`mt-2 text-xs ${
+                gst.state === "bad"
+                  ? "text-rose-600"
+                  : gst.state === "good"
+                    ? "text-emerald-700"
+                    : "text-slate-500"
+              }`}
+            >
+              {gst.state === "good"
+                ? `Looks right. Registered in ${gst.stateName}.`
+                : gst.state === "bad" || gst.state === "typing"
+                  ? gst.message
+                  : "Printed on every bill. Your customers need it to claim their input credit, so a wrong one costs them money."}
             </p>
+            {stateMismatch && (
+              <p className="mt-1.5 text-xs text-amber-700">
+                Your GST number is registered in {gst.stateName}, but you send
+                goods from {declaredState}. Bills work out CGST and SGST or
+                IGST from this, so please check which one is right.
+              </p>
+            )}
           </div>
         </div>
       </div>

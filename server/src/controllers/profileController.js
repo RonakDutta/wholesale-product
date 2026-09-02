@@ -1,4 +1,5 @@
 const pool = require("../config/db");
+const { checkGstin } = require("../utils/gstin");
 
 // @desc    Get wholesaler profile
 // @route   GET /api/profile
@@ -38,6 +39,16 @@ exports.updateProfile = async (req, res) => {
   const lng = Number(warehouseLng);
   const hasPin = Number.isFinite(lat) && Number.isFinite(lng);
 
+  // His own GST number ends up on every invoice he raises, so a mistyped one
+  // is worse here than anywhere else. Checked by the number's own arithmetic,
+  // which costs nothing. Leaving the field out is still fine.
+  let gstinValue = gstin;
+  if (gstin !== undefined && gstin !== null && String(gstin).trim() !== "") {
+    const result = checkGstin(gstin);
+    if (!result.ok) return res.status(400).json({ message: result.reason });
+    gstinValue = result.gstin;
+  }
+
   try {
     const updatedProfile = await pool.query(
       `UPDATE wholesaler_profiles 
@@ -61,7 +72,7 @@ exports.updateProfile = async (req, res) => {
        WHERE user_id = $13
        RETURNING *`,
       [
-        companyName, contactPhone, gstin, upiId, city, country,
+        companyName, contactPhone, gstinValue, upiId, city, country,
         warehouseAddress, warehouseCity, warehouseState, warehousePincode,
         hasPin ? lat : null, hasPin ? lng : null,
         req.user.id,

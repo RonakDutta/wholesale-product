@@ -2,6 +2,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import api from "../utils/axios";
 import { toast } from "sonner";
+import { gstinFeedback } from "../utils/gstin";
 
 /**
  * Adds a customer or edits one. The same form does both, because the fields
@@ -29,10 +30,17 @@ const PartyFormModal = ({ party, onClose, onSaved }) => {
   const set = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
+  const gst = gstinFeedback(form.gstin);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) {
       toast.error("Please enter a name.");
+      return;
+    }
+    // A half typed number counts as wrong at this point: he pressed save.
+    if (form.gstin.trim() && gst.state !== "good") {
+      toast.error("Please check the GST number, or clear it.");
       return;
     }
 
@@ -135,12 +143,43 @@ const PartyFormModal = ({ party, onClose, onSaved }) => {
             placeholder: "Ramesh Cloth Store",
           })}
 
-          {field("party-gstin", "GST number", {
-            name: "gstin",
-            placeholder: "24AAAAA0000A1Z5",
-            uppercase: true,
-            hint: "Goes on their bill so they can claim input credit.",
-          })}
+          {/* Checked as it is typed. The number carries its own check
+              digit, so a mistyped one can be caught here with nothing to
+              call and nothing to pay for. The server checks it again. */}
+          <div>
+            <label
+              htmlFor="party-gstin"
+              className="mb-1.5 block text-sm font-bold text-espresso"
+            >
+              GST number
+            </label>
+            <input
+              id="party-gstin"
+              value={form.gstin}
+              onChange={set("gstin")}
+              placeholder="24AAACC1206D1ZM"
+              className={`w-full rounded-lg border px-3 py-2.5 text-sm uppercase outline-none transition-colors ${
+                gst.state === "bad"
+                  ? "border-rose-300 focus:border-rose-400"
+                  : "border-slate-200 focus:border-clay"
+              }`}
+            />
+            <p
+              className={`mt-1 text-xs ${
+                gst.state === "bad"
+                  ? "text-rose-600"
+                  : gst.state === "good"
+                    ? "text-emerald-700"
+                    : "text-slate-500"
+              }`}
+            >
+              {gst.state === "good"
+                ? `Looks right. Registered in ${gst.stateName}.`
+                : gst.state === "bad" || gst.state === "typing"
+                  ? gst.message
+                  : "Leave blank if they are not registered. Goes on their bill so they can claim input credit."}
+            </p>
+          </div>
 
           {field("party-address", "Address", {
             name: "address",

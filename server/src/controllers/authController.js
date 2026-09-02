@@ -1,4 +1,5 @@
 const bcrypt = require("bcryptjs");
+const { checkGstin } = require("../utils/gstin");
 const jwt = require("jsonwebtoken");
 const pool = require("../config/db");
 const {
@@ -125,6 +126,15 @@ exports.upgradeToSeller = async (req, res) => {
   const userId = req.user.id;
   const { companyName, gstin, phone, city } = req.body;
 
+  // Checked here rather than left for the profile screen, because this number
+  // goes onto his invoices from the first one he raises.
+  let gstinValue = gstin;
+  if (gstin !== undefined && gstin !== null && String(gstin).trim() !== "") {
+    const result = checkGstin(gstin);
+    if (!result.ok) return res.status(400).json({ message: result.reason });
+    gstinValue = result.gstin;
+  }
+
   try {
     const userResult = await pool.query(
       "SELECT role FROM users WHERE id = $1",
@@ -143,7 +153,7 @@ exports.upgradeToSeller = async (req, res) => {
     await pool.query(
       `INSERT INTO wholesaler_profiles (user_id, company_name, gstin, contact_phone, city, is_verified) 
        VALUES ($1, $2, $3, $4, $5, false)`,
-      [userId, companyName, gstin, phone, city],
+      [userId, companyName, gstinValue, phone, city],
     );
 
     res

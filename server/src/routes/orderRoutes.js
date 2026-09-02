@@ -8,6 +8,7 @@ const {
   getSupplierOrders,
   getBuyerOrders,
   updateOrderStatus,
+  cancelOrderHandler,
   getOrderTimelineHandler,
   requestReturn,
   generateInvoice,
@@ -34,6 +35,10 @@ router.post("/:orderId/payment", authenticateToken, initiatePayment);
 router.post("/:orderId/send-installment-reminder", authenticateToken, authorizeRoles("seller", "both", "admin"), sendInstallmentReminder);
 router.put("/:orderId/payment-status", authenticateToken, updatePaymentStatus);
 router.patch("/:orderId/status", authenticateToken, authorizeRoles("seller", "both", "admin"), updateOrderStatus);
+// Not role gated. Both sides of an order may call it off, and who is allowed
+// is decided against the order itself. Gating this on the seller role would
+// take a buyer's own cancel button away, and a 403 logs people out.
+router.post("/:orderId/cancel", authenticateToken, cancelOrderHandler);
 router.get("/:orderId/timeline", authenticateToken, getOrderTimelineHandler);
 router.get("/:orderId/tracking", authenticateToken, getTracking);
 router.post("/:orderId/checkpoints", authenticateToken, authorizeRoles("seller", "both"), addCheckpoint);

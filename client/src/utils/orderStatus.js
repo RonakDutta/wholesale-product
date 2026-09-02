@@ -191,3 +191,42 @@ const DISPATCHABLE = [
 ];
 
 export const canSendOut = (status) => DISPATCHABLE.includes(normalize(status));
+
+/**
+ * Whether the wholesaler can still refuse this order.
+ *
+ * The mirror of SUPPLIER_CANCELLABLE_STATUSES on the server, which is the
+ * authority and checks again. The line is drawn at packed: once the goods are
+ * boxed and a driver may already have them, the way out is a return, not a
+ * cancellation.
+ *
+ * payment_pending is on the list deliberately. That is where a brand new
+ * order sits, and refusing one he has only just received is the commonest
+ * case there is: the colour is finished, the lot is sold, the buyer is too
+ * far to deliver to.
+ */
+const REFUSABLE = [
+  "pending",
+  "payment_pending",
+  "payment_completed",
+  "supplier_accepted",
+  "processing",
+];
+
+export const canRefuse = (status) => REFUSABLE.includes(normalize(status));
+
+/**
+ * Whether the buyer can still call his own order off.
+ *
+ * Shorter than the wholesaler's list on purpose: once he has accepted it and
+ * started packing, the buyer walking away is the seller's loss, so from there
+ * it is a conversation rather than a button.
+ */
+const BUYER_CANCELLABLE = [
+  "pending",
+  "payment_pending",
+  "payment_completed",
+  "supplier_accepted",
+];
+
+export const canBuyerCancel = (status) => BUYER_CANCELLABLE.includes(normalize(status));

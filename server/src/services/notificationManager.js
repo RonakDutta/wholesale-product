@@ -22,9 +22,54 @@ const NOTIFICATION_TYPES = {
   auth: "auth",
 };
 
+/**
+ * Whether the notifications table still carries the older "type" column.
+ *
+ * It does, it is NOT NULL, and it has no default, while everything here was
+ * writing only the newer "notification_type". Every insert therefore failed
+ * on the not null constraint, and because notifications are fire and forget
+ * the error was swallowed by each caller in turn. The result was an app in
+ * which the bell never showed anything and nobody was told why.
+ *
+ * Both columns are written, with the same value, so the record is right for
+ * whichever one a reader happens to use. Asked once and remembered, so a
+ * database that is behind on migrations still works.
+ */
+let hasLegacyType = null;
+const legacyTypeColumn = async () => {
+  if (hasLegacyType === null) {
+    const { rows } = await pool.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'notifications'
+            AND column_name = 'type'
+       ) AS yes`,
+    );
+    hasLegacyType = rows[0].yes;
+  }
+  return hasLegacyType;
+};
+
+// For tests, which rebuild the schema underneath a running process.
+const resetNotificationSchema = () => {
+  hasLegacyType = null;
+};
+
 const createNotificationRecord = async ({ userId, title, message, notificationType, channel, referenceId = null, referenceType = null, priority = "normal" }) => {
-  const query = `INSERT INTO notifications (user_id, title, message, notification_type, channel, reference_id, reference_type, priority, is_read, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,NOW()) RETURNING *`;
-  const { rows } = await pool.query(query, [userId, title, message, notificationType, channel, referenceId, referenceType, priority]);
+  const legacy = await legacyTypeColumn();
+  const columns = [
+    "user_id", "title", "message", "notification_type", "channel",
+    "reference_id", "reference_type", "priority",
+  ];
+  const values = [userId, title, message, notificationType, channel, referenceId, referenceType, priority];
+  if (legacy) {
+    columns.push("type");
+    values.push(notificationType);
+  }
+  const placeholders = values.map((_, i) => `$${i + 1}`).join(", ");
+  const query = `INSERT INTO notifications (${columns.join(", ")}, is_read, created_at)
+                 VALUES (${placeholders}, false, NOW()) RETURNING *`;
+  const { rows } = await pool.query(query, values);
   return rows[0];
 };
 
@@ -164,6 +209,7 @@ module.exports = {
   getDeviceTokens,
   createNotificationRecord,
   createNotificationPreference,
+  resetNotificationSchema,
   NOTIFICATION_CHANNELS,
   NOTIFICATION_TYPES,
 };

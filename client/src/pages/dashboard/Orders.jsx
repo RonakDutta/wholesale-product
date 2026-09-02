@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Eye, Clock, ArrowRight, Truck } from "lucide-react";
+import { Search, Eye, Clock, ArrowRight, Truck, XCircle } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
 import DispatchModal from "../../components/DispatchModal";
+import RefuseOrderModal from "../../components/RefuseOrderModal";
 import {
   ORDER_TABS,
   formatOrderStatus,
@@ -11,6 +12,7 @@ import {
   matchesOrderTab,
   getNextStep,
   needsAction,
+  canRefuse,
 } from "../../utils/orderStatus";
 
 const Orders = () => {
@@ -22,6 +24,7 @@ const Orders = () => {
   // The order id currently being advanced, so only its own button waits.
   const [working, setWorking] = useState(null);
   const [dispatching, setDispatching] = useState(null);
+  const [refusing, setRefusing] = useState(null);
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -216,15 +219,31 @@ const Orders = () => {
                   </button>
                 </div>
 
-                {step && (
-                  <button
-                    onClick={() => advance(order)}
-                    disabled={busy}
-                    className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-clay px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-60"
-                  >
-                    <Icon className="h-4 w-4" />
-                    {busy ? "Saving..." : step.label}
-                  </button>
+                {(step || canRefuse(order.status)) && (
+                  <div className="mt-3 flex gap-2">
+                    {step && (
+                      <button
+                        onClick={() => advance(order)}
+                        disabled={busy}
+                        className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg bg-clay px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-60"
+                      >
+                        <Icon className="h-4 w-4" />
+                        {busy ? "Saving..." : step.label}
+                      </button>
+                    )}
+                    {/* Quiet, and never the wider of the two. Refusing is the
+                        rarer answer and should not sit level with getting the
+                        order out. */}
+                    {canRefuse(order.status) && (
+                      <button
+                        onClick={() => setRefusing(order)}
+                        className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:border-rose-300 hover:text-rose-600 ${step ? "" : "flex-1"}`}
+                      >
+                        <XCircle className="h-4 w-4" />
+                        Refuse
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             );
@@ -343,6 +362,15 @@ const Orders = () => {
                             </button>
                           );
                         })()}
+                        {canRefuse(order.status) && (
+                          <button
+                            onClick={() => setRefusing(order)}
+                            className="inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:border-rose-300 hover:text-rose-600"
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                            Refuse
+                          </button>
+                        )}
                         <button
                           onClick={() => navigate(`/orders/${order.id}`)}
                           className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-lg border border-slate-200 transition-colors cursor-pointer"
@@ -365,6 +393,14 @@ const Orders = () => {
           order={dispatching}
           onClose={() => setDispatching(null)}
           onDispatched={applyStatus}
+        />
+      )}
+
+      {refusing && (
+        <RefuseOrderModal
+          order={refusing}
+          onClose={() => setRefusing(null)}
+          onCancelled={applyStatus}
         />
       )}
     </div>

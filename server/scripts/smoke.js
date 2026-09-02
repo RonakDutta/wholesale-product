@@ -56,8 +56,12 @@ const check = (cond, label, v) => { if (!cond) fails++;
   if (DB === "withtax") await testPool.query(mig("wholesale3_tax_on_top.sql"));
   repo.resetSchemaExtras();
 
-  const u = await testPool.query(`INSERT INTO users (first_name,last_name,email,role)
-    VALUES ('Ram','T',$1,'seller') RETURNING id`, [`ram+${Date.now()}@${DB}.local`]);
+  // password_hash and phone are NOT NULL on the real schema. Leaving them out
+  // worked for a long time only because this ran against a hand built stub
+  // that was missing those constraints.
+  const u = await testPool.query(`INSERT INTO users (first_name,last_name,email,phone,password_hash,role)
+    VALUES ('Ram','T',$1,$2,'x','seller') RETURNING id`,
+    [`ram+${Date.now()}@${DB}.local`, `9${String(Date.now()).slice(-9)}`]);
   const wid = u.rows[0].id;
   await testPool.query(`INSERT INTO wholesaler_profiles (user_id,company_name,gstin,city,warehouse_state)
     VALUES ($1,'Ram Textiles','24AAAAA0000A1Z5','Surat','Gujarat')`, [wid]);

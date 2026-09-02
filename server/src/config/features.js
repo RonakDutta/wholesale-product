@@ -15,11 +15,15 @@ const FEATURES = {
    *     hidden, a buyer told "only 3 left" cannot act on it, and a listing
    *     created since stock was hidden has a count of zero, so every one of
    *     them would be unorderable.
-   *   - Orders DO still decrement, and cancellations still credit back. A
-   *     wholesaler who had real counts keeps them moving, so turning this
-   *     back on is a screen change rather than a stock take. The cost is
-   *     that a listing which never had a count can go negative, which reads
-   *     correctly as "we do not know".
+   *   - Orders DO still decrement, but the subtraction is floored at zero
+   *     rather than refused, because supplier_inventory.stock carries a
+   *     CHECK (stock >= 0) and every listing created since stock was hidden
+   *     starts at zero. Without the floor, ordering any recent listing
+   *     failed outright.
+   *   - Cancelling does NOT credit stock back while this is off. The floor
+   *     means a listing at zero gave nothing up, so adding the quantity back
+   *     would invent stock. Turn this on and cancelling credits back again,
+   *     because checkout then takes the full quantity or refuses.
    */
   STOCK_TRACKING: false,
 };

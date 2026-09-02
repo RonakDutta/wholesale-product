@@ -7,7 +7,7 @@ const {
   recordOrderPayment,
 } = require("../services/partyService");
 const { createSaleFromOrder } = require("../services/orderSaleService");
-const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange } = require("../services/orderStatusService");
+const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange, cancelOrder } = require("../services/orderStatusService");
 const { geocodeOrderDestination } = require("../services/geocodingService");
 const invoiceService = require("../services/invoiceService");
 const pdfService = require("../services/pdfService");
@@ -146,6 +146,10 @@ const getSupplierOrders = async (req, res) => {
         COALESCE(items.item_count, 1) as item_count,
         o.quantity as qty,
         o.total_amount as amount,
+        -- What has actually been received. The refuse screen warns about it,
+        -- because refusing an order does not send money back and a
+        -- wholesaler needs to know he is now holding his customer's cash.
+        o.amount_paid,
         o.status,
         o.payment_status,
         o.created_at as date
@@ -1031,6 +1035,43 @@ const updateOrderStatus = async (req, res) => {
   }
 };
 
+/**
+ * Refuse an order, or call one off.
+ *
+ * Both sides land here. A wholesaler who cannot fill an order refuses it; a
+ * buyer who changes his mind before it goes out cancels it. The unwinding is
+ * identical, so there is one path rather than two that could drift apart.
+ *
+ * Who may do it, and from which states, is decided inside cancelOrder against
+ * the order itself, so this does not repeat the rule in a second place.
+ */
+const cancelOrderHandler = async (req, res) => {
+  const { orderId } = req.params;
+  const reason = clean(req.body?.reason);
+
+  try {
+    const accessCheck = await ensureOrderAccess(req, res, orderId, {
+      requireBuyer: true,
+      requireSupplier: true,
+    });
+    if (!accessCheck) return;
+
+    const result = await cancelOrder(orderId, req.user.id, reason);
+    res.json(result);
+  } catch (error) {
+    // The service throws for the ordinary refusals as well as for faults:
+    // wrong person, wrong state, order gone. Those are the caller's problem,
+    // not the server's, and answering all of them with a 500 would tell a
+    // wholesaler his order failed to cancel when it simply cannot be.
+    const isRefusal =
+      /cannot cancel|already been sent|not found|not allowed|Invalid status/i.test(error.message || "");
+    if (!isRefusal) console.error("Error cancelling order:", error);
+    res
+      .status(isRefusal ? (/(not found)/i.test(error.message) ? 404 : 400) : 500)
+      .json({ success: false, message: error.message || "Failed to cancel order" });
+  }
+};
+
 const getOrderTimelineHandler = async (req, res) => {
   try {
     const accessCheck = await ensureOrderAccess(req, res, req.params.orderId, { requireBuyer: true, requireSupplier: true });
@@ -1218,6 +1259,7 @@ module.exports = {
   getSupplierOrders,
   getBuyerOrders,
   updateOrderStatus,
+  cancelOrderHandler,
   getOrderTimelineHandler,
   requestReturn,
   generateInvoice,

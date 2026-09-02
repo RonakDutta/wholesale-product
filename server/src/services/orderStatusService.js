@@ -1,4 +1,5 @@
 const pool = require("../config/db");
+const { FEATURES } = require("../config/features");
 
 /**
  * Order Status Service
@@ -47,11 +48,25 @@ const ORDER_STATUS_FLOW = {
   return_rejected: []
 };
 
-// Define status that can be cancelled by buyer
+// When a buyer may still call his own order off.
 const BUYER_CANCELLABLE_STATUSES = ['pending', 'payment_pending', 'payment_completed', 'supplier_accepted'];
 
-// Define status that can be cancelled by supplier
-const SUPPLIER_CANCELLABLE_STATUSES = ['pending', 'payment_completed', 'supplier_accepted', 'processing'];
+// When a wholesaler may still refuse an order.
+//
+// payment_pending belongs here, and its absence made the whole idea useless:
+// a new order sits at payment_pending from the moment it is placed, so
+// without it a wholesaler could not refuse an order he had only just
+// received, which is precisely when he wants to.
+//
+// The line is drawn at packed. Once goods are boxed and a driver may be on
+// his way, the way out is a return, not a cancellation.
+const SUPPLIER_CANCELLABLE_STATUSES = [
+  'pending',
+  'payment_pending',
+  'payment_completed',
+  'supplier_accepted',
+  'processing',
+];
 
 // Define status that can be returned
 const RETURNABLE_STATUSES = ['delivered', 'completed'];
@@ -143,63 +158,152 @@ const updateOrderStatus = async (orderId, newStatus, userId, userRole, remarks =
 };
 
 /**
- * Cancel an order with inventory restoration
+ * Cancel an order, and unwind everything cancelling it should unwind.
+ *
+ * Four things have to move together, which is why this is one transaction on
+ * one client rather than a status write plus a few helpers:
+ *
+ *   the order          goes to cancelled, but only through a transition the
+ *                      map above allows, so a delivered order cannot be
+ *                      quietly undone
+ *   the sales book     an order that was accepted has already written itself
+ *                      a sale. Leaving that standing bills a customer for
+ *                      goods he is never going to get
+ *   the stock          goes back on the shelf, from order_items, which is the
+ *                      real content of an order. The old version of this read
+ *                      orders.inventory_item_id, a single item leftover, so a
+ *                      cart of five products returned the stock of one
+ *   the history        one row saying who cancelled it and why
+ *
+ * Money is deliberately left alone. A payment that was made is real money the
+ * customer handed over, so it stays in the khata and he sits in credit until
+ * somebody refunds him or sets it against his next order. Deleting it here
+ * would make the money disappear from the books without anyone deciding to
+ * give it back.
+ *
+ * Stock only comes back when nothing has been paid. That is the rule the rest
+ * of this codebase already follows: once money is against an order, unwinding
+ * it is a refund, which is a decision a person makes, not a side effect of
+ * pressing cancel.
  */
-const cancelOrder = async (orderId, userId, userRole, reason = null) => {
+const cancelOrder = async (orderId, userId, reason = null) => {
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
-    // Get order details
+
+    // FOR UPDATE, because two people pressing cancel at once would otherwise
+    // both read "not cancelled yet" and both put the stock back.
     const orderResult = await client.query(
-      'SELECT status, buyer_id, supplier_id, inventory_item_id, quantity FROM orders WHERE id = $1',
+      `SELECT status, buyer_id, supplier_id, amount_paid
+         FROM orders WHERE id = $1 FOR UPDATE`,
       [orderId]
     );
-    
+
     if (orderResult.rows.length === 0) {
       throw new Error('Order not found');
     }
-    
+
     const order = orderResult.rows[0];
-    
-    // Validate cancellation permissions
-    if (userRole === 'buyer' && order.buyer_id !== userId) {
-      throw new Error('You can only cancel your own orders');
+
+    // Who is allowed. A seller account browsing as a buyer is still the buyer
+    // of his own order, so this asks who this person is on THIS order rather
+    // than what their account role says.
+    const isBuyer = order.buyer_id === userId;
+    const isSupplier = order.supplier_id === userId;
+    if (!isBuyer && !isSupplier) {
+      throw new Error('You cannot cancel this order');
     }
-    
-    if (userRole === 'supplier' && order.supplier_id !== userId) {
-      throw new Error('You can only cancel orders placed with you');
+
+    const allowed = isSupplier ? SUPPLIER_CANCELLABLE_STATUSES : BUYER_CANCELLABLE_STATUSES;
+    if (!allowed.includes(order.status)) {
+      throw new Error(
+        isSupplier
+          ? 'This order has already been sent out, so it cannot be refused. Use a return instead.'
+          : 'This order has already been sent out, so it cannot be cancelled. Ask the seller about a return.'
+      );
     }
-    
-    // Validate if order can be cancelled
-    if (userRole === 'buyer' && !BUYER_CANCELLABLE_STATUSES.includes(order.status)) {
-      throw new Error(`Cannot cancel order in ${order.status} status`);
+
+    // The map is the authority on what a status may become, and cancelled is
+    // not reachable from everywhere. Asking it keeps the two lists above from
+    // drifting away from the lifecycle they are meant to sit inside.
+    const validation = validateStatusTransition(order.status, 'cancelled');
+    if (!validation.valid) {
+      throw new Error(validation.message);
     }
-    
-    if (userRole === 'supplier' && !SUPPLIER_CANCELLABLE_STATUSES.includes(order.status)) {
-      throw new Error(`Cannot cancel order in ${order.status} status`);
-    }
-    
-    // Update order status to cancelled
+
     await client.query(
       'UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
       ['cancelled', orderId]
     );
-    
-    // Record status change
+
     await client.query(
       `INSERT INTO order_status_history (order_id, status, previous_status, updated_by, updated_by_role, remarks)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [orderId, 'cancelled', order.status, userId, userRole, reason || 'Order cancelled']
+      [
+        orderId,
+        'cancelled',
+        order.status,
+        userId,
+        // What this person is on this order, not what their account says. A
+        // wholesaler cancelling his own purchase is a buyer here.
+        isSupplier ? 'supplier' : 'buyer',
+        reason || (isSupplier ? 'Order refused by the seller' : 'Order cancelled by the buyer'),
+      ]
     );
-    
-    // Restore inventory stock
-    await restoreInventoryStock(order.inventory_item_id, order.quantity, orderId, userId);
-    
+
+    // The sale, if the order got far enough to write one. Cancelled sales are
+    // not counted in any balance, so this is what stops the customer being
+    // billed. The column may not exist yet on a database that is behind on
+    // migrations, hence the check.
+    const bridged = await client.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'sales' AND column_name = 'order_id'
+       ) AS yes`
+    );
+    if (bridged.rows[0].yes) {
+      await client.query(
+        `UPDATE sales SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+          WHERE order_id = $1 AND status <> 'cancelled'`,
+        [orderId]
+      );
+    }
+
+    // Stock, every line of it. Nothing paid means nothing was sold, so the
+    // goods were only ever reserved.
+    //
+    // Only while stock is being tracked. With tracking off, checkout floors
+    // the subtraction at zero instead of refusing the order, so a listing
+    // that sat at zero gave nothing up, and adding the quantity back here
+    // would invent stock that never existed. An invented count is exactly
+    // what turning the feature off was meant to avoid.
+    const nothingPaid = Number(order.amount_paid || 0) === 0;
+    let stockReturned = 0;
+    if (nothingPaid && FEATURES.STOCK_TRACKING) {
+      const lines = await client.query(
+        `SELECT inventory_item_id, quantity FROM order_items
+          WHERE order_id = $1 AND inventory_item_id IS NOT NULL`,
+        [orderId]
+      );
+
+      for (const line of lines.rows) {
+        const restored = await client.query(
+          `UPDATE supplier_inventory SET stock = stock + $1 WHERE id = $2 RETURNING stock`,
+          [line.quantity, line.inventory_item_id]
+        );
+        if (restored.rows.length > 0) stockReturned++;
+      }
+    }
+
     await client.query('COMMIT');
-    
-    return { success: true, message: 'Order cancelled successfully' };
+
+    return {
+      success: true,
+      message: 'Order cancelled',
+      stockReturned,
+      paymentLeftInPlace: !nothingPaid,
+    };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

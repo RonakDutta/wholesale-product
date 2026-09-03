@@ -3,8 +3,11 @@ const { hasPartyLink } = require("../services/partyService");
 const { hasSaleLink } = require("../services/orderSaleService");
 const {
   BILLED_SALE_STATUSES,
+  NOT_OWED_SQL,
+  bridgedGuard,
   balanceExpression,
   totalsExpression,
+  collectionTotals,
 } = require("../services/khataBalance");
 
 /**
@@ -48,8 +51,9 @@ exports.getOverview = async (req, res) => {
       since: "date_trunc('month', CURRENT_DATE)",
     });
 
-    const [money, counts, toDeliver, topDues, quiet, recentSales] =
+    const [collect, money, counts, toDeliver, topDues, quiet, recentSales] =
       await Promise.all([
+        pool.query(collectionTotals({ hasOrderParty, hasBridge }), [wholesalerId]),
         pool.query(
           `SELECT
              ${allTime.billed} AS billed_all_time,
@@ -130,11 +134,15 @@ exports.getOverview = async (req, res) => {
 
     const m = money.rows[0];
     const c = counts.rows[0];
+    const k = collect.rows[0];
 
     res.status(200).json({
       money: {
-        outstanding:
-          Number(m.billed_all_time) - Number(m.received_all_time),
+        // Each customer's balance worked out on its own and only then added
+        // up, so a customer in credit cannot cancel out another's debt and
+        // "still to collect" cannot come out negative. See khataBalance.
+        outstanding: Number(k.owed_to_you),
+        owedBack: Number(k.owed_by_you),
         billedThisMonth: Number(m.billed_this_month),
         receivedThisMonth: Number(m.received_this_month),
       },
@@ -151,6 +159,124 @@ exports.getOverview = async (req, res) => {
     });
   } catch (err) {
     console.error("Error building the overview:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/**
+ * Why is that number what it is?
+ *
+ * The three figures on the Overview are sums, and a sum a wholesaler cannot
+ * take apart is a number he has to trust rather than check. This returns the
+ * rows behind one of them.
+ *
+ * The rule is not restated here. It is read from services/khataBalance, the
+ * same place the card itself reads, which is what makes "these rows add up to
+ * that card" true rather than hoped for. The test asserts exactly that.
+ *
+ * @route GET /api/overview/breakdown?metric=outstanding|billed|received
+ */
+exports.getBreakdown = async (req, res) => {
+  const wholesalerId = req.user.id;
+  const metric = String(req.query.metric || "outstanding");
+
+  if (!["outstanding", "billed", "received"].includes(metric)) {
+    return res.status(400).json({ message: "Unknown metric" });
+  }
+
+  try {
+    const hasOrderParty = await hasPartyLink(pool);
+    const hasBridge = await hasSaleLink(pool);
+
+    if (metric === "outstanding") {
+      // Every customer, with the three numbers his balance is made of, so the
+      // arithmetic is on the screen rather than behind it. Customers who owe
+      // nothing are left out; the ones in credit are kept, because a minus is
+      // exactly the thing somebody opens this page to understand.
+      const rows = await pool.query(
+        `SELECT p.id, p.name, p.business_name, p.phone, p.city,
+                dues.billed_sales, dues.billed_orders, dues.received,
+                (dues.billed_sales + dues.billed_orders - dues.received) AS outstanding
+           FROM parties p
+           JOIN LATERAL (
+             SELECT
+               COALESCE((SELECT SUM(s.total) FROM sales s
+                  WHERE s.party_id = p.id
+                    AND s.status IN ${BILLED_SALE_STATUSES}), 0) AS billed_sales,
+               ${
+                 hasOrderParty
+                   ? `COALESCE((SELECT SUM(o.total_amount) FROM orders o
+                        WHERE o.party_id = p.id
+                          AND o.status NOT IN (${NOT_OWED_SQL})
+                          ${bridgedGuard(hasBridge)}), 0)`
+                   : "0"
+               } AS billed_orders,
+               COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
+                  WHERE pp.party_id = p.id), 0) AS received
+           ) dues ON TRUE
+          WHERE p.wholesaler_id = $1
+            AND (dues.billed_sales + dues.billed_orders - dues.received) <> 0
+          ORDER BY (dues.billed_sales + dues.billed_orders - dues.received) DESC`,
+        [wholesalerId],
+      );
+      return res.status(200).json({ metric, rows: rows.rows });
+    }
+
+    const since = "date_trunc('month', CURRENT_DATE)";
+
+    if (metric === "billed") {
+      // Hand written sales and shop orders in one list, each saying which it
+      // is, because "billed this month" covers both and a wholesaler looking
+      // for a missing figure needs to know where to go and look.
+      const orderPart = hasOrderParty
+        ? `UNION ALL
+           SELECT o.id, 'order' AS kind, o.order_number AS reference,
+                  o.created_at::date AS on_date, o.status, o.total_amount AS amount,
+                  COALESCE(p.name, 'Walk in') AS party_name, p.id AS party_id
+             FROM orders o
+             LEFT JOIN parties p ON p.id = o.party_id
+            WHERE o.supplier_id = $1
+              AND o.party_id IS NOT NULL
+              AND o.status NOT IN (${NOT_OWED_SQL})
+              ${bridgedGuard(hasBridge)}
+              AND o.created_at >= ${since}`
+        : "";
+
+      const rows = await pool.query(
+        `SELECT id, kind, reference, on_date, status, amount, party_name, party_id
+           FROM (
+             SELECT s.id, 'sale' AS kind, s.sale_number AS reference,
+                    s.sale_date AS on_date, s.status, s.total AS amount,
+                    p.name AS party_name, p.id AS party_id
+               FROM sales s
+               JOIN parties p ON p.id = s.party_id
+              WHERE s.wholesaler_id = $1
+                AND s.status IN ${BILLED_SALE_STATUSES}
+                AND s.sale_date >= ${since}
+             ${orderPart}
+           ) rows
+          ORDER BY on_date DESC, reference DESC`,
+        [wholesalerId],
+      );
+      return res.status(200).json({ metric, rows: rows.rows });
+    }
+
+    // received
+    const rows = await pool.query(
+      `SELECT pp.id, pp.amount, pp.method, pp.paid_on, pp.note,
+              p.id AS party_id, p.name AS party_name,
+              o.order_number
+         FROM party_payments pp
+         JOIN parties p ON p.id = pp.party_id
+         LEFT JOIN orders o ON o.id = pp.order_id
+        WHERE pp.wholesaler_id = $1
+          AND pp.paid_on >= ${since}
+        ORDER BY pp.paid_on DESC, pp.created_at DESC`,
+      [wholesalerId],
+    );
+    return res.status(200).json({ metric, rows: rows.rows });
+  } catch (err) {
+    console.error("Error building the breakdown:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

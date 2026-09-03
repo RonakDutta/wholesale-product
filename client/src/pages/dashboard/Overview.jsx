@@ -45,14 +45,32 @@ const STATUS_STYLES = {
   cancelled: "bg-rose-50 text-rose-700",
 };
 
-const MoneyCard = ({ label, value, hint, tone = "espresso" }) => (
-  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-2xl sm:p-5">
+/**
+ * One of the three figures, and the way into the rows behind it.
+ *
+ * These were plain boxes. A total a wholesaler cannot take apart is a number
+ * he has to trust rather than check, and the first question anybody asks of a
+ * figure on a dashboard is "why is it that". Each card now opens the list it
+ * is made of.
+ *
+ * A negative "still to collect" reads red rather than amber. It means he owes
+ * his customers money, which is a different fact from being owed some.
+ */
+const MoneyCard = ({ label, value, hint, to, tone = "espresso" }) => (
+  <Link
+    to={to}
+    className="group block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-clay sm:rounded-2xl sm:p-5"
+  >
     <p className="text-[11px] font-semibold leading-tight text-slate-500 sm:text-sm">
       {label}
     </p>
     <p
       className={`mt-1 text-lg font-black sm:text-2xl ${
-        tone === "amber" ? "text-amber-600" : "text-espresso"
+        Number(value) < 0
+          ? "text-rose-600"
+          : tone === "amber"
+            ? "text-amber-600"
+            : "text-espresso"
       }`}
     >
       ₹{money(value)}
@@ -60,7 +78,11 @@ const MoneyCard = ({ label, value, hint, tone = "espresso" }) => (
     <p className="mt-1 hidden text-xs font-medium text-slate-500 sm:block">
       {hint}
     </p>
-  </div>
+    <p className="mt-1.5 flex items-center gap-1 text-[11px] font-bold text-clay opacity-0 transition-opacity group-hover:opacity-100">
+      See what makes this up
+      <ArrowRight className="h-3 w-3" />
+    </p>
+  </Link>
 );
 
 const Panel = ({ icon: Icon, title, subtitle, action, children }) => (
@@ -217,20 +239,45 @@ const Overview = () => {
         <MoneyCard
           label="Still to collect"
           value={m.outstanding}
-          hint="Billed minus received, all time"
+          hint="What your customers owe you"
+          to="/seller/money/outstanding"
           tone={m.outstanding > 0 ? "amber" : "espresso"}
         />
         <MoneyCard
           label="Billed this month"
           value={m.billedThisMonth}
-          hint="Confirmed and delivered sales"
+          hint="Your sales and shop orders"
+          to="/seller/money/billed"
         />
         <MoneyCard
           label="Received this month"
           value={m.receivedThisMonth}
           hint="Money that came in"
+          to="/seller/money/received"
         />
       </div>
+
+      {/* Money that is not yours, said out loud rather than quietly taken off
+          the figure above. A customer goes into credit when he has paid for
+          something that was later cancelled or sent back, and netting it
+          against what other customers owe would hide both facts. */}
+      {Number(m.owedBack) > 0 && (
+        <Link
+          to="/seller/money/outstanding"
+          className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 transition-colors hover:border-amber-300 sm:rounded-2xl sm:px-5"
+        >
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-amber-900">
+              You are holding ₹{money(m.owedBack)} of customers' money
+            </p>
+            <p className="mt-0.5 text-xs text-amber-800">
+              They paid for something that was cancelled or came back. Refund
+              it, or set it against their next order.
+            </p>
+          </div>
+          <ArrowRight className="h-4 w-4 shrink-0 text-amber-700" />
+        </Link>
+      )}
 
       {/* items-start so a short panel does not stretch to match a tall one. */}
       <div className="grid items-start gap-6 lg:grid-cols-2">

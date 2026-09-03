@@ -192,6 +192,79 @@ const mkUser = async (role, phone) =>
     {},
   );
 
+  // ---- a customer in credit must not go on the "still to collect" card ---
+  // This is the shape that put a large minus sign on the dashboard: money
+  // taken for an order that was later cancelled. The customer is genuinely
+  // owed it back, so it must be reported, but not as a negative amount to
+  // collect and not by cancelling out what other customers owe.
+  const creditBuyer = await mkUser("buyer", "9820099887");
+  const refunded = await call(orders.createOrder, {
+    user: { id: creditBuyer },
+    body: {
+      products: [{ productId: prod, inventoryId: inv, quantity: 20 }],
+      deliveryAddress: { name: "Credit Traders", phone: "9820099887", city: "Surat" },
+    },
+  });
+  const creditParty = (await q("SELECT party_id FROM orders WHERE id=$1", [refunded.body.orderId])).rows[0].party_id;
+  await call(orders.initiatePayment, { user: { id: creditBuyer }, params: { orderId: refunded.body.orderId }, body: {} });
+  await call(orders.updatePaymentStatus, {
+    user: { id: creditBuyer }, params: { orderId: refunded.body.orderId }, body: { paymentStatus: "paid" },
+  });
+  await call(orders.cancelOrderHandler, {
+    user: seller, params: { orderId: refunded.body.orderId }, body: { reason: "Out of stock" },
+  });
+  check((await partyBalance(creditParty)) === -2000, "he paid 2000 for an order that was cancelled", { bal: await partyBalance(creditParty) });
+
+  // And somebody who genuinely owes, at the same time.
+  const debtBuyer = await mkUser("buyer", "9820055443");
+  const unpaid = await call(orders.createOrder, {
+    user: { id: debtBuyer },
+    body: {
+      products: [{ productId: prod, inventoryId: inv, quantity: 30 }],
+      deliveryAddress: { name: "Debt Traders", phone: "9820055443", city: "Surat" },
+    },
+  });
+  const debtParty = (await q("SELECT party_id FROM orders WHERE id=$1", [unpaid.body.orderId])).rows[0].party_id;
+  await call(orders.initiatePayment, { user: { id: debtBuyer }, params: { orderId: unpaid.body.orderId }, body: {} });
+  await call(orders.updatePaymentStatus, {
+    user: { id: debtBuyer }, params: { orderId: unpaid.body.orderId }, body: { paymentStatus: "paid" },
+  });
+  await call(orders.updateOrderStatus, {
+    user: seller, params: { orderId: unpaid.body.orderId }, body: { status: "supplier_accepted" },
+  });
+  await q("DELETE FROM party_payments WHERE party_id = $1", [debtParty]);
+  check((await partyBalance(debtParty)) === 3000, "and somebody else owes 3000", { bal: await partyBalance(debtParty) });
+
+  const mixed = await seen();
+  check(Number(mixed.money.outstanding) === 3000, "still to collect is the 3000, not 1000", mixed.money.outstanding);
+  check(Number(mixed.money.outstanding) >= 0, "and it can never be negative", mixed.money.outstanding);
+  check(Number(mixed.money.owedBack) === 2000, "the 2000 owed back is reported separately", mixed.money.owedBack);
+
+  // ---- the breakdown rows add up to the cards ---------------------------
+  const detail = await call(overview.getBreakdown, { user: seller, query: { metric: "outstanding" } });
+  const rows = detail.body.rows;
+  const sumOwed = rows.reduce((t, r) => t + Math.max(Number(r.outstanding), 0), 0);
+  const sumCredit = rows.reduce((t, r) => t + Math.max(-Number(r.outstanding), 0), 0);
+  check(sumOwed === Number(mixed.money.outstanding), "the rows behind the card add up to the card", { rows: sumOwed, card: mixed.money.outstanding });
+  check(sumCredit === Number(mixed.money.owedBack), "and the credits add up to the money owed back", { rows: sumCredit, card: mixed.money.owedBack });
+  const oneRow = rows.find((r) => r.id === debtParty);
+  check(
+    Number(oneRow.billed_sales) + Number(oneRow.billed_orders) - Number(oneRow.received) === 3000,
+    "each row shows the arithmetic that makes its balance",
+    { sales: oneRow.billed_sales, orders: oneRow.billed_orders, received: oneRow.received },
+  );
+
+  const billed = await call(overview.getBreakdown, { user: seller, query: { metric: "billed" } });
+  const billedSum = billed.body.rows.reduce((t, r) => t + Number(r.amount), 0);
+  check(billedSum === Number(mixed.money.billedThisMonth), "billed rows add up to the billed card", { rows: billedSum, card: mixed.money.billedThisMonth });
+
+  const received = await call(overview.getBreakdown, { user: seller, query: { metric: "received" } });
+  const receivedSum = received.body.rows.reduce((t, r) => t + Number(r.amount), 0);
+  check(receivedSum === Number(mixed.money.receivedThisMonth), "received rows add up to the received card", { rows: receivedSum, card: mixed.money.receivedThisMonth });
+
+  const junk = await call(overview.getBreakdown, { user: seller, query: { metric: "whatever" } });
+  check(junk.statusCode === 400, "an unknown metric is refused", { s: junk.statusCode });
+
   console.log(fails === 0 ? "\nall good\n" : `\n${fails} failure(s)\n`);
   process.exitCode = fails === 0 ? 0 : 1;
   await testPool.end();

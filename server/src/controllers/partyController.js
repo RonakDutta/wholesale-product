@@ -8,6 +8,7 @@ const {
   NOT_OWED_SQL,
   bridgedGuard,
   balanceExpression,
+  collectionTotals,
 } = require("../services/khataBalance");
 const pdfService = require("../services/pdfService");
 
@@ -616,18 +617,29 @@ exports.getPartyStats = async (req, res) => {
   const wholesalerId = req.user.id;
 
   try {
-    const result = await pool.query(
-      `SELECT
-         (SELECT COUNT(*) FROM parties
-           WHERE wholesaler_id = $1 AND status = 'active') AS active_parties,
-         (SELECT COUNT(*) FROM parties WHERE wholesaler_id = $1) AS total_parties,
-         COALESCE((SELECT SUM(s.total) FROM sales s
-            WHERE s.wholesaler_id = $1
-              AND s.status IN ('confirmed', 'delivered')), 0) AS total_billed,
-         COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
-            WHERE pp.wholesaler_id = $1), 0) AS total_received`,
-      [wholesalerId],
-    );
+    // This carried a third copy of the balance rule, with the same fault the
+    // Overview had: billed from sales alone, less every payment including
+    // money taken through the shop. It now reads the one rule, and asks for
+    // what is owed per customer rather than netting the whole book, so a
+    // customer in credit cannot cancel out another customer's debt.
+    const hasOrderParty = await hasPartyLink(pool);
+    const hasBridge = await hasSaleLink(pool);
+
+    const [result, collect] = await Promise.all([
+      pool.query(
+        `SELECT
+           (SELECT COUNT(*) FROM parties
+             WHERE wholesaler_id = $1 AND status = 'active') AS active_parties,
+           (SELECT COUNT(*) FROM parties WHERE wholesaler_id = $1) AS total_parties,
+           COALESCE((SELECT SUM(s.total) FROM sales s
+              WHERE s.wholesaler_id = $1
+                AND s.status IN ('confirmed', 'delivered')), 0) AS total_billed,
+           COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
+              WHERE pp.wholesaler_id = $1), 0) AS total_received`,
+        [wholesalerId],
+      ),
+      pool.query(collectionTotals({ hasOrderParty, hasBridge }), [wholesalerId]),
+    ]);
 
     const row = result.rows[0];
     res.status(200).json({
@@ -635,7 +647,8 @@ exports.getPartyStats = async (req, res) => {
       totalParties: Number(row.total_parties),
       totalBilled: Number(row.total_billed),
       totalReceived: Number(row.total_received),
-      outstanding: Number(row.total_billed) - Number(row.total_received),
+      outstanding: Number(collect.rows[0].owed_to_you),
+      owedBack: Number(collect.rows[0].owed_by_you),
     });
   } catch (err) {
     console.error("Error fetching party stats:", err);

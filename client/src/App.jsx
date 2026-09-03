@@ -59,6 +59,7 @@ const Sales = lazy(() => import("./pages/dashboard/Sales"));
 const RecordSale = lazy(() => import("./pages/dashboard/RecordSale"));
 const SaleDetail = lazy(() => import("./pages/dashboard/SaleDetail"));
 const Overview = lazy(() => import("./pages/dashboard/Overview"));
+const MoneyBreakdown = lazy(() => import("./pages/dashboard/MoneyBreakdown"));
 
 const SellerFallback = () => (
   <div className="flex min-h-dvh items-center justify-center bg-slate-100">
@@ -136,6 +137,8 @@ const router = createBrowserRouter([
       { path: "products/new", element: <AddProduct /> },
       { path: "products/edit/:id", element: <EditProduct /> },
       { path: "orders", element: <Orders /> },
+      // The rows behind each figure on the overview.
+      { path: "money/:metric", element: <MoneyBreakdown /> },
       { path: "invoices", element: <Invoices /> },
       { path: "invoices/create", element: <CreateInvoice /> },
       { path: "invoices/reports", element: <InvoiceReports /> },

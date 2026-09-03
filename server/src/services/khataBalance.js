@@ -90,12 +90,11 @@ const balanceExpression = ({ hasOrderParty, hasBridge, partyRef = "pt.id" }) => 
 `;
 
 /**
- * The same sum across a whole wholesaler, for the Overview.
+ * What is billed and what has come in, over a window, for the Overview.
  *
- * Not a SUM of the per party figure, because a wholesaler can have payments
- * against a customer who has since been deleted, and because summing one
- * correlated subquery per party over a large book is slow. Scoped by
- * wholesaler_id on every term.
+ * These two are plain sums and cannot go wrong on their own. It is the
+ * difference between them that used to be reported as "still to collect", and
+ * that is the thing that could go negative. See collectionTotals below.
  */
 const totalsExpression = ({ hasOrderParty, hasBridge, since = null }) => {
   const salesWindow = since ? `AND s.sale_date >= ${since}` : "";
@@ -122,6 +121,43 @@ const totalsExpression = ({ hasOrderParty, hasBridge, since = null }) => {
   };
 };
 
+/**
+ * How much is actually still to collect, and how much is owed back.
+ *
+ * Everything before this asked one subtraction of the whole business: total
+ * billed, less total received. That is the wrong sum, and it is wrong in a way
+ * that shows a large minus sign on a card headed "still to collect".
+ *
+ * Two customers make the point. Ramesh owes 5,000. Suresh paid for an order
+ * that was later cancelled and is 2,000 in credit. The old figure said 3,000,
+ * which is not a real quantity: there is no 3,000 to go and collect, and
+ * nobody is going to hand Ramesh's debt to Suresh. What is true is that 5,000
+ * is out there to collect, and 2,000 of somebody else's money is sitting in
+ * the till.
+ *
+ * Netting them also lets one customer's credit hide another's debt, which is
+ * the failure that matters: a wholesaler chasing 5,000 is shown 3,000 and
+ * stops chasing early.
+ *
+ * So each customer's balance is worked out on its own and only then added up,
+ * the debts into one figure and the credits into another. "Still to collect"
+ * becomes structurally incapable of going negative, and the money owed back is
+ * reported rather than quietly cancelled out. Neither number is invented and
+ * neither is hidden.
+ *
+ * Scoped by wholesaler_id. Takes $1 as the wholesaler.
+ */
+const collectionTotals = ({ hasOrderParty, hasBridge }) => `
+  SELECT
+    COALESCE(SUM(GREATEST(dues.balance, 0)), 0) AS owed_to_you,
+    COALESCE(SUM(GREATEST(-dues.balance, 0)), 0) AS owed_by_you
+  FROM parties p
+  JOIN LATERAL (
+    SELECT ${balanceExpression({ hasOrderParty, hasBridge, partyRef: "p.id" })} AS balance
+  ) dues ON TRUE
+  WHERE p.wholesaler_id = $1
+`;
+
 module.exports = {
   ORDER_NOT_OWED,
   NOT_OWED_SQL,
@@ -129,4 +165,5 @@ module.exports = {
   bridgedGuard,
   balanceExpression,
   totalsExpression,
+  collectionTotals,
 };

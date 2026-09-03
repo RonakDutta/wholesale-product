@@ -48,13 +48,15 @@ const GROUPS = {
   processing: ["processing", "packed", "ready_for_pickup"],
   shipped: ["shipped", "in_transit", "out_for_delivery"],
   delivered: ["delivered", "completed"],
+  // A return in progress is live work, not a dead order, so it does not
+  // belong under Cancelled where it used to sit unread. Rejected and
+  // completed returns are finished and stay there.
+  returns: ["return_requested", "return_approved", "replacement_requested", "replacement_issued"],
   cancelled: [
     "cancelled",
     "payment_failed",
     "failed_delivery",
     "refunded",
-    "return_requested",
-    "return_approved",
     "return_rejected",
     "return_completed",
   ],
@@ -74,6 +76,7 @@ const GROUP_STYLES = {
   processing: "bg-indigo-100 text-indigo-700 border-indigo-200",
   shipped: "bg-blue-100 text-blue-700 border-blue-200",
   delivered: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  returns: "bg-orange-100 text-orange-700 border-orange-200",
   cancelled: "bg-rose-100 text-rose-700 border-rose-200",
 };
 
@@ -112,6 +115,7 @@ export const ORDER_TABS = [
   { label: "Processing", group: "processing" },
   { label: "Shipped", group: "shipped" },
   { label: "Delivered", group: "delivered" },
+  { label: "Returns", group: "returns" },
   { label: "Cancelled", group: "cancelled" },
 ];
 
@@ -150,7 +154,37 @@ const NEXT_STEP = {
   in_transit: { to: "out_for_delivery", label: "Out for delivery" },
   out_for_delivery: { to: "delivered", label: "Mark delivered" },
   delivered: { to: "completed", label: "Close this order" },
+  // A return the buyer has asked for. Two answers rather than one next step,
+  // so the Orders page offers a pair of buttons here instead of the usual
+  // single one: see RETURN_ANSWERS below.
+  return_approved: { to: "return_completed", label: "Goods came back" },
 };
+
+/**
+ * A return the buyer has asked for, and the two answers to it.
+ *
+ * Kept apart from NEXT_STEP because this is the one point in the lifecycle
+ * with a genuine choice rather than a next step. Everywhere else the
+ * wholesaler is moving an order along; here he is deciding.
+ *
+ * Rejecting is not a dead end for the money: partyController leaves a
+ * rejected return owed on purpose, because the customer still has the goods.
+ */
+export const RETURN_ANSWERS = [
+  { to: "return_approved", label: "Accept return", tone: "primary" },
+  { to: "return_rejected", label: "Refuse return", tone: "quiet" },
+];
+
+/** Whether this order is waiting on the wholesaler to answer a return. */
+export const isReturnRequested = (status) => normalize(status) === "return_requested";
+
+/**
+ * Whether the buyer can ask to send this order back.
+ *
+ * The mirror of RETURNABLE_STATUSES on the server, which checks again.
+ */
+export const canRequestReturn = (status) =>
+  ["delivered", "completed"].includes(normalize(status));
 
 /**
  * What to offer on this order, or null when there is nothing to do.
@@ -166,7 +200,8 @@ export const getNextStep = (status) => NEXT_STEP[normalize(status)] || null;
  * This is the count worth putting in front of him: not how many orders exist,
  * but how many are waiting on him.
  */
-export const needsAction = (status) => Boolean(getNextStep(status));
+export const needsAction = (status) =>
+  Boolean(getNextStep(status)) || isReturnRequested(status);
 
 /**
  * Whether this order is far enough along to hand to a driver.

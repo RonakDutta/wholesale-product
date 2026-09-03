@@ -1,6 +1,14 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Eye, Clock, ArrowRight, Truck, XCircle } from "lucide-react";
+import {
+  Search,
+  Eye,
+  Clock,
+  ArrowRight,
+  Truck,
+  XCircle,
+  Undo2,
+} from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
 import DispatchModal from "../../components/DispatchModal";
@@ -13,6 +21,8 @@ import {
   getNextStep,
   needsAction,
   canRefuse,
+  isReturnRequested,
+  RETURN_ANSWERS,
 } from "../../utils/orderStatus";
 
 const Orders = () => {
@@ -76,6 +86,36 @@ const Orders = () => {
     }
   };
 
+  /**
+   * Answer a return the buyer has asked for.
+   *
+   * Separate from advance() because this is a choice rather than a step, and
+   * because accepting a return is the point where the money unwinds: the
+   * server cancels the sale so the customer stops owing for goods that are
+   * coming back. Worth saying out loud in the toast, because a wholesaler
+   * who does not realise his khata just changed will go looking for the
+   * difference later.
+   */
+  const answerReturn = async (order, answer) => {
+    setWorking(order.id);
+    try {
+      await api.patch(`/api/orders/${order.id}/status`, { status: answer.to });
+      applyStatus(order.id, answer.to);
+      toast.success(
+        answer.to === "return_approved"
+          ? "Return accepted. Mark it once the goods are back with you."
+          : "Return refused. This order stays owed.",
+      );
+    } catch (err) {
+      toast.error(
+        err.response?.data?.message ||
+          "Could not answer this return. Refresh and try again.",
+      );
+    } finally {
+      setWorking(null);
+    }
+  };
+
   const tabs = ORDER_TABS.map((t) => t.label);
 
   const getStatusStyle = getOrderStatusStyle;
@@ -127,7 +167,11 @@ const Orders = () => {
 
       {/* Filters and Search */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-        <div className="flex items-center gap-2 w-full lg:w-auto overflow-x-auto pb-2 lg:pb-0 hide-scrollbar">
+        {/* Scrolls sideways on a phone, wraps on a wide screen. Adding a
+            seventh tab pushed the last one under the search box, where it
+            read "Cance" and could not be clicked. Wrapping is the only one of
+            the two that cannot hide a tab. */}
+        <div className="flex flex-nowrap lg:flex-wrap items-center gap-2 w-full min-w-0 lg:w-auto overflow-x-auto lg:overflow-visible pb-2 lg:pb-0 hide-scrollbar">
           {tabs.map((tab) => (
             <button
               key={tab}
@@ -218,6 +262,26 @@ const Orders = () => {
                     View
                   </button>
                 </div>
+
+                {isReturnRequested(order.status) && (
+                  <div className="mt-3 flex gap-2 border-t border-slate-100 pt-3">
+                    {RETURN_ANSWERS.map((answer) => (
+                      <button
+                        key={answer.to}
+                        onClick={() => answerReturn(order, answer)}
+                        disabled={busy}
+                        className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-bold transition-colors disabled:opacity-60 ${
+                          answer.tone === "primary"
+                            ? "bg-clay text-cream hover:bg-espresso"
+                            : "border border-slate-200 text-slate-600 hover:border-rose-300 hover:text-rose-600"
+                        }`}
+                      >
+                        <Undo2 className="h-4 w-4" />
+                        {busy ? "Saving..." : answer.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {(step || canRefuse(order.status)) && (
                   <div className="mt-3 flex gap-2">
@@ -346,6 +410,22 @@ const Orders = () => {
                             the order is waiting on the buyer to pay or is
                             already finished, because there is nothing he can
                             do to it. */}
+                        {isReturnRequested(order.status) &&
+                          RETURN_ANSWERS.map((answer) => (
+                            <button
+                              key={answer.to}
+                              onClick={() => answerReturn(order, answer)}
+                              disabled={working === order.id}
+                              className={`inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-colors disabled:opacity-60 ${
+                                answer.tone === "primary"
+                                  ? "bg-clay text-cream hover:bg-espresso"
+                                  : "border border-slate-200 bg-white text-slate-600 hover:border-rose-300 hover:text-rose-600"
+                              }`}
+                            >
+                              <Undo2 className="h-3.5 w-3.5" />
+                              {answer.label}
+                            </button>
+                          ))}
                         {(() => {
                           const step = getNextStep(order.status);
                           if (!step) return null;

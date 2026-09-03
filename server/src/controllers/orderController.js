@@ -6,10 +6,11 @@ const {
   hasPartyLink,
   recordOrderPayment,
 } = require("../services/partyService");
-const { createSaleFromOrder } = require("../services/orderSaleService");
+const { createSaleFromOrder, hasSaleLink } = require("../services/orderSaleService");
 const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange, cancelOrder } = require("../services/orderStatusService");
 const { geocodeOrderDestination } = require("../services/geocodingService");
 const invoiceService = require("../services/invoiceService");
+const creditNoteService = require("../services/creditNoteService");
 const pdfService = require("../services/pdfService");
 const {
   enqueueNotification,
@@ -972,6 +973,88 @@ const getOrderById = async (req, res) => {
   }
 };
 
+// The lifecycle status the wholesaler moves the order to, and the shorter
+// word the older return_status column uses for the same thing. Both are kept
+// current because screens and reports read one or the other.
+const RETURN_ANSWERS = {
+  return_approved: "approved",
+  return_rejected: "rejected",
+  return_completed: "completed",
+};
+
+/**
+ * Goods are back. Stop billing for them.
+ *
+ * Two things happen, and only the first one changes what anybody owes.
+ *
+ * The sale is cancelled. An accepted order writes itself a sale, and from
+ * that moment the sale is what the khata bills, not the order. partyController
+ * already leaves an order at return_completed out of the billed side, but for
+ * an order that reached delivery, and every returned order did, that clause
+ * has no effect: the debt is coming from the sale, which is still confirmed.
+ * So the sale is what has to be cancelled, or the customer goes on owing for
+ * goods sitting back in the godown.
+ *
+ * A credit note is raised against the invoice, if there is one. That is the
+ * document GST asks for when goods come back: the invoice stands and is
+ * reversed by a note, rather than being deleted as though it never happened.
+ *
+ * The credit note does NOT move the balance, and must not start doing so
+ * while this cancels the sale, or a return would be subtracted twice. If
+ * credit notes are ever made to reduce the khata, this needs the guard that
+ * a note against an already cancelled sale counts for nothing.
+ *
+ * Money paid stays where it is, exactly as it does when an order is refused:
+ * it is real money, and the customer sits in credit until somebody refunds
+ * him. That is what the refunded state further along the lifecycle is for.
+ *
+ * Best effort, on its own transaction. A credit note that cannot be written
+ * is worth a line in the log; it is not worth refusing to accept goods that
+ * are physically back.
+ */
+const unwindReturnedOrder = async (orderId, userId) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const hasBridge = await hasSaleLink(client);
+    if (hasBridge) {
+      await client.query(
+        `UPDATE sales SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+          WHERE order_id = $1 AND status <> 'cancelled'`,
+        [orderId],
+      );
+    }
+
+    const invoice = await client.query(
+      "SELECT id, supplier_id FROM invoices WHERE order_id = $1 LIMIT 1",
+      [orderId],
+    );
+    if (invoice.rows.length > 0) {
+      const result = await creditNoteService.createCreditNote(
+        {
+          invoiceId: invoice.rows[0].id,
+          wholesalerId: invoice.rows[0].supplier_id,
+          reason: "goods_returned",
+        },
+        client,
+      );
+      // "exists" is not a failure: the note was already raised, which is what
+      // running this twice looks like.
+      if (result?.error && result.error !== "exists") {
+        console.warn(`Order ${orderId} returned but no credit note: ${result.error}`);
+      }
+    }
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.warn(`Order ${orderId} returned but not unwound: ${err.message}`);
+  } finally {
+    client.release();
+  }
+};
+
 const updateOrderStatus = async (req, res) => {
   const { orderId } = req.params;
   const { status, remarks } = req.body;
@@ -1025,6 +1108,27 @@ const updateOrderStatus = async (req, res) => {
       } finally {
         saleClient.release();
       }
+    }
+
+    // The return states. Approving and rejecting are answers; completing is
+    // the one that moves money, because that is when the goods are actually
+    // back on the shelf.
+    if (RETURN_ANSWERS[status]) {
+      await pool.query(
+        // $2 is cast explicitly because it is used both as a value to store
+        // and inside a comparison, and Postgres will not deduce one type for
+        // both on its own.
+        `UPDATE orders SET return_status = $2::text,
+                           return_completed_at = CASE WHEN $2::text = 'completed'
+                                                      THEN CURRENT_TIMESTAMP
+                                                      ELSE return_completed_at END
+          WHERE id = $1`,
+        [orderId, RETURN_ANSWERS[status]],
+      );
+    }
+
+    if (status === "return_completed") {
+      await unwindReturnedOrder(orderId, userId);
     }
 
     await recordStatusChange(orderId, status, previousStatus, userId, userRole, remarks || `Status updated to ${status}`);
@@ -1085,18 +1189,74 @@ const getOrderTimelineHandler = async (req, res) => {
   }
 };
 
+/**
+ * The buyer asks to send goods back.
+ *
+ * This used to set return_status and nothing else, so orders.status stayed at
+ * "delivered" and the request existed only as a flag nobody read. The
+ * wholesaler was never told, and there was no screen where he could have
+ * answered. A return was a note in a bottle.
+ *
+ * The order now moves to return_requested, which is a real state the
+ * lifecycle already knew about, so it appears on the wholesaler's list with
+ * something to do about it.
+ *
+ * A reason is required. It is the only thing the wholesaler has to decide on,
+ * and "returned" with no explanation is how a disagreement starts.
+ */
 const requestReturn = async (req, res) => {
   const { orderId } = req.params;
-  const { reason } = req.body;
+  const reason = clean(req.body?.reason);
+
+  if (!reason) {
+    return res.status(400).json({
+      success: false,
+      message: "Please say what is wrong with the goods.",
+    });
+  }
+
   try {
     const accessCheck = await ensureOrderAccess(req, res, orderId, { requireBuyer: true, requireSupplier: false });
     if (!accessCheck) return;
 
-    await pool.query(
-      `UPDATE orders SET return_status = 'requested', return_requested_at = CURRENT_TIMESTAMP, notes = COALESCE(notes, '') || ' Return requested' WHERE id = $1 AND buyer_id = $2`,
-      [orderId, req.user.id],
+    const lookup = await pool.query(
+      "SELECT status, buyer_id FROM orders WHERE id = $1",
+      [orderId],
     );
-    res.json({ success: true, message: "Return requested" });
+    if (lookup.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+    // The seller's own return route is different; this one is the buyer's.
+    if (lookup.rows[0].buyer_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: "This is not your order." });
+    }
+
+    const previousStatus = lookup.rows[0].status;
+    const validation = validateStatusTransition(previousStatus, "return_requested");
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        message:
+          previousStatus === "return_requested"
+            ? "You have already asked to return this order."
+            : "Goods can only be sent back once the order has been delivered.",
+      });
+    }
+
+    await pool.query(
+      `UPDATE orders
+          SET status = 'return_requested',
+              return_status = 'requested',
+              return_reason = $3,
+              return_requested_at = CURRENT_TIMESTAMP,
+              updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1 AND buyer_id = $2`,
+      [orderId, req.user.id, reason],
+    );
+
+    await recordStatusChange(orderId, "return_requested", previousStatus, req.user.id, "buyer", reason);
+
+    res.json({ success: true, message: "The seller has been asked about this return." });
   } catch (error) {
     console.error("Error requesting return:", error);
     res.status(500).json({ success: false, message: "Failed to request return" });

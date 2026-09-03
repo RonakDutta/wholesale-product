@@ -13,8 +13,10 @@ import {
   formatOrderStatus,
   getOrderStatusStyle,
   canBuyerCancel,
+  canRequestReturn,
 } from "../utils/orderStatus";
 import RefuseOrderModal from "../components/RefuseOrderModal";
+import ReturnRequestModal from "../components/ReturnRequestModal";
 
 // Buckets are driven by the payment outcome, which is what a buyer actually
 // wants to sort by: what they paid for, what still needs paying, and what
@@ -62,7 +64,7 @@ const BUCKET_COPY = {
   },
 };
 
-const OrderRow = ({ order, onCancel }) => {
+const OrderRow = ({ order, onCancel, onReturn }) => {
   const bucket = bucketOf(order);
   const placed = order.created_at
     ? new Date(order.created_at).toLocaleDateString("en-IN", {
@@ -129,8 +131,19 @@ const OrderRow = ({ order, onCancel }) => {
               Pay now
             </Link>
           )}
-          {/* Only while the seller has not started on it. After that it is
-              a conversation with him, not a button. */}
+          {/* Once the goods have arrived, sending them back is the only way
+              out, and the seller decides. Before they arrive it is a
+              cancellation instead, which is the button below. */}
+          {canRequestReturn(order.status) && (
+            <button
+              onClick={() => onReturn(order)}
+              className="rounded-xl border border-sage/40 px-3 py-2 text-xs font-bold text-espresso/70 transition-colors hover:border-clay hover:text-clay"
+            >
+              Send back
+            </button>
+          )}
+          {/* Only while the seller has not started on it. After that it is a
+              conversation with him, not a button. */}
           {canBuyerCancel(order.status) && (
             <button
               onClick={() => onCancel(order)}
@@ -159,6 +172,7 @@ const MyOrders = () => {
   const [tab, setTab] = useState("all");
   const [reloadKey, setReloadKey] = useState(0);
   const [cancelling, setCancelling] = useState(null);
+  const [returning, setReturning] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -302,9 +316,22 @@ const MyOrders = () => {
               key={order.id}
               order={order}
               onCancel={setCancelling}
+              onReturn={setReturning}
             />
           ))}
         </div>
+      )}
+
+      {returning && (
+        <ReturnRequestModal
+          order={returning}
+          onClose={() => setReturning(null)}
+          onRequested={(id, status) =>
+            setOrders((prev) =>
+              prev.map((o) => (o.id === id ? { ...o, status } : o)),
+            )
+          }
+        />
       )}
 
       {cancelling && (

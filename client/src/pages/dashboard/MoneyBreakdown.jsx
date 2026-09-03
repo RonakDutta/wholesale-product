@@ -168,7 +168,7 @@ const MoneyBreakdown = () => {
           {/* The point of the page. The rows above add up to this, and this
               is the figure on the card. */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+            <div className="flex flex-col gap-1 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <div>
                 <p className="text-sm font-bold text-espresso">{meta.title}</p>
                 <p className="text-xs text-slate-500">
@@ -181,7 +181,7 @@ const MoneyBreakdown = () => {
             </div>
 
             {owedByYou > 0 && (
-              <div className="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
+              <div className="flex flex-col gap-1 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <div>
                   <p className="text-sm font-bold text-amber-900">
                     Money you are holding for customers
@@ -191,7 +191,7 @@ const MoneyBreakdown = () => {
                     reduce what others owe you.
                   </p>
                 </div>
-                <p className="text-2xl font-black text-amber-700">
+                <p className="shrink-0 text-2xl font-black text-amber-700">
                   {money(owedByYou)}
                 </p>
               </div>
@@ -236,15 +236,18 @@ const OutstandingRows = ({ rows }) => (
 
               {/* On a phone the four figures read as a sentence under the
                   name rather than as a table nobody can see the right of. */}
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 sm:hidden">
+              {/* A grid rather than a wrapping line. Four figures running
+                  into each other cannot be read as arithmetic, and the whole
+                  point of this page is that the arithmetic is visible. */}
+              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500 sm:hidden">
                 <span>Sales {money(r.billed_sales)}</span>
                 <span>Shop {money(r.billed_orders)}</span>
                 <span>Received {money(r.received)}</span>
                 <span
                   className={`font-bold ${balance < 0 ? "text-rose-600" : "text-espresso"}`}
                 >
-                  Balance {money(balance)}
-                  {balance < 0 && " in credit"}
+                  {money(balance)}
+                  {balance < 0 ? " in credit" : " due"}
                 </span>
               </div>
 

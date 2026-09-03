@@ -157,6 +157,14 @@ client/src/
   context/       Auth, Cart, Socket, Notification, Unread, Wishlist
 ```
 
+## Where things stand
+
+`PROGRESS.md` at the repository root is the running record: what has been
+built, what is left, what is known to be broken, and which migrations still
+need running by hand. Read it before starting, and add to it in the same
+commit as the work it describes. It is kept out of this file on purpose, so
+the instructions every session loads do not grow a changelog inside them.
+
 ## Known gaps, as of this writing
 
 - No screen advances an order past `payment_completed`. The API exists and is

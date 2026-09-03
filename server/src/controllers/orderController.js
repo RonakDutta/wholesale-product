@@ -728,7 +728,9 @@ const updatePaymentStatus = async (req, res) => {
       await client.query(
         `INSERT INTO order_status_history (order_id, status, previous_status, updated_by, updated_by_role, remarks)
          VALUES ($1,'payment_failed',$2,$3,$4,$5)`,
-        [orderId, previousStatus, userId, req.user.role || "buyer", remarks || "Buyer left the payment screen before paying"],
+        // The payer, always. An account that both buys and sells is "both",
+        // and writing that here put "by the both" in the timeline.
+        [orderId, previousStatus, userId, "buyer", remarks || "Buyer left the payment screen before paying"],
       );
 
       await client.query("COMMIT");
@@ -858,7 +860,9 @@ const updatePaymentStatus = async (req, res) => {
         statusMoved ? nextOrderStatus : previousStatus,
         previousStatus,
         userId,
-        req.user.role || "buyer",
+        // Only the buyer of this order reaches here, whatever his account
+        // role happens to be.
+        "buyer",
         remarks ||
           `Payment of ${paidNowRupees.toFixed(2)} recorded (instalment ${due.installmentNumber}). Outstanding ${fromPaise(Math.max(newRemainingPaise, 0)).toFixed(2)}.`,
       ],
@@ -1059,7 +1063,11 @@ const updateOrderStatus = async (req, res) => {
   const { orderId } = req.params;
   const { status, remarks } = req.body;
   const userId = req.user.id;
-  const userRole = req.user.role || "buyer";
+  // What this person is on THIS order, not what their account says. An
+  // account may be "both", a wholesaler who also buys, and the timeline was
+  // printing that straight out: "Accepted, by the both". Only the supplier
+  // can reach this route, so that is what gets written down.
+  const userRole = "supplier";
 
   if (!status) {
     return res.status(400).json({ success: false, message: "Status is required" });
@@ -1131,7 +1139,10 @@ const updateOrderStatus = async (req, res) => {
       await unwindReturnedOrder(orderId, userId);
     }
 
-    await recordStatusChange(orderId, status, previousStatus, userId, userRole, remarks || `Status updated to ${status}`);
+    // No default remark. The screen already prints the status in plain
+    // English as the heading of the entry, so "Status updated to
+    // ready_for_pickup" underneath it added nothing but an internal name.
+    await recordStatusChange(orderId, status, previousStatus, userId, userRole, remarks || null);
     res.json({ success: true, message: "Order status updated" });
   } catch (error) {
     console.error("Error updating order status:", error);

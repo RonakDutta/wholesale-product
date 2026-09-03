@@ -57,6 +57,29 @@ const money = (value) =>
 // keeping the number does.
 const qty = (value) => String(Number(value || 0));
 
+/**
+ * Who did it, in words a person would use.
+ *
+ * The timeline stores an account role, and an account can be "both": a
+ * wholesaler who also buys. Printed straight out that read "by the both".
+ * New rows record what the person was on this order, but rows already written
+ * carry the old value, so "both" is read as the seller here, which is what it
+ * always meant on this screen.
+ */
+const BY = { supplier: "the seller", seller: "the seller", both: "the seller", buyer: "the buyer", admin: "an admin" };
+const byWhom = (role) => BY[String(role || "").toLowerCase()] || null;
+
+/**
+ * Whether a remark is worth printing under the entry.
+ *
+ * "Status updated to ready_for_pickup" sat under a heading that already read
+ * "Ready for Pickup", so it added an internal name and nothing else. New rows
+ * are written without it; rows already in the database still carry it, so it
+ * is dropped here too.
+ */
+const worthShowing = (remark) =>
+  Boolean(remark) && !/^status updated to /i.test(String(remark).trim());
+
 const when = (value) =>
   value
     ? new Date(value).toLocaleString("en-IN", {
@@ -372,12 +395,14 @@ const SellerOrderDetail = () => {
                   <p className="text-sm font-semibold text-espresso">
                     {formatOrderStatus(entry.status)}
                   </p>
-                  {entry.remarks && (
+                  {worthShowing(entry.remarks) && (
                     <p className="text-xs text-slate-600">{entry.remarks}</p>
                   )}
                   <p className="mt-0.5 text-xs text-slate-400">
                     {when(entry.created_at)}
-                    {entry.updated_by_role ? ` · by the ${entry.updated_by_role}` : ""}
+                    {byWhom(entry.updated_by_role)
+                      ? ` · by ${byWhom(entry.updated_by_role)}`
+                      : ""}
                   </p>
                 </div>
               </li>

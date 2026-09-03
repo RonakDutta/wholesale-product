@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   ArrowRight,
   CheckCircle2,
+  ChevronRight,
   Circle,
   Clock,
   Package,
@@ -61,9 +62,14 @@ const MoneyCard = ({ label, value, hint, to, tone = "espresso" }) => (
     to={to}
     className="group block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-clay sm:rounded-2xl sm:p-5"
   >
-    <p className="text-[11px] font-semibold leading-tight text-slate-500 sm:text-sm">
-      {label}
-    </p>
+    <div className="flex items-start justify-between gap-1">
+      <p className="text-[11px] font-semibold leading-tight text-slate-500 sm:text-sm">
+        {label}
+      </p>
+      {/* A phone has no hover, so the card needs to say it can be tapped
+          without spending a line on it. */}
+      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300 sm:hidden" />
+    </div>
     <p
       className={`mt-1 text-lg font-black sm:text-2xl ${
         Number(value) < 0
@@ -78,7 +84,10 @@ const MoneyCard = ({ label, value, hint, to, tone = "espresso" }) => (
     <p className="mt-1 hidden text-xs font-medium text-slate-500 sm:block">
       {hint}
     </p>
-    <p className="mt-1.5 flex items-center gap-1 text-[11px] font-bold text-clay opacity-0 transition-opacity group-hover:opacity-100">
+    {/* Hidden rather than transparent on a phone. Left in the layout it
+        reserved a line that hover could never fill, which is what made these
+        cards half empty on a 390px screen. */}
+    <p className="mt-1.5 hidden items-center gap-1 text-[11px] font-bold text-clay opacity-0 transition-opacity group-hover:opacity-100 sm:flex">
       See what makes this up
       <ArrowRight className="h-3 w-3" />
     </p>

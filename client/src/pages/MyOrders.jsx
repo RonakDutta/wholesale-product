@@ -17,6 +17,7 @@ import {
 } from "../utils/orderStatus";
 import RefuseOrderModal from "../components/RefuseOrderModal";
 import ReturnRequestModal from "../components/ReturnRequestModal";
+import { FEATURES } from "../config/features";
 
 // Buckets are driven by the payment outcome, which is what a buyer actually
 // wants to sort by: what they paid for, what still needs paying, and what
@@ -134,7 +135,7 @@ const OrderRow = ({ order, onCancel, onReturn }) => {
           {/* Once the goods have arrived, sending them back is the only way
               out, and the seller decides. Before they arrive it is a
               cancellation instead, which is the button below. */}
-          {canRequestReturn(order.status) && (
+          {FEATURES.BUYER_RETURNS && canRequestReturn(order.status) && (
             <button
               onClick={() => onReturn(order)}
               className="rounded-xl border border-sage/40 px-3 py-2 text-xs font-bold text-espresso/70 transition-colors hover:border-clay hover:text-clay"
@@ -322,7 +323,7 @@ const MyOrders = () => {
         </div>
       )}
 
-      {returning && (
+      {FEATURES.BUYER_RETURNS && returning && (
         <ReturnRequestModal
           order={returning}
           onClose={() => setReturning(null)}

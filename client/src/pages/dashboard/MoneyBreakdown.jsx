@@ -23,11 +23,17 @@ import { toast } from "sonner";
  * red, since that is exactly what somebody opens this page to understand.
  */
 
-const money = (value) =>
-  Number(value || 0).toLocaleString("en-IN", {
+// The minus belongs in front of the whole amount, not between the rupee sign
+// and the digits. "Rs.-2,000.00" reads as a typo; "-Rs.2,000.00" reads as a
+// credit.
+const money = (value) => {
+  const n = Number(value || 0);
+  const digits = Math.abs(n).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+  return `${n < 0 ? "-" : ""}₹${digits}`;
+};
 
 const dateLabel = (value) =>
   value
@@ -170,7 +176,7 @@ const MoneyBreakdown = () => {
                 </p>
               </div>
               <p className="text-2xl font-black text-espresso">
-                ₹{money(owedToYou)}
+                {money(owedToYou)}
               </p>
             </div>
 
@@ -186,7 +192,7 @@ const MoneyBreakdown = () => {
                   </p>
                 </div>
                 <p className="text-2xl font-black text-amber-700">
-                  ₹{money(owedByYou)}
+                  {money(owedByYou)}
                 </p>
               </div>
             )}
@@ -231,32 +237,32 @@ const OutstandingRows = ({ rows }) => (
               {/* On a phone the four figures read as a sentence under the
                   name rather than as a table nobody can see the right of. */}
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 sm:hidden">
-                <span>Sales ₹{money(r.billed_sales)}</span>
-                <span>Shop ₹{money(r.billed_orders)}</span>
-                <span>Received ₹{money(r.received)}</span>
+                <span>Sales {money(r.billed_sales)}</span>
+                <span>Shop {money(r.billed_orders)}</span>
+                <span>Received {money(r.received)}</span>
                 <span
                   className={`font-bold ${balance < 0 ? "text-rose-600" : "text-espresso"}`}
                 >
-                  Balance ₹{money(balance)}
+                  Balance {money(balance)}
                   {balance < 0 && " in credit"}
                 </span>
               </div>
 
               <span className="hidden text-right text-sm text-slate-600 sm:block">
-                ₹{money(r.billed_sales)}
+                {money(r.billed_sales)}
               </span>
               <span className="hidden text-right text-sm text-slate-600 sm:block">
-                ₹{money(r.billed_orders)}
+                {money(r.billed_orders)}
               </span>
               <span className="hidden text-right text-sm text-slate-600 sm:block">
-                ₹{money(r.received)}
+                {money(r.received)}
               </span>
               <span
                 className={`hidden text-right text-sm font-bold sm:block ${
                   balance < 0 ? "text-rose-600" : "text-espresso"
                 }`}
               >
-                ₹{money(balance)}
+                {money(balance)}
               </span>
             </Link>
           </li>
@@ -306,7 +312,7 @@ const BilledRows = ({ rows }) => (
             </div>
           </div>
           <span className="shrink-0 text-sm font-bold text-espresso">
-            ₹{money(r.amount)}
+            {money(r.amount)}
           </span>
         </Link>
       </li>
@@ -332,7 +338,7 @@ const ReceivedRows = ({ rows }) => (
             </p>
           </div>
           <span className="shrink-0 text-sm font-bold text-emerald-700">
-            ₹{money(r.amount)}
+            {money(r.amount)}
           </span>
         </Link>
       </li>

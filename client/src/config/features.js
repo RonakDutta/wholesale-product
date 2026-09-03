@@ -20,6 +20,22 @@ export const FEATURES = {
   // The wholesaler's customer book, sales records and khata. The new trunk.
   SALES_MANAGEMENT: true,
 
+  /**
+   * Whether a buyer can ask to send goods back from his own orders page.
+   *
+   * Off by deliberate choice, not because it is unfinished. The whole round
+   * trip is built and tested: the buyer asks with a reason, the wholesaler
+   * accepts or refuses, and completing it cancels the sale and raises a
+   * credit note so the customer stops owing for goods that came back.
+   *
+   * What is off is only the buyer's way in. The seller side stays visible,
+   * because an order can still reach return_requested another way and a
+   * wholesaler who cannot answer one would be stuck.
+   *
+   * The endpoint stays live, so turning this on is the only change needed.
+   */
+  BUYER_RETURNS: false,
+
   // Wholesaler only, and intended to sit behind a subscription plan later.
   // Off until there is real data to report on, because an analytics screen
   // with nothing in it teaches a wholesaler the product is empty.

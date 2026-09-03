@@ -1,4 +1,11 @@
 const pool = require("../config/db");
+const { hasPartyLink } = require("../services/partyService");
+const { hasSaleLink } = require("../services/orderSaleService");
+const {
+  BILLED_SALE_STATUSES,
+  balanceExpression,
+  totalsExpression,
+} = require("../services/khataBalance");
 
 /**
  * The first screen a wholesaler sees. Everything here is computed from his own
@@ -11,9 +18,16 @@ const pool = require("../config/db");
  * gone out yet, and who has gone quiet.
  */
 
-// A sale counts towards money owed once it is confirmed. Drafts are not debts
-// and cancellations are not either, which matches the customer book.
-const BILLED_STATUSES = "('confirmed', 'delivered')";
+// What counts as billed, and what counts as owed, is defined once in
+// services/khataBalance and read by both this screen and the customer page.
+//
+// This screen used to compute it here instead, billing from sales alone while
+// subtracting every payment including money taken through the shop. A
+// wholesaler whose customers paid through the marketplace was therefore shown
+// a NEGATIVE amount still to collect: the payment came off the total and the
+// order behind it was never added on. The two screens disagreed about the
+// same question, and this was the one that was wrong.
+const BILLED_STATUSES = BILLED_SALE_STATUSES;
 
 // How long without a sale before a customer is worth chasing. Nothing hangs
 // on the exact number, it is a prompt rather than a rule.
@@ -23,24 +37,25 @@ exports.getOverview = async (req, res) => {
   const wholesalerId = req.user.id;
 
   try {
+    // Asked once, so the query below can name orders.party_id and sales.order_id
+    // only when the migrations that add them have actually been run.
+    const hasOrderParty = await hasPartyLink(pool);
+    const hasBridge = await hasSaleLink(pool);
+    const allTime = totalsExpression({ hasOrderParty, hasBridge });
+    const thisMonth = totalsExpression({
+      hasOrderParty,
+      hasBridge,
+      since: "date_trunc('month', CURRENT_DATE)",
+    });
+
     const [money, counts, toDeliver, topDues, quiet, recentSales] =
       await Promise.all([
         pool.query(
           `SELECT
-             COALESCE((SELECT SUM(total) FROM sales
-                WHERE wholesaler_id = $1
-                  AND status IN ${BILLED_STATUSES}), 0) AS billed_all_time,
-             COALESCE((SELECT SUM(amount) FROM party_payments
-                WHERE wholesaler_id = $1), 0) AS received_all_time,
-             COALESCE((SELECT SUM(total) FROM sales
-                WHERE wholesaler_id = $1
-                  AND status IN ${BILLED_STATUSES}
-                  AND sale_date >= date_trunc('month', CURRENT_DATE)), 0)
-               AS billed_this_month,
-             COALESCE((SELECT SUM(amount) FROM party_payments
-                WHERE wholesaler_id = $1
-                  AND paid_on >= date_trunc('month', CURRENT_DATE)), 0)
-               AS received_this_month`,
+             ${allTime.billed} AS billed_all_time,
+             ${allTime.received} AS received_all_time,
+             ${thisMonth.billed} AS billed_this_month,
+             ${thisMonth.received} AS received_this_month`,
           [wholesalerId],
         ),
 
@@ -74,13 +89,8 @@ exports.getOverview = async (req, res) => {
           `SELECT p.id, p.name, p.business_name, p.phone, dues.outstanding
              FROM parties p
              JOIN LATERAL (
-               SELECT
-                 COALESCE((SELECT SUM(s.total) FROM sales s
-                    WHERE s.party_id = p.id
-                      AND s.status IN ${BILLED_STATUSES}), 0)
-                 -
-                 COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
-                    WHERE pp.party_id = p.id), 0) AS outstanding
+               SELECT ${balanceExpression({ hasOrderParty, hasBridge, partyRef: "p.id" })}
+                 AS outstanding
              ) dues ON TRUE
             WHERE p.wholesaler_id = $1 AND dues.outstanding > 0
             ORDER BY dues.outstanding DESC

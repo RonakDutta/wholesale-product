@@ -4,6 +4,11 @@ const saleInvoiceService = require("../services/saleInvoiceService");
 const { hasPartyLink } = require("../services/partyService");
 const { hasSaleLink } = require("../services/orderSaleService");
 const { checkGstin } = require("../utils/gstin");
+const {
+  NOT_OWED_SQL,
+  bridgedGuard,
+  balanceExpression,
+} = require("../services/khataBalance");
 const pdfService = require("../services/pdfService");
 
 /**
@@ -16,83 +21,13 @@ const pdfService = require("../services/pdfService");
  */
 
 /**
- * The order statuses that mean a marketplace order is really owed.
+ * What a customer owes is defined in services/khataBalance, not here.
  *
- * An order is a request before it is a debt. A basket abandoned at the
- * payment screen must not appear in a customer's khata, and neither must one
- * that was cancelled, refunded, or whose goods have come back.
- *
- * So the debt starts at payment_completed, the point where money has actually
- * moved, and survives the return states until the goods are physically
- * returned. return_rejected stays owed on purpose: the wholesaler refused the
- * return, so the customer still owes for the goods he has.
- *
- * Kept as a list of what is NOT owed rather than what is, because a status
- * added later is far more likely to be another step of a live order than
- * another way for one to die, and the safer default is to count it.
+ * It used to live in this file, and overviewController answered the same
+ * question its own way and got a different answer. Both now read one rule.
  */
-const ORDER_NOT_OWED = [
-  "pending",
-  "payment_pending",
-  "payment_failed",
-  "cancelled",
-  "refunded",
-  "return_completed",
-];
-
-/**
- * What this customer owes: everything billed to him, minus everything he has
- * paid, whichever way the business came in.
- *
- * Cancelled sales are not owed, so they are left out of the billed side.
- * Drafts are excluded too: a sale nobody has confirmed is not yet a debt.
- *
- * Marketplace orders sit on the billed side beside hand written sales, and
- * the money that came in against them sits in party_payments beside the cash
- * the wholesaler wrote down. Before this, a retailer could pay half of a
- * large order through the shop and his customer page would still show the
- * full old balance, because the two halves of the business kept separate
- * books.
- *
- * An accepted order now also writes a sale, so the same goods would otherwise
- * be counted on both sides of this and every marketplace customer would show
- * double what he owes. The orders term therefore skips any order that has
- * produced a sale: the sale is the commercial record from that point, and the
- * order is only fulfilment. An order not yet accepted has no sale, so it is
- * still counted here on its own.
- */
-// Inlined rather than bound, because this fragment is pasted into three
-// queries that each number their own parameters. These are constants defined
-// three lines up, never anything a caller sent.
-const NOT_OWED_SQL = ORDER_NOT_OWED.map((s) => `'${s}'`).join(", ");
-
-// sales.order_id only exists once the bridge migration has run. Naming it
-// before then takes the customer page down with a 500, which is how this
-// module has broken twice before.
-const bridgedGuard = (hasBridge) =>
-  hasBridge
-    ? "AND NOT EXISTS (SELECT 1 FROM sales s2 WHERE s2.order_id = o.id)"
-    : "";
-
-const balanceSelect = (hasOrderParty, hasBridge) => `
-  COALESCE((
-    SELECT SUM(s.total) FROM sales s
-     WHERE s.party_id = pt.id AND s.status IN ('confirmed', 'delivered')
-  ), 0)
-  ${
-    hasOrderParty
-      ? `+ COALESCE((
-    SELECT SUM(o.total_amount) FROM orders o
-     WHERE o.party_id = pt.id AND o.status NOT IN (${NOT_OWED_SQL})
-       ${bridgedGuard(hasBridge)}
-  ), 0)`
-      : ""
-  }
-  -
-  COALESCE((
-    SELECT SUM(pp.amount) FROM party_payments pp WHERE pp.party_id = pt.id
-  ), 0) AS outstanding
-`;
+const balanceSelect = (hasOrderParty, hasBridge) =>
+  `${balanceExpression({ hasOrderParty, hasBridge })} AS outstanding`;
 
 exports.listParties = async (req, res) => {
   const wholesalerId = req.user.id;

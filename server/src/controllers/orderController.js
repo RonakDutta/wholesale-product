@@ -872,13 +872,15 @@ const updatePaymentStatus = async (req, res) => {
 
     // Reconcile, not create: the invoice was raised when the order was placed
     // and is sitting on Pending, so creating again returned early and left it
-    // stamped UNPAID over money that had just been received. Only a fully
-    // settled order closes its invoice.
-    if (settled) {
-      invoiceService.reconcileInvoiceForOrder(orderId).catch((invErr) => {
-        console.warn("Background invoice reconcile notice:", invErr.message);
-      });
-    }
+    // stamped UNPAID over money that had just been received.
+    //
+    // Run on every payment, not only the last one. This used to be guarded by
+    // `settled`, so a first instalment left the bill showing nothing received
+    // while the order screen showed a receipt for it. Reconciling is
+    // idempotent, so calling it on a payment that changes nothing is free.
+    invoiceService.reconcileInvoiceForOrder(orderId).catch((invErr) => {
+      console.warn("Background invoice reconcile notice:", invErr.message);
+    });
 
     notifyPaymentRecorded(orderId, paidNowRupees, fromPaise(Math.max(newRemainingPaise, 0)));
 

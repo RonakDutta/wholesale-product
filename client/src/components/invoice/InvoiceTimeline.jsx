@@ -6,6 +6,7 @@ import {
   Download,
   AlertTriangle,
   ShieldCheck,
+  IndianRupee,
 } from "lucide-react";
 
 export default function InvoiceTimeline({ logs = [] }) {
@@ -23,6 +24,11 @@ export default function InvoiceTimeline({ logs = [] }) {
         return <Download className="w-4 h-4 text-emerald-500" />;
       case "paid":
         return <CheckCircle2 className="w-4 h-4 text-emerald-600" />;
+      // Money in, but not all of it. Deliberately a different mark from
+      // "paid", so a glance at the timeline does not read a part payment as a
+      // settled bill.
+      case "payment":
+        return <IndianRupee className="w-4 h-4 text-amber-600" />;
       case "cancelled":
         return <AlertTriangle className="w-4 h-4 text-rose-500" />;
       default:

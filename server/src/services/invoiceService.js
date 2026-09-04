@@ -22,6 +22,33 @@ class InvoiceService {
     try {
       if (shouldManageTransaction) await client.query("BEGIN");
 
+      /**
+       * One order, one invoice, even when two callers ask at once.
+       *
+       * The check above is a read outside any lock, so two calls arriving
+       * together both saw nothing and both created. There is no unique index
+       * on invoices.order_id to stop them (there is one on sale_id, which is
+       * how the sales side avoids this), so the order genuinely ended up with
+       * two invoice numbers, each with its own share of the payments.
+       *
+       * The lock is held to the end of this transaction and keyed on the
+       * order, so it blocks only the second caller for this same order. The
+       * re-read after it is the point: by then the first caller has committed
+       * and this one returns the invoice it made.
+       *
+       * migrations/wholesale3_one_invoice_per_order.sql adds the index that
+       * makes this belt and braces. Until it has been run, this is the belt.
+       */
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
+        [orderId],
+      );
+      const raced = await invoiceRepository.findInvoiceByOrderId(orderId);
+      if (raced) {
+        if (shouldManageTransaction) await client.query("ROLLBACK");
+        return raced;
+      }
+
       // Fetch order metadata along with buyer and supplier profiles
       const orderQuery = `
         SELECT 
@@ -204,6 +231,13 @@ class InvoiceService {
    * This is the call the payment path wants. It is idempotent: safe to run on
    * every payment event, and safe to run again over rows that are already
    * correct, which is what makes the backfill migration possible.
+   *
+   * Part payments count. This used to wait for the whole amount, so a buyer on
+   * the 50/50 plan who had paid his first instalment looked, on his own bill,
+   * exactly like a buyer who had paid nothing: no entry, no date, no amount,
+   * and an UNPAID stamp over the PDF. He had a receipt on the order screen and
+   * a bill that disagreed with it. The invoice now mirrors what the order says
+   * has been received, instalment by instalment.
    */
   async reconcileInvoiceForOrder(orderId) {
     const invoice = await invoiceRepository.findInvoiceByOrderId(orderId);
@@ -213,61 +247,111 @@ class InvoiceService {
     }
 
     const orderResult = await pool.query(
-      `SELECT payment_status, total_amount, buyer_id FROM orders WHERE id = $1`,
+      `SELECT payment_status, total_amount, amount_paid, buyer_id, order_number
+         FROM orders WHERE id = $1`,
       [orderId],
     );
     if (orderResult.rows.length === 0) throw new Error("Order not found.");
 
     const order = orderResult.rows[0];
-    const orderPaid = ["paid", "completed"].includes(
-      String(order.payment_status || "").toLowerCase(),
-    );
     const invoicePaid = String(invoice.payment_status || "").toLowerCase() === "paid";
 
-    // Only ever moves an invoice forward. A cancelled invoice, or one already
-    // settled, is left exactly as it is.
-    if (!orderPaid || invoicePaid || invoice.invoice_status === "Cancelled") {
-      return invoice;
-    }
+    // A settled invoice and a cancelled one are both left exactly as they are.
+    // This only ever moves an invoice forward.
+    if (invoicePaid || invoice.invoice_status === "Cancelled") return invoice;
+
+    const grandTotal = Number(invoice.grand_total || 0);
+    const settledOrder = ["paid", "completed"].includes(
+      String(order.payment_status || "").toLowerCase(),
+    );
+
+    /**
+     * How much this invoice should show as received.
+     *
+     * A settled order closes the invoice on the invoice's own total, not the
+     * order's. The two differ by a rupee or so once GST has been worked out,
+     * and settling against the order's figure would leave a bill owing four
+     * paise forever.
+     *
+     * Anything short of settled is mirrored from amount_paid, capped so a
+     * part payment can never overshoot the bill.
+     */
+    const target = settledOrder
+      ? grandTotal
+      : Math.min(Number(order.amount_paid || 0), grandTotal);
 
     const client = await pool.connect();
+    let nowSettled = false;
     try {
       await client.query("BEGIN");
 
-      // Anything already recorded against the invoice counts, so a part
-      // payment taken manually is not billed twice.
-      const alreadyPaid = (invoice.payments || []).reduce(
-        (sum, p) => sum + Number(p.amount),
-        0,
-      );
-      const outstanding = Number(
-        (Number(invoice.grand_total) - alreadyPaid).toFixed(2),
+      /**
+       * Read what is already on the bill, decide, and write, all under one
+       * lock on this invoice.
+       *
+       * Working it out from the copy fetched above is a read outside any
+       * transaction, and two payment events arriving close together both read
+       * the same "already paid" figure, both saw the same gap, and both wrote
+       * it. One instalment of 892.50 went onto the bill three times and the
+       * invoice claimed 2,677.50 had been received against a bill for 1,785.
+       * Reconcile is called from a background handler on every payment, so
+       * two of them overlapping is the normal case, not a rare one.
+       */
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
+        [invoice.id],
       );
 
-      if (outstanding > 0) {
-        await invoiceRepository.addPayment(
-          {
-            invoiceId: invoice.id,
-            amount: outstanding,
-            paymentMethod: "UPI",
-            remarks: "Payment completed at checkout",
-          },
-          client,
-        );
+      // Anything already recorded against the invoice counts, so a payment the
+      // wholesaler entered by hand is not billed twice.
+      const alreadyPaid = Number(
+        (await client.query(
+          "SELECT COALESCE(SUM(amount), 0) AS paid FROM payments WHERE invoice_id = $1",
+          [invoice.id],
+        )).rows[0].paid,
+      );
+      const gap = Number((target - alreadyPaid).toFixed(2));
+
+      // Nothing new has arrived since the last run. Idempotence lives here.
+      if (gap <= 0) {
+        await client.query("ROLLBACK");
+        return invoice;
       }
+
+      nowSettled = Number((target - grandTotal).toFixed(2)) >= 0;
+      const stillOwed = Number((grandTotal - target).toFixed(2));
+
+      await invoiceRepository.addPayment(
+        {
+          invoiceId: invoice.id,
+          amount: gap,
+          paymentMethod: "UPI",
+          remarks: nowSettled
+            ? "Payment completed at checkout"
+            : "Part payment received at checkout",
+        },
+        client,
+      );
 
       await invoiceRepository.updateInvoice(
         invoice.id,
-        { payment_status: "Paid", invoice_status: "Paid" },
+        nowSettled
+          ? { payment_status: "Paid", invoice_status: "Paid" }
+          : // invoice_status is left alone on purpose. It tracks the life of
+            // the document (Generated, Sent, Cancelled), and a part payment
+            // does not change what has happened to the document.
+            { payment_status: "Partial" },
         client,
       );
 
       await invoiceRepository.addLog(
         {
           invoiceId: invoice.id,
-          action: "Paid",
+          action: nowSettled ? "Paid" : "Payment",
           performedBy: order.buyer_id,
-          details: `Invoice settled against order payment of ₹${Number(order.total_amount || 0).toFixed(2)}`,
+          details: nowSettled
+            ? `Invoice settled. ₹${gap.toFixed(2)} received against order ${order.order_number || orderId}.`
+            : `₹${gap.toFixed(2)} received against order ${order.order_number || orderId}. ₹${stillOwed.toFixed(2)} still to pay.`,
         },
         client,
       );
@@ -280,9 +364,11 @@ class InvoiceService {
       client.release();
     }
 
-    // Re-render so the cached PDF loses the UNPAID watermark, and send the
-    // settled copy on.
-    this.generateAndSendInvoiceEmailAsync(invoice.id, null);
+    // Only a settled bill is re-rendered and posted. The PDF carries an UNPAID
+    // stamp until the last rupee is in, which is correct while money is still
+    // owed, and emailing the same half paid bill after every instalment would
+    // be noise.
+    if (nowSettled) this.generateAndSendInvoiceEmailAsync(invoice.id, null);
 
     return invoiceRepository.findInvoiceById(invoice.id);
   }

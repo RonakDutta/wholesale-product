@@ -71,46 +71,6 @@ io.on("connection", (socket) => {
 
 const PORT = Number(process.env.PORT) || 5000;
 
-/**
- * Say once, at boot, whether the database can be reached.
- *
- * Without this the first sign of a bad DATABASE_URL is a stack trace on every
- * request, all of them identical and all of them naming whichever controller
- * happened to be hit. A deploy where the password was wrong looked exactly
- * like a broken feature, and the traces pointed at the feature.
- *
- * Deliberately not fatal. The server still listens, so the host's health check
- * and the logs both stay useful, and a database that comes back on its own,
- * which is what a sleeping Neon compute does, needs no restart.
- *
- * Nothing about the connection string is printed. The point is which of the
- * three things is wrong, not what the credential is.
- */
-const reportDatabase = async () => {
-  if (!process.env.DATABASE_URL) {
-    console.error(
-      "DATABASE_URL is not set. Every request that touches the database will fail.",
-    );
-    return;
-  }
-  try {
-    const { rows } = await pool.query("SELECT current_database() AS db");
-    console.log(`Database reachable: ${rows[0].db}`);
-  } catch (err) {
-    const advice =
-      err.code === "28P01"
-        ? "the password in DATABASE_URL is wrong. If the database password was rotated, update it wherever this is deployed. Check too that any special characters in it are percent encoded."
-        : err.code === "3D000"
-          ? "that database does not exist on the server DATABASE_URL points at."
-          : err.code === "ENOTFOUND" || err.code === "EAI_AGAIN"
-            ? "the host in DATABASE_URL cannot be resolved."
-            : "see the error below.";
-    console.error(`Cannot reach the database: ${advice}`);
-    console.error(`  ${err.code || "no code"}: ${err.message}`);
-  }
-};
-
 httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT} with Enterprise Invoice System initialized`);
-  reportDatabase();
 });

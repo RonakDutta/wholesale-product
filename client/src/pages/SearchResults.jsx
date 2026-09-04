@@ -15,6 +15,7 @@ import {
 import gsap from "gsap";
 import { ScrollToPlugin } from "gsap/all";
 import api from "../utils/axios"; // Your backend API
+import { useLocationFilter } from "../context/LocationContext";
 
 gsap.registerPlugin(ScrollToPlugin);
 
@@ -43,11 +44,15 @@ const SearchResults = () => {
   const [initialFetchDone, setInitialFetchDone] = useState(false);
   const resultsRef = useRef(null);
 
+  const { cityParam, label: cityLabel, setCity } = useLocationFilter();
+
   // 1. Fetch live catalog and build searchable arrays on mount
   useEffect(() => {
     const fetchLiveCatalog = async () => {
       try {
-        const res = await api.get("/api/products");
+        const res = await api.get("/api/products", {
+          params: cityParam ? { city: cityParam } : {},
+        });
         const dbProducts = res.data;
 
         const mappedProducts = [];
@@ -121,7 +126,7 @@ const SearchResults = () => {
     };
 
     fetchLiveCatalog();
-  }, []);
+  }, [cityParam]);
 
   // 2. Local filtering over the live data
   useEffect(() => {
@@ -440,22 +445,40 @@ const SearchResults = () => {
                     No results found
                   </h3>
                   <p className="text-espresso/60 mt-2 max-w-md mx-auto">
-                    We couldn't find anything matching "{query}". Try adjusting
-                    your filters or search for something else.
+                    We couldn't find anything matching "{query}".
+                    {/* The city is a filter the buyer set in the navbar, far
+                        from here. Say so, or he blames the search. */}
+                    {cityParam
+                      ? ` You are only being shown sellers in ${cityLabel}.`
+                      : " Try adjusting your filters or search for something else."}
                   </p>
-                  <button
-                    onClick={() =>
-                      setFilters({
-                        category: "",
-                        minPrice: "",
-                        maxPrice: "",
-                        minRating: "",
-                      })
-                    }
-                    className="mt-6 bg-clay text-cream px-6 py-2.5 rounded-xl hover:bg-clay/90 transition-colors shadow-lg cursor-pointer"
-                  >
-                    Clear all filters
-                  </button>
+                  <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                    {cityParam && (
+                      <button
+                        onClick={() => setCity(null)}
+                        className="bg-clay text-cream px-6 py-2.5 rounded-xl hover:bg-clay/90 transition-colors shadow-lg cursor-pointer"
+                      >
+                        Search all of India
+                      </button>
+                    )}
+                    <button
+                      onClick={() =>
+                        setFilters({
+                          category: "",
+                          minPrice: "",
+                          maxPrice: "",
+                          minRating: "",
+                        })
+                      }
+                      className={`px-6 py-2.5 rounded-xl transition-colors cursor-pointer ${
+                        cityParam
+                          ? "border border-sage/40 text-espresso hover:border-clay hover:text-clay"
+                          : "bg-clay text-cream hover:bg-clay/90 shadow-lg"
+                      }`}
+                    >
+                      Clear all filters
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <>

@@ -2,6 +2,11 @@ const pool = require("../config/db");
 const { FEATURES } = require("../config/features");
 const { clean, optionalNumber } = require("../utils/money");
 const invoiceRepository = require("../repositories/invoiceRepository");
+const {
+  CITY_SQL,
+  CITY_KEY_SQL,
+  cityFilterFrom,
+} = require("../services/sellerLocation");
 
 /**
  * Hides a sold out listing from the catalogue, but only while stock counts
@@ -136,11 +141,19 @@ exports.addProduct = async (req, res) => {
 // @route   GET /api/products
 exports.getPublicCatalog = async (req, res) => {
   try {
+    // The filter sits in the WHERE, so it removes individual listings before
+    // they are gathered up. That matters: filtering the product instead would
+    // leave a Surat buyer looking at a product card whose suppliers, prices
+    // and "3 sellers" count all came from Ludhiana.
+    const city = cityFilterFrom(req.query);
+    const cityClause = city ? `AND ${CITY_KEY_SQL} = $1` : "";
+    const params = city ? [city] : [];
+
     const query = `
-      SELECT 
-        p.id, 
-        p.name, 
-        p.category, 
+      SELECT
+        p.id,
+        p.name,
+        p.category,
         p.description,
         p.global_image_url as image,
         MIN(si.price) as starting_price,
@@ -154,7 +167,8 @@ exports.getPublicCatalog = async (req, res) => {
             'discountPrice', si.discount_price,
             'verified', COALESCE(wp.is_verified, false),
             'moq', si.moq,
-            'stock', si.stock
+            'stock', si.stock,
+            'city', ${CITY_SQL}
           )
         ) as suppliers
       FROM products p
@@ -162,14 +176,49 @@ exports.getPublicCatalog = async (req, res) => {
       ${SELLER_JOIN}
       WHERE si.status = 'Active' AND si.visibility = 'public'
         ${IN_STOCK}
+        ${cityClause}
       GROUP BY p.id, p.name, p.category, p.description, p.global_image_url
       ORDER BY p.id DESC
+    `;
+    const result = await pool.query(query, params);
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error fetching catalog" });
+  }
+};
+
+// @desc    The cities a buyer can actually filter to
+// @route   GET /api/products/cities
+//
+// Built from the listings themselves rather than from a list of big Indian
+// cities. A hardcoded list offers Bangalore to a buyer when no wholesaler
+// there has ever listed anything, and he gets an empty page with no way of
+// telling whether he filtered wrongly or the shop is broken. Every city here
+// has stock behind it, and the count says how much.
+exports.getCatalogCities = async (req, res) => {
+  try {
+    const query = `
+      SELECT
+        ${CITY_KEY_SQL} AS key,
+        -- Sellers spell it differently. Show the commonest spelling rather
+        -- than the folded one, so the menu reads "Surat", not "surat".
+        mode() WITHIN GROUP (ORDER BY ${CITY_SQL}) AS city,
+        COUNT(DISTINCT si.id)::int AS listings,
+        COUNT(DISTINCT si.supplier_id)::int AS sellers
+      FROM supplier_inventory si
+      ${SELLER_JOIN}
+      WHERE si.status = 'Active' AND si.visibility = 'public'
+        ${IN_STOCK}
+        AND ${CITY_SQL} IS NOT NULL
+      GROUP BY ${CITY_KEY_SQL}
+      ORDER BY listings DESC, city ASC
     `;
     const result = await pool.query(query);
     res.status(200).json(result.rows);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Server error fetching catalog" });
+    res.status(500).json({ message: "Server error fetching cities" });
   }
 };
 
@@ -197,7 +246,11 @@ exports.getProductById = async (req, res) => {
             'moq', si.moq,
             'stock', si.stock,
             'shippingDays', si.shipping_days,
-            'city', wp.city,
+            -- Where the goods actually sit, same rule the catalogue filters
+            -- on. It used to read wp.city alone, so a seller whose warehouse
+            -- was in Surat while he signed up from Mumbai was shown in the
+            -- filter under Surat and on this page under Mumbai.
+            'city', ${CITY_SQL},
             'country', wp.country,
             -- A buyer is being told something about a seller here, so it has
             -- to be true. It used to be "the box is not empty", which meant
@@ -357,7 +410,7 @@ exports.getListingById = async (req, res) => {
          COALESCE(si.image_url, p.global_image_url) AS image,
          u.id             AS supplier_id,
          COALESCE(wp.company_name, u.first_name || ' ' || u.last_name) AS company_name,
-         wp.city,
+         ${CITY_SQL} AS city,
          wp.country,
          wp.is_verified,
          wp.contact_phone
@@ -416,7 +469,7 @@ exports.getWholesalerById = async (req, res) => {
          u.first_name || ' ' || u.last_name AS contact_name,
          u.email,
          wp.company_name,
-         wp.city,
+         ${CITY_SQL} AS city,
          wp.country,
          wp.is_verified,
          -- wholesaler_profiles.gst_verified is a boolean nothing has ever

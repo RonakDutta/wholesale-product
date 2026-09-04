@@ -9,7 +9,7 @@ import { Boxes, MapPin, Store } from "lucide-react";
  * pricing strategy should not broadcast. These figures are counted from the
  * live catalogue and say nothing about price direction.
  */
-const MarketSnapshot = ({ products = [], region = "Delhi NCR" }) => {
+const MarketSnapshot = ({ products = [], region }) => {
   const productCount = products.length;
 
   const supplierCount = new Set(
@@ -53,9 +53,13 @@ const MarketSnapshot = ({ products = [], region = "Delhi NCR" }) => {
         <Stat icon={Boxes} value={categoryCount} label="Categories" />
       </div>
 
+      {/* This used to read "Delivering to Delhi NCR" on every screen in the
+          country, with nothing behind it: no seller had said he delivers
+          there and no code worked it out. It now says where the sellers
+          counted above actually are, which is a fact the page already holds. */}
       <p className="flex items-center gap-1.5 text-xs font-semibold text-espresso/50">
         <MapPin className="h-3.5 w-3.5 text-clay" />
-        Delivering to {region}
+        {region ? `Sellers in ${region}` : "Sellers from all over India"}
       </p>
     </div>
   );

@@ -17,21 +17,136 @@ import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { useAuth } from "../context/AuthContext";
 import { useUnread } from "../context/UnreadContext";
+import { useLocationFilter } from "../context/LocationContext";
 import NotificationBell from "./NotificationBell";
 import CartDrawer from "./CartDrawer";
 
-const CITIES = [
-  "Delhi NCR",
-  "Mumbai",
-  "Bangalore",
-  "Hyderabad",
-  "Chennai",
-  "Kolkata",
-  "Pune",
-  "Ahmedabad",
-  "Surat",
-  "Jaipur",
-];
+// One line of the city menu. Outside the selector so it is not rebuilt on
+// every render, which would reset the row's state each time it opened.
+const CityRow = ({ active, onClick, children }) => (
+  <button
+    onClick={onClick}
+    className={`w-full text-left px-3 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer flex items-center justify-between gap-2 ${
+      active
+        ? "bg-clay/10 text-clay"
+        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+    }`}
+  >
+    {children}
+  </button>
+);
+
+/**
+ * Which city's sellers the shop is showing.
+ *
+ * The list is whatever the server says has stock, so every line here leads
+ * somewhere. It is deliberately not a list of big Indian cities: offering
+ * Bangalore when no wholesaler there has listed anything gives the buyer an
+ * empty page and no way of telling whether he filtered wrongly.
+ *
+ * Open state is local to each copy of this, and that is load bearing. The
+ * navbar mounts two, one for phones and one for desktop, and only hides the
+ * wrong one with CSS. Sharing one flag meant the hidden copy's outside-click
+ * handler saw a click on the visible copy as a click outside itself, closed
+ * the menu on mousedown, and destroyed the button before the mouseup could
+ * land on it. No click event was ever produced and the picker did nothing at
+ * all. A keyboard or a script could still choose a city, which is what made it
+ * look like it worked.
+ */
+const LocationSelector = ({ city, setCity, cities, loadingCities, label }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropRef = useRef(null);
+  const activeKey = city?.key || null;
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropRef.current && !dropRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [setIsOpen]);
+
+  return (
+    <div className="relative" ref={dropRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        aria-label={`Showing sellers from ${label}. Change city.`}
+        className="flex items-center gap-1 sm:gap-1.5 p-2 text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-colors group cursor-pointer"
+      >
+        <MapPin
+          className={`w-5 h-5 group-hover:scale-110 transition-transform ${
+            activeKey ? "text-clay" : "text-slate-500"
+          }`}
+        />
+        {/* Text hidden on mobile to save space */}
+        <span className="hidden sm:inline whitespace-nowrap max-w-[9rem] truncate">
+          {label}
+        </span>
+        <ChevronDown
+          className={`hidden sm:block w-3 h-3 text-slate-400 transition-transform ${
+            isOpen ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 sm:right-auto sm:left-0 mt-2 w-60 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-50">
+          <div className="p-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-clay" />
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Show sellers from
+            </span>
+          </div>
+
+          <div className="max-h-72 overflow-y-auto p-1 hide-scrollbar">
+            <CityRow
+              active={!activeKey}
+              onClick={() => {
+                setCity(null);
+                setIsOpen(false);
+              }}
+            >
+              <span>All India</span>
+              {!activeKey && <Check className="w-4 h-4 shrink-0" />}
+            </CityRow>
+
+            {loadingCities && (
+              <p className="px-3 py-3 text-xs text-slate-400">Loading...</p>
+            )}
+
+            {!loadingCities && cities.length === 0 && (
+              <p className="px-3 py-3 text-xs text-slate-400">
+                No seller has filled in his city yet, so there is nothing to
+                choose from.
+              </p>
+            )}
+
+            {cities.map((c) => (
+              <CityRow
+                key={c.key}
+                active={activeKey === c.key}
+                onClick={() => {
+                  setCity(c);
+                  setIsOpen(false);
+                }}
+              >
+                <span className="truncate">{c.city}</span>
+                <span className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[11px] font-semibold text-slate-400">
+                    {c.sellers}
+                  </span>
+                  {activeKey === c.key && <Check className="w-4 h-4" />}
+                </span>
+              </CityRow>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Navbar = () => {
   const { uniqueItemCount, setIsCartOpen } = useCart();
@@ -39,9 +154,10 @@ const Navbar = () => {
   const { isAuthenticated, user, logout } = useAuth();
   const { unreadCount } = useUnread();
 
+  const { city, setCity, cities, loadingCities, label } = useLocationFilter();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [selectedCity, setSelectedCity] = useState("Delhi NCR");
   const navRef = useRef(null);
   const navigate = useNavigate();
 
@@ -69,8 +185,12 @@ const Navbar = () => {
     navigate("/");
   };
 
-  // Reusable Profile Dropdown Menu
-  const ProfileMenu = () => (
+  // Plain functions, not components declared during render. Declaring a
+  // component inside Navbar gives it a new identity on every render, so React
+  // throws its subtree away and builds it again. The city menu could not be
+  // clicked at all because of it: the mousedown replaced the DOM node the
+  // mouseup was meant to land on, so no click event was ever produced.
+  const profileMenu = () => (
     <div className="absolute right-0 mt-2 w-56 sm:w-64 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-50">
       <div className="p-4 border-b border-slate-100 bg-slate-50/50">
         <p className="text-sm font-bold text-slate-900 truncate">
@@ -124,74 +244,15 @@ const Navbar = () => {
     </div>
   );
 
-  // Self-contained Location Selector to prevent double-render ref bugs
-  const LocationSelector = () => {
-    const [isOpen, setIsOpen] = useState(false);
-    const dropRef = useRef(null);
-
-    useEffect(() => {
-      const handleClickOutside = (e) => {
-        if (dropRef.current && !dropRef.current.contains(e.target)) {
-          setIsOpen(false);
-        }
-      };
-      document.addEventListener("mousedown", handleClickOutside);
-      return () =>
-        document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
-
-    return (
-      <div className="relative" ref={dropRef}>
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-1 sm:gap-1.5 p-2 text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-colors group cursor-pointer"
-        >
-          <MapPin className="w-5 h-5 group-hover:scale-110 transition-transform text-slate-500" />
-          {/* Text hidden on mobile to save space */}
-          <span className="hidden sm:inline whitespace-nowrap">
-            {selectedCity}
-          </span>
-          <ChevronDown
-            className={`hidden sm:block w-3 h-3 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""
-              }`}
-          />
-        </button>
-
-        {isOpen && (
-          <div className="absolute right-0 sm:right-auto sm:left-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-50">
-            <div className="p-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-clay" />
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Select Region
-              </span>
-            </div>
-            <div className="max-h-60 overflow-y-auto p-1 hide-scrollbar">
-              {CITIES.map((city) => (
-                <button
-                  key={city}
-                  onClick={() => {
-                    setSelectedCity(city);
-                    setIsOpen(false);
-                  }}
-                  className={`w-full text-left px-3 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer flex items-center justify-between ${selectedCity === city
-                    ? "bg-clay/10 text-clay"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                    }`}
-                >
-                  {city}
-                  {selectedCity === city && <Check className="w-4 h-4" />}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const ActionIcons = () => (
+  const actionIcons = () => (
     <>
-      <LocationSelector />
+      <LocationSelector
+        city={city}
+        setCity={setCity}
+        cities={cities}
+        loadingCities={loadingCities}
+        label={label}
+      />
 
       {user && (
         <Link
@@ -255,7 +316,7 @@ const Navbar = () => {
 
             {/* Mobile Icons */}
             <div className="flex items-center gap-0.5 sm:gap-1 md:hidden -mr-2">
-              <ActionIcons />
+              {actionIcons()}
               <NotificationBell />
               {isAuthenticated ? (
                 <div className="relative">
@@ -265,7 +326,7 @@ const Navbar = () => {
                   >
                     <User className="w-5 h-5" />
                   </button>
-                  {isProfileOpen && <ProfileMenu />}
+                  {isProfileOpen && profileMenu()}
                 </div>
               ) : (
                 <Link
@@ -301,7 +362,7 @@ const Navbar = () => {
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center gap-2 lg:gap-4 shrink-0">
             <div className="flex items-center gap-1">
-              <ActionIcons />
+              {actionIcons()}
               <NotificationBell />
             </div>
 
@@ -328,7 +389,7 @@ const Navbar = () => {
                     />
                   </button>
 
-                  {isProfileOpen && <ProfileMenu />}
+                  {isProfileOpen && profileMenu()}
                 </div>
               ) : (
                 <>

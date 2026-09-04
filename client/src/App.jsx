@@ -11,6 +11,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { SocketProvider } from "./context/SocketContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { UnreadProvider } from "./context/UnreadContext";
+import { LocationProvider } from "./context/LocationContext";
 
 import MainLayout from "./layouts/MainLayout";
 import AuthLayout from "./layouts/AuthLayout";
@@ -201,8 +202,10 @@ export default function App() {
           <UnreadProvider>
             <CartProvider>
               <WishlistProvider>
-                <Toaster richColors position="bottom-right" />
-                <RouterProvider router={router} />
+                <LocationProvider>
+                  <Toaster richColors position="bottom-right" />
+                  <RouterProvider router={router} />
+                </LocationProvider>
               </WishlistProvider>
             </CartProvider>
           </UnreadProvider>

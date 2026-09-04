@@ -14,6 +14,7 @@ import {
 } from "../utils/supplierUtils";
 import api from "../utils/axios"; // Added API import
 import { toast } from "sonner";
+import { useLocationFilter } from "../context/LocationContext";
 
 const PAGE_SIZE = 8;
 
@@ -31,10 +32,14 @@ const MarketplaceHome = () => {
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [sortBy, setSortBy] = useState("recommended");
 
+  const { cityParam, label: cityLabel, setCity } = useLocationFilter();
+
   useEffect(() => {
     const fetchCatalog = async () => {
       try {
-        const res = await api.get("/api/products");
+        const res = await api.get("/api/products", {
+          params: cityParam ? { city: cityParam } : {},
+        });
 
         const mappedProducts = res.data.map((dbProduct) => ({
           id: dbProduct.id.toString(),
@@ -101,7 +106,11 @@ const MarketplaceHome = () => {
     };
 
     fetchCatalog();
-  }, []);
+    // Deliberately no spinner on a city change. The cards already on screen
+    // stay until the new ones arrive, which reads better than the whole page
+    // blanking out, and the chip below the filter bar has already changed to
+    // say which city is being loaded.
+  }, [cityParam]);
 
   const categories = useMemo(() => {
     const set = new Set(products.map((p) => p.category).filter(Boolean));
@@ -257,7 +266,10 @@ const MarketplaceHome = () => {
         <HeroCarousel />
       </div>
       <div className="page-load-anim">
-        <MarketSnapshot products={products} />
+        <MarketSnapshot
+          products={products}
+          region={cityParam ? cityLabel : null}
+        />
       </div>
       <div className="page-load-anim">
         <PromotionStrip />
@@ -279,6 +291,22 @@ const MarketplaceHome = () => {
           resultCount={displayedProducts.length}
           totalCount={filteredSorted.length}
         />
+        {/* The navbar carries the city too, but a buyer who scrolled past it
+            is owed a reminder of why he is seeing fewer sellers than he
+            expects, and a way out that does not need him to find the pin. */}
+        {cityParam && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-sage/30 bg-sage/5 px-3 py-2 text-xs">
+            <span className="font-semibold text-espresso">
+              Showing sellers from {cityLabel} only
+            </span>
+            <button
+              onClick={() => setCity(null)}
+              className="font-bold text-clay underline underline-offset-2 hover:text-espresso"
+            >
+              Show all of India
+            </button>
+          </div>
+        )}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 items-start">
           {displayedProducts.map((product) => (
             <div
@@ -292,7 +320,21 @@ const MarketplaceHome = () => {
         </div>
         {filteredSorted.length === 0 && (
           <div className="text-center py-12 text-sm text-slate-500">
-            No products match your filters.
+            {/* Naming the city matters. Without it a buyer cannot tell
+                whether the shop is empty or he narrowed it himself. */}
+            {cityParam ? (
+              <>
+                <p>No products from sellers in {cityLabel}.</p>
+                <button
+                  onClick={() => setCity(null)}
+                  className="mt-3 rounded-xl border border-sage/40 px-4 py-2 text-xs font-bold text-espresso transition-colors hover:border-clay hover:text-clay"
+                >
+                  Show sellers from all of India
+                </button>
+              </>
+            ) : (
+              "No products match your filters."
+            )}
           </div>
         )}
       </div>

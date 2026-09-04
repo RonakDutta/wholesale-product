@@ -9,6 +9,7 @@ const {
   getBuyerOrders,
   updateOrderStatus,
   cancelOrderHandler,
+  refundOrder,
   getOrderTimelineHandler,
   requestReturn,
   generateInvoice,
@@ -45,6 +46,10 @@ router.post("/:orderId/checkpoints", authenticateToken, authorizeRoles("seller",
 router.get("/:orderId/driver-link", authenticateToken, authorizeRoles("seller", "both"), getOrderLink);
 router.post("/:orderId/driver-link", authenticateToken, authorizeRoles("seller", "both"), createLink);
 router.post("/:orderId/return", authenticateToken, requestReturn);
+// The last step of a return. Not role gated at the route: the handler checks
+// that the caller is the seller on this order, and a 403 from the middleware
+// would clear the token and log him out mid job.
+router.post("/:orderId/refund", authenticateToken, refundOrder);
 router.get("/:orderId/invoice", authenticateToken, generateInvoice);
 router.get("/:orderId/packing-slip", authenticateToken, generatePackingSlip);
 router.get("/:orderId", authenticateToken, getOrderById);

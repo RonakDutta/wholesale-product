@@ -48,7 +48,7 @@ const METRICS = {
   outstanding: {
     title: "Still to collect",
     icon: Wallet,
-    lead: "Everything billed, less everything received, for each customer.",
+    lead: "Everything billed, less everything received, plus anything paid back, for each customer.",
     empty: "Nobody owes you anything, and you owe nobody. Your book is square.",
   },
   billed: {
@@ -207,13 +207,23 @@ const MoneyBreakdown = () => {
  * Each customer with the arithmetic spelled out, because "he owes 4,200" is
  * not something anyone can check and "billed 9,000, paid 4,800" is.
  */
-const OutstandingRows = ({ rows }) => (
+const OutstandingRows = ({ rows }) => {
+  // The column only appears once there is something in it. A wholesaler who
+  // has never refunded anybody does not need a column of zeroes, and one who
+  // has cannot follow the arithmetic without it.
+  const showRefunds = rows.some((r) => Number(r.refunded || 0) !== 0);
+  const grid = showRefunds
+    ? "sm:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr]"
+    : "sm:grid-cols-[2fr_1fr_1fr_1fr_1fr]";
+
+  return (
   <>
-    <div className="hidden grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-500 sm:grid">
+    <div className={`hidden gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-500 sm:grid ${grid}`}>
       <span>Customer</span>
       <span className="text-right">Sales</span>
       <span className="text-right">Shop orders</span>
       <span className="text-right">Received</span>
+      {showRefunds && <span className="text-right">Paid back</span>}
       <span className="text-right">Balance</span>
     </div>
     <ul className="divide-y divide-slate-100">
@@ -223,7 +233,7 @@ const OutstandingRows = ({ rows }) => (
           <li key={r.id}>
             <Link
               to={`/seller/customers/${r.id}`}
-              className="block px-5 py-3.5 transition-colors hover:bg-slate-50 sm:grid sm:grid-cols-[2fr_1fr_1fr_1fr_1fr] sm:gap-3"
+              className={`block px-5 py-3.5 transition-colors hover:bg-slate-50 sm:grid sm:gap-3 ${grid}`}
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold text-espresso">
@@ -243,6 +253,9 @@ const OutstandingRows = ({ rows }) => (
                 <span>Sales {money(r.billed_sales)}</span>
                 <span>Shop {money(r.billed_orders)}</span>
                 <span>Received {money(r.received)}</span>
+                {showRefunds && (
+                  <span>Paid back {money(r.refunded)}</span>
+                )}
                 <span
                   className={`font-bold ${balance < 0 ? "text-rose-600" : "text-espresso"}`}
                 >
@@ -260,6 +273,11 @@ const OutstandingRows = ({ rows }) => (
               <span className="hidden text-right text-sm text-slate-600 sm:block">
                 {money(r.received)}
               </span>
+              {showRefunds && (
+                <span className="hidden text-right text-sm text-slate-600 sm:block">
+                  {money(r.refunded)}
+                </span>
+              )}
               <span
                 className={`hidden text-right text-sm font-bold sm:block ${
                   balance < 0 ? "text-rose-600" : "text-espresso"
@@ -282,7 +300,8 @@ const OutstandingRows = ({ rows }) => (
       </p>
     )}
   </>
-);
+  );
+};
 
 const BilledRows = ({ rows }) => (
   <ul className="divide-y divide-slate-100">

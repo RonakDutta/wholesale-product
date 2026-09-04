@@ -22,9 +22,11 @@ import {
   getOrderStatusStyle,
   getNextStep,
   canRefuse,
+  canRefund,
   isReturnRequested,
   RETURN_ANSWERS,
 } from "../../utils/orderStatus";
+import RefundModal from "../../components/RefundModal";
 
 /**
  * One order, everything about it, in one place.
@@ -114,6 +116,7 @@ const SellerOrderDetail = () => {
   const [working, setWorking] = useState(false);
   const [dispatching, setDispatching] = useState(false);
   const [refusing, setRefusing] = useState(false);
+  const [refunding, setRefunding] = useState(false);
   // Bumped after anything that moves the order, so the page is rebuilt from
   // what the server actually did rather than from what the button hoped for.
   const [reloadKey, setReloadKey] = useState(0);
@@ -214,9 +217,44 @@ const SellerOrderDetail = () => {
       {/* What to do next, at the top, because it is the reason the page was
           opened. A return is a choice rather than a step, so it gets its own
           pair of buttons. */}
-      {(step || canRefuse(order.status) || isReturnRequested(order.status)) && (
+      {(step ||
+        canRefuse(order.status) ||
+        isReturnRequested(order.status) ||
+        canRefund(order.status)) && (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          {isReturnRequested(order.status) ? (
+          {canRefund(order.status) ? (
+            /* The last step of a return, and the one nothing used to offer.
+               Until it is done the goods are back on his shelf and the
+               customer's money is still in his till, which the Overview
+               reports as owed back. */
+            <>
+              <p className="text-sm font-bold text-espresso">
+                The goods are back. {paid > 0
+                  ? `You are holding ₹${money(paid)} of ${order.buyer_name || "your customer"}'s money.`
+                  : "Nothing was ever paid on this order."}
+              </p>
+              {paid > 0 ? (
+                <>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Pay him back however you normally would, by UPI or cash,
+                    then record it here so his account comes back to zero.
+                  </p>
+                  <button
+                    onClick={() => setRefunding(true)}
+                    disabled={working}
+                    className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-clay px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-60 sm:w-auto"
+                  >
+                    <IndianRupee className="h-4 w-4" />
+                    Record the refund
+                  </button>
+                </>
+              ) : (
+                <p className="mt-1 text-xs text-slate-500">
+                  There is nothing to pay back, so this order is finished.
+                </p>
+              )}
+            </>
+          ) : isReturnRequested(order.status) ? (
             <>
               <p className="text-sm font-bold text-espresso">
                 {order.buyer_name || "Your customer"} wants to send this back
@@ -424,6 +462,14 @@ const SellerOrderDetail = () => {
           order={{ ...order, buyer: order.buyer_name }}
           onClose={() => setRefusing(false)}
           onCancelled={reload}
+        />
+      )}
+
+      {refunding && (
+        <RefundModal
+          order={{ ...order, buyer: order.buyer_name }}
+          onClose={() => setRefunding(false)}
+          onRefunded={reload}
         />
       )}
     </div>

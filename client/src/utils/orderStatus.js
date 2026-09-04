@@ -181,10 +181,33 @@ export const isReturnRequested = (status) => normalize(status) === "return_reque
 /**
  * Whether the buyer can ask to send this order back.
  *
- * The mirror of RETURNABLE_STATUSES on the server, which checks again.
+ * Two doors, and both have to be open. The lifecycle says the goods have
+ * arrived; the clock says they arrived recently enough. The server checks
+ * both again and is the authority.
+ *
+ * `deliveredOn` missing means open, matching the server: an order with no
+ * delivery date on record is one of ours from before the date was written
+ * down, and locking a buyer out on the strength of a gap in our own records
+ * would be the wrong way round.
  */
-export const canRequestReturn = (status) =>
-  ["delivered", "completed"].includes(normalize(status));
+export const canRequestReturn = (status, deliveredOn = undefined) => {
+  if (!["delivered", "completed"].includes(normalize(status))) return false;
+  return returnDaysLeft(deliveredOn) !== 0;
+};
+
+/**
+ * Days left to send goods back, or null when there is no delivery date and
+ * so no countdown to show. Never returns 0 while the door is still open, so
+ * a screen can treat 0 as closed.
+ */
+export const returnDaysLeft = (deliveredOn) => {
+  if (!deliveredOn) return null;
+  const at = new Date(deliveredOn);
+  if (Number.isNaN(at.getTime())) return null;
+  const closesAt = at.getTime() + RETURN_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  const msLeft = closesAt - Date.now();
+  return msLeft > 0 ? Math.ceil(msLeft / (24 * 60 * 60 * 1000)) : 0;
+};
 
 /**
  * What to offer on this order, or null when there is nothing to do.
@@ -246,9 +269,30 @@ const REFUSABLE = [
   "payment_completed",
   "supplier_accepted",
   "processing",
+  // Not a late refusal. The goods went out and came straight back, so there
+  // is nothing for the buyer to return and this is the only way to close it.
+  "failed_delivery",
 ];
 
 export const canRefuse = (status) => REFUSABLE.includes(normalize(status));
+
+/**
+ * Whether the wholesaler still owes this customer his money back.
+ *
+ * The last step of a return, and the one nothing ever called. Until it is
+ * done the goods are back on the shelf and the customer's money is still in
+ * the till, which the Overview correctly reports as owed back to him.
+ */
+export const canRefund = (status) => normalize(status) === "return_completed";
+
+/**
+ * How long goods can be sent back after they arrive.
+ *
+ * The server counts this from the delivery date and is the authority. The
+ * number is here so a screen can say "3 days left" instead of leaving a
+ * buyer to find out by being refused.
+ */
+export const RETURN_WINDOW_DAYS = 7;
 
 /**
  * Whether the buyer can still call his own order off.

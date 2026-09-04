@@ -28,9 +28,15 @@ const ORDER_STATUS_FLOW = {
   payment_completed: ['supplier_accepted', 'cancelled'],
   supplier_accepted: ['processing', 'cancelled'],
   processing: ['packed', 'cancelled'],
-  packed: ['ready_for_pickup', 'cancelled'],
-  ready_for_pickup: ['shipped', 'cancelled'],
-  shipped: ['in_transit', 'cancelled'],
+  // Packed is the cut-off, and the map has to say so or the rule is only a
+  // rule on the screens that ask nicely. Cancelling was reachable from packed,
+  // ready_for_pickup and shipped through the generic status handler, so a
+  // seller could kill an order whose goods were already with a driver by
+  // posting a status directly, going round the refuse button that refuses.
+  // Once goods are boxed the way out is a return.
+  packed: ['ready_for_pickup'],
+  ready_for_pickup: ['shipped'],
+  shipped: ['in_transit'],
   in_transit: ['out_for_delivery'],
   out_for_delivery: ['delivered', 'failed_delivery'],
   delivered: ['completed', 'return_requested'],
@@ -40,6 +46,9 @@ const ORDER_STATUS_FLOW = {
   replacement_requested: ['replacement_issued'],
   replacement_issued: ['completed'],
   return_completed: ['refunded'],
+  // The one place a cancellation still makes sense after dispatch. The goods
+  // never arrived, so there is nothing to send back, and without this exit a
+  // failed delivery could only be retried for ever.
   failed_delivery: ['out_for_delivery', 'cancelled'],
   // Terminal. Nothing follows these.
   cancelled: [],
@@ -66,6 +75,9 @@ const SUPPLIER_CANCELLABLE_STATUSES = [
   'payment_completed',
   'supplier_accepted',
   'processing',
+  // Not a late cancellation, an admission that the delivery never happened.
+  // The goods are back with him, so there is nothing to return.
+  'failed_delivery',
 ];
 
 // Define status that can be returned
@@ -133,12 +145,29 @@ const updateOrderStatus = async (orderId, newStatus, userId, userRole, remarks =
       throw new Error(validation.message);
     }
     
-    // Update order status
+    // Update order status.
+    //
+    // The delivery date is stamped here because the return window is counted
+    // from it. orders.actual_delivery_date existed from the beginning and
+    // nothing had ever written to it, so the only record of when goods
+    // arrived was a row in the history table. COALESCE keeps the first
+    // arrival: an order can be delivered, returned, replaced and delivered
+    // again, and the window belongs to the first one.
     await client.query(
-      'UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-      [newStatus, orderId]
+      `UPDATE orders
+          SET status = $1,
+              -- A plain boolean rather than comparing $1 to 'delivered' in
+              -- here. Postgres deduces $1 as varchar from the SET and as text
+              -- from the comparison, refuses to pick one, and every status
+              -- change fails with "inconsistent types deduced for parameter".
+              actual_delivery_date = CASE WHEN $3
+                                          THEN COALESCE(actual_delivery_date, CURRENT_DATE)
+                                          ELSE actual_delivery_date END,
+              updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2`,
+      [newStatus, orderId, newStatus === 'delivered']
     );
-    
+
     // Record status change in history
     await client.query(
       `INSERT INTO order_status_history (order_id, status, previous_status, updated_by, updated_by_role, remarks)

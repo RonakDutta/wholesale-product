@@ -9,6 +9,10 @@ const {
 const { createSaleFromOrder, hasSaleLink } = require("../services/orderSaleService");
 const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange, cancelOrder } = require("../services/orderStatusService");
 const { geocodeOrderDestination } = require("../services/geocodingService");
+const {
+  RETURN_WINDOW_DAYS,
+  returnWindowForOrder,
+} = require("../services/orderWindows");
 const invoiceService = require("../services/invoiceService");
 const creditNoteService = require("../services/creditNoteService");
 const pdfService = require("../services/pdfService");
@@ -969,10 +973,23 @@ const getOrderById = async (req, res) => {
       [req.params.orderId],
     );
 
+    // How long the goods can still be sent back. Worked out here rather than
+    // on the screen, so one rule decides it and the screen can say "3 days
+    // left" instead of letting somebody press a button and be refused.
+    const window = await returnWindowForOrder(req.params.orderId);
+
     res.json({
       ...result.rows[0],
       items: itemsResult.rows,
       payments: paymentsResult.rows,
+      returnWindow: {
+        days: RETURN_WINDOW_DAYS,
+        open: window.open,
+        daysLeft: window.daysLeft,
+        closesAt: window.closesAt,
+        knownDelivery: window.knownDelivery,
+        reason: window.reason,
+      },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1061,6 +1078,129 @@ const unwindReturnedOrder = async (orderId, userId) => {
   }
 };
 
+/**
+ * The last step of a return: the wholesaler hands the money back.
+ *
+ * The lifecycle has always allowed return_completed to become refunded and
+ * nothing has ever called it, so every returned order stopped one step short.
+ * The goods were back on the shelf, the sale was cancelled, the credit note
+ * was raised, and the customer's money was still in the till with the Overview
+ * correctly reporting it as owed back to him. Nothing could clear that line.
+ *
+ * There is no payment gateway here, so this records a refund the wholesaler
+ * has made himself, exactly as payments are recorded: he says he has paid,
+ * and the books follow. The amount is capped at what was actually received, so
+ * no amount of typing can hand back more than came in.
+ */
+const refundOrder = async (req, res) => {
+  const { orderId } = req.params;
+  const method = clean(req.body?.method) || "upi";
+  const reference = clean(req.body?.reference);
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const found = await client.query(
+      `SELECT id, status, supplier_id, buyer_id, amount_paid, refund_amount,
+              refund_status, order_number
+         FROM orders WHERE id = $1 FOR UPDATE`,
+      [orderId],
+    );
+    if (found.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+    const order = found.rows[0];
+
+    // Only the wholesaler can pay money back, because he is the one paying it.
+    // Not role gated at the route, because a 403 clears the token.
+    if (order.supplier_id !== req.user.id) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({
+        success: false,
+        message: "Only the seller can record a refund on this order.",
+      });
+    }
+
+    const transition = validateStatusTransition(order.status, "refunded");
+    if (!transition.valid) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        success: false,
+        message:
+          order.status === "refunded"
+            ? "This order has already been refunded."
+            : "A refund can only be recorded once the goods have come back.",
+      });
+    }
+
+    const received = toPaise(order.amount_paid || 0);
+    if (received <= 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        success: false,
+        message: "Nothing was ever paid on this order, so there is nothing to refund.",
+      });
+    }
+
+    // Whatever the request says, never more than came in.
+    const askedPaise = req.body?.amount === undefined
+      ? received
+      : toPaise(Number(req.body.amount) || 0);
+    if (askedPaise <= 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        success: false,
+        message: "Enter a refund amount greater than zero.",
+      });
+    }
+    const refundPaise = Math.min(askedPaise, received);
+    const refund = fromPaise(refundPaise);
+
+    await client.query(
+      `UPDATE orders
+          SET status = 'refunded',
+              refund_amount = $2,
+              refund_status = 'processed',
+              refund_id = COALESCE($3, refund_id),
+              refund_processed_at = CURRENT_TIMESTAMP,
+              updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1`,
+      [orderId, refund, reference || null],
+    );
+
+    await client.query(
+      `INSERT INTO order_status_history (order_id, status, previous_status, updated_by, updated_by_role, remarks)
+       VALUES ($1,'refunded',$2,$3,'supplier',$4)`,
+      [
+        orderId,
+        order.status,
+        req.user.id,
+        `Refund of ${refund.toFixed(2)} paid back by ${method}${reference ? `, reference ${reference}` : ""}.`,
+      ],
+    );
+
+    await client.query("COMMIT");
+
+    res.json({
+      success: true,
+      message: "Refund recorded.",
+      refundAmount: refund,
+      // True whenever the wholesaler chose to hand back less than he received,
+      // so the screen can say so rather than implying the account is square.
+      partial: refundPaise < received,
+      stillHeld: fromPaise(received - refundPaise),
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Error recording refund:", error);
+    res.status(500).json({ success: false, message: "Failed to record the refund" });
+  } finally {
+    client.release();
+  }
+};
+
 const updateOrderStatus = async (req, res) => {
   const { orderId } = req.params;
   const { status, remarks } = req.body;
@@ -1090,9 +1230,22 @@ const updateOrderStatus = async (req, res) => {
       return res.status(400).json({ success: false, message: validation.message });
     }
 
+    // The delivery date is stamped here as well as in orderStatusService,
+    // because this route writes the status itself rather than going through
+    // it. The return window is counted from that date, and the column had
+    // never been written to by anything.
     await pool.query(
-      `UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
-      [status, orderId],
+      `UPDATE orders
+          SET status = $1,
+              -- $3 is a plain boolean, not a comparison against $1. Postgres
+              -- deduces $1 as varchar from the SET and as text from a
+              -- comparison, refuses to pick one, and the whole update fails.
+              actual_delivery_date = CASE WHEN $3
+                                          THEN COALESCE(actual_delivery_date, CURRENT_DATE)
+                                          ELSE actual_delivery_date END,
+              updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2`,
+      [status, orderId, status === "delivered"],
     );
 
     // Accepting is the moment the order becomes business. It goes into the
@@ -1253,6 +1406,20 @@ const requestReturn = async (req, res) => {
           previousStatus === "return_requested"
             ? "You have already asked to return this order."
             : "Goods can only be sent back once the order has been delivered.",
+      });
+    }
+
+    // The lifecycle says a delivered order may be returned. It cannot say
+    // whether the goods arrived on Tuesday or last February, so the clock is
+    // asked separately. Without this the door never shut: an order delivered a
+    // year ago could still be sent back, and the wholesaler had nothing to
+    // point at when he said no.
+    const window = await returnWindowForOrder(orderId);
+    if (!window.open) {
+      return res.status(400).json({
+        success: false,
+        code: "RETURN_WINDOW_CLOSED",
+        message: window.reason,
       });
     }
 
@@ -1435,6 +1602,7 @@ module.exports = {
   cancelOrderHandler,
   getOrderTimelineHandler,
   requestReturn,
+  refundOrder,
   generateInvoice,
   generatePackingSlip,
 };

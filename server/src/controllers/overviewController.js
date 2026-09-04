@@ -5,6 +5,7 @@ const {
   BILLED_SALE_STATUSES,
   NOT_OWED_SQL,
   bridgedGuard,
+  refundedBack,
   balanceExpression,
   totalsExpression,
   collectionTotals,
@@ -193,10 +194,16 @@ exports.getBreakdown = async (req, res) => {
       // arithmetic is on the screen rather than behind it. Customers who owe
       // nothing are left out; the ones in credit are kept, because a minus is
       // exactly the thing somebody opens this page to understand.
+      // The sum this page shows its working for. It must stay the same four
+      // terms as balanceExpression in khataBalance, in the same order, or the
+      // page contradicts the card that sent the wholesaler here.
+      const sum =
+        "(dues.billed_sales + dues.billed_orders - dues.received + dues.refunded)";
+
       const rows = await pool.query(
         `SELECT p.id, p.name, p.business_name, p.phone, p.city,
-                dues.billed_sales, dues.billed_orders, dues.received,
-                (dues.billed_sales + dues.billed_orders - dues.received) AS outstanding
+                dues.billed_sales, dues.billed_orders, dues.received, dues.refunded,
+                ${sum} AS outstanding
            FROM parties p
            JOIN LATERAL (
              SELECT
@@ -212,11 +219,16 @@ exports.getBreakdown = async (req, res) => {
                    : "0"
                } AS billed_orders,
                COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
-                  WHERE pp.party_id = p.id), 0) AS received
+                  WHERE pp.party_id = p.id), 0) AS received,
+               ${
+                 hasOrderParty
+                   ? `COALESCE((${refundedBack("p.id")}), 0)`
+                   : "0"
+               } AS refunded
            ) dues ON TRUE
           WHERE p.wholesaler_id = $1
-            AND (dues.billed_sales + dues.billed_orders - dues.received) <> 0
-          ORDER BY (dues.billed_sales + dues.billed_orders - dues.received) DESC`,
+            AND ${sum} <> 0
+          ORDER BY ${sum} DESC`,
         [wholesalerId],
       );
       return res.status(200).json({ metric, rows: rows.rows });

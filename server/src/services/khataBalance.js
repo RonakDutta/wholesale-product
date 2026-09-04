@@ -64,6 +64,32 @@ const bridgedGuard = (hasBridge) =>
     : "";
 
 /**
+ * Money handed back to the customer.
+ *
+ * A refund is a payment in reverse, and party_payments cannot hold one: the
+ * table has a CHECK that every amount is greater than zero, which is right,
+ * because a receipt for minus two thousand rupees is not a receipt.
+ *
+ * So it is added back here instead. Follow one order through: the customer
+ * pays 2,000, which lands in party_payments and is subtracted. The goods come
+ * back, the order reaches return_completed, and it stops counting as owed, so
+ * his balance is now minus 2,000 and the Overview correctly reports 2,000 of
+ * his money sitting in the till. The wholesaler hands it back, and this term
+ * adds the 2,000 on again, which cancels the payment exactly and returns him
+ * to zero.
+ *
+ * Only refunds actually paid out count. refund_status is written at the moment
+ * the money leaves, and refund_amount is capped at what was received, so this
+ * can never add back more than was taken.
+ */
+const REFUNDED_BACK_SQL = `
+    SELECT SUM(o.refund_amount) FROM orders o
+     WHERE o.party_id = %REF% AND o.refund_status = 'processed'
+       AND o.refund_amount IS NOT NULL`;
+
+const refundedBack = (partyRef) => REFUNDED_BACK_SQL.replace("%REF%", partyRef);
+
+/**
  * The balance for one party, as a SQL expression.
  *
  * `partyRef` is how the surrounding query names the party's id column, so the
@@ -87,6 +113,7 @@ const balanceExpression = ({ hasOrderParty, hasBridge, partyRef = "pt.id" }) => 
   COALESCE((
     SELECT SUM(pp.amount) FROM party_payments pp WHERE pp.party_id = ${partyRef}
   ), 0)
+  ${hasOrderParty ? `+ COALESCE((${refundedBack(partyRef)}), 0)` : ""}
 `;
 
 /**
@@ -163,6 +190,7 @@ module.exports = {
   NOT_OWED_SQL,
   BILLED_SALE_STATUSES,
   bridgedGuard,
+  refundedBack,
   balanceExpression,
   totalsExpression,
   collectionTotals,

@@ -148,9 +148,26 @@ numbering; shop prices treated as tax inclusive.
 
 Roughly in the order agreed.
 
-1. **Staff accounts.** Agreed: staff may do everything except change business
-   settings and GST details. Needs a staff table, invites, and every query
-   scoped to the wholesaler being acted for.
+### Start here, 5 Sept
+
+Before writing anything, confirm the two migrations above have actually been
+run against Neon. The order number sequence in particular is a live risk: until
+it is applied, two checkouts in the same second can be handed the same number.
+
+0. **Check the deploy is healthy.** The Neon password was rotated and Render was
+   left holding the old one, so every request failed with `28P01, password
+   authentication failed`. The connection string has been updated. Confirm the
+   home page loads and the city menu fills before starting on anything else,
+   and check `server/.env` has the new string too or the migrations will not
+   run either.
+1. **Staff accounts.** The biggest of the remaining items, so it gets the
+   fresh day. Agreed: staff may do everything except change business settings
+   and GST details. Needs a staff table, an invite flow, and, the part that
+   actually decides whether this works, every query scoped to the wholesaler
+   being acted for rather than to the logged in user. Search for `req.user.id`
+   used as a wholesaler id: that is the list of places to change, and missing
+   one leaks another wholesaler's book. Worth writing the scoping helper first
+   and making the controllers read it, the way khataBalance was done.
 2. **Trim the seller location.** The state is load bearing because it decides
    CGST plus SGST against IGST. The map pin is only for delivery. Ask the
    state once at signup and drop the pin unless marketplace delivery is on.
@@ -164,6 +181,31 @@ Roughly in the order agreed.
    eventually `itemController`) once the merge is confirmed good.
 6. **Mobile OTP.** Deferred. There is no genuinely free SMS OTP in India that
    we know of; every gateway charges per message.
+
+### GST APIs, looked into 4 Sept
+
+Answering "is there a free one we can test against". There is, for both.
+
+**e-Way Bill is the one worth doing.** GSTN runs a free pre-production sandbox;
+credentials come by emailing `ewaybill.api.helpdesk@gmail.com` from a GST
+registered address. It applies to any consignment over ₹50,000 regardless of
+turnover, which is a wholesaler's ordinary week, so it is relevant to the people
+actually using this.
+
+**e-Invoice can wait.** NIC's sandbox at `einv-apisandbox.nic.in` is free and
+self-registration, but e-invoicing is only mandatory above ₹5 crore annual
+turnover. Most of our sellers are below that, so it would be compliance nobody
+on the platform needs. Revisit when we go after larger sellers.
+
+Faster to prototype against: WhiteBooks, Masters India and sandbox.co.in hand
+out free sandbox keys instantly rather than by email. Production is paid and
+couples us to that provider, so keep any integration behind an interface.
+
+**Settle this before writing code.** Both official sandboxes assume one taxpayer
+testing his own ERP. A platform raising e-way bills for hundreds of different
+wholesalers cannot use one set of credentials: either each seller enrols his own
+API access and we hold his credentials, or we sign with a GSP licensed to act
+for many taxpayers. That is a commercial decision and it shapes the schema.
 
 ---
 

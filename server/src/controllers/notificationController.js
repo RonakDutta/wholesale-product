@@ -6,6 +6,7 @@ const {
   NOTIFICATION_CHANNELS,
   NOTIFICATION_TYPES,
 } = require("../services/notificationManager");
+const { scanLowStockInventory } = require("../services/stockAlertService");
 
 const getNotifications = async (req, res) => {
   const userId = req.user.id;
@@ -229,6 +230,36 @@ const sendAdminNotification = async (req, res) => {
   }
 };
 
+const getLowStockSummary = async (req, res) => {
+  const supplierId = req.user.id;
+  const threshold = req.query.threshold ? parseInt(req.query.threshold, 10) : undefined;
+
+  try {
+    const summary = await scanLowStockInventory({ supplierId, threshold, autoNotify: false });
+    res.json({ success: true, ...summary });
+  } catch (error) {
+    console.error("Error fetching low stock summary", error);
+    res.status(500).json({ success: false, message: "Server error fetching low stock summary" });
+  }
+};
+
+const triggerLowStockScan = async (req, res) => {
+  const supplierId = req.user.id;
+  const threshold = req.body.threshold ? parseInt(req.body.threshold, 10) : undefined;
+
+  try {
+    const result = await scanLowStockInventory({ supplierId, threshold, autoNotify: true });
+    res.json({
+      success: true,
+      message: `Scanned inventory: ${result.lowStockCount} low-stock item(s) found and alerts dispatched.`,
+      ...result,
+    });
+  } catch (error) {
+    console.error("Error triggering low stock alert scan", error);
+    res.status(500).json({ success: false, message: "Server error triggering low stock scan" });
+  }
+};
+
 module.exports = {
   getNotifications,
   getUnreadNotifications,
@@ -242,4 +273,6 @@ module.exports = {
   getAdminNotifications,
   getNotificationLogs,
   sendAdminNotification,
+  getLowStockSummary,
+  triggerLowStockScan,
 };

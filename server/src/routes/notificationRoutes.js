@@ -14,11 +14,16 @@ const {
   getAdminNotifications,
   getNotificationLogs,
   sendAdminNotification,
+  getLowStockSummary,
+  triggerLowStockScan,
 } = require("../controllers/notificationController");
 
 const router = express.Router();
 
 router.use(authenticateToken);
+
+router.get("/inventory/low-stock-summary", authorizeRoles("seller", "both", "admin"), getLowStockSummary);
+router.post("/inventory/scan-low-stock", authorizeRoles("seller", "both", "admin"), triggerLowStockScan);
 
 router.get("/", getNotifications);
 router.get("/unread", getUnreadNotifications);

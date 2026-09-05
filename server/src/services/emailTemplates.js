@@ -19,7 +19,57 @@ const renderEmailTemplate = (templateName, variables) => {
     password_reset: `<h2 style="font-size: 20px; margin-bottom: 16px;">Reset your password</h2><p style="margin-bottom: 16px;">Use this link to reset your password:</p><p style="margin-bottom: 24px;"><a href="${variables.resetUrl}" style="display: inline-block; background: #0f766e; color: #ffffff; padding: 12px 20px; border-radius: 8px; text-decoration: none;">Reset Password</a></p>`,
     order_update: `<h2 style="font-size: 20px; margin-bottom: 16px;">Order #${variables.orderNumber} Update</h2><p style="margin-bottom: 16px;">${variables.message}</p><p style="margin-bottom: 16px;">Current status: <strong>${variables.status}</strong></p>`,
     promo_alert: `<h2 style="font-size: 20px; margin-bottom: 16px;">${variables.title}</h2><p style="margin-bottom: 16px;">${variables.message}</p><p style="margin-bottom: 16px;">${variables.ctaText ? `<a href="${variables.ctaUrl}" style="display: inline-block; background: #0f766e; color: #ffffff; padding: 12px 20px; border-radius: 8px; text-decoration: none;">${variables.ctaText}</a>` : ""}</p>`,
-    low_stock_alert: `<h2 style="font-size: 20px; margin-bottom: 16px;">Low stock alert</h2><p style="margin-bottom: 16px;">Your product ${variables.productName} is low in stock with only ${variables.stockLeft} units remaining.</p>`,
+    low_stock_alert: `
+      <div style="padding: 4px 0;">
+        <div style="background: \${variables.severity === 'out_of_stock' ? '#fef2f2' : '#fffbeb'}; border-left: 4px solid \${variables.severity === 'out_of_stock' ? '#ef4444' : '#f59e0b'}; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+          <h2 style="font-size: 18px; margin: 0 0 8px; color: \${variables.severity === 'out_of_stock' ? '#991b1b' : '#92400e'};">
+            \${variables.severity === 'out_of_stock' ? '🚨 Product Out of Stock' : '⚠️ Low Stock Restock Alert'}
+          </h2>
+          <p style="margin: 0; font-size: 14px; color: \${variables.severity === 'out_of_stock' ? '#b91c1c' : '#b45309'};">
+            \${variables.message || \`Your product "\${variables.productName}" requires restocking.\`}
+          </p>
+        </div>
+
+        <p style="margin-bottom: 16px; color: #334155; font-size: 14px;">
+          Dear <strong>\${variables.supplierName || 'Wholesaler'}</strong>,
+        </p>
+        <p style="margin-bottom: 16px; color: #475569; font-size: 14px; line-height: 1.5;">
+          The inventory level for your wholesale listing has reached a critical threshold. Buyers may not be able to place bulk orders if stock is insufficient.
+        </p>
+
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tr>
+              <td style="padding: 8px 0; color: #64748b;">Product Name:</td>
+              <td style="padding: 8px 0; font-weight: bold; color: #0f172a; text-align: right;">\${variables.productName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #64748b;">Current Stock Remaining:</td>
+              <td style="padding: 8px 0; font-weight: bold; color: \${variables.stockLeft <= 0 ? '#ef4444' : '#d97706'}; text-align: right;">\${variables.stockLeft} units</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #64748b;">Minimum Order Quantity (MOQ):</td>
+              <td style="padding: 8px 0; font-weight: bold; color: #0f172a; text-align: right;">\${variables.moq || 1} units</td>
+            </tr>
+            \${variables.category ? \`
+            <tr>
+              <td style="padding: 8px 0; color: #64748b;">Category:</td>
+              <td style="padding: 8px 0; color: #0f172a; text-align: right;">\${variables.category}</td>
+            </tr>\` : ''}
+          </table>
+        </div>
+
+        <div style="text-align: center; margin-bottom: 20px;">
+          <a href="\${variables.restockUrl || '/seller/products'}" style="display: inline-block; background: #0f766e; color: #ffffff; padding: 12px 28px; border-radius: 10px; text-decoration: none; font-weight: bold; font-size: 14px;">
+            Restock Inventory in Dashboard &rarr;
+          </a>
+        </div>
+
+        <p style="margin: 0; font-size: 12px; color: #94a3b8; text-align: center;">
+          You can manage your notification preferences anytime from your Seller Settings.
+        </p>
+      </div>
+    `,
     review_request: `<h2 style="font-size: 20px; margin-bottom: 16px;">Review your purchase</h2><p style="margin-bottom: 16px;">Thank you for ordering ${variables.productName}. Please share your feedback and help the supplier improve.</p>`,
     coupon_received: `<h2 style="font-size: 20px; margin-bottom: 16px;">You have a new coupon</h2><p style="margin-bottom: 16px;">Use code <strong>${variables.couponCode}</strong> to get savings on your next purchase.</p>`,
     invoice_notification: `

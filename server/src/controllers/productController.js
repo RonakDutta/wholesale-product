@@ -7,6 +7,7 @@ const {
   CITY_KEY_SQL,
   cityFilterFrom,
 } = require("../services/sellerLocation");
+const { checkAndTriggerLowStockAlert } = require("../services/stockAlertService");
 
 /**
  * Hides a sold out listing from the catalogue, but only while stock counts
@@ -682,6 +683,12 @@ exports.updateInventoryItem = async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({
         message: "Listing not found or you don't have permission to edit it",
+      });
+    }
+
+    if (sent("stock")) {
+      checkAndTriggerLowStockAlert({ inventoryId: id, supplierId, currentStock: result.rows[0].stock }).catch((err) => {
+        console.warn("[StockAlert] Update Notice:", err.message);
       });
     }
 

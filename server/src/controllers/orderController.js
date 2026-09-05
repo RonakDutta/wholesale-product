@@ -21,6 +21,7 @@ const {
   NOTIFICATION_CHANNELS,
   NOTIFICATION_TYPES,
 } = require("../services/notificationManager");
+const { checkAndTriggerLowStockAlert } = require("../services/stockAlertService");
 
 // Money is handled in paise so that splitting a bill never loses or invents a
 // fraction of a rupee.
@@ -483,6 +484,15 @@ const createOrder = async (req, res) => {
     invoiceService.createInvoiceFromOrder(orderId).catch((invErr) => {
       console.warn("Background invoice creation notice:", invErr.message);
     });
+
+    // Trigger automated low-stock and restock alerts for supplier inventory
+    for (const line of lines) {
+      if (line.inventoryId) {
+        checkAndTriggerLowStockAlert({ inventoryId: line.inventoryId }).catch((alertErr) => {
+          console.warn("[StockAlert] Notice:", alertErr.message);
+        });
+      }
+    }
 
     return res.status(201).json({ success: true, orderId, subtotal, itemCount: lines.length });
   } catch (error) {

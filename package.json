@@ -29,7 +29,8 @@
 		"concurrently": "^10.0.3"
 	},
 	"scripts": {
-		"dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\""
+		"dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+		"test": "node --test server/tests/stockAlertService.test.js"
 	},
 	"repository": {
 		"type": "git",

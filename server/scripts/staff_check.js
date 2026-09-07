@@ -286,6 +286,68 @@ const mkUser = async (name, role, phone) =>
   check(ownerMe.body?.staff?.isOwner === true, "an owner is told he is one", ownerMe.body?.staff);
   check(ownerMe.body?.staff?.worksFor === null, "with no employer named", ownerMe.body?.staff);
 
+  // ---- an invite turned off can be brought back ---------------------------
+  // The trap this replaced: turning off somebody who had not yet used his code
+  // left him unreachable. The row sat disabled, the button was refused every
+  // time, and a second invite under a second row was the only way out.
+  const pending = (await asUser(ram, staff.inviteStaff, {
+    body: { name: "Never Joined", phone: "9820033445" },
+  }, [requireOwner])).body.staff;
+  const firstCode = pending.inviteCode;
+
+  const cancelled = await asUser(ram, staff.setStaffStatus, {
+    params: { id: pending.id }, body: { status: "disabled" },
+  }, [requireOwner]);
+  check(cancelled.statusCode === 200, "an unused invite can be cancelled", { s: cancelled.statusCode });
+  check(cancelled.body?.staff?.status === "disabled", "and goes to turned off", { s: cancelled.body?.staff?.status });
+
+  const deadCode = await asUser(null, staff.acceptInvite, {
+    body: { code: firstCode, password: "some-long-password", email: `dead${stamp}@x.local` },
+  });
+  check(deadCode.statusCode === 400, "the cancelled code stops working", { s: deadCode.statusCode });
+
+  const revived = await asUser(ram, staff.setStaffStatus, {
+    params: { id: pending.id }, body: { status: "active" },
+  }, [requireOwner]);
+  check(revived.statusCode === 200, "and he can be invited again", { s: revived.statusCode });
+  check(revived.body?.staff?.status === "invited",
+    "back to waiting rather than working, since he never joined",
+    { s: revived.body?.staff?.status });
+  check(!!revived.body?.staff?.inviteCode && revived.body.staff.inviteCode !== firstCode,
+    "with a fresh code, because the old one may have expired", {});
+
+  const joinedLate = await asUser(null, staff.acceptInvite, {
+    body: { code: revived.body.staff.inviteCode, password: "late-password-1", email: `late${stamp}@x.local` },
+  });
+  check(joinedLate.statusCode === 201, "and the new code works", { s: joinedLate.statusCode });
+
+  // ---- removing somebody for good -----------------------------------------
+  const doomed = (await asUser(ram, staff.inviteStaff, {
+    body: { name: "Wrong Number", phone: "9820099887" },
+  }, [requireOwner])).body.staff;
+  const gone = await asUser(ram, staff.removeStaff, { params: { id: doomed.id } }, [requireOwner]);
+  check(gone.statusCode === 200, "an invite sent to the wrong number can be removed", { s: gone.statusCode });
+  const left = await asUser(ram, staff.listStaff, {}, [requireOwner]);
+  check(!(left.body?.staff || []).some((p) => p.id === doomed.id),
+    "and he is off the list", { n: (left.body?.staff || []).length });
+
+  // Somebody who did work can go too, and his work stays.
+  const worked = await q("SELECT COUNT(*)::int AS n FROM parties WHERE name = $1",
+    [`Added by the nephew ${stamp}`]);
+  const removedWorker = await asUser(ram, staff.removeStaff,
+    { params: { id: kishan.id } }, [requireOwner]);
+  check(removedWorker.statusCode === 200, "so can somebody who has worked", { s: removedWorker.statusCode });
+  const afterRemoval = await q("SELECT COUNT(*)::int AS n FROM parties WHERE name = $1",
+    [`Added by the nephew ${stamp}`]);
+  check(afterRemoval.rows[0].n === worked.rows[0].n,
+    "and the customer he added is untouched", { before: worked.rows[0].n, after: afterRemoval.rows[0].n });
+
+  const notMineToRemove = await asUser(shyam, staff.removeStaff,
+    { params: { id: pending.id } }, [requireOwner]);
+  check(notMineToRemove.statusCode === 404,
+    "another wholesaler cannot remove your staff", { s: notMineToRemove.statusCode });
+
+
   console.log(fails ? `\n${fails} FAILED\n` : "\nall good\n");
   await testPool.end();
   process.exit(fails ? 1 : 0);

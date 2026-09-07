@@ -4,6 +4,7 @@ import {
   Copy,
   KeyRound,
   Power,
+  Trash2,
   UserPlus,
   Users,
   X,
@@ -55,6 +56,7 @@ const Staff = () => {
   const [reloadKey, setReloadKey] = useState(0);
   const [inviting, setInviting] = useState(false);
   const [working, setWorking] = useState(null);
+  const [removing, setRemoving] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,6 +137,20 @@ const Staff = () => {
     }
   };
 
+  const remove = async (person) => {
+    setWorking(person.id);
+    try {
+      const { data } = await api.delete(`/api/staff/${person.id}`);
+      setStaff((prev) => prev.filter((s) => s.id !== person.id));
+      toast.success(data.message);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Could not remove this person");
+    } finally {
+      setWorking(null);
+      setRemoving(null);
+    }
+  };
+
   const copyCode = async (person) => {
     const link = `${window.location.origin}/join?code=${encodeURIComponent(person.inviteCode)}`;
     try {
@@ -207,9 +223,19 @@ const Staff = () => {
               onStatus={setStatus}
               onNewCode={newCode}
               onCopy={copyCode}
+              onRemove={setRemoving}
             />
           ))}
         </div>
+      )}
+
+      {removing && (
+        <RemoveModal
+          person={removing}
+          onClose={() => setRemoving(null)}
+          onConfirm={() => remove(removing)}
+          busy={working === removing.id}
+        />
       )}
 
       {inviting && (
@@ -231,6 +257,7 @@ const PersonCard = ({
   onStatus,
   onNewCode,
   onCopy,
+  onRemove,
 }) => {
   const status = STATUS[person.status] || STATUS.invited;
   const off = person.status === "disabled";
@@ -266,18 +293,37 @@ const PersonCard = ({
           )}
         </div>
 
-        <button
-          onClick={() => onStatus(person, off ? "active" : "disabled")}
-          disabled={busy || (off && !person.hasAccount)}
-          className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition-colors disabled:opacity-50 ${
-            off
-              ? "border-slate-200 text-slate-600 hover:border-emerald-300 hover:text-emerald-700"
-              : "border-slate-200 text-slate-600 hover:border-rose-300 hover:text-rose-600"
-          }`}
-        >
-          <Power className="h-3.5 w-3.5" />
-          {off ? "Turn back on" : "Turn off"}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            onClick={() => onStatus(person, off ? "active" : "disabled")}
+            disabled={busy}
+            className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition-colors disabled:opacity-50 ${
+              off
+                ? "border-slate-200 text-slate-600 hover:border-emerald-300 hover:text-emerald-700"
+                : "border-slate-200 text-slate-600 hover:border-rose-300 hover:text-rose-600"
+            }`}
+          >
+            <Power className="h-3.5 w-3.5" />
+            {/* An invite turned off goes back to invited with a fresh code,
+                not straight to working, so the word has to match. */}
+            {off
+              ? person.hasAccount
+                ? "Turn back on"
+                : "Invite again"
+              : person.hasAccount
+                ? "Turn off"
+                : "Cancel invite"}
+          </button>
+          <button
+            onClick={() => onRemove(person)}
+            disabled={busy}
+            aria-label={`Remove ${person.name}`}
+            title="Remove from your staff"
+            className="cursor-pointer rounded-lg border border-slate-200 p-2 text-slate-400 transition-colors hover:border-rose-300 hover:text-rose-600 disabled:opacity-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       {person.status === "invited" && person.inviteCode && (
@@ -357,6 +403,62 @@ const PersonCard = ({
     </div>
   );
 };
+
+/**
+ * Removing somebody, which is the one thing on this page that cannot be undone.
+ *
+ * It says what actually happens rather than asking "are you sure". A man who
+ * has done work keeps his history and only loses his way in; an invite that was
+ * never used simply goes. Those are different enough to be worth two sentences.
+ */
+const RemoveModal = ({ person, onClose, onConfirm, busy }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
+    <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6">
+      <h3 className="flex items-center gap-2 text-base font-bold text-espresso">
+        <Trash2 className="h-5 w-5 text-rose-500" />
+        Remove {person.name}?
+      </h3>
+
+      <p className="mt-3 text-sm text-slate-600">
+        {person.hasAccount ? (
+          <>
+            He will not be able to open your book again. Everything he did stays
+            on the record under his name, so your sales and dispatches do not
+            change.
+          </>
+        ) : (
+          <>
+            He never used his code, so there is nothing of his in your book. The
+            code stops working.
+          </>
+        )}
+      </p>
+
+      {person.hasAccount && (
+        <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2.5 text-xs text-slate-500">
+          If he might come back, turn him off instead. That keeps him on this
+          list and you can turn him on again in one tap.
+        </p>
+      )}
+
+      <div className="mt-5 flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+        <button
+          onClick={onClose}
+          className="cursor-pointer rounded-xl px-4 py-2 text-xs font-semibold text-espresso/60 transition-colors hover:bg-slate-100"
+        >
+          Keep him
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={busy}
+          className="cursor-pointer rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-rose-700 disabled:opacity-50"
+        >
+          {busy ? "Removing..." : "Remove him"}
+        </button>
+      </div>
+    </div>
+  </div>
+);
 
 const InviteModal = ({ catalogue, onClose, onInvited }) => {
   const [name, setName] = useState("");

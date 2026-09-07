@@ -16,9 +16,13 @@ const {
  * could edit permissions could give himself the rest of them, so this is the
  * one part of the dashboard that cannot be delegated.
  *
- * Rows are disabled rather than deleted. An employee's name sits on dispatches,
- * payments and status history, and deleting the row would either break those
- * or, worse, leave them reading as somebody else's work.
+ * Turning somebody off is the usual move and keeps him on the list, which is
+ * what you want for a man who might come back. Removing him is for the ones who
+ * will not, and for an invite sent to the wrong number.
+ *
+ * Either way his history is safe: the rows that record who did what point at
+ * users.id, not at this table, so his name stays on the dispatches he made and
+ * the payments he recorded whatever happens here.
  */
 
 const INVITE_DAYS = 14;
@@ -185,29 +189,51 @@ exports.setStaffStatus = async (req, res) => {
     }
     const staff = found.rows[0];
 
-    // Turning somebody on who never accepted his invite would leave a row
-    // claiming to be active with nobody behind it.
-    if (wanted === "active" && !staff.user_id) {
-      return res.status(400).json({
-        message: "He has not signed in with his code yet, so there is nothing to turn on.",
-      });
-    }
+    /**
+     * Turning somebody back on means putting him back where he was, and where
+     * he was depends on whether he ever joined.
+     *
+     * This used to refuse outright for anybody without an account, which
+     * quietly created a trap: turn off a man who had not yet used his code and
+     * there was no way to reach him again. The row sat disabled for ever, the
+     * button was refused every time, and the only way out was another invite
+     * under a second row.
+     *
+     * So somebody who never joined goes back to invited, with a fresh code:
+     * his old one may well have expired while he sat turned off, and handing
+     * back a dead code would be the same trap one step further along.
+     */
+    const neverJoined = !staff.user_id;
+    const restoreTo = wanted === "active" && neverJoined ? "invited" : wanted;
 
+    const reissue = restoreTo === "invited";
     const { rows } = await pool.query(
       `UPDATE staff_members
-          SET status = $2, updated_at = CURRENT_TIMESTAMP
+          SET status = $2,
+              invite_code       = CASE WHEN $3 THEN $4 ELSE invite_code END,
+              invite_expires_at = CASE WHEN $3 THEN $5 ELSE invite_expires_at END,
+              invited_at        = CASE WHEN $3 THEN CURRENT_TIMESTAMP ELSE invited_at END,
+              updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
         RETURNING *`,
-      [id, wanted],
+      [
+        id,
+        restoreTo,
+        reissue,
+        reissue ? newInviteCode() : null,
+        reissue ? new Date(Date.now() + INVITE_DAYS * 24 * 60 * 60 * 1000) : null,
+      ],
     );
 
-    res.status(200).json({
-      staff: shape(rows[0]),
-      message:
-        wanted === "disabled"
-          ? "He can no longer open your book. Everything he did is still on the record."
-          : "He can open your book again.",
-    });
+    const messages = {
+      disabled: neverJoined
+        ? "His invite is cancelled. The code you gave him no longer works."
+        : "He can no longer open your book. Everything he did is still on the record.",
+      invited: "His invite is back, with a new code. Send it to him again.",
+      active: "He can open your book again.",
+    };
+
+    res.status(200).json({ staff: shape(rows[0]), message: messages[restoreTo] });
   } catch (err) {
     console.error("Error changing staff status:", err);
     res.status(500).json({ message: "Could not change this" });
@@ -343,5 +369,48 @@ exports.acceptInvite = async (req, res) => {
     res.status(500).json({ message: "Could not set up your account" });
   } finally {
     client.release();
+  }
+};
+
+/**
+ * Take somebody off the staff for good.
+ *
+ * Safe to delete, and this is worth knowing before anybody worries about it:
+ * history rows point at users.id, not at this table. His name stays on the
+ * dispatches he made, the payments he recorded and the statuses he moved, and
+ * deleting the employment does not touch any of it. What goes is the link
+ * between his login and this shop.
+ *
+ * If he had joined, his login survives and stops reaching this book. Turning
+ * him off does the same thing while leaving him on the list, which is the
+ * better move for somebody who might come back; deleting is for the ones who
+ * will not, and for an invite sent to the wrong number.
+ *
+ * @route DELETE /api/staff/:id
+ */
+exports.removeStaff = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const { rows } = await pool.query(
+      `DELETE FROM staff_members
+        WHERE id = $1 AND wholesaler_id = $2
+        RETURNING name, user_id`,
+      [id, businessId(req)],
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "No such person on your staff" });
+    }
+
+    res.status(200).json({
+      removed: id,
+      message: rows[0].user_id
+        ? `${rows[0].name} is off your staff. What he did is still on the record.`
+        : `${rows[0].name}'s invite is cancelled.`,
+    });
+  } catch (err) {
+    console.error("Error removing staff:", err);
+    res.status(500).json({ message: "Could not remove this person" });
   }
 };

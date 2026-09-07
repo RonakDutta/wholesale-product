@@ -22,17 +22,32 @@ cd server && npm run migrate
 
 | Migration | What it does | Run? |
 |---|---|---|
-| `wholesale3_order_number_sequence.sql` | Order numbers from a counter instead of dice | **outstanding** |
-| `wholesale3_one_invoice_per_order.sql` | Unique index so one order cannot hold two invoices | **outstanding** |
-| `wholesale3_staff_accounts.sql` | Employees who work on a wholesaler's book | **outstanding** |
+| `wholesale3_order_number_sequence.sql` | Order numbers from a counter instead of dice | run 7 Sept |
+| `wholesale3_one_invoice_per_order.sql` | Unique index so one order cannot hold two invoices | run 7 Sept |
+| `wholesale3_staff_accounts.sql` | Employees who work on a wholesaler's book | run 7 Sept |
 
-`wholesale3_one_invoice_per_order.sql` opens with a query that lists any order
-already holding two invoices. It returns nothing on a healthy database. If it
-returns rows, the index will refuse to build until they are sorted out, and
-that is a judgement call: a duplicate carrying payments needs those payments
-moved onto the surviving invoice first. Do not delete on the strength of the
-query alone. The application takes a lock before creating either way, so new
-duplicates cannot appear whether or not this has been run.
+Nothing outstanding. To confirm all three actually landed, since two of them use
+IF NOT EXISTS and one can be refused by existing data without stopping the run:
+
+```sql
+SELECT
+  (SELECT count(*) FROM pg_class
+     WHERE relname = 'order_number_seq' AND relkind = 'S')          AS order_seq,
+  (SELECT count(*) FROM pg_indexes
+     WHERE indexname = 'idx_invoices_order')                        AS invoice_index,
+  (SELECT count(*) FROM information_schema.tables
+     WHERE table_name = 'staff_members')                            AS staff_table;
+-- all three should read 1
+SELECT generate_order_number();  -- ORD + today's date + six digits
+```
+
+`idx_invoices_order` is the one that can be missing while the others are fine:
+it refuses to build if an order already holds two invoices. If it reads 0, the
+query at the top of that migration lists the offenders. Sorting them out is a
+judgement call, because a duplicate carrying payments needs those payments moved
+onto the surviving invoice first, so do not delete on the strength of the query
+alone. The application takes a lock before creating either way, so new
+duplicates cannot appear whether or not the index exists.
 
 Backfills, safe to run more than once, in this order:
 
@@ -199,14 +214,6 @@ numbering; shop prices treated as tax inclusive.
 ## Left to do
 
 Roughly in the order agreed.
-
-### Before anything else
-
-The three migrations above have still not been run. The order number sequence
-is the live risk: until it is applied, two checkouts in the same second can be
-handed the same number. The staff one matters now that staff accounts are being
-used, because until it runs the table does not exist and every account resolves
-as its own owner.
 
 1. **Trim the seller location.** The state is load bearing because it decides
    CGST plus SGST against IGST. The map pin is only for delivery. Ask the

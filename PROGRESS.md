@@ -24,6 +24,7 @@ cd server && npm run migrate
 |---|---|---|
 | `wholesale3_order_number_sequence.sql` | Order numbers from a counter instead of dice | **outstanding** |
 | `wholesale3_one_invoice_per_order.sql` | Unique index so one order cannot hold two invoices | **outstanding** |
+| `wholesale3_staff_accounts.sql` | Employees who work on a wholesaler's book | **outstanding** |
 
 `wholesale3_one_invoice_per_order.sql` opens with a query that lists any order
 already holding two invoices. It returns nothing on a healthy database. If it
@@ -44,6 +45,38 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 ---
 
 ## Done
+
+### 5 Sept 2026
+
+**Staff accounts.** A wholesaler's people can work on his book with their own
+logins. Until now every employee used the owner's, so nothing could say who did
+a thing and access could not be taken back from somebody who had left.
+
+The feature is one substitution and everything else is consequence. Two ideas
+that were the same variable are now apart: the person signed in, who owns the
+history entries and the notifications, and the business being acted on, whose
+customers and money these are. For an owner they are the same id, which is why
+`req.user.id` was doing both jobs and why getting it wrong is invisible in any
+test that only has owners in it. `middlewares/businessContext` resolves it once,
+chained into `authenticateToken` so a route cannot forget it.
+
+Sixty odd call sites were gone through one at a time rather than swept.
+`performedBy` on an invoice log, the name on a status history row and the
+recipient of a notification are all still the person; swapping those would have
+been the same bug pointing the other way.
+
+Permissions are per employee and changeable whenever. A new employee starts
+with everything, which is the rule already agreed, and the owner takes things
+away. Four things are owner only and deliberately not grantable: business
+settings, the GST number, the UPI id, and staff management itself.
+
+Two decisions worth keeping. Turning somebody off is not the same as never
+having employed him: resolving a disabled employee as his own owner handed a
+sacked man a working, empty seller dashboard, so he is now refused outright. And
+an employee without the money permission still gets the Overview, because the
+lists on it are his work; the money block is withheld rather than zeroed, so the
+screen can say it is not shown to him instead of telling him the business is
+owed nothing.
 
 ### 4 Sept 2026
 
@@ -160,14 +193,9 @@ it is applied, two checkouts in the same second can be handed the same number.
    home page loads and the city menu fills before starting on anything else,
    and check `server/.env` has the new string too or the migrations will not
    run either.
-1. **Staff accounts.** The biggest of the remaining items, so it gets the
-   fresh day. Agreed: staff may do everything except change business settings
-   and GST details. Needs a staff table, an invite flow, and, the part that
-   actually decides whether this works, every query scoped to the wholesaler
-   being acted for rather than to the logged in user. Search for `req.user.id`
-   used as a wholesaler id: that is the list of places to change, and missing
-   one leaks another wholesaler's book. Worth writing the scoping helper first
-   and making the controllers read it, the way khataBalance was done.
+1. **The sign in and sign up screens, on a laptop.** They are too big and do
+   not look good on a wide screen. Wanted: smaller, tidier, and worth looking
+   at. Nothing behind them changes.
 2. **Trim the seller location.** The state is load bearing because it decides
    CGST plus SGST against IGST. The map pin is only for delivery. Ask the
    state once at signup and drop the pin unless marketplace delivery is on.
@@ -241,7 +269,7 @@ for many taxpayers. That is a commercial decision and it shapes the schema.
 
 ## Testing
 
-Sixteen suites in `server/scripts/*_check.js`. They drive the real
+Seventeen suites in `server/scripts/*_check.js`. They drive the real
 controllers against a local Postgres, so they catch schema drift that reading
 the code does not.
 

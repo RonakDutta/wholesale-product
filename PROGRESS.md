@@ -200,33 +200,26 @@ numbering; shop prices treated as tax inclusive.
 
 Roughly in the order agreed.
 
-### Start here, 5 Sept
+### Before anything else
 
-Before writing anything, confirm the two migrations above have actually been
-run against Neon. The order number sequence in particular is a live risk: until
-it is applied, two checkouts in the same second can be handed the same number.
+The three migrations above have still not been run. The order number sequence
+is the live risk: until it is applied, two checkouts in the same second can be
+handed the same number. The staff one matters now that staff accounts are being
+used, because until it runs the table does not exist and every account resolves
+as its own owner.
 
-0. **Check the deploy is healthy.** The Neon password was rotated and Render was
-   left holding the old one, so every request failed with `28P01, password
-   authentication failed`. The connection string has been updated. Confirm the
-   home page loads and the city menu fills before starting on anything else,
-   and check `server/.env` has the new string too or the migrations will not
-   run either.
-1. **The sign in and sign up screens, on a laptop.** They are too big and do
-   not look good on a wide screen. Wanted: smaller, tidier, and worth looking
-   at. Nothing behind them changes.
-2. **Trim the seller location.** The state is load bearing because it decides
+1. **Trim the seller location.** The state is load bearing because it decides
    CGST plus SGST against IGST. The map pin is only for delivery. Ask the
    state once at signup and drop the pin unless marketplace delivery is on.
-3. **Delete the invoice's "mark as delivered".** One event should not have two
+2. **Delete the invoice's "mark as delivered".** One event should not have two
    switches; the order lifecycle is the authority.
-4. **HSN codes**, scoped small: validate the shape (4, 6 or 8 digits), suggest
+3. **HSN codes**, scoped small: validate the shape (4, 6 or 8 digits), suggest
    from what this wholesaler has used before, and a short curated list for
    textiles. Do NOT ship a rate table as authoritative: rates change, and the
    same HSN carries different rates by price slab.
-5. **Delete the retired rate list code** (`RateList.jsx`, `AddItemModal.jsx`,
+4. **Delete the retired rate list code** (`RateList.jsx`, `AddItemModal.jsx`,
    eventually `itemController`) once the merge is confirmed good.
-6. **Mobile OTP.** Deferred. There is no genuinely free SMS OTP in India that
+5. **Mobile OTP.** Deferred. There is no genuinely free SMS OTP in India that
    we know of; every gateway charges per message.
 
 ### GST APIs, looked into 4 Sept
@@ -273,6 +266,15 @@ for many taxpayers. That is a commercial decision and it shapes the schema.
 - **Three list endpoints are unpaginated,** `listParties` among them. Measured
   at 200,000 customers: a book of 5,000 takes 99ms and returns all 5,000 rows.
   Fine today, worth fixing before it is not.
+- **A seller only account is half a buyer, which is nobody's intention.**
+  Deferred on purpose, noted so it is not rediscovered. Signing up as "I sell
+  wholesale" gives role `seller`, and that account sees the cart, the wishlist
+  and "Your Orders" in the navbar. Checkout has no role check, so he can
+  genuinely place an order; `contactSupplier` does have one, so he cannot then
+  message the wholesaler he just ordered from. Whichever way this is settled,
+  the two ends need to agree: either he buys and can talk to his seller, or he
+  does not buy and the navbar stops offering it. `upgradeToSeller` only ever
+  writes `both`, so there is no path from seller back to buying either.
 - **The home page falls back to invented demo products** when the catalogue
   fails to load. Two made up wholesalers in Mumbai and Delhi, with prices. The
   toast says "demo data", which is the only thing stopping it being a straight

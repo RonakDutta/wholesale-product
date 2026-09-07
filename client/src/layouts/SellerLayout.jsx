@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import {
   LayoutDashboard,
   Package,
@@ -59,6 +59,55 @@ const NAV = [
   { path: "/seller/staff", label: "Staff", icon: UserCog, ownerOnly: true },
   { path: "/seller/settings", label: "Settings", icon: Settings, ownerOnly: true },
 ].filter((item) => !item.flag || FEATURES[item.flag]);
+
+/**
+ * Fetch a tab's code before it is clicked.
+ *
+ * The pointer rests on a nav item for a moment before the click lands, and
+ * that moment is usually enough to pull the chunk down. Vite serves the same
+ * module React.lazy will ask for, so this is a warm cache rather than a second
+ * download. Keyed by path and matched to the routes in App.jsx.
+ *
+ * Failures are swallowed on purpose: this is an optimisation, and a prefetch
+ * that fails costs nothing because the real navigation will ask again.
+ */
+const PREFETCH = {
+  "/seller": () => import("../pages/dashboard/Overview"),
+  "/seller/customers": () => import("../pages/dashboard/Parties"),
+  "/seller/products": () => import("../pages/dashboard/MyProducts"),
+  "/seller/sales": () => import("../pages/dashboard/Sales"),
+  "/seller/orders": () => import("../pages/dashboard/Orders"),
+  "/seller/promotions": () => import("../pages/dashboard/Promotions"),
+  "/seller/staff": () => import("../pages/dashboard/Staff"),
+  "/seller/settings": () => import("../pages/dashboard/Settings"),
+};
+
+const warmed = new Set();
+const prefetch = (path) => {
+  if (warmed.has(path) || !PREFETCH[path]) return;
+  warmed.add(path);
+  PREFETCH[path]().catch(() => warmed.delete(path));
+};
+
+/**
+ * What the content pane shows while a tab's code arrives.
+ *
+ * Shaped like a page rather than a spinner in the middle of nothing. The
+ * sidebar and header are already on screen and are not going anywhere, so a
+ * centred spinner here reads as the page having broken rather than as it
+ * being a moment away.
+ */
+const PaneFallback = () => (
+  <div className="mx-auto max-w-4xl animate-pulse space-y-4">
+    <div className="h-7 w-48 rounded-lg bg-slate-200" />
+    <div className="h-4 w-72 rounded bg-slate-200/70" />
+    <div className="mt-6 space-y-3">
+      <div className="h-20 rounded-2xl bg-slate-200/60" />
+      <div className="h-20 rounded-2xl bg-slate-200/40" />
+      <div className="h-20 rounded-2xl bg-slate-200/25" />
+    </div>
+  </div>
+);
 
 const SellerLayout = () => {
   const location = useLocation();
@@ -135,6 +184,9 @@ const SellerLayout = () => {
               <Link
                 key={item.path}
                 to={item.path}
+                onMouseEnter={() => prefetch(item.path)}
+                onFocus={() => prefetch(item.path)}
+                onTouchStart={() => prefetch(item.path)}
                 className={`flex items-center justify-between rounded-lg px-3 py-2.5 text-sm transition-colors ${
                   active
                     ? "bg-clay text-white font-bold"
@@ -224,8 +276,15 @@ const SellerLayout = () => {
           </Link>
         </header>
 
+        {/* The boundary belongs here, around the content, not around the whole
+            dashboard. With only the outer one a lazily loaded page suspended
+            past the sidebar and header, so switching to a tab for the first
+            time threw the entire shell away and rebuilt it behind a full
+            screen spinner. Now the shell stays put and only this pane waits. */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-          <Outlet />
+          <Suspense fallback={<PaneFallback />}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
     </div>

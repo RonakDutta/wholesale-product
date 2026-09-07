@@ -5,6 +5,7 @@ const {
   updateStaff,
   setStaffStatus,
   resendInvite,
+  removeStaff,
   acceptInvite,
 } = require("../controllers/staffController");
 const authenticateToken = require("../middlewares/authMiddleware");
@@ -26,5 +27,6 @@ router.post("/", inviteStaff);
 router.patch("/:id", updateStaff);
 router.post("/:id/status", setStaffStatus);
 router.post("/:id/invite", resendInvite);
+router.delete("/:id", removeStaff);
 
 module.exports = router;

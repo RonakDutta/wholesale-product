@@ -1,7 +1,16 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
-import { Box, ArrowLeft, Users, Receipt, Wallet } from "lucide-react";
+import { Box, ArrowLeft } from "lucide-react";
+
+// The example page. Two customers owing and one settled, because a book in
+// which everybody owes is not what a real one looks like, and the settled row
+// is what makes the column mean something.
+const LEDGER = [
+  { name: "Kishan Cloth House", note: "Surat", amount: 12400 },
+  { name: "Bansal Traders", note: "Ludhiana", amount: 4750 },
+  { name: "New Krishna Textiles", note: "Ahmedabad", amount: 0 },
+];
 
 const AuthLayout = () => {
   const location = useLocation();
@@ -9,9 +18,6 @@ const AuthLayout = () => {
   const isLogin = location.pathname === "/login";
 
   const leftPanelRef = useRef(null);
-  const shapesRef = useRef(null);
-  const glowBlob1Ref = useRef(null);
-  const glowBlob2Ref = useRef(null);
   const formContentRef = useRef(null);
 
   useEffect(() => {
@@ -25,61 +31,6 @@ const AuthLayout = () => {
     return () => ctx.revert();
   }, []);
 
-
-  useEffect(() => {
-    const container = shapesRef.current;
-    if (!container) return;
-
-    const colors = ["#c56b4a", "#7a8b6f", "#faf6ef"];
-    const shapes = [];
-
-    for (let i = 0; i < 12; i++) {
-      const shape = document.createElement("div");
-      shape.className = "float-shape";
-      const size = Math.random() * 6 + 3;
-      const color = colors[Math.floor(Math.random() * colors.length)];
-      shape.style.cssText = `position:absolute;border-radius:9999px;width:${size}px;height:${size}px;background:${color};left:${Math.random() * 100}%;top:${Math.random() * 100}%;`;
-      container.appendChild(shape);
-      shapes.push(shape);
-
-      gsap.to(shape, {
-        opacity: Math.random() * 0.3 + 0.05,
-        duration: Math.random() * 2 + 1,
-        delay: Math.random() * 2,
-      });
-      gsap.to(shape, {
-        x: (Math.random() - 0.5) * 80,
-        y: (Math.random() - 0.5) * 80,
-        duration: Math.random() * 8 + 6,
-        repeat: -1,
-        yoyo: true,
-        ease: "sine.inOut",
-        delay: Math.random() * 3,
-      });
-    }
-
-    return () => {
-      shapes.forEach((s) => s.remove());
-    };
-  }, []);
-
-  const handleMouseMove = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width - 0.5;
-    const y = (e.clientY - rect.top) / rect.height - 0.5;
-    gsap.to(glowBlob1Ref.current, {
-      x: x * 30,
-      y: y * 30,
-      duration: 1.2,
-      ease: "power2.out",
-    });
-    gsap.to(glowBlob2Ref.current, {
-      x: x * -20,
-      y: y * -20,
-      duration: 1.2,
-      ease: "power2.out",
-    });
-  };
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -105,114 +56,96 @@ const AuthLayout = () => {
 
   return (
     <main className="font-dmsans h-screen w-full flex overflow-hidden">
+      {/* The panel is one idea, not a stack of them.
+          It carried an eyebrow, a three line headline, a paragraph, three
+          feature bullets and an early access card, which is five things
+          competing where one would do, plus twelve randomly floating dots.
+          A wholesaler opening this already knows what he came for.
+
+          What is left is the thing itself: a page of the book, which says
+          what the product is faster than a list of what it does. */}
       <div
         ref={leftPanelRef}
-        onMouseMove={handleMouseMove}
-        className="hidden lg:flex relative w-[55%] bg-espresso grid-pattern overflow-hidden flex-col justify-between px-10 py-10 lg:p-14"
+        className="relative hidden w-[48%] flex-col justify-between overflow-hidden bg-espresso px-10 py-10 grid-pattern xl:w-[46%] xl:p-12 lg:flex"
       >
-        <div
-          ref={glowBlob1Ref}
-          className="glow-blob absolute rounded-full blur-3xl pointer-events-none w-75 h-75 bg-clay/15 -top-20 -left-20"
-        />
-        <div
-          ref={glowBlob2Ref}
-          className="glow-blob absolute rounded-full blur-3xl pointer-events-none w-62.5 h-62.5 bg-sage/10 bottom-20 right-10"
-        />
-
-        <div
-          ref={shapesRef}
-          className="absolute inset-0 pointer-events-none overflow-hidden"
-        />
+        <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-clay/15 blur-3xl" />
 
         <div
           className="relative z-10 brand-top"
           style={{ opacity: 0, transform: "translateY(20px)" }}
         >
-          <Link to="/" className="cursor-pointer flex items-center gap-3">
-            <div className="w-10 h-10 bg-clay rounded-lg flex items-center justify-center">
-              <Box className="w-5 h-5 text-cream" />
+          <Link to="/" className="flex cursor-pointer items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-clay">
+              <Box className="h-4.5 w-4.5 text-cream" />
             </div>
-            <span className="text-cream font-bold font-dmsans text-xl tracking-tight">
+            <span className="font-dmsans text-lg font-bold tracking-tight text-cream">
               marketplace.
             </span>
           </Link>
         </div>
 
         <div
-          className="relative z-10 max-w-md brand-center"
+          className="brand-center relative z-10 max-w-md"
           style={{ opacity: 0, transform: "translateY(30px)" }}
         >
-          <div className="text-clay/90 text-[10px] font-bold uppercase tracking-widest mb-4 font-inter">
-            For wholesalers
-          </div>
-
-          <h1 className="text-4xl xl:text-5xl font-black text-cream leading-[1.1] tracking-tight mb-5">
-            Your customers.
+          {/* Two lines, and they have to stay two. The first version ran to
+              three at 1440 and the break landed mid phrase. */}
+          <h1 className="max-w-md text-[1.9rem] font-black leading-[1.12] tracking-tight text-cream xl:text-[2.25rem]">
+            Know who owes you what,
             <br />
-            Your sales.
-            <br />
-            <span className="text-clay">All in one place.</span>
+            <span className="text-clay">without a diary.</span>
           </h1>
-          <p className="text-cream/60 text-sm leading-relaxed font-inter max-w-sm">
-            Keep your business out of a diary and off your phone's notes. Every
-            shop you sell to, every sale you make, and what each one still owes
-            you, all in one place.
-          </p>
 
-          {/* Three things the product does, not three numbers. Counters here
-              were invented figures, and this product is sold on being an
-              honest record of a wholesaler's own business. */}
-          <div className="mt-8 space-y-4 max-w-sm">
-            {[
-              {
-                icon: Users,
-                title: "Your customer book",
-                body: "Every shop you sell to, in one list",
-              },
-              {
-                icon: Receipt,
-                title: "Every sale written down",
-                body: "What you sold, to whom, and when",
-              },
-              {
-                icon: Wallet,
-                title: "Know who owes what",
-                body: "A running balance for each customer",
-              },
-            ].map((item) => (
-              <div key={item.title} className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-clay/20">
-                  <item.icon className="h-4 w-4 text-clay" />
-                </div>
-                <div className="font-inter">
-                  <div className="text-cream text-[13px] font-semibold">
-                    {item.title}
-                  </div>
-                  <div className="text-cream/50 text-xs mt-0.5">
-                    {item.body}
-                  </div>
-                </div>
-              </div>
-            ))}
+          {/* A page of the book rather than a description of one. Real
+              columns, real alignment, tabular figures: a wholesaler reads
+              this at a glance because it is shaped like what he already
+              keeps. Marked as an example, because it is one. */}
+          <div className="mt-8 max-w-sm rounded-xl border border-cream/10 bg-cream/5 p-4 backdrop-blur-sm">
+            <div className="mb-3 flex items-baseline justify-between border-b border-cream/10 pb-2">
+              <span className="font-inter text-[10px] font-bold uppercase tracking-widest text-clay">
+                Example page
+              </span>
+              <span className="font-inter text-[10px] font-semibold text-cream/40">
+                Still to collect
+              </span>
+            </div>
+            <ul className="font-inter space-y-2.5">
+              {LEDGER.map((row) => (
+                <li
+                  key={row.name}
+                  className="flex items-baseline justify-between gap-4"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-[13px] font-semibold text-cream">
+                      {row.name}
+                    </span>
+                    <span className="block text-[11px] text-cream/40">
+                      {row.note}
+                    </span>
+                  </span>
+                  <span
+                    className={`shrink-0 text-[13px] font-bold tabular-nums ${
+                      row.amount > 0 ? "text-cream" : "text-sage"
+                    }`}
+                  >
+                    {row.amount > 0
+                      ? `₹${row.amount.toLocaleString("en-IN")}`
+                      : "Settled"}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
 
         <div
-          className="relative z-10 brand-bottom"
+          className="brand-bottom relative z-10"
           style={{ opacity: 0, transform: "translateY(25px)" }}
         >
-          {/* This replaced an invented customer quote. We have no customers to
-              quote yet, so this says where the product actually is instead. */}
-          <div className="bg-cream/5 border border-cream/10 rounded-xl p-5 backdrop-blur-sm max-w-md">
-            <div className="text-clay text-[10px] font-bold uppercase tracking-widest mb-2 font-inter">
-              Early access
-            </div>
-            <p className="text-cream/70 text-xs leading-relaxed font-inter">
-              We are building this alongside a small group of wholesalers, and
-              adding what they ask for. If something is missing or does not fit
-              how you work, tell us and it gets looked at.
-            </p>
-          </div>
+          <p className="font-inter max-w-sm text-xs leading-relaxed text-cream/45">
+            Built with a small group of wholesalers. If something does not fit
+            how you work, tell us.
+          </p>
         </div>
       </div>
 
@@ -220,7 +153,11 @@ const AuthLayout = () => {
         className="flex-1 bg-cream flex flex-col h-full relative overflow-y-auto overflow-x-hidden"
         style={{ scrollbarGutter: "stable" }}
       >
-        <div className="flex shrink-0 items-center justify-between p-6 lg:px-14 lg:pt-10">
+        {/* Header, form and footer share one column, so "Back to Home" sits
+            directly above the fields and the small print directly below them.
+            Spread across the full width they read as three unrelated things
+            floating in a lot of cream. */}
+        <div className="mx-auto flex w-full max-w-96 shrink-0 items-center justify-between px-6 pt-6 lg:px-0 lg:pt-7">
           <div className="lg:hidden flex items-center gap-3">
             <div className="w-9 h-9 bg-clay rounded-lg flex items-center justify-center">
               <Box className="w-4 h-4 text-cream" />
@@ -240,9 +177,9 @@ const AuthLayout = () => {
           </button>
         </div>
 
-        <div className="flex-1 flex shrink-0 items-start justify-center px-6 pt-4 pb-10 lg:pt-10 lg:pb-14">
-          <div className="w-full max-w-105">
-            <div className="relative bg-white rounded-xl p-1 mb-8 shadow-sm border border-slate-200/60">
+        <div className="flex flex-1 items-start justify-center px-6 pt-5 pb-10 lg:items-center lg:px-0 lg:py-6">
+          <div className="w-full max-w-96">
+            <div className="relative bg-white rounded-xl p-1 mb-6 shadow-sm border border-slate-200/60">
               <div
                 className="tab-slider absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] bg-espresso rounded-lg z-0"
                 style={{
@@ -252,7 +189,7 @@ const AuthLayout = () => {
               <div className="font-inter relative z-10 flex">
                 <button
                   onClick={() => navigate("/login")}
-                  className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors duration-300 cursor-pointer ${
+                  className={`flex-1 py-2 text-[13px] font-semibold rounded-lg transition-colors duration-300 cursor-pointer ${
                     isLogin ? "text-cream" : "text-espresso"
                   }`}
                 >
@@ -260,7 +197,7 @@ const AuthLayout = () => {
                 </button>
                 <button
                   onClick={() => navigate("/signup")}
-                  className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors duration-300 cursor-pointer ${
+                  className={`flex-1 py-2 text-[13px] font-semibold rounded-lg transition-colors duration-300 cursor-pointer ${
                     !isLogin ? "text-cream" : "text-espresso"
                   }`}
                 >
@@ -275,7 +212,7 @@ const AuthLayout = () => {
           </div>
         </div>
 
-        <div className="font-inter px-6 pb-6 lg:px-14 text-center shrink-0">
+        <div className="font-inter mx-auto w-full max-w-96 shrink-0 px-6 pb-5 text-center lg:px-0">
           <p className="text-[11px] text-slate-500 font-medium">
             2026 <i>marketplace.</i> All rights reserved.
           </p>

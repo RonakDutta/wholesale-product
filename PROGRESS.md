@@ -48,6 +48,25 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 
 ### 5 Sept 2026
 
+**The sign in screens fit a laptop.** They were sized for a hoarding: the panel
+took 55 percent of the width with a 48px headline, and the form sat at the top
+of a tall column with a third of the screen empty below it. Header, form and
+small print now share one column. The panel carried an eyebrow, a three line
+headline, a paragraph, three feature bullets and an early access card, plus
+twelve drifting dots; it now shows one thing, a page of the book, marked as an
+example.
+
+**Staff, after real use.** An invite that was turned off could not be turned
+back on, which was a trap of my own making: the row sat disabled for ever and a
+second invite was the only way out. Somebody who never joined now returns to
+invited with a fresh code. Removing a person is possible at all now, and safe:
+history rows point at `users.id`, not at `staff_members`, so his name stays on
+what he did.
+
+**Switching dashboard tabs.** Hovering a nav item fetches its code. Measured on
+the production build over a 250kbps link with 300ms latency: a cold click took
+369 to 638ms, the same click after the pointer rested on it took 61ms.
+
 **Staff accounts.** A wholesaler's people can work on his book with their own
 logins. Until now every employee used the owner's, so nothing could say who did
 a thing and access could not be taken back from somebody who had left.

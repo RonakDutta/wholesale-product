@@ -277,6 +277,45 @@ const mkUser = async (name, role, phone) =>
   }, [requireOwner]);
   check(back.statusCode === 200, "and he can be turned back on", { s: back.statusCode });
 
+  // ---- invited by email alone ---------------------------------------------
+  // users.phone is NOT NULL. Every invite in this file used to carry a phone,
+  // so accepting one that did not failed on a database constraint the employee
+  // could do nothing about, and nothing here noticed.
+  const byEmail = (await asUser(ram, staff.inviteStaff, {
+    body: { name: "Email Only", email: `emailonly${stamp}@x.local` },
+  }, [requireOwner])).body.staff;
+  check(!byEmail.phone, "somebody can be invited with only an email", { p: byEmail.phone });
+
+  const noPhone = await asUser(null, staff.acceptInvite, {
+    body: { code: byEmail.inviteCode, password: "email-only-pass" },
+  });
+  check(noPhone.statusCode === 400,
+    "and is asked for a phone number rather than failing", { s: noPhone.statusCode, b: noPhone.body });
+
+  const withPhone = await asUser(null, staff.acceptInvite, {
+    body: { code: byEmail.inviteCode, password: "email-only-pass", phone: "9820055667" },
+  });
+  check(withPhone.statusCode === 201, "giving one completes the join", { s: withPhone.statusCode, b: withPhone.body });
+
+  const stored = (await q(
+    `SELECT u.phone, u.email, s.phone AS staff_phone
+       FROM staff_members s JOIN users u ON u.id = s.user_id WHERE s.id = $1`,
+    [byEmail.id],
+  )).rows[0];
+  check(stored?.phone === "9820055667", "his number is on his account", { p: stored?.phone });
+  check(stored?.staff_phone === "9820055667",
+    "and on the owner's list, so it reaches him", { p: stored?.staff_phone });
+
+  // The other way round: a phone on the invite, nothing typed at join.
+  const byPhone = (await asUser(ram, staff.inviteStaff, {
+    body: { name: "Phone Only", phone: "9820066778" },
+  }, [requireOwner])).body.staff;
+  const usedOwners = await asUser(null, staff.acceptInvite, {
+    body: { code: byPhone.inviteCode, password: "phone-only-pass", email: `phoneonly${stamp}@x.local` },
+  });
+  check(usedOwners.statusCode === 201,
+    "a phone the owner entered is enough on its own", { s: usedOwners.statusCode });
+
   // ---- who am I ------------------------------------------------------------
   const me = await asUser(kishanUser, auth.getMe);
   check(me.body?.staff?.isOwner === false, "the employee is told he is not the owner", me.body?.staff);

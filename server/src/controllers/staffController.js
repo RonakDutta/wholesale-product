@@ -284,6 +284,7 @@ exports.acceptInvite = async (req, res) => {
   const code = clean(req.body?.code);
   const password = String(req.body?.password || "");
   const email = clean(req.body?.email);
+  const phone = clean(req.body?.phone);
 
   if (!code) return res.status(400).json({ message: "Enter the code your owner gave you." });
   if (password.length < 8) {
@@ -321,6 +322,22 @@ exports.acceptInvite = async (req, res) => {
       return res.status(400).json({ message: "Enter the email you want to sign in with." });
     }
 
+    /**
+     * users.phone is NOT NULL, and an owner may well have invited somebody by
+     * email alone. Inserting null there failed the whole join with a database
+     * error the employee could do nothing about, and the tests never caught it
+     * because every invite they made had a phone on it.
+     *
+     * So it is asked for here, falling back to whatever the owner already
+     * entered. There is no unique index on the column, which is right: a shop
+     * landline shared by two people is an ordinary arrangement.
+     */
+    const loginPhone = phone || staff.phone;
+    if (!loginPhone) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ message: "Enter your phone number." });
+    }
+
     const taken = await client.query("SELECT id FROM users WHERE email = $1", [loginEmail]);
     if (taken.rows.length > 0) {
       await client.query("ROLLBACK");
@@ -340,7 +357,7 @@ exports.acceptInvite = async (req, res) => {
         first,
         rest.join(" ") || "",
         loginEmail,
-        staff.phone || null,
+        loginPhone,
         await bcrypt.hash(password, 10),
       ],
     );
@@ -349,10 +366,11 @@ exports.acceptInvite = async (req, res) => {
     await client.query(
       `UPDATE staff_members
           SET user_id = $2, status = 'active',
+              email = $3, phone = $4,
               invite_code = NULL, invite_expires_at = NULL,
               joined_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
         WHERE id = $1`,
-      [staff.id, user.id],
+      [staff.id, user.id, loginEmail, loginPhone],
     );
 
     await client.query("COMMIT");

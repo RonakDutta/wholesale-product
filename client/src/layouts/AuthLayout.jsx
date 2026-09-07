@@ -16,6 +16,10 @@ const AuthLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const isLogin = location.pathname === "/login";
+  // The switcher belongs to the two screens it switches between. On the join
+  // page it offered "Sign In" and "Create Account" to somebody who is doing
+  // neither, and pushed his form down the page for no reason.
+  const showSwitcher = isLogin || location.pathname === "/signup";
 
   const leftPanelRef = useRef(null);
   const formContentRef = useRef(null);
@@ -179,6 +183,7 @@ const AuthLayout = () => {
 
         <div className="flex flex-1 items-start justify-center px-6 pt-5 pb-10 lg:items-center lg:px-0 lg:py-6">
           <div className="w-full max-w-96">
+            {showSwitcher && (
             <div className="relative bg-white rounded-xl p-1 mb-6 shadow-sm border border-slate-200/60">
               <div
                 className="tab-slider absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] bg-espresso rounded-lg z-0"
@@ -205,6 +210,7 @@ const AuthLayout = () => {
                 </button>
               </div>
             </div>
+            )}
 
             <div ref={formContentRef}>
               <Outlet />

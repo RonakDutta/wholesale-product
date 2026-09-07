@@ -273,6 +273,15 @@ for many taxpayers. That is a commercial decision and it shapes the schema.
 - **Three list endpoints are unpaginated,** `listParties` among them. Measured
   at 200,000 customers: a book of 5,000 takes 99ms and returns all 5,000 rows.
   Fine today, worth fixing before it is not.
+- **A seller only account is half a buyer, which is nobody's intention.**
+  Deferred on purpose, noted so it is not rediscovered. Signing up as "I sell
+  wholesale" gives role `seller`, and that account sees the cart, the wishlist
+  and "Your Orders" in the navbar. Checkout has no role check, so he can
+  genuinely place an order; `contactSupplier` does have one, so he cannot then
+  message the wholesaler he just ordered from. Whichever way this is settled,
+  the two ends need to agree: either he buys and can talk to his seller, or he
+  does not buy and the navbar stops offering it. `upgradeToSeller` only ever
+  writes `both`, so there is no path from seller back to buying either.
 - **The home page falls back to invented demo products** when the catalogue
   fails to load. Two made up wholesalers in Mumbai and Delhi, with prices. The
   toast says "demo data", which is the only thing stopping it being a straight

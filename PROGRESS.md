@@ -24,6 +24,7 @@ cd server && npm run migrate
 |---|---|---|
 | `wholesale3_order_number_sequence.sql` | Order numbers from a counter instead of dice | **outstanding** |
 | `wholesale3_one_invoice_per_order.sql` | Unique index so one order cannot hold two invoices | **outstanding** |
+| `wholesale3_staff_accounts.sql` | Employees who work on a wholesaler's book | **outstanding** |
 
 `wholesale3_one_invoice_per_order.sql` opens with a query that lists any order
 already holding two invoices. It returns nothing on a healthy database. If it
@@ -44,6 +45,38 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 ---
 
 ## Done
+
+### 5 Sept 2026
+
+**Staff accounts.** A wholesaler's people can work on his book with their own
+logins. Until now every employee used the owner's, so nothing could say who did
+a thing and access could not be taken back from somebody who had left.
+
+The feature is one substitution and everything else is consequence. Two ideas
+that were the same variable are now apart: the person signed in, who owns the
+history entries and the notifications, and the business being acted on, whose
+customers and money these are. For an owner they are the same id, which is why
+`req.user.id` was doing both jobs and why getting it wrong is invisible in any
+test that only has owners in it. `middlewares/businessContext` resolves it once,
+chained into `authenticateToken` so a route cannot forget it.
+
+Sixty odd call sites were gone through one at a time rather than swept.
+`performedBy` on an invoice log, the name on a status history row and the
+recipient of a notification are all still the person; swapping those would have
+been the same bug pointing the other way.
+
+Permissions are per employee and changeable whenever. A new employee starts
+with everything, which is the rule already agreed, and the owner takes things
+away. Four things are owner only and deliberately not grantable: business
+settings, the GST number, the UPI id, and staff management itself.
+
+Two decisions worth keeping. Turning somebody off is not the same as never
+having employed him: resolving a disabled employee as his own owner handed a
+sacked man a working, empty seller dashboard, so he is now refused outright. And
+an employee without the money permission still gets the Overview, because the
+lists on it are his work; the money block is withheld rather than zeroed, so the
+screen can say it is not shown to him instead of telling him the business is
+owed nothing.
 
 ### 4 Sept 2026
 
@@ -148,9 +181,21 @@ numbering; shop prices treated as tax inclusive.
 
 Roughly in the order agreed.
 
-1. **Staff accounts.** Agreed: staff may do everything except change business
-   settings and GST details. Needs a staff table, invites, and every query
-   scoped to the wholesaler being acted for.
+### Start here, 5 Sept
+
+Before writing anything, confirm the two migrations above have actually been
+run against Neon. The order number sequence in particular is a live risk: until
+it is applied, two checkouts in the same second can be handed the same number.
+
+0. **Check the deploy is healthy.** The Neon password was rotated and Render was
+   left holding the old one, so every request failed with `28P01, password
+   authentication failed`. The connection string has been updated. Confirm the
+   home page loads and the city menu fills before starting on anything else,
+   and check `server/.env` has the new string too or the migrations will not
+   run either.
+1. **The sign in and sign up screens, on a laptop.** They are too big and do
+   not look good on a wide screen. Wanted: smaller, tidier, and worth looking
+   at. Nothing behind them changes.
 2. **Trim the seller location.** The state is load bearing because it decides
    CGST plus SGST against IGST. The map pin is only for delivery. Ask the
    state once at signup and drop the pin unless marketplace delivery is on.
@@ -164,6 +209,31 @@ Roughly in the order agreed.
    eventually `itemController`) once the merge is confirmed good.
 6. **Mobile OTP.** Deferred. There is no genuinely free SMS OTP in India that
    we know of; every gateway charges per message.
+
+### GST APIs, looked into 4 Sept
+
+Answering "is there a free one we can test against". There is, for both.
+
+**e-Way Bill is the one worth doing.** GSTN runs a free pre-production sandbox;
+credentials come by emailing `ewaybill.api.helpdesk@gmail.com` from a GST
+registered address. It applies to any consignment over ₹50,000 regardless of
+turnover, which is a wholesaler's ordinary week, so it is relevant to the people
+actually using this.
+
+**e-Invoice can wait.** NIC's sandbox at `einv-apisandbox.nic.in` is free and
+self-registration, but e-invoicing is only mandatory above ₹5 crore annual
+turnover. Most of our sellers are below that, so it would be compliance nobody
+on the platform needs. Revisit when we go after larger sellers.
+
+Faster to prototype against: WhiteBooks, Masters India and sandbox.co.in hand
+out free sandbox keys instantly rather than by email. Production is paid and
+couples us to that provider, so keep any integration behind an interface.
+
+**Settle this before writing code.** Both official sandboxes assume one taxpayer
+testing his own ERP. A platform raising e-way bills for hundreds of different
+wholesalers cannot use one set of credentials: either each seller enrols his own
+API access and we hold his credentials, or we sign with a GSP licensed to act
+for many taxpayers. That is a commercial decision and it shapes the schema.
 
 ---
 
@@ -199,7 +269,7 @@ Roughly in the order agreed.
 
 ## Testing
 
-Sixteen suites in `server/scripts/*_check.js`. They drive the real
+Seventeen suites in `server/scripts/*_check.js`. They drive the real
 controllers against a local Postgres, so they catch schema drift that reading
 the code does not.
 

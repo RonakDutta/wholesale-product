@@ -43,6 +43,7 @@ import InvoiceSettings from "./pages/dashboard/InvoiceSettings";
 import WholesalerProfile from "./pages/WholesalerProfile";
 import SharedListing from "./pages/SharedListing";
 import DriverTracking from "./pages/DriverTracking";
+import JoinShop from "./pages/JoinShop";
 import NotFound from "./pages/NotFound";
 
 // Seller workspace is lazy-loaded: retailers never download this bundle.
@@ -62,6 +63,7 @@ const SaleDetail = lazy(() => import("./pages/dashboard/SaleDetail"));
 const Overview = lazy(() => import("./pages/dashboard/Overview"));
 const MoneyBreakdown = lazy(() => import("./pages/dashboard/MoneyBreakdown"));
 const SellerOrderDetail = lazy(() => import("./pages/dashboard/SellerOrderDetail"));
+const Staff = lazy(() => import("./pages/dashboard/Staff"));
 
 const SellerFallback = () => (
   <div className="flex min-h-dvh items-center justify-center bg-slate-100">
@@ -152,6 +154,8 @@ const router = createBrowserRouter([
       { path: "messages", element: <Messages /> },
       { path: "messages/:vendorId", element: <Messages /> },
       { path: "settings", element: <Settings /> },
+      // Owner only, and the server refuses an employee outright.
+      { path: "staff", element: <Staff /> },
     ],
   },
   // Old dashboard links and bookmarks keep working.
@@ -190,6 +194,9 @@ const router = createBrowserRouter([
     children: [
       { path: "login", element: <Login /> },
       { path: "signup", element: <SignUp /> },
+      // An employee turning his owner's code into an account. Public, because
+      // he has no login yet; the code in the form is the credential.
+      { path: "join", element: <JoinShop /> },
     ],
   },
 ]);

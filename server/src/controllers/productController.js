@@ -2,6 +2,7 @@ const pool = require("../config/db");
 const { FEATURES } = require("../config/features");
 const { clean, optionalNumber } = require("../utils/money");
 const invoiceRepository = require("../repositories/invoiceRepository");
+const { businessId } = require("../middlewares/businessContext");
 const {
   CITY_SQL,
   CITY_KEY_SQL,
@@ -75,7 +76,7 @@ exports.addProduct = async (req, res) => {
     gstPercent,
     notes,
   } = req.body;
-  const supplierId = req.user.id;
+  const supplierId = businessId(req);
 
   try {
     let finalProductId = productId;
@@ -596,7 +597,7 @@ exports.getWholesalerById = async (req, res) => {
 // @route   PUT /api/products/inventory/:id
 exports.updateInventoryItem = async (req, res) => {
   const { id } = req.params;
-  const supplierId = req.user.id;
+  const supplierId = businessId(req);
   const {
     price,
     bulkPrice,
@@ -703,7 +704,7 @@ exports.updateInventoryItem = async (req, res) => {
 // @route   GET /api/products/inventory/:id
 exports.getInventoryItemById = async (req, res) => {
   const { id } = req.params;
-  const supplierId = req.user.id;
+  const supplierId = businessId(req);
 
   try {
     const result = await pool.query(
@@ -729,7 +730,7 @@ exports.getInventoryItemById = async (req, res) => {
 // @route   DELETE /api/products/inventory/:id
 exports.deleteInventoryItem = async (req, res) => {
   const { id } = req.params;
-  const supplierId = req.user.id;
+  const supplierId = businessId(req);
 
   try {
     const listing = await pool.query(

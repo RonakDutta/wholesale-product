@@ -1,5 +1,6 @@
 const pool = require("../config/db");
 const { checkGstin } = require("../utils/gstin");
+const { businessId } = require("../middlewares/businessContext");
 
 // @desc    Get wholesaler profile
 // @route   GET /api/profile
@@ -10,7 +11,10 @@ exports.getProfile = async (req, res) => {
        FROM wholesaler_profiles wp 
        JOIN users u ON wp.user_id = u.id 
        WHERE wp.user_id = $1`,
-      [req.user.id],
+      // The business, so an employee sees the shop he actually works in
+      // rather than an empty profile of his own. Changing it is owner only,
+      // enforced at the router: the GSTIN here goes on every invoice.
+      [businessId(req)],
     );
 
     if (profile.rows.length === 0) {

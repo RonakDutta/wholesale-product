@@ -11,6 +11,7 @@ const {
 } = require("../controllers/partyController");
 const authenticateToken = require("../middlewares/authMiddleware");
 const authorizeRoles = require("../middlewares/roleMiddleware");
+const { requirePermission } = require("../middlewares/businessContext");
 
 const router = express.Router();
 
@@ -18,14 +19,14 @@ const router = express.Router();
 router.use(authenticateToken, authorizeRoles("seller", "both"));
 
 // Registered before "/:id" so the word is not read as a party id.
-router.get("/stats", getPartyStats);
+router.get("/stats", requirePermission("money"), getPartyStats);
 
-router.get("/", listParties);
-router.post("/", createParty);
-router.get("/:id", getPartyById);
-router.put("/:id", updateParty);
-router.post("/:id/payments", recordPayment);
-router.get("/:id/statement", getPartyStatement);
-router.get("/:id/statement/pdf", getPartyStatementPDF);
+router.get("/", requirePermission("customers"), listParties);
+router.post("/", requirePermission("customers"), createParty);
+router.get("/:id", requirePermission("customers"), getPartyById);
+router.put("/:id", requirePermission("customers"), updateParty);
+router.post("/:id/payments", requirePermission("payments"), recordPayment);
+router.get("/:id/statement", requirePermission("money"), getPartyStatement);
+router.get("/:id/statement/pdf", requirePermission("money"), getPartyStatementPDF);
 
 module.exports = router;

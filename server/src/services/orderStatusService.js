@@ -215,7 +215,11 @@ const updateOrderStatus = async (orderId, newStatus, userId, userRole, remarks =
  * it is a refund, which is a decision a person makes, not a side effect of
  * pressing cancel.
  */
-const cancelOrder = async (orderId, userId, reason = null) => {
+const cancelOrder = async (orderId, userId, reason = null, actingFor = null) => {
+  // Who the permission belongs to. An employee refusing an order on his
+  // employer's behalf is the supplier here; the history row below still
+  // records him by name, because he is the one who did it.
+  const businessId = actingFor || userId;
   const client = await pool.connect();
 
   try {
@@ -239,7 +243,7 @@ const cancelOrder = async (orderId, userId, reason = null) => {
     // of his own order, so this asks who this person is on THIS order rather
     // than what their account role says.
     const isBuyer = order.buyer_id === userId;
-    const isSupplier = order.supplier_id === userId;
+    const isSupplier = order.supplier_id === businessId;
     if (!isBuyer && !isSupplier) {
       throw new Error('You cannot cancel this order');
     }

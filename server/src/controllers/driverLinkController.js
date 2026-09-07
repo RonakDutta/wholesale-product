@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const pool = require("../config/db");
+const { businessId } = require("../middlewares/businessContext");
 
 /**
  * Driver tracking links.
@@ -87,7 +88,7 @@ const createLink = async (req, res) => {
     if (order.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
-    if (String(order.rows[0].supplier_id) !== String(req.user.id)) {
+    if (String(order.rows[0].supplier_id) !== String(businessId(req))) {
       return res
         .status(403)
         .json({ success: false, message: "Only the supplier can create a driver link" });
@@ -266,7 +267,7 @@ const getOrderLink = async (req, res) => {
     if (order.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
-    if (String(order.rows[0].supplier_id) !== String(req.user.id)) {
+    if (String(order.rows[0].supplier_id) !== String(businessId(req))) {
       return res.status(403).json({ success: false, message: "Not your order" });
     }
 

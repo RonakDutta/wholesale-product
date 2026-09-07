@@ -6,6 +6,7 @@ import {
   MessageSquare,
   FileText,
   Settings,
+  UserCog,
   Sparkles,
   LogOut,
   Menu,
@@ -26,21 +27,22 @@ import { FEATURES } from "../config/features";
 // but only shown when the marketplace flag is on, so nothing is deleted.
 const NAV = [
   { path: "/seller", label: "Overview", icon: LayoutDashboard, exact: true },
-  { path: "/seller/customers", label: "Customers", icon: Users },
+  { path: "/seller/customers", label: "Customers", icon: Users, needs: "customers" },
   // One list. It used to be two, his own rate list and his shop listings,
   // which meant the same thing to him and differed only in which half of the
   // row each screen could show. Where a product is shown is now a control on
   // the product itself, which is where he looks for it.
-  { path: "/seller/products", label: "Products", icon: Package },
-  { path: "/seller/sales", label: "Sales", icon: ShoppingBag },
+  { path: "/seller/products", label: "Products", icon: Package, needs: "products" },
+  { path: "/seller/sales", label: "Sales", icon: ShoppingBag, needs: "sales" },
   // Marketplace orders, which are a different thing from a recorded sale.
   {
     path: "/seller/orders",
     label: "Orders",
     icon: ShoppingBag,
     flag: "MARKETPLACE",
+    needs: "orders",
   },
-  { path: "/seller/invoices", label: "Invoices", icon: FileText },
+  { path: "/seller/invoices", label: "Invoices", icon: FileText, needs: "invoices" },
   { path: "/seller/messages", label: "Messages", icon: MessageSquare, badge: "unread" },
   {
     path: "/seller/promotions",
@@ -54,15 +56,25 @@ const NAV = [
     icon: BarChart3,
     flag: "ANALYTICS",
   },
-  { path: "/seller/settings", label: "Settings", icon: Settings },
+  { path: "/seller/staff", label: "Staff", icon: UserCog, ownerOnly: true },
+  { path: "/seller/settings", label: "Settings", icon: Settings, ownerOnly: true },
 ].filter((item) => !item.flag || FEATURES[item.flag]);
 
 const SellerLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, can, isOwner, staff } = useAuth();
   const { unreadCount } = useUnread();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // What this person can actually reach. The sidebar must not offer a screen
+  // the server will refuse: an employee clicking "Customers" and being told no
+  // is a worse experience than never seeing it. The server checks again, which
+  // is the boundary; this is only politeness.
+  const nav = NAV.filter(
+    (item) =>
+      (!item.ownerOnly || isOwner) && (!item.needs || can(item.needs)),
+  );
 
   // Close the mobile drawer whenever the route changes
   useEffect(() => {
@@ -116,7 +128,7 @@ const SellerLayout = () => {
         </div>
 
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-4">
-          {NAV.map((item) => {
+          {nav.map((item) => {
             const active = isActive(item);
             const showBadge = item.badge === "unread" && unreadCount > 0;
             return (
@@ -190,10 +202,13 @@ const SellerLayout = () => {
             </button>
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-slate-900">
-                {companyName || "Your business"}
+                {/* An employee is looking at his employer's shop, so the
+                    header says whose it is. Two brothers with two firms and
+                    one phone between them is not an unusual arrangement. */}
+                {isOwner ? companyName || "Your business" : staff.worksFor}
               </p>
-              <p className="text-[11px] font-semibold text-slate-400">
-                Wholesaler account
+              <p className="truncate text-[11px] font-semibold text-slate-400">
+                {isOwner ? "Wholesaler account" : "You are working here as staff"}
               </p>
             </div>
           </div>

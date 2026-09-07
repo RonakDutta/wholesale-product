@@ -4,6 +4,7 @@ const saleInvoiceService = require("../services/saleInvoiceService");
 const creditNoteService = require("../services/creditNoteService");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const gstService = require("../services/gstService");
+const { businessId } = require("../middlewares/businessContext");
 
 /**
  * Recording a sale is the wholesaler's core action. He is usually writing
@@ -148,7 +149,7 @@ const buildLines = (rawLines) => {
 };
 
 exports.createSale = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   const {
     partyId,
     saleDate,
@@ -299,7 +300,7 @@ exports.createSale = async (req, res) => {
 };
 
 exports.listSales = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   const { partyId, status } = req.query;
 
   try {
@@ -338,7 +339,7 @@ exports.listSales = async (req, res) => {
 };
 
 exports.getSaleById = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   const { id } = req.params;
 
   try {
@@ -397,7 +398,7 @@ const ALLOWED_NEXT = {
 };
 
 exports.updateSaleStatus = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   const { id } = req.params;
   const { status } = req.body;
 
@@ -466,7 +467,7 @@ exports.updateSaleStatus = async (req, res) => {
  * gets exactly one invoice: a second would give the same goods two numbers.
  */
 exports.createInvoiceForSale = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   const { id } = req.params;
 
   const REASONS = {
@@ -492,7 +493,7 @@ exports.createInvoiceForSale = async (req, res) => {
 };
 
 exports.getInvoiceForSale = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   try {
     const invoice = await saleInvoiceService.findBySaleId(req.params.id, wholesalerId);
     if (!invoice) return res.status(404).json({ message: "No bill raised yet" });
@@ -521,7 +522,7 @@ exports.getInvoiceForSale = async (req, res) => {
  * The sale number and its status, which are not content.
  */
 exports.updateSale = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   const { id } = req.params;
   const { saleDate, discount, notes, lines: rawLines } = req.body;
 

@@ -17,6 +17,7 @@ const saleRoutes = require("./routes/saleRoutes");
 const itemRoutes = require("./routes/itemRoutes");
 const overviewRoutes = require("./routes/overviewRoutes");
 const creditNoteRoutes = require("./routes/creditNoteRoutes");
+const staffRoutes = require("./routes/staffRoutes");
 
 const app = express();
 
@@ -47,5 +48,7 @@ app.use("/api/sales", saleRoutes);
 app.use("/api/items", itemRoutes);
 app.use("/api/overview", overviewRoutes);
 app.use("/api/credit-notes", creditNoteRoutes);
+// A wholesaler's employees. Owner only, except the invite acceptance.
+app.use("/api/staff", staffRoutes);
 
 module.exports = app;

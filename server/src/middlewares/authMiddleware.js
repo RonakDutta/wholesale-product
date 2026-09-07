@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const { resolveBusiness } = require("./businessContext");
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
@@ -13,7 +14,11 @@ const authenticateToken = (req, res, next) => {
     if (err)
       return res.status(401).json({ message: "Invalid or expired token" });
     req.user = decoded;
-    next();
+    // Whose book this request is acting on. Chained here rather than mounted
+    // route by route so it cannot be forgotten: every authenticated request
+    // has a business, and a seller route that reads req.user.id where it means
+    // the wholesaler is then a visible mistake rather than a silent one.
+    resolveBusiness(req, res, next);
   });
 };
 

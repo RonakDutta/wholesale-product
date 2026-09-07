@@ -113,7 +113,33 @@ exports.getMe = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    res.status(200).json({ user: user.rows[0] });
+    // Who he is working for, and what he may do. An owner gets isOwner true
+    // and an empty permission list, which the client reads as "everything":
+    // sending an owner the whole catalogue would mean a new permission had to
+    // be added in two places to reach him.
+    const business = req.business || { id: req.user.id, isOwner: true, permissions: [] };
+    const employer = business.isOwner
+      ? null
+      : (await pool.query(
+          `SELECT COALESCE(NULLIF(btrim(wp.company_name), ''),
+                           btrim(u.first_name || ' ' || COALESCE(u.last_name, ''))) AS name
+             FROM users u
+             LEFT JOIN wholesaler_profiles wp ON wp.user_id = u.id
+            WHERE u.id = $1`,
+          [business.id],
+        )).rows[0]?.name || "your employer";
+
+    res.status(200).json({
+      user: user.rows[0],
+      staff: {
+        isOwner: business.isOwner,
+        permissions: business.permissions,
+        // Shown in the dashboard header, so an employee can see at a glance
+        // whose book he has open. Two brothers with two firms and one phone
+        // is not an unusual arrangement.
+        worksFor: employer,
+      },
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });

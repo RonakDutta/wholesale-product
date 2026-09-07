@@ -11,6 +11,7 @@ const {
   collectionTotals,
 } = require("../services/khataBalance");
 const pdfService = require("../services/pdfService");
+const { businessId } = require("../middlewares/businessContext");
 
 /**
  * Parties are a wholesaler's own customer book. Every query in this file is
@@ -31,7 +32,7 @@ const balanceSelect = (hasOrderParty, hasBridge) =>
   `${balanceExpression({ hasOrderParty, hasBridge })} AS outstanding`;
 
 exports.listParties = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   const search = clean(req.query.search);
 
   try {
@@ -76,7 +77,7 @@ exports.listParties = async (req, res) => {
 };
 
 exports.getPartyById = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   const { id } = req.params;
 
   try {
@@ -150,7 +151,7 @@ const gstinToStore = (raw, res) => {
 };
 
 exports.createParty = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   const { name, businessName, phone, city, address, gstin, notes } = req.body;
 
   if (!clean(name)) {
@@ -193,7 +194,7 @@ exports.createParty = async (req, res) => {
 };
 
 exports.updateParty = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   const { id } = req.params;
   const { name, businessName, phone, city, address, gstin, notes, status } =
     req.body;
@@ -268,7 +269,7 @@ const PAYMENT_METHODS = ["cash", "upi", "bank", "cheque", "other"];
  * which, so a payment can sit against the running balance instead.
  */
 exports.recordPayment = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   const { id } = req.params;
   const { amount, method, paidOn, note, saleId } = req.body;
 
@@ -559,7 +560,7 @@ exports.getPartyStatement = async (req, res) => {
   try {
     const result = await buildStatement(
       req.params.id,
-      req.user.id,
+      businessId(req),
       req.query.from,
       req.query.to,
     );
@@ -577,7 +578,7 @@ exports.getPartyStatement = async (req, res) => {
  * The same statement as a document, so it can be handed over or sent on.
  */
 exports.getPartyStatementPDF = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   try {
     const result = await buildStatement(
       req.params.id,
@@ -614,7 +615,7 @@ exports.getPartyStatementPDF = async (req, res) => {
  * real rows. A wholesaler with no data sees zeroes, which is the truth.
  */
 exports.getPartyStats = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
 
   try {
     // This carried a third copy of the balance rule, with the same fault the

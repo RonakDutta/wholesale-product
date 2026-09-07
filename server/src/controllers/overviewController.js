@@ -1,6 +1,8 @@
 const pool = require("../config/db");
 const { hasPartyLink } = require("../services/partyService");
 const { hasSaleLink } = require("../services/orderSaleService");
+const { businessId } = require("../middlewares/businessContext");
+const { can } = require("../services/staffAccess");
 const {
   BILLED_SALE_STATUSES,
   NOT_OWED_SQL,
@@ -38,7 +40,7 @@ const BILLED_STATUSES = BILLED_SALE_STATUSES;
 const QUIET_AFTER_DAYS = 60;
 
 exports.getOverview = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
 
   try {
     // Asked once, so the query below can name orders.party_id and sales.order_id
@@ -137,23 +139,37 @@ exports.getOverview = async (req, res) => {
     const c = counts.rows[0];
     const k = collect.rows[0];
 
+    // An employee who packs orders does not necessarily get to see the books.
+    // The screen is not gated whole, because the lists on it are his work; the
+    // money block is simply not sent. Withheld rather than zeroed, so the
+    // screen can say "not shown to you" instead of "you are owed nothing",
+    // which would be a lie about the business.
+    // No business on the request means the middleware did not run, which for
+    // an authenticated request cannot happen. Treated as the owner so this
+    // matches businessId's documented fallback: it would be perverse for one
+    // to scope a query to a man's own book and the other to hide its total.
+    const showMoney = req.business ? can(req.business, "money") : true;
+
     res.status(200).json({
-      money: {
-        // Each customer's balance worked out on its own and only then added
-        // up, so a customer in credit cannot cancel out another's debt and
-        // "still to collect" cannot come out negative. See khataBalance.
-        outstanding: Number(k.owed_to_you),
-        owedBack: Number(k.owed_by_you),
-        billedThisMonth: Number(m.billed_this_month),
-        receivedThisMonth: Number(m.received_this_month),
-      },
+      money: showMoney
+        ? {
+            // Each customer's balance worked out on its own and only then
+            // added up, so a customer in credit cannot cancel out another's
+            // debt and "still to collect" cannot come out negative. See
+            // khataBalance.
+            outstanding: Number(k.owed_to_you),
+            owedBack: Number(k.owed_by_you),
+            billedThisMonth: Number(m.billed_this_month),
+            receivedThisMonth: Number(m.received_this_month),
+          }
+        : null,
       counts: {
         parties: Number(c.parties),
         items: Number(c.items),
         salesThisMonth: Number(c.sales_this_month),
       },
       toDeliver: toDeliver.rows,
-      topDues: topDues.rows,
+      topDues: showMoney ? topDues.rows : [],
       quiet: quiet.rows,
       quietAfterDays: QUIET_AFTER_DAYS,
       recentSales: recentSales.rows,
@@ -178,7 +194,7 @@ exports.getOverview = async (req, res) => {
  * @route GET /api/overview/breakdown?metric=outstanding|billed|received
  */
 exports.getBreakdown = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   const metric = String(req.query.metric || "outstanding");
 
   if (!["outstanding", "billed", "received"].includes(metric)) {

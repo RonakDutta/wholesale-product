@@ -1,6 +1,7 @@
 const pool = require("../config/db");
 const { clean, optionalNumber } = require("../utils/money");
 const invoiceRepository = require("../repositories/invoiceRepository");
+const { businessId } = require("../middlewares/businessContext");
 
 /**
  * A wholesaler's rate list. Every query is scoped by the wholesaler id from
@@ -19,7 +20,7 @@ const UNITS = ["pcs", "dozen", "case", "mtr", "kg", "box", "bundle"];
 // than to zero.
 
 exports.listItems = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   const search = clean(req.query.search);
   const status = clean(req.query.status);
 
@@ -59,7 +60,7 @@ exports.listItems = async (req, res) => {
 };
 
 exports.getItemById = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   const { id } = req.params;
 
   try {
@@ -80,7 +81,7 @@ exports.getItemById = async (req, res) => {
 };
 
 exports.createItem = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   const { name, category, unit, packSize, rate, moq, hsnCode, gstPercent, notes } =
     req.body;
 
@@ -144,7 +145,7 @@ exports.createItem = async (req, res) => {
 };
 
 exports.updateItem = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   const { id } = req.params;
   const { name, category, unit, packSize, rate, moq, hsnCode, gstPercent, notes, status } =
     req.body;
@@ -231,7 +232,7 @@ exports.updateItem = async (req, res) => {
  * sale_lines keeps the item name as text, so old bills are untouched by this.
  */
 exports.deleteItem = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   const { id } = req.params;
 
   try {

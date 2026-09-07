@@ -8,6 +8,7 @@ const {
 } = require("../controllers/creditNoteController");
 const authenticateToken = require("../middlewares/authMiddleware");
 const authorizeRoles = require("../middlewares/roleMiddleware");
+const { requirePermission } = require("../middlewares/businessContext");
 
 const router = express.Router();
 
@@ -15,12 +16,12 @@ const router = express.Router();
 // will read them, but through a route of its own, not this one.
 router.use(authenticateToken, authorizeRoles("seller", "both"));
 
-router.get("/", listCreditNotes);
-router.post("/", createCreditNote);
+router.get("/", requirePermission("refunds"), listCreditNotes);
+router.post("/", requirePermission("refunds"), createCreditNote);
 
 // Registered before "/:id" so "by-invoice" is not swallowed as a note id.
-router.get("/by-invoice/:invoiceId", getCreditNoteForInvoice);
-router.get("/:id", getCreditNote);
-router.get("/:id/pdf", getCreditNotePDF);
+router.get("/by-invoice/:invoiceId", requirePermission("refunds"), getCreditNoteForInvoice);
+router.get("/:id", requirePermission("refunds"), getCreditNote);
+router.get("/:id/pdf", requirePermission("refunds"), getCreditNotePDF);
 
 module.exports = router;

@@ -18,6 +18,7 @@ const {
 } = require("../controllers/orderController");
 const authenticateToken = require("../middlewares/authMiddleware");
 const authorizeRoles = require("../middlewares/roleMiddleware");
+const { requirePermission } = require("../middlewares/businessContext");
 const { getTracking, addCheckpoint } = require("../controllers/trackingController");
 const { createLink, getOrderLink } = require("../controllers/driverLinkController");
 
@@ -28,28 +29,28 @@ const router = express.Router();
 // purchases from them and, because the client treats 403 as a dead session,
 // logged them out mid-browse. Supplier-side routes stay role-gated: they act
 // on someone else's order.
-router.get("/supplier", authenticateToken, authorizeRoles("seller", "both"), getSupplierOrders);
+router.get("/supplier", authenticateToken, authorizeRoles("seller", "both"), requirePermission("orders"), getSupplierOrders);
 router.get("/buyer", authenticateToken, getBuyerOrders);
 router.post("/create", authenticateToken, createOrder);
 router.get("/:orderId/payment-details", authenticateToken, getPaymentDetails);
 router.post("/:orderId/payment", authenticateToken, initiatePayment);
 router.post("/:orderId/send-installment-reminder", authenticateToken, authorizeRoles("seller", "both", "admin"), sendInstallmentReminder);
 router.put("/:orderId/payment-status", authenticateToken, updatePaymentStatus);
-router.patch("/:orderId/status", authenticateToken, authorizeRoles("seller", "both", "admin"), updateOrderStatus);
+router.patch("/:orderId/status", authenticateToken, authorizeRoles("seller", "both", "admin"), requirePermission("orders"), updateOrderStatus);
 // Not role gated. Both sides of an order may call it off, and who is allowed
 // is decided against the order itself. Gating this on the seller role would
 // take a buyer's own cancel button away, and a 403 logs people out.
 router.post("/:orderId/cancel", authenticateToken, cancelOrderHandler);
 router.get("/:orderId/timeline", authenticateToken, getOrderTimelineHandler);
 router.get("/:orderId/tracking", authenticateToken, getTracking);
-router.post("/:orderId/checkpoints", authenticateToken, authorizeRoles("seller", "both"), addCheckpoint);
+router.post("/:orderId/checkpoints", authenticateToken, authorizeRoles("seller", "both"), requirePermission("orders"), addCheckpoint);
 router.get("/:orderId/driver-link", authenticateToken, authorizeRoles("seller", "both"), getOrderLink);
-router.post("/:orderId/driver-link", authenticateToken, authorizeRoles("seller", "both"), createLink);
+router.post("/:orderId/driver-link", authenticateToken, authorizeRoles("seller", "both"), requirePermission("orders"), createLink);
 router.post("/:orderId/return", authenticateToken, requestReturn);
 // The last step of a return. Not role gated at the route: the handler checks
 // that the caller is the seller on this order, and a 403 from the middleware
 // would clear the token and log him out mid job.
-router.post("/:orderId/refund", authenticateToken, refundOrder);
+router.post("/:orderId/refund", authenticateToken, requirePermission("refunds"), refundOrder);
 router.get("/:orderId/invoice", authenticateToken, generateInvoice);
 router.get("/:orderId/packing-slip", authenticateToken, generatePackingSlip);
 router.get("/:orderId", authenticateToken, getOrderById);

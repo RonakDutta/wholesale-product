@@ -16,6 +16,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { useAuth } from "../context/AuthContext";
+import Wordmark from "./Wordmark";
 import { useUnread } from "../context/UnreadContext";
 import { useLocationFilter } from "../context/LocationContext";
 import NotificationBell from "./NotificationBell";
@@ -311,7 +312,7 @@ const Navbar = () => {
               to="/"
               className="text-xl sm:text-2xl font-black tracking-tighter text-slate-900 select-none"
             >
-              market<span className="text-clay">place.</span>
+              <Wordmark />
             </Link>
 
             {/* Mobile Icons */}

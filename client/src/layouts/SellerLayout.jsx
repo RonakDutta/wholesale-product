@@ -21,6 +21,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useUnread } from "../context/UnreadContext";
 import { FEATURES } from "../config/features";
+import Wordmark from "../components/Wordmark";
 
 // Wholesale 3.0 nav. "Customers" sits second because the customer book is the
 // thing a wholesaler opens the app for. The marketplace-era entries are kept
@@ -161,7 +162,7 @@ const SellerLayout = () => {
         <div className="flex h-16 shrink-0 items-center justify-between px-5">
           <div>
             <p className="text-base font-black leading-none tracking-tight">
-              market<span className="text-clay">place.</span>
+              <Wordmark />
             </p>
             <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-cream/40">
               Seller Workspace

@@ -1,4 +1,5 @@
 const PDFDocument = require("pdfkit");
+const { BRAND } = require("../config/brand");
 const QRCode = require("qrcode");
 const fs = require("fs");
 const path = require("path");
@@ -132,7 +133,7 @@ class PDFService {
         doc.text("TAX INVOICE", 50, 48);
 
         doc.fontSize(9).font("Helvetica").fillColor("#94a3b8");
-        doc.text(invoice.supplier_company || invoice.supplier_name || "B2B WHOLESALE MARKETPLACE", 50, 72);
+        doc.text(invoice.supplier_company || invoice.supplier_name || BRAND.name, 50, 72);
 
         doc.fillColor("#ffffff").fontSize(12).font("Helvetica-Bold");
         doc.text(invoice.invoice_number || "INV-2026-000000", 350, 48, { align: "right", width: 195 });

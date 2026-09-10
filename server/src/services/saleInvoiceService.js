@@ -169,9 +169,21 @@ class SaleInvoiceService {
         })),
         discount: Number(sale.discount || 0),
         shippingCharge: 0,
-        supplierLocation:
-          seller.warehouse_state || seller.warehouse_city || seller.city || "Delhi",
-        buyerLocation: sale.party_city || seller.city || "Delhi",
+        // The customer's GST number settles his state outright, which matters
+        // most here: a party is usually entered with a name, a phone and a
+        // city, and half the cities in India are not in any map we hold.
+        //
+        // A customer with neither a GST number nor a city known to that map
+        // comes back unknown, and unknown is read as the same state, so his
+        // bill is CGST plus SGST. That is what a local sale is, and it is what
+        // the previous code did too, by pretending he lived where the seller
+        // lives.
+        supplierLocation: {
+          state: seller.warehouse_state,
+          gstin: seller.gstin,
+          city: seller.warehouse_city || seller.city,
+        },
+        buyerLocation: { gstin: sale.party_gstin, city: sale.party_city },
         isTaxInclusive: fromShop || legacyInclusive ? true : TAX_INCLUSIVE,
       });
 

@@ -51,6 +51,32 @@ const STATE_NAMES = {
 
 const STRUCTURE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
+/**
+ * The states a person can be asked to pick from, in one place.
+ *
+ * Built from the table above rather than typed out again, so the list a
+ * wholesaler chooses from and the list a GSTIN is read against cannot drift
+ * apart. Codes 97 and 99 are left out: "Other Territory" is the offshore area
+ * and "Centre" is a UN body or an embassy, and neither is somewhere a
+ * wholesaler keeps a godown.
+ *
+ * Two names appear against two codes each, because two states were split and
+ * two union territories merged and the old registrations are still live. The
+ * name is what gets stored, so the duplicate is dropped and both codes read
+ * back to the same answer.
+ */
+const INDIAN_STATES = [
+  ...new Set(
+    Object.entries(STATE_NAMES)
+      .filter(([code]) => Number(code) >= 1 && Number(code) <= 38)
+      .map(([, name]) => name),
+  ),
+].sort((a, b) => a.localeCompare(b));
+
+/** Case and spacing folded, for comparing two states written by two people. */
+const stateKey = (value) =>
+  String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+
 /** Upper cased, with spaces and dashes taken out. People type both. */
 const tidy = (value) => String(value ?? "").toUpperCase().replace(/[\s-]/g, "");
 
@@ -140,4 +166,11 @@ const gstinState = (value) => {
   return result.ok ? { code: result.stateCode, name: result.stateName } : null;
 };
 
-module.exports = { checkGstin, isValidGstin, gstinState, STATE_NAMES };
+module.exports = {
+  checkGstin,
+  isValidGstin,
+  gstinState,
+  STATE_NAMES,
+  INDIAN_STATES,
+  stateKey,
+};

@@ -58,7 +58,8 @@ class InvoiceService {
           bwp.company_name AS buyer_company, bwp.gstin AS buyer_gstin, bwp.city AS buyer_city,
           su.first_name AS supplier_first_name, su.last_name AS supplier_last_name, su.email AS supplier_email,
           swp.company_name AS supplier_company, swp.gstin AS supplier_gstin, swp.upi_id AS supplier_upi_id,
-          COALESCE(NULLIF(swp.warehouse_state, ''), swp.warehouse_city, swp.city) AS supplier_city
+          swp.warehouse_state AS supplier_state,
+          COALESCE(NULLIF(swp.warehouse_city, ''), swp.city) AS supplier_city
         FROM orders o
         JOIN users bu ON o.buyer_id = bu.id
         LEFT JOIN wholesaler_profiles bwp ON bu.id = bwp.user_id
@@ -82,9 +83,18 @@ class InvoiceService {
       const itemsResult = await client.query(itemsQuery, [orderId]);
       const orderItems = itemsResult.rows;
 
-      // Calculate GST breakdown using GSTService
-      const supplierLocation = order.supplier_city || "Delhi";
-      const buyerLocation = order.buyer_city || "Delhi";
+      // Where each side sits, for CGST plus SGST against IGST. The GST number
+      // goes along with the address because the first two digits of a GSTIN
+      // are the state, which beats reading a city off a profile.
+      const supplierLocation = {
+        state: order.supplier_state,
+        gstin: order.supplier_gstin,
+        city: order.supplier_city,
+      };
+      const buyerLocation = {
+        gstin: order.buyer_gstin,
+        city: order.buyer_city,
+      };
 
       // The seller's own defaults, falling back to platform values.
       const settings = await invoiceRepository.getSettings(order.supplier_id);
@@ -422,20 +432,22 @@ class InvoiceService {
       }
 
       const buyerQuery = await client.query(
-        `SELECT u.id, u.email, wp.city FROM users u LEFT JOIN wholesaler_profiles wp ON u.id = wp.user_id WHERE u.id = $1`,
+        `SELECT u.id, u.email, wp.city, wp.gstin
+           FROM users u
+           LEFT JOIN wholesaler_profiles wp ON u.id = wp.user_id
+          WHERE u.id = $1`,
         [buyerId]
       );
       if (buyerQuery.rows.length === 0) throw new Error("Buyer user not found.");
       const buyerUser = buyerQuery.rows[0];
 
       const supplierQuery = await client.query(
-        `SELECT COALESCE(NULLIF(wp.warehouse_state, ''), wp.warehouse_city, wp.city) AS city
-         FROM wholesaler_profiles wp WHERE wp.user_id = $1`,
+        `SELECT warehouse_state AS state, gstin,
+                COALESCE(NULLIF(warehouse_city, ''), city) AS city
+           FROM wholesaler_profiles WHERE user_id = $1`,
         [supplierId]
       );
-
-      const supplierCity = supplierQuery.rows[0]?.city || "Delhi";
-      const buyerCity = buyerUser.city || "Delhi";
+      const supplierProfile = supplierQuery.rows[0] || {};
 
       const settings = await invoiceRepository.getSettings(supplierId);
 
@@ -446,8 +458,12 @@ class InvoiceService {
         })),
         discount,
         shippingCharge,
-        supplierLocation: supplierCity,
-        buyerLocation: buyerCity,
+        supplierLocation: {
+          state: supplierProfile.state,
+          gstin: supplierProfile.gstin,
+          city: supplierProfile.city,
+        },
+        buyerLocation: { gstin: buyerUser.gstin, city: buyerUser.city },
       });
 
       const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(

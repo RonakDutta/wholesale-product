@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
 const { checkGstin } = require("../utils/gstin");
+const { asState } = require("../services/placeOfSupply");
 const jwt = require("jsonwebtoken");
 const pool = require("../config/db");
 const {
@@ -10,7 +11,7 @@ const {
 } = require("../services/notificationManager");
 
 exports.register = async (req, res) => {
-  const { firstName, lastName, email, phone, password, role } = req.body;
+  const { firstName, lastName, email, phone, password, role, state } = req.body;
   try {
     const userExists = await pool.query(
       "SELECT id FROM users WHERE email = $1",
@@ -29,9 +30,25 @@ exports.register = async (req, res) => {
     );
 
     if (role === "seller" || role === "both") {
+      /**
+       * The state, asked once at signup and stored here.
+       *
+       * It is the field every bill this account raises depends on: the same
+       * state as the customer means CGST plus SGST, a different one means
+       * IGST. Nothing used to ask for it, and wholesaler_profiles.city
+       * defaults to 'Delhi', so a Surat wholesaler's first invoice was worked
+       * out as though he were in Delhi.
+       *
+       * Checked against the list rather than stored as typed, because this is
+       * a value a bill is computed from, and "Gujrat" is not a state.
+       *
+       * The city is written as an explicit NULL to override that default. A
+       * blank city is true; "Delhi" is a claim nobody made.
+       */
       await pool.query(
-        "INSERT INTO wholesaler_profiles (user_id) VALUES ($1)",
-        [newUser.rows[0].id],
+        `INSERT INTO wholesaler_profiles (user_id, warehouse_state, city)
+         VALUES ($1, $2, NULL)`,
+        [newUser.rows[0].id, asState(state)],
       );
     }
 
@@ -150,7 +167,7 @@ exports.getMe = async (req, res) => {
 // @route   POST /api/auth/upgrade
 exports.upgradeToSeller = async (req, res) => {
   const userId = req.user.id;
-  const { companyName, gstin, phone, city } = req.body;
+  const { companyName, gstin, phone, city, state } = req.body;
 
   // Checked here rather than left for the profile screen, because this number
   // goes onto his invoices from the first one he raises.
@@ -176,10 +193,18 @@ exports.upgradeToSeller = async (req, res) => {
 
     await pool.query("UPDATE users SET role = 'both' WHERE id = $1", [userId]);
 
+    // The state comes from what he picked if he picked one, and otherwise
+    // from his GST number, whose first two digits are the state. Only if he
+    // gave neither is it left blank, which is honest: better an empty field
+    // the invoice screen can ask him about than a wrong one it bills from.
+    const declaredState =
+      asState(state) || (gstinValue ? checkGstin(gstinValue).stateName : null);
+
     await pool.query(
-      `INSERT INTO wholesaler_profiles (user_id, company_name, gstin, contact_phone, city, is_verified) 
-       VALUES ($1, $2, $3, $4, $5, false)`,
-      [userId, companyName, gstinValue, phone, city],
+      `INSERT INTO wholesaler_profiles
+         (user_id, company_name, gstin, contact_phone, city, warehouse_state, is_verified)
+       VALUES ($1, $2, $3, $4, $5, $6, false)`,
+      [userId, companyName, gstinValue, phone, city || null, declaredState],
     );
 
     res

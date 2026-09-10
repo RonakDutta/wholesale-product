@@ -4,6 +4,7 @@ const saleInvoiceService = require("../services/saleInvoiceService");
 const creditNoteService = require("../services/creditNoteService");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const gstService = require("../services/gstService");
+const { checkHsn } = require("../services/hsnService");
 const { businessId } = require("../middlewares/businessContext");
 
 /**
@@ -132,6 +133,13 @@ const buildLines = (rawLines) => {
       }
     }
 
+    // The HSN says what the goods ARE on a tax document. Blank is allowed and
+    // common; a code of the wrong length is a slipped keystroke, and letting
+    // it through prints a false description on a bill the customer claims his
+    // input credit against.
+    const hsn = checkHsn(raw.hsnCode ?? raw.hsn_code);
+    if (!hsn.ok) return { error: `${hsn.reason} Check the HSN for ${itemName}.` };
+
     lines.push({
       itemName,
       quantity,
@@ -140,7 +148,7 @@ const buildLines = (rawLines) => {
       gstPercent,
       // Snapshot from the rate list, so editing an item later cannot change
       // the HSN printed on a bill already raised.
-      hsnCode: clean(raw.hsnCode ?? raw.hsn_code),
+      hsnCode: hsn.hsn,
       amountPaise: Math.round(toPaise(rate) * quantity),
     });
   }

@@ -11,6 +11,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
+import HsnField from "../../components/HsnField";
 import api from "../../utils/axios";
 import VisibilityPicker from "../../components/VisibilityPicker";
 import { UNITS, GST_RATES } from "../../constants/products";
@@ -593,21 +594,14 @@ const AddProduct = () => {
                 placeholder="100"
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-2">
-                HSN code, optional
-              </label>
-              <input
-                type="text"
-                name="hsnCode"
-                inputMode="numeric"
-                maxLength={20}
-                value={formData.hsnCode}
-                onChange={handleChange}
-                className="w-full bg-slate-50 border border-slate-200 focus:border-clay focus:ring-1 focus:ring-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900 transition-colors"
-                placeholder="5208"
-              />
-            </div>
+            <HsnField
+              id="add-hsn"
+              label="HSN code, optional"
+              value={formData.hsnCode}
+              onChange={(hsnCode) =>
+                setFormData((prev) => ({ ...prev, hsnCode }))
+              }
+            />
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-2">
                 GST rate, optional

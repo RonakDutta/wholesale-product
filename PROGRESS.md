@@ -332,6 +332,13 @@ Requested in one go and deliberately not started. Written down here so the
 shape is agreed before any of it is typed. Photos of the app this is modelled
 on are coming; several of the decisions below wait on them.
 
+**Read `docs/BUSY_MODEL.md` first.** Fourteen screenshots of a live Busy 21
+were shared on 10 Sept and are written up there field by field: the Masters
+menu, the whole Transactions menu, a real tax invoice with its IRN and e-way
+bill number, the voucher numbering dialog, the regional settings and the GST
+config. Most of the questions below are answered by it, and several guesses in
+this section turned out to be right for the wrong reasons.
+
 ### The shape: masters, transactions, reports
 
 This is how Tally, Busy and Marg are laid out, and it is what a wholesaler who

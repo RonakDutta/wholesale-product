@@ -256,16 +256,33 @@ class PDFService {
         const boxX = 330;
         let boxY = summaryY;
 
+        /**
+         * The total is ruled, not filled.
+         *
+         * It used to be a solid dark bar with white text, which is a web
+         * button dropped onto a document. A printed invoice sets its total
+         * apart with a rule above and below and lets the figure carry the
+         * weight, and that is also what survives a black and white printer
+         * and a fax, which is still how a lot of these get sent.
+         */
         const addTotalRow = (label, amount, isBold = false, isHighlight = false) => {
           if (isHighlight) {
-            doc.rect(boxX, boxY, 229, 20).fill("#0f172a");
-            doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(10);
+            boxY += 4;
+            doc.rect(boxX, boxY, 229, 1).fill("#0f172a");
+            boxY += 5;
+            doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(11);
           } else {
             doc.fillColor(isBold ? "#0f172a" : "#475569").font(isBold ? "Helvetica-Bold" : "Helvetica").fontSize(8);
           }
-          doc.text(label, boxX + 10, boxY + (isHighlight ? 5 : 2));
-          doc.text(rupees(amount), boxX + 110, boxY + (isHighlight ? 5 : 2), { align: "right", width: 110 });
-          boxY += isHighlight ? 22 : 14;
+          doc.text(label, boxX + 10, boxY);
+          doc.text(rupees(amount), boxX + 110, boxY, { align: "right", width: 110 });
+          if (isHighlight) {
+            boxY += 15;
+            doc.rect(boxX, boxY, 229, 1).fill("#0f172a");
+            boxY += 6;
+          } else {
+            boxY += 14;
+          }
         };
 
         addTotalRow("Subtotal:", invoice.subtotal || 0);
@@ -443,19 +460,27 @@ class PDFService {
 
         const boxX = 330;
         let boxY = y;
+        // Ruled, the same way the invoice total is. The two documents are
+        // read side by side, so they should not be laid out differently.
         const addRow = (label, amount, isBold = false, isHighlight = false) => {
           if (isHighlight) {
-            doc.rect(boxX, boxY, 229, 20).fill("#0f172a");
-            doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(10);
+            boxY += 4;
+            doc.rect(boxX, boxY, 229, 1).fill("#0f172a");
+            boxY += 5;
+            doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(11);
           } else {
             doc.fillColor(isBold ? "#0f172a" : "#475569")
               .font(isBold ? "Helvetica-Bold" : "Helvetica").fontSize(8);
           }
-          doc.text(label, boxX + 10, boxY + (isHighlight ? 5 : 2));
-          doc.text(rupees(amount), boxX + 110, boxY + (isHighlight ? 5 : 2), {
-            align: "right", width: 110,
-          });
-          boxY += isHighlight ? 22 : 14;
+          doc.text(label, boxX + 10, boxY);
+          doc.text(rupees(amount), boxX + 110, boxY, { align: "right", width: 110 });
+          if (isHighlight) {
+            boxY += 15;
+            doc.rect(boxX, boxY, 229, 1).fill("#0f172a");
+            boxY += 6;
+          } else {
+            boxY += 14;
+          }
         };
 
         addRow("Taxable value credited:", note.taxable_amount || 0, true);
@@ -619,8 +644,9 @@ class PDFService {
         doc.text(rupees(totals.received), 410, y, { width: 70, align: "right" });
         y += 20;
 
-        doc.rect(36, y, 523, 24).fill("#0f172a");
-        doc.fillColor("#ffffff").fontSize(11).font("Helvetica-Bold");
+        // The closing balance, ruled rather than reversed out of a dark bar.
+        doc.rect(36, y, 523, 1).fill("#0f172a");
+        doc.fillColor("#0f172a").fontSize(11).font("Helvetica-Bold");
         doc.text(
           Number(closingBalance) < 0 ? "IN CREDIT WITH US" : "BALANCE DUE",
           44,
@@ -630,6 +656,7 @@ class PDFService {
           width: 171,
           align: "right",
         });
+        doc.rect(36, y + 23, 523, 1).fill("#0f172a");
 
         const range = doc.bufferedPageRange();
         for (let i = range.start; i < range.start + range.count; i++) {

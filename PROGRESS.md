@@ -22,17 +22,32 @@ cd server && npm run migrate
 
 | Migration | What it does | Run? |
 |---|---|---|
-| `wholesale3_order_number_sequence.sql` | Order numbers from a counter instead of dice | **outstanding** |
-| `wholesale3_one_invoice_per_order.sql` | Unique index so one order cannot hold two invoices | **outstanding** |
-| `wholesale3_staff_accounts.sql` | Employees who work on a wholesaler's book | **outstanding** |
+| `wholesale3_order_number_sequence.sql` | Order numbers from a counter instead of dice | run 7 Sept |
+| `wholesale3_one_invoice_per_order.sql` | Unique index so one order cannot hold two invoices | run 7 Sept |
+| `wholesale3_staff_accounts.sql` | Employees who work on a wholesaler's book | run 7 Sept |
 
-`wholesale3_one_invoice_per_order.sql` opens with a query that lists any order
-already holding two invoices. It returns nothing on a healthy database. If it
-returns rows, the index will refuse to build until they are sorted out, and
-that is a judgement call: a duplicate carrying payments needs those payments
-moved onto the surviving invoice first. Do not delete on the strength of the
-query alone. The application takes a lock before creating either way, so new
-duplicates cannot appear whether or not this has been run.
+Nothing outstanding. To confirm all three actually landed, since two of them use
+IF NOT EXISTS and one can be refused by existing data without stopping the run:
+
+```sql
+SELECT
+  (SELECT count(*) FROM pg_class
+     WHERE relname = 'order_number_seq' AND relkind = 'S')          AS order_seq,
+  (SELECT count(*) FROM pg_indexes
+     WHERE indexname = 'idx_invoices_order')                        AS invoice_index,
+  (SELECT count(*) FROM information_schema.tables
+     WHERE table_name = 'staff_members')                            AS staff_table;
+-- all three should read 1
+SELECT generate_order_number();  -- ORD + today's date + six digits
+```
+
+`idx_invoices_order` is the one that can be missing while the others are fine:
+it refuses to build if an order already holds two invoices. If it reads 0, the
+query at the top of that migration lists the offenders. Sorting them out is a
+judgement call, because a duplicate carrying payments needs those payments moved
+onto the surviving invoice first, so do not delete on the strength of the query
+alone. The application takes a lock before creating either way, so new
+duplicates cannot appear whether or not the index exists.
 
 Backfills, safe to run more than once, in this order:
 
@@ -45,6 +60,79 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 ---
 
 ## Done
+
+### 10 Sept 2026
+
+**Which state the wholesaler sells from, asked once.** The field that decides
+whether a bill charges CGST plus SGST or IGST was never asked for anywhere.
+`wholesaler_profiles.city` defaults to `'Delhi'`, so a Surat wholesaler's first
+invoice was worked out as though he sat in Delhi. Signup now asks, of anybody
+who says he sells, from a list rather than a box: "Gujrat" typed by hand
+matches no customer's state and would send every local sale out as
+inter-state. Settings has the same list and the server refuses a value that is
+not a state.
+
+The question is now asked in one place, `services/placeOfSupply.js`. It was
+asked three ways: `invoiceService` read one chain of columns, `saleInvoiceService`
+read a slightly different one, and `gstService` then guessed a state by looking
+the answer up in a hand written map of about fifty cities. The order is now by
+what each source knows: the state he declared, then the state his GST number
+carries, then his city. A GSTIN's first two digits ARE the state, which is not
+a guess, and that matters most for a customer, who is usually entered with a
+name and a phone and nothing else.
+
+Unknown stays null and reads as the same state, so a walk in customer is billed
+CGST plus SGST, which is what a local sale is. Same answer as before, honest
+route: the old code got there by asserting both sides were in Delhi.
+
+The map pin was already behind `FEATURES.MARKETPLACE`, so that half needed no
+change.
+
+**One switch for one delivery.** An accepted order writes a sale, so one lot of
+goods was two rows and neither was in charge. The order has the 22 state
+lifecycle that stamps a delivery date and opens the return window; the sale had
+a plain "Mark delivered" that knew nothing about it. Press the order and the
+sale sat at confirmed for ever; press the sale and the order sat at shipped
+with no delivery date, so the seven day return window had nothing to count
+from. The order is now the only switch and the sale mirrors it, the way
+cancelling already worked.
+
+Editing was refused on the same rows, found while writing the tests: nothing
+stopped a wholesaler retyping the lines of an order backed sale and moving the
+debt away from the figure the customer pressed pay on. `orderSaleService` has
+said that was the one rule that matters since it was written, and nothing
+enforced it.
+
+**HSN codes, kept to what can be checked.** The shape is enforced, 4, 6 or 8
+digits, on listings and on sale lines, with the message naming the line. Blank
+stays allowed: most of what a small wholesaler sells was never classified, and
+a gap on a bill beats a false description. The box suggests the codes he has
+already put on his own goods, commonest first, read from his listings and his
+sale lines, and behind those 32 common textile headings labelled Common with
+a note telling him to read the description first.
+
+No rate table, and a test asserts there is none. Rates change, the same heading
+carries different rates by price slab, and a rate presented as authoritative
+puts a wrong tax on a legal document.
+
+**The retired rate list is gone.** `RateList.jsx`, `AddItemModal.jsx`,
+`itemController`, `itemRoutes` and the `/api/items` mount, deleted. Two places
+were still reading the dead table and both were quietly wrong: `resolveRates`
+took a sale line's GST rate from `items`, so a rate changed on the product page
+changed nothing it could see, and the overview counted `items` for "products",
+so that number froze on the day of the merge. Both now read the listings. The
+`items` table itself stays: its rows are the audit trail for the merge, and
+dropping data is a separate decision.
+
+**The invoice total is ruled, not filled.** It sat in a rounded dark pill with
+white text, which is a web button dropped onto a document, and it is the first
+thing a customer looks at. Rules above and below on the PDF and both screens,
+plus the credit note total and the statement's closing balance, which had the
+same bar.
+
+Verified: 19 suites, 456 checks, plus both smoke shapes. Three of the suites are
+new, `place_check.js`, `hsn_check.js` and `follows_order_check.js`. The PDF and
+the screens were rendered and looked at rather than read.
 
 ### 5 Sept 2026
 
@@ -200,27 +288,19 @@ numbering; shop prices treated as tax inclusive.
 
 Roughly in the order agreed.
 
-### Before anything else
+Items 1 to 4 were done on 10 Sept, see above.
 
-The three migrations above have still not been run. The order number sequence
-is the live risk: until it is applied, two checkouts in the same second can be
-handed the same number. The staff one matters now that staff accounts are being
-used, because until it runs the table does not exist and every account resolves
-as its own owner.
-
-1. **Trim the seller location.** The state is load bearing because it decides
-   CGST plus SGST against IGST. The map pin is only for delivery. Ask the
-   state once at signup and drop the pin unless marketplace delivery is on.
-2. **Delete the invoice's "mark as delivered".** One event should not have two
-   switches; the order lifecycle is the authority.
-3. **HSN codes**, scoped small: validate the shape (4, 6 or 8 digits), suggest
-   from what this wholesaler has used before, and a short curated list for
-   textiles. Do NOT ship a rate table as authoritative: rates change, and the
-   same HSN carries different rates by price slab.
-4. **Delete the retired rate list code** (`RateList.jsx`, `AddItemModal.jsx`,
-   eventually `itemController`) once the merge is confirmed good.
-5. **Mobile OTP.** Deferred. There is no genuinely free SMS OTP in India that
+1. **Mobile OTP.** Deferred. There is no genuinely free SMS OTP in India that
    we know of; every gateway charges per message.
+2. **e-Way Bill against the free sandbox**, once the GSP question below is
+   settled. It is the one GST integration worth doing, see the note.
+3. **The invented demo products on the home page.** Delete them and show the
+   failure. Now also out of step with the city filter.
+4. **The 4.5 star rating search invents** for a wholesaler with none, which it
+   then sorts and filters on. Same rule that removed `trust_score`.
+5. **Rewrite the git history** to take out the committed password and the
+   invoice PDF. The Neon credential is already rotated. Needs a moment when
+   nobody else is pushing, because it changes every commit hash.
 
 ### GST APIs, looked into 4 Sept
 
@@ -290,7 +370,7 @@ for many taxpayers. That is a commercial decision and it shapes the schema.
 
 ## Testing
 
-Seventeen suites in `server/scripts/*_check.js`. They drive the real
+Nineteen suites in `server/scripts/*_check.js`, 456 checks. They drive the real
 controllers against a local Postgres, so they catch schema drift that reading
 the code does not.
 

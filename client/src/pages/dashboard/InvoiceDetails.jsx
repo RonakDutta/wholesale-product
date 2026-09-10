@@ -431,9 +431,15 @@ export default function InvoiceDetails() {
                   <span>Total Tax:</span>
                   <span>₹{Number(invoice.total_tax || 0).toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-base font-black text-white bg-slate-900 p-3 rounded-xl mt-2">
-                  <span>Grand Total:</span>
-                  <span>₹{Number(invoice.grand_total || 0).toFixed(2)}</span>
+                {/* Same treatment as the preview and the PDF: a rule, not a
+                    dark rounded pill. The three should look like one bill. */}
+                <div className="mt-2.5 flex items-baseline justify-between border-y-2 border-espresso py-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-espresso">
+                    Grand total
+                  </span>
+                  <span className="text-lg font-black tabular-nums text-espresso">
+                    ₹{Number(invoice.grand_total || 0).toFixed(2)}
+                  </span>
                 </div>
               </div>
             </div>

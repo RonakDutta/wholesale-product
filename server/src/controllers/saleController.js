@@ -4,6 +4,7 @@ const saleInvoiceService = require("../services/saleInvoiceService");
 const creditNoteService = require("../services/creditNoteService");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const gstService = require("../services/gstService");
+const { checkHsn } = require("../services/hsnService");
 const { businessId } = require("../middlewares/businessContext");
 
 /**
@@ -69,10 +70,16 @@ const resolveRates = async (client, wholesalerId, lines) => {
   const settings = await invoiceRepository.getSettings(wholesalerId);
   const fallback = Number(settings.defaultTaxRate ?? 18);
 
-  // The rate list only carries a GST rate once the migration has been run.
-  // Until then every line falls back to the wholesaler's default.
+  // Read off his shop listings, which is where a product's tax rate now
+  // lives. It used to read the rate list, a second product table that has
+  // since been merged into the listings and whose screen is gone: a rate
+  // edited on the product page would have been ignored here, and a sale of
+  // the same goods would have been taxed at whatever the dead table said.
+  //
+  // The column arrives with wholesale3_listing_billing_fields.sql. Until that
+  // has been run every line falls back to the wholesaler's default rate.
   const has = await invoiceRepository.schemaExtras();
-  if (!has.has_item_gst) {
+  if (!has.has_listing_billing) {
     return lines.map((line) => ({
       ...line,
       gstPercent: line.gstPercent ?? fallback,
@@ -81,9 +88,11 @@ const resolveRates = async (client, wholesalerId, lines) => {
 
   const named = lines.map((line) => line.itemName.toLowerCase());
   const known = await client.query(
-    `SELECT lower(name) AS name, gst_percent FROM items
-      WHERE wholesaler_id = $1 AND gst_percent IS NOT NULL
-        AND lower(name) = ANY($2::text[])`,
+    `SELECT lower(p.name) AS name, si.gst_percent
+       FROM supplier_inventory si
+       JOIN products p ON p.id = si.product_id
+      WHERE si.supplier_id = $1 AND si.gst_percent IS NOT NULL
+        AND lower(p.name) = ANY($2::text[])`,
     [wholesalerId, named],
   );
   const byName = new Map(known.rows.map((row) => [row.name, Number(row.gst_percent)]));
@@ -132,6 +141,13 @@ const buildLines = (rawLines) => {
       }
     }
 
+    // The HSN says what the goods ARE on a tax document. Blank is allowed and
+    // common; a code of the wrong length is a slipped keystroke, and letting
+    // it through prints a false description on a bill the customer claims his
+    // input credit against.
+    const hsn = checkHsn(raw.hsnCode ?? raw.hsn_code);
+    if (!hsn.ok) return { error: `${hsn.reason} Check the HSN for ${itemName}.` };
+
     lines.push({
       itemName,
       quantity,
@@ -140,7 +156,7 @@ const buildLines = (rawLines) => {
       gstPercent,
       // Snapshot from the rate list, so editing an item later cannot change
       // the HSN printed on a bill already raised.
-      hsnCode: clean(raw.hsnCode ?? raw.hsn_code),
+      hsnCode: hsn.hsn,
       amountPaise: Math.round(toPaise(rate) * quantity),
     });
   }
@@ -343,11 +359,20 @@ exports.getSaleById = async (req, res) => {
   const { id } = req.params;
 
   try {
+    const has = await invoiceRepository.schemaExtras();
+
+    // The order this sale came from, when it came from one. The page needs it
+    // to send the wholesaler to the order rather than offering him a second
+    // set of buttons for the same goods, see updateSaleStatus below.
+    const fromOrder = has.has_sale_order_id;
+
     const sale = await pool.query(
       `SELECT s.*, p.name AS party_name, p.business_name AS party_business_name,
               p.phone AS party_phone, p.city AS party_city, p.gstin AS party_gstin
+              ${fromOrder ? ", o.order_number, o.status AS order_status" : ""}
          FROM sales s
          JOIN parties p ON p.id = s.party_id
+         ${fromOrder ? "LEFT JOIN orders o ON o.id = s.order_id" : ""}
         WHERE s.id = $1 AND s.wholesaler_id = $2`,
       [id, wholesalerId],
     );
@@ -356,7 +381,6 @@ exports.getSaleById = async (req, res) => {
       return res.status(404).json({ message: "Sale not found" });
     }
 
-    const has = await invoiceRepository.schemaExtras();
     const [lines, payments, creditNote] = await Promise.all([
       pool.query(
         // Carries the stored GST rate back to the edit form, so editing a
@@ -403,12 +427,37 @@ exports.updateSaleStatus = async (req, res) => {
   const { status } = req.body;
 
   try {
+    const has = await invoiceRepository.schemaExtras();
+
     const current = await pool.query(
-      "SELECT status FROM sales WHERE id = $1 AND wholesaler_id = $2",
+      `SELECT status${has.has_sale_order_id ? ", order_id" : ""}
+         FROM sales WHERE id = $1 AND wholesaler_id = $2`,
       [id, wholesalerId],
     );
     if (current.rows.length === 0) {
       return res.status(404).json({ message: "Sale not found" });
+    }
+
+    /**
+     * A sale that came from a shop order does not get its own switches.
+     *
+     * The goods being delivered is one event. It had two buttons: the order
+     * had a lifecycle that stamps a delivery date and starts the return
+     * window, and the sale had a plain "Mark delivered" that knew nothing
+     * about any of it. Pressing the second one left an order still sitting at
+     * "shipped" and a sale saying "delivered", with the return window counted
+     * from a date the order never got.
+     *
+     * The order lifecycle is the authority. Move the order and the sale
+     * follows, in orderStatusService.
+     */
+    if (current.rows[0].order_id) {
+      return res.status(409).json({
+        code: "FOLLOWS_ORDER",
+        orderId: current.rows[0].order_id,
+        message:
+          "This sale came from a shop order, so it follows that order. Change the order and this will follow.",
+      });
     }
 
     const from = current.rows[0].status;
@@ -541,8 +590,10 @@ exports.updateSale = async (req, res) => {
   try {
     await client.query("BEGIN");
 
+    const has = await invoiceRepository.schemaExtras();
     const existing = await client.query(
-      "SELECT id, status, sale_number FROM sales WHERE id = $1 AND wholesaler_id = $2 FOR UPDATE",
+      `SELECT id, status, sale_number${has.has_sale_order_id ? ", order_id" : ""}
+         FROM sales WHERE id = $1 AND wholesaler_id = $2 FOR UPDATE`,
       [id, wholesalerId],
     );
     if (existing.rows.length === 0) {
@@ -551,6 +602,21 @@ exports.updateSale = async (req, res) => {
     }
 
     const sale = existing.rows[0];
+
+    // The same rule as the status buttons, for the same reason. A sale
+    // written from a shop order owes exactly what the customer agreed at
+    // checkout, and part of it may already be paid. Retyping the lines here
+    // would move the debt away from the figure he pressed pay on.
+    if (sale.order_id) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({
+        code: "FOLLOWS_ORDER",
+        orderId: sale.order_id,
+        message:
+          "This sale came from a shop order, so its amounts are what the customer agreed at checkout and cannot be retyped here.",
+      });
+    }
+
     if (sale.status === "cancelled") {
       await client.query("ROLLBACK");
       return res
@@ -575,7 +641,6 @@ exports.updateSale = async (req, res) => {
       "SELECT COALESCE(SUM(amount), 0) AS total FROM party_payments WHERE sale_id = $1",
       [id],
     );
-    const has = await invoiceRepository.schemaExtras();
     const priced = await resolveRates(client, wholesalerId, lines);
     const gst = has.has_sale_tax ? priceSale(priced, discountPaise) : null;
     const taxPaise = gst ? toPaise(gst.totalTax) : 0;

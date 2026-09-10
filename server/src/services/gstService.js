@@ -1,70 +1,40 @@
-// CGST/SGST versus IGST turns on the state, not the city. Comparing cities
-// treated Mumbai to Pune as inter-state and charged IGST on a tax document, so
-// the common metros are mapped back to their state first. Anything unmapped
-// falls back to comparing the value as given, which is right when a state name
-// was passed in and no worse than before when it was a city.
-const STATE_BY_CITY = {
-  delhi: "delhi",
-  "new delhi": "delhi",
-  noida: "uttar pradesh",
-  ghaziabad: "uttar pradesh",
-  lucknow: "uttar pradesh",
-  kanpur: "uttar pradesh",
-  gurgaon: "haryana",
-  gurugram: "haryana",
-  faridabad: "haryana",
-  mumbai: "maharashtra",
-  pune: "maharashtra",
-  nagpur: "maharashtra",
-  nashik: "maharashtra",
-  thane: "maharashtra",
-  bengaluru: "karnataka",
-  bangalore: "karnataka",
-  mysore: "karnataka",
-  chennai: "tamil nadu",
-  coimbatore: "tamil nadu",
-  madurai: "tamil nadu",
-  hyderabad: "telangana",
-  warangal: "telangana",
-  kolkata: "west bengal",
-  howrah: "west bengal",
-  ahmedabad: "gujarat",
-  surat: "gujarat",
-  vadodara: "gujarat",
-  rajkot: "gujarat",
-  jaipur: "rajasthan",
-  jodhpur: "rajasthan",
-  udaipur: "rajasthan",
-  indore: "madhya pradesh",
-  bhopal: "madhya pradesh",
-  patna: "bihar",
-  chandigarh: "chandigarh",
-  ludhiana: "punjab",
-  amritsar: "punjab",
-  kochi: "kerala",
-  ernakulam: "kerala",
-  thiruvananthapuram: "kerala",
-  bhubaneswar: "odisha",
-  guwahati: "assam",
-  raipur: "chhattisgarh",
-  ranchi: "jharkhand",
-  dehradun: "uttarakhand",
-  visakhapatnam: "andhra pradesh",
-  vijayawada: "andhra pradesh",
-};
+// Which state each side is in, and therefore CGST plus SGST against IGST,
+// is now one question asked in one place. See placeOfSupply.js: it reads a
+// declared state first, then the state the GST number itself carries, and
+// only then falls back to looking a city up.
+const placeOfSupply = require("./placeOfSupply");
 
-const toState = (value) => {
-  const clean = String(value || "").trim().toLowerCase();
-  return STATE_BY_CITY[clean] || clean;
+/**
+ * The two sides of a bill, as this service wants them.
+ *
+ * A caller may pass a string, which is what every caller used to pass and
+ * what a lot of stored data still looks like. A string is read as "whatever
+ * you have": it could be a state, it could be a city, and placeOfSupply
+ * works out which. An object is better, because a GST number settles the
+ * question outright.
+ */
+const asPlace = (value) => {
+  if (!value) return {};
+  if (typeof value === "string") return { city: value, state: value };
+  return value;
 };
 
 class GSTService {
   /**
-   * Checks whether the transaction is Intra-State (same state) or Inter-State (different state).
+   * Same state, so CGST plus SGST, or different states, so IGST?
+   *
+   * Either side may be a plain place name or an object carrying a GST number.
+   * The defaults are gone: this used to fall back to "Delhi" on both sides,
+   * which reached the right answer for a local sale by asserting a location
+   * nobody had given it.
    */
-  isIntraState(supplierCityOrState = "Delhi", buyerCityOrState = "Delhi") {
-    if (!supplierCityOrState || !buyerCityOrState) return true;
-    return toState(supplierCityOrState) === toState(buyerCityOrState);
+  isIntraState(supplier, buyer) {
+    return placeOfSupply.isIntraState(asPlace(supplier), asPlace(buyer));
+  }
+
+  /** Which state a side is in, and what told us. Null when nothing did. */
+  placeOf(value) {
+    return placeOfSupply.resolveState(asPlace(value));
   }
 
   /**
@@ -76,10 +46,14 @@ class GSTService {
     items = [],
     discount = 0.00,
     shippingCharge = 0.00,
-    supplierLocation = "Delhi",
-    buyerLocation = "Delhi",
+    // A place name, or an object like { state, gstin, city }. No default:
+    // "we were not told" has to stay distinguishable from "Delhi".
+    supplierLocation = null,
+    buyerLocation = null,
     isTaxInclusive = false,
   }) {
+    const supplierPlace = this.placeOf(supplierLocation);
+    const buyerPlace = this.placeOf(buyerLocation);
     const intraState = this.isIntraState(supplierLocation, buyerLocation);
     let subtotal = 0;
     let totalTax = 0;
@@ -190,6 +164,12 @@ class GSTService {
       roundOff,
       grandTotal: roundedGrandTotal,
       isIntraState: intraState,
+      // Which states this was worked out between, and what said so. Kept on
+      // the result so a caller can put it on the bill or say why it split the
+      // tax the way it did, instead of working it out a second time.
+      supplierState: supplierPlace.state,
+      buyerState: buyerPlace.state,
+      placeOfSupplyFrom: { supplier: supplierPlace.from, buyer: buyerPlace.from },
       items: processedItems,
     };
   }

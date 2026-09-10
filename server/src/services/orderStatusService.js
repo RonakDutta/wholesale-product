@@ -174,7 +174,39 @@ const updateOrderStatus = async (orderId, newStatus, userId, userRole, remarks =
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [orderId, newStatus, currentStatus, userId, userRole, remarks]
     );
-    
+
+    /**
+     * The sales book follows the order.
+     *
+     * An accepted order writes itself a sale, and that sale used to carry its
+     * own "Mark delivered" button, so the same event had two switches and
+     * nothing kept them in step. A wholesaler who marked the order delivered
+     * left the sale reading "confirmed" for ever; one who marked the sale
+     * delivered left the order sitting at "shipped" with no delivery date, so
+     * the return window had nothing to count from.
+     *
+     * Now the order is the only switch and the sale mirrors it. Cancelling
+     * already worked this way, in cancelOrder below.
+     */
+    if (newStatus === 'delivered') {
+      const bridged = await client.query(
+        `SELECT EXISTS (
+           SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'sales' AND column_name = 'order_id'
+         ) AS yes`
+      );
+      if (bridged.rows[0].yes) {
+        // Only from confirmed. A cancelled sale stays cancelled: an order
+        // that somehow reaches delivered after its sale was written off is a
+        // problem for a person to look at, not one to paper over here.
+        await client.query(
+          `UPDATE sales SET status = 'delivered', updated_at = CURRENT_TIMESTAMP
+            WHERE order_id = $1 AND status = 'confirmed'`,
+          [orderId]
+        );
+      }
+    }
+
     await client.query('COMMIT');
     
     return { success: true, currentStatus, newStatus };

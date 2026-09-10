@@ -264,9 +264,17 @@ export default function InvoicePreview({ invoice, onClose, onSendEmail }) {
                 <span>Total Tax:</span>
                 <span>₹{Number(invoice.total_tax || 0).toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-base font-black text-espresso bg-slate-900 text-white p-2.5 rounded-xl mt-2">
-                <span>GRAND TOTAL:</span>
-                <span>₹{Number(invoice.grand_total || 0).toFixed(2)}</span>
+              {/* Ruled, not filled. A rounded dark pill is a web button
+                  shape, and a bill is a document: the total is set apart the
+                  way a printed invoice does it, with a rule above and below
+                  and the figure carrying the weight. */}
+              <div className="mt-2.5 flex items-baseline justify-between border-y-2 border-espresso py-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-espresso">
+                  Grand total
+                </span>
+                <span className="text-lg font-black tabular-nums text-espresso">
+                  ₹{Number(invoice.grand_total || 0).toFixed(2)}
+                </span>
               </div>
             </div>
           </div>

@@ -1,6 +1,8 @@
 const pool = require("../config/db");
 const { fullName } = require("../utils/money");
 const invoiceRepository = require("../repositories/invoiceRepository");
+const challanService = require("./challanService");
+const { placeOfSupply } = require("./placeOfSupply");
 const invoiceNumberService = require("./invoiceNumberService");
 const gstService = require("./gstService");
 
@@ -192,6 +194,31 @@ class SaleInvoiceService {
         return { error: "empty" };
       }
 
+      /**
+       * A tax invoice only once the money is in.
+       *
+       * Asked for on 10 Sept: while a sale is part paid or unpaid the
+       * wholesaler gets a delivery challan instead, and the bill waits.
+       *
+       * This is not what section 31(1) says, which ties the invoice to
+       * removal of the goods rather than to payment. See the header of
+       * challanService.js. It is behind a flag for exactly that reason:
+       * CHALLAN_WHEN_UNPAID=false restores the old behaviour, where a bill
+       * could be raised whenever it was asked for.
+       */
+      if (challanService.challanEnabled() && await challanService.challanTablesExist(client)) {
+        const money = await challanService.settlementOf(client, sale);
+        if (!money.settled) {
+          await client.query("ROLLBACK");
+          return {
+            error: "unpaid",
+            outstanding: Number((money.total - money.received).toFixed(2)),
+            received: money.received,
+            total: money.total,
+          };
+        }
+      }
+
       const supplier = await client.query(
         `SELECT u.first_name, u.last_name, u.email,
                 wp.company_name, wp.gstin, wp.city, wp.warehouse_city,
@@ -262,11 +289,14 @@ class SaleInvoiceService {
         isTaxInclusive: fromShop || legacyInclusive ? true : TAX_INCLUSIVE,
       });
 
+      const pos = placeOfSupply({ gstin: sale.party_gstin, city: sale.party_city });
+
       const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(
         client,
         settings.prefix,
         null,
         wholesalerId,
+        { suffix: settings.numberSuffix, padTo: settings.numberPadTo },
       );
 
       const issueDate = new Date(sale.sale_date || Date.now());
@@ -292,6 +322,16 @@ class SaleInvoiceService {
         igst: gst.igst,
         totalTax: gst.totalTax,
         grandTotal: gst.grandTotal,
+        // Rule 46 particulars, frozen at issue. The place of supply is the
+        // state the goods went TO, which is what decides IGST against CGST
+        // plus SGST, and it has been computed all along without being stored.
+        placeOfSupply: pos.state,
+        placeOfSupplyCode: pos.code,
+        supplierState: gst.supplierState,
+        // No reverse charge path exists yet, so this is always false. The
+        // field is required on the document even when the answer is no.
+        reverseCharge: false,
+        roundOff: gst.roundOff,
         paymentStatus: paid ? "Paid" : "Pending",
         invoiceStatus: "Generated",
         issueDate,
@@ -310,6 +350,11 @@ class SaleInvoiceService {
       // The link back to the sale, and the recipient frozen as of today.
       // See the migration for why these are stored rather than joined.
       const stamped = { rows: [await this.stampRecipient(client, invoice.id, sale)] };
+
+      // The goods may have gone out on one or more challans while the money
+      // was outstanding. Point them at the bill that superseded them, so they
+      // stop reading as open.
+      await challanService.markInvoiced(client, sale.id, invoice.id);
 
       await invoiceRepository.addLog(
         {

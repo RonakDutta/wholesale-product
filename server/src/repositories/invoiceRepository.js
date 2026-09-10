@@ -181,6 +181,12 @@ async function schemaExtras(db = pool) {
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'sales' AND column_name = 'order_id') AS has_sale_order_id,
         EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'invoice_settings'
+                   AND column_name = 'number_suffix') AS has_number_format,
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'invoices'
+                   AND column_name = 'place_of_supply') AS has_rule46_fields,
+        EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'sale_lines' AND column_name = 'gst_percent') AS has_line_gst,
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'items' AND column_name = 'gst_percent') AS has_item_gst,
@@ -204,6 +210,8 @@ async function schemaExtras(db = pool) {
       has_recipient: false,
       has_sale_tax: false,
       has_sale_order_id: false,
+      has_number_format: false,
+      has_rule46_fields: false,
       has_line_gst: false,
       has_item_gst: false,
       has_listing_billing: false,
@@ -301,7 +309,17 @@ class InvoiceRepository {
       notes = "Thank you for your business!",
       termsConditions = "Standard B2B wholesale payment terms apply.",
       pdfUrl = null,
+      // Rule 46 particulars. Optional so an unmigrated database and an older
+      // caller both still work; see wholesale3_invoice_rule46_fields.sql.
+      placeOfSupply = null,
+      placeOfSupplyCode = null,
+      supplierState = null,
+      reverseCharge = false,
+      roundOff = 0,
     } = invoiceData;
+
+    const has = await schemaExtras();
+    const rule46 = has.has_rule46_fields;
 
     const invoiceResult = await dbClient.query(
       `INSERT INTO invoices (
@@ -309,13 +327,15 @@ class InvoiceRepository {
         subtotal, discount, shipping_charge, taxable_amount,
         cgst, sgst, igst, total_tax, grand_total,
         payment_status, invoice_status, issue_date, due_date,
-        notes, terms_conditions, pdf_url
+        notes, terms_conditions, pdf_url${rule46 ? `,
+        place_of_supply, place_of_supply_code, supplier_state,
+        reverse_charge, round_off` : ""}
       ) VALUES (
         $1, $2, $3, $4,
         $5, $6, $7, $8,
         $9, $10, $11, $12, $13,
         $14, $15, $16, $17,
-        $18, $19, $20
+        $18, $19, $20${rule46 ? ", $21, $22, $23, $24, $25" : ""}
       ) RETURNING *`,
       [
         invoiceNumber,
@@ -338,6 +358,9 @@ class InvoiceRepository {
         notes,
         termsConditions,
         pdfUrl,
+        ...(rule46
+          ? [placeOfSupply, placeOfSupplyCode, supplierState, reverseCharge, roundOff]
+          : []),
       ]
     );
 
@@ -994,8 +1017,12 @@ class InvoiceRepository {
    */
   async getSettings(userId) {
     await ensureSchema();
+    // The number format columns arrive with wholesale3_invoice_number_format.
+    // Until it has been run the defaults reproduce the old behaviour exactly.
+    const has = await schemaExtras();
+    const format = has.has_number_format ? ", number_suffix, number_pad_to" : "";
     const result = await pool.query(
-      `SELECT prefix, due_days, default_tax_rate, default_notes, default_terms
+      `SELECT prefix, due_days, default_tax_rate, default_notes, default_terms${format}
        FROM invoice_settings WHERE user_id = $1`,
       [userId]
     );
@@ -1009,31 +1036,62 @@ class InvoiceRepository {
       defaultTerms:
         row.default_terms ??
         "1. Goods once sold will not be returned.\n2. Payment is due within the agreed credit period.",
+      // How his invoice number is shaped. See invoiceNumberService.
+      numberSuffix: row.number_suffix ?? "",
+      numberPadTo: Number(row.number_pad_to ?? 6),
     };
   }
 
   async saveSettings(userId, settings) {
     await ensureSchema();
+    const has = await schemaExtras();
     const result = await pool.query(
-      `INSERT INTO invoice_settings (
-         user_id, prefix, due_days, default_tax_rate, default_notes, default_terms, updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
-       ON CONFLICT (user_id) DO UPDATE SET
-         prefix = EXCLUDED.prefix,
-         due_days = EXCLUDED.due_days,
-         default_tax_rate = EXCLUDED.default_tax_rate,
-         default_notes = EXCLUDED.default_notes,
-         default_terms = EXCLUDED.default_terms,
-         updated_at = CURRENT_TIMESTAMP
-       RETURNING prefix, due_days, default_tax_rate, default_notes, default_terms`,
-      [
-        userId,
-        settings.prefix,
-        settings.dueDays,
-        settings.defaultTaxRate,
-        settings.defaultNotes,
-        settings.defaultTerms,
-      ]
+      has.has_number_format
+        ? `INSERT INTO invoice_settings (
+             user_id, prefix, due_days, default_tax_rate, default_notes,
+             default_terms, number_suffix, number_pad_to, updated_at
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
+           ON CONFLICT (user_id) DO UPDATE SET
+             prefix = EXCLUDED.prefix,
+             due_days = EXCLUDED.due_days,
+             default_tax_rate = EXCLUDED.default_tax_rate,
+             default_notes = EXCLUDED.default_notes,
+             default_terms = EXCLUDED.default_terms,
+             number_suffix = EXCLUDED.number_suffix,
+             number_pad_to = EXCLUDED.number_pad_to,
+             updated_at = CURRENT_TIMESTAMP
+           RETURNING prefix, due_days, default_tax_rate, default_notes,
+                     default_terms, number_suffix, number_pad_to`
+        : `INSERT INTO invoice_settings (
+             user_id, prefix, due_days, default_tax_rate, default_notes, default_terms, updated_at
+           ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+           ON CONFLICT (user_id) DO UPDATE SET
+             prefix = EXCLUDED.prefix,
+             due_days = EXCLUDED.due_days,
+             default_tax_rate = EXCLUDED.default_tax_rate,
+             default_notes = EXCLUDED.default_notes,
+             default_terms = EXCLUDED.default_terms,
+             updated_at = CURRENT_TIMESTAMP
+           RETURNING prefix, due_days, default_tax_rate, default_notes, default_terms`,
+      has.has_number_format
+        ? [
+            userId,
+            settings.prefix,
+            settings.dueDays,
+            settings.defaultTaxRate,
+            settings.defaultNotes,
+            settings.defaultTerms,
+            settings.numberSuffix ?? "",
+            settings.numberPadTo ?? 6,
+          ]
+        : [
+            userId,
+            settings.prefix,
+            settings.dueDays,
+            settings.defaultTaxRate,
+            settings.defaultNotes,
+            settings.defaultTerms,
+          ]
     );
 
     const row = result.rows[0];

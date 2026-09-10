@@ -71,6 +71,11 @@ const SaleDetail = () => {
   // rather than inside it because it is a document in its own right.
   const [creditNote, setCreditNote] = useState(null);
   const [downloading, setDownloading] = useState("");
+  // Set when the server refuses to bill because money is still outstanding.
+  // Carries the figures, so the panel can say how much is left.
+  const [unpaid, setUnpaid] = useState(null);
+  const [challans, setChallans] = useState([]);
+  const [makingChallan, setMakingChallan] = useState(false);
 
   const handleDownloadInvoice = async () => {
     if (!invoice) return;
@@ -136,6 +141,15 @@ const SaleDetail = () => {
         }
       }
 
+      // Goods may already have gone out on one or more challans while the
+      // money was outstanding. An empty list is the ordinary case.
+      try {
+        const res = await api.get(`/api/challans/sale/${id}`);
+        if (alive) setChallans(Array.isArray(res.data) ? res.data : []);
+      } catch {
+        if (alive) setChallans([]);
+      }
+
       if (alive) setLoading(false);
     };
     load();
@@ -149,13 +163,47 @@ const SaleDetail = () => {
     try {
       const { data: raised } = await api.post(`/api/sales/${id}/invoice`);
       setInvoice(raised);
+      setUnpaid(null);
       toast.success(`Invoice ${raised.invoice_number} is ready.`);
     } catch (error) {
-      toast.error(
-        error.response?.data?.message || "Could not raise the invoice.",
-      );
+      // Not paid in full is not a failure, it is "not yet". The panel turns
+      // it into an offer to send the goods out on a delivery challan.
+      if (error.response?.data?.code === "UNPAID") {
+        setUnpaid(error.response.data);
+      } else {
+        toast.error(
+          error.response?.data?.message || "Could not raise the invoice.",
+        );
+      }
     }
     setBilling(false);
+  };
+
+  const makeChallan = async () => {
+    setMakingChallan(true);
+    try {
+      const { data } = await api.post(`/api/challans/sale/${id}`, {});
+      setChallans((prev) => [data, ...prev]);
+      toast.success(`Delivery challan ${data.challan_number} is ready.`);
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message || "Could not make the delivery challan.",
+      );
+    }
+    setMakingChallan(false);
+  };
+
+  const downloadChallan = async (challan) => {
+    setDownloading(challan.id);
+    try {
+      await downloadFile(
+        `/api/challans/${challan.id}/pdf`,
+        `${challan.challan_number}.pdf`,
+      );
+    } catch (err) {
+      toast.error(err.message || "Could not download the challan");
+    }
+    setDownloading("");
   };
 
   const changeStatus = async (status) => {
@@ -422,6 +470,68 @@ const SaleDetail = () => {
                 <FileText className="h-4 w-4" />
                 {billing ? "Making invoice..." : "Make invoice"}
               </button>
+            </div>
+          )}
+
+          {/* The bill waits until the money is in, so the offer here is to
+              send the goods out on a delivery challan meanwhile. Only shown
+              after the server has actually refused, so a wholesaler who is
+              paid in full never sees it. */}
+          {unpaid && !invoice && (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-bold text-amber-900">
+                ₹{money(unpaid.outstanding)} is still to come in
+              </p>
+              <p className="mt-1 text-xs text-amber-800">
+                The tax invoice is raised once this sale is settled. Until then
+                you can send the goods out on a delivery challan, which is not
+                a tax invoice and carries no GST.
+              </p>
+              <button
+                onClick={makeChallan}
+                disabled={makingChallan}
+                className="mt-3 flex items-center gap-2 rounded-lg bg-amber-700 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-amber-800 disabled:opacity-50"
+              >
+                <Truck className="h-4 w-4" />
+                {makingChallan ? "Making challan..." : "Make delivery challan"}
+              </button>
+            </div>
+          )}
+
+          {challans.length > 0 && (
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+                Delivery challans
+              </p>
+              <ul className="space-y-1.5">
+                {challans.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                  >
+                    <span className="flex items-center gap-2 text-espresso">
+                      <Truck className="h-3.5 w-3.5 text-slate-400" />
+                      <span className="font-bold">{c.challan_number}</span>
+                      <span className="text-xs text-slate-500">
+                        {dateLabel(c.issue_date)}
+                      </span>
+                      {c.invoice_id && (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                          Billed
+                        </span>
+                      )}
+                    </span>
+                    <button
+                      onClick={() => downloadChallan(c)}
+                      disabled={downloading === c.id}
+                      className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      {downloading === c.id ? "..." : "PDF"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>

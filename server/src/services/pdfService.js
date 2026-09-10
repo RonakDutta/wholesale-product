@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const { fullName } = require("../utils/money");
+const { amountInWords } = require("../utils/amountInWords");
 
 /**
  * Money, as it can actually be printed.
@@ -19,6 +20,16 @@ const { fullName } = require("../utils/money");
  * a character that "Rs." says perfectly well to the traders using this.
  */
 const rupees = (value) => `Rs.${Number(value || 0).toFixed(2)}`;
+
+/**
+ * The PAN inside a GSTIN. Characters 3 to 12, by the number's own definition.
+ * Rule 46 wants the supplier's PAN on the invoice, and this is it: not a
+ * second field to store and keep in step, the same number read differently.
+ */
+const panFromGstin = (gstin) => {
+  const clean = String(gstin || "").toUpperCase().replace(/[\s-]/g, "");
+  return clean.length === 15 ? clean.slice(2, 12) : null;
+};
 
 // Spelled month, matching the screen. "13/5/2025" and "5/13/2025" are the
 // same nine characters and mean different days, and a statement is read by a
@@ -72,7 +83,7 @@ class PDFService {
   /**
    * Generates a professional A4 PDF Tax Invoice and streams it to an Express response or returns a Buffer.
    */
-  async generateInvoicePDF(invoice, res = null) {
+  async generateInvoicePDF(invoice, res = null, options = {}) {
     // Generate UPI QR code data URL asynchronously
     let qrDataUrl = null;
     try {
@@ -91,6 +102,10 @@ class PDFService {
       try {
         const doc = new PDFDocument({ size: "A4", margin: 36, bufferPages: true });
         const buffers = [];
+        // Rule 46(o): Original for Recipient, Duplicate for Transporter,
+        // Triplicate for Supplier. Defaults to the recipient's copy, which is
+        // the one that goes out with the goods.
+        const copyTitle = String(options.copy || "ORIGINAL FOR RECIPIENT").toUpperCase();
 
         if (res) {
           res.setHeader("Content-Type", "application/pdf");
@@ -132,6 +147,12 @@ class PDFService {
         doc.fillColor("#ffffff").fontSize(20).font("Helvetica-Bold");
         doc.text("TAX INVOICE", 50, 48);
 
+        // Rule 46 wants each copy marked. Original for the recipient is the
+        // one that leaves with the goods; the other two are printed from the
+        // same page by whoever needs them.
+        doc.fontSize(7).font("Helvetica").fillColor("#94a3b8");
+        doc.text(copyTitle, 350, 40, { align: "right", width: 195 });
+
         doc.fontSize(9).font("Helvetica").fillColor("#94a3b8");
         doc.text(invoice.supplier_company || invoice.supplier_name || BRAND.name, 50, 72);
 
@@ -159,10 +180,14 @@ class PDFService {
         doc.fillColor("#1e293b").fontSize(9).font("Helvetica-Bold").text(invoice.supplier_company || invoice.supplier_name || "Wholesaler", 44, y + 26);
         doc.fontSize(8).font("Helvetica").fillColor("#475569");
         doc.text(`GSTIN: ${invoice.supplier_gstin || "N/A"}`, 44, y + 40);
-        doc.text(`Phone: ${invoice.supplier_phone || "N/A"}`, 44, y + 52);
-        doc.text(`Email: ${invoice.supplier_email || "N/A"}`, 44, y + 64);
+        // Characters 3 to 12 of a GSTIN are the PAN, so this is not a second
+        // field to store or to keep in step; it is the same number read.
+        const supplierPan = panFromGstin(invoice.supplier_gstin);
+        doc.text(`PAN: ${supplierPan || "N/A"}`, 44, y + 52);
+        doc.text(`Phone: ${invoice.supplier_phone || "N/A"}`, 44, y + 64);
+        doc.text(`Email: ${invoice.supplier_email || "N/A"}`, 44, y + 76);
         if (invoice.supplier_upi_id) {
-          doc.text(`UPI ID: ${invoice.supplier_upi_id}`, 44, y + 76);
+          doc.text(`UPI ID: ${invoice.supplier_upi_id}`, 44, y + 88);
         }
 
         // Buyer Box
@@ -185,9 +210,28 @@ class PDFService {
         if (sourceRef) doc.text(sourceRef, 312, y + 76);
 
         // ----------------------------------------------------
-        // PRODUCTS TABLE
+        // PLACE OF SUPPLY AND REVERSE CHARGE
         // ----------------------------------------------------
+        // Rule 46(n) and 46(p). Both were computed and thrown away: the place
+        // of supply is the state that decided whether this bill charges IGST
+        // or CGST plus SGST, so leaving it off made the tax split unexplained
+        // on the one document that has to explain it.
         y += 115;
+
+        const posText = invoice.place_of_supply
+          ? `${invoice.place_of_supply}${invoice.place_of_supply_code ? ` (${invoice.place_of_supply_code})` : ""}`
+          : null;
+        if (posText || invoice.reverse_charge !== undefined) {
+          doc.rect(36, y, 523, 18).fill("#f1f5f9");
+          doc.fillColor("#334155").fontSize(8).font("Helvetica-Bold");
+          if (posText) doc.text(`Place of Supply: ${posText}`, 44, y + 5);
+          doc.font("Helvetica").fillColor("#475569");
+          doc.text(
+            `Reverse Charge: ${invoice.reverse_charge ? "Yes" : "No"}`,
+            330, y + 5, { width: 220, align: "right" },
+          );
+          y += 26;
+        }
 
         // Table Header
         doc.rect(36, y, 523, 22).fill("#0f172a");
@@ -296,7 +340,77 @@ class PDFService {
         if (Number(invoice.igst) > 0) addTotalRow("IGST:", invoice.igst);
 
         addTotalRow("Total Tax:", invoice.total_tax || 0);
+        // Rounding, shown rather than swallowed, so taxable + tax + round off
+        // visibly equals the grand total. Busy prints it as "Less: Rounded
+        // Off"; gstService has returned it all along and nothing showed it.
+        if (Number(invoice.round_off)) {
+          addTotalRow("Rounded Off:", invoice.round_off);
+        }
         addTotalRow("GRAND TOTAL:", invoice.grand_total || 0, true, true);
+
+        // Total quantity, beside the money. A wholesaler checks the bale count
+        // before he checks the rupees.
+        const totalQty = items.reduce((sum, i) => sum + Number(i.quantity || 0), 0);
+        doc.fontSize(8).font("Helvetica").fillColor("#475569");
+        doc.text(`Total quantity: ${Number(totalQty.toFixed(3))}`, boxX + 10, boxY);
+        boxY += 16;
+
+        // The amount in words, which is what a person checks the figure
+        // against, because digits can be altered by hand and words cannot.
+        doc.fontSize(8).font("Helvetica-Bold").fillColor("#1e293b");
+        doc.text(amountInWords(invoice.grand_total || 0), 36, boxY + 6, { width: 523 });
+        boxY += 30;
+
+        // ----------------------------------------------------
+        // HSN / SAC WISE TAX SUMMARY
+        // ----------------------------------------------------
+        // Rule 46 in practice: this is the table a buyer's accountant
+        // reconciles against GSTR-2B. Built from the lines, so it needs no
+        // new data, only adding up what is already on the page.
+        const byHsn = new Map();
+        for (const item of items) {
+          const key = `${item.hsn_code || "-"}|${Number(item.gst_percent ?? 18)}`;
+          const taxable = Number(item.unit_price || 0) * Number(item.quantity || 0);
+          const row = byHsn.get(key) || {
+            hsn: item.hsn_code || "-",
+            rate: Number(item.gst_percent ?? 18),
+            taxable: 0,
+            tax: 0,
+          };
+          row.taxable += taxable;
+          row.tax += Number(item.tax_amount || 0);
+          byHsn.set(key, row);
+        }
+
+        if (byHsn.size > 0) {
+          let hy = boxY + 4;
+          doc.rect(36, hy, 300, 16).fill("#0f172a");
+          doc.fillColor("#ffffff").fontSize(7).font("Helvetica-Bold");
+          doc.text("HSN/SAC", 42, hy + 5, { width: 70 });
+          doc.text("RATE", 116, hy + 5, { width: 34, align: "right" });
+          doc.text("TAXABLE", 156, hy + 5, { width: 80, align: "right" });
+          doc.text("TAX", 240, hy + 5, { width: 90, align: "right" });
+          hy += 16;
+
+          let sumTaxable = 0;
+          let sumTax = 0;
+          for (const row of byHsn.values()) {
+            doc.fillColor("#1e293b").fontSize(7).font("Helvetica");
+            doc.text(row.hsn, 42, hy + 4, { width: 70 });
+            doc.text(`${row.rate}%`, 116, hy + 4, { width: 34, align: "right" });
+            doc.text(rupees(row.taxable), 156, hy + 4, { width: 80, align: "right" });
+            doc.text(rupees(row.tax), 240, hy + 4, { width: 90, align: "right" });
+            sumTaxable += row.taxable;
+            sumTax += row.tax;
+            hy += 13;
+          }
+          doc.rect(36, hy, 300, 1).fill("#cbd5e1");
+          hy += 3;
+          doc.fillColor("#0f172a").fontSize(7).font("Helvetica-Bold");
+          doc.text("Total", 42, hy + 3, { width: 70 });
+          doc.text(rupees(sumTaxable), 156, hy + 3, { width: 80, align: "right" });
+          doc.text(rupees(sumTax), 240, hy + 3, { width: 90, align: "right" });
+        }
 
         // ----------------------------------------------------
         // SIGNATURE & FOOTER & PAGE NUMBERS
@@ -531,6 +645,174 @@ class PDFService {
    * new page when it runs out of room, and every page repeats the column
    * headings and carries the balance forward, the way a ledger book does.
    */
+
+  /**
+   * A delivery challan.
+   *
+   * Deliberately does NOT look like a tax invoice, because it is not one and
+   * the person receiving it has to be able to tell at a glance. No tax
+   * columns, no GST summary, and a line under the heading saying in plain
+   * words that it is not a bill and no input credit can be claimed against it.
+   *
+   * See challanService.js for what this document is and why the rule behind
+   * it is expected to change.
+   */
+  async generateChallanPDF(challan, res = null) {
+    return new Promise((resolve, reject) => {
+      try {
+        const doc = new PDFDocument({ size: "A4", margin: 36, bufferPages: true });
+        const buffers = [];
+
+        if (res) {
+          doc.pipe(res);
+          doc.on("end", () => resolve());
+        } else {
+          doc.on("data", (chunk) => buffers.push(chunk));
+          doc.on("end", () => resolve(Buffer.concat(buffers)));
+        }
+        doc.on("error", (err) => reject(err));
+
+        const supplier = challan.supplier || {};
+
+        // Header. Sage rather than the invoice's near black, so the two
+        // documents are told apart across a desk.
+        doc.rect(36, 36, 523, 62).fill("#4b5563");
+        doc.fillColor("#ffffff").fontSize(18).font("Helvetica-Bold");
+        doc.text("DELIVERY CHALLAN", 50, 52);
+        doc.fontSize(8).font("Helvetica").fillColor("#e5e7eb");
+        doc.text("Not a tax invoice. No input tax credit can be claimed against this document.", 50, 76);
+        doc.fillColor("#ffffff").fontSize(12).font("Helvetica-Bold");
+        doc.text(challan.challan_number || "", 360, 52, { align: "right", width: 185 });
+        doc.fontSize(8).font("Helvetica").fillColor("#e5e7eb");
+        doc.text(`Dated: ${dateOf(challan.issue_date)}`, 360, 70, { align: "right", width: 185 });
+
+        let y = 112;
+
+        // Who sent it, and who it went to.
+        doc.rect(36, y, 255, 18).fill("#f3f4f6");
+        doc.fillColor("#374151").fontSize(8).font("Helvetica-Bold").text("FROM", 44, y + 5);
+        doc.rect(304, y, 255, 18).fill("#f3f4f6");
+        doc.fillColor("#374151").fontSize(8).font("Helvetica-Bold").text("DELIVER TO", 312, y + 5);
+
+        doc.fillColor("#111827").fontSize(9).font("Helvetica-Bold");
+        doc.text(supplier.company_name || fullName(supplier.first_name, supplier.last_name) || "Supplier", 44, y + 24, { width: 240 });
+        doc.text(challan.recipient_name || "Customer", 312, y + 24, { width: 240 });
+
+        doc.fontSize(8).font("Helvetica").fillColor("#4b5563");
+        const fromLines = [
+          supplier.warehouse_address || supplier.city || "",
+          supplier.gstin ? `GSTIN: ${supplier.gstin}` : "",
+          supplier.contact_phone || supplier.phone || "",
+        ].filter(Boolean);
+        doc.text(fromLines.join("\n"), 44, y + 38, { width: 240 });
+
+        const toLines = [
+          challan.recipient_address || "",
+          challan.recipient_city || "",
+          challan.recipient_gstin ? `GSTIN: ${challan.recipient_gstin}` : "",
+          challan.recipient_phone || "",
+        ].filter(Boolean);
+        doc.text(toLines.join("\n"), 312, y + 38, { width: 240 });
+
+        y += 96;
+
+        // What it came from, so the goods can be traced back.
+        const against = [
+          challan.sale_number ? `Sale: ${challan.sale_number}` : "",
+          challan.order_number ? `Order: ${challan.order_number}` : "",
+        ].filter(Boolean).join("    ");
+        if (against) {
+          doc.fontSize(8).font("Helvetica").fillColor("#4b5563").text(against, 36, y);
+          y += 16;
+        }
+
+        // The lines. Value only: no rate of tax, no tax amount, by instruction.
+        doc.rect(36, y, 523, 20).fill("#4b5563");
+        doc.fillColor("#ffffff").fontSize(8).font("Helvetica-Bold");
+        doc.text("#", 44, y + 6);
+        doc.text("DESCRIPTION OF GOODS", 66, y + 6);
+        doc.text("HSN", 300, y + 6);
+        doc.text("QTY", 360, y + 6, { width: 50, align: "right" });
+        doc.text("UNIT", 416, y + 6);
+        doc.text("VALUE", 460, y + 6, { width: 90, align: "right" });
+        y += 20;
+
+        let totalQty = 0;
+        (challan.items || []).forEach((item, index) => {
+          if (index % 2 === 0) doc.rect(36, y, 523, 18).fill("#f9fafb");
+          doc.fillColor("#111827").fontSize(8).font("Helvetica");
+          doc.text(String(index + 1), 44, y + 5);
+          doc.text(item.item_name || "Item", 66, y + 5, { width: 228, ellipsis: true });
+          doc.text(item.hsn_code || "-", 300, y + 5);
+          doc.text(Number(item.quantity || 0).toFixed(3), 360, y + 5, { width: 50, align: "right" });
+          doc.text(item.unit || "", 416, y + 5);
+          doc.text(rupees(item.total), 460, y + 5, { width: 90, align: "right" });
+          totalQty += Number(item.quantity || 0);
+          y += 18;
+        });
+
+        doc.rect(36, y, 523, 1).fill("#9ca3af");
+        y += 8;
+
+        /**
+         * Two different numbers, and the page has to say which is which.
+         *
+         * The lines above are the value of the goods BEFORE tax, because this
+         * document carries no tax by instruction. What the customer owes is
+         * the sale total, which includes it. Printing the second against a
+         * column that sums to the first made the page disagree with itself.
+         */
+        const goodsValue = (challan.items || []).reduce(
+          (sum, item) => sum + Number(item.total || 0), 0,
+        );
+        const owed = Number(challan.total_value || 0);
+        const paid = Number(challan.amount_paid || 0);
+        const due = Number((owed - paid).toFixed(2));
+
+        doc.fontSize(8).font("Helvetica").fillColor("#4b5563");
+        doc.text(`Total quantity: ${totalQty.toFixed(3)}`, 36, y);
+
+        const rowRight = (label, amount, bold = false) => {
+          doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(bold ? 9 : 8);
+          doc.fillColor(bold ? "#111827" : "#4b5563");
+          doc.text(label, 300, y);
+          doc.text(rupees(amount), 440, y, { width: 110, align: "right" });
+          y += bold ? 16 : 13;
+        };
+        rowRight("Value of goods (before tax):", goodsValue, true);
+        rowRight("Sale total, tax included:", owed);
+        rowRight("Received so far:", paid);
+        rowRight("Outstanding:", due, true);
+
+        y += 6;
+        doc.fontSize(8).font("Helvetica-Oblique").fillColor("#4b5563");
+        doc.text(`Value of goods: ${amountInWords(goodsValue)}`, 36, y, { width: 523 });
+        y += 22;
+
+        // The whole point of the document, said plainly.
+        doc.rect(36, y, 523, 40).fill("#fef3c7");
+        doc.fillColor("#92400e").fontSize(8).font("Helvetica-Bold");
+        doc.text("This is a delivery challan, not a tax invoice.", 44, y + 8);
+        doc.font("Helvetica").fontSize(7.5);
+        doc.text(
+          "It records goods sent out while payment is outstanding. A tax invoice will follow once the balance is settled. Please do not claim input tax credit against this document.",
+          44, y + 20, { width: 500 },
+        );
+        y += 56;
+
+        doc.fontSize(8).font("Helvetica").fillColor("#6b7280");
+        doc.text("Receiver's signature", 36, y + 30);
+        doc.text(`For ${supplier.company_name || "Supplier"}`, 360, y + 30, { align: "right", width: 199 });
+
+        doc.end();
+      } catch (err) {
+        console.error("Challan PDF error:", err);
+        if (res && !res.headersSent) res.status(500).send("Error generating the challan");
+        else reject(err);
+      }
+    });
+  }
+
   async generateStatementPDF(statement, supplier = {}, res = null) {
     const { party, from, to, openingBalance, rows, totals, closingBalance } = statement;
 

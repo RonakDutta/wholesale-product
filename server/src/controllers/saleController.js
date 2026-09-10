@@ -524,6 +524,9 @@ exports.createInvoiceForSale = async (req, res) => {
     cancelled: [400, "A cancelled sale cannot be billed"],
     draft: [400, "Confirm this sale before raising a bill"],
     empty: [400, "This sale has no items to bill"],
+    // Not a failure so much as "not yet". The screen turns this into an
+    // offer to send the goods out on a delivery challan instead.
+    unpaid: [409, "This sale is not fully paid yet, so the bill waits"],
   };
 
   try {
@@ -531,7 +534,18 @@ exports.createInvoiceForSale = async (req, res) => {
 
     if (result.error) {
       const [status, message] = REASONS[result.error] || [400, "Cannot bill this sale"];
-      return res.status(status).json({ message });
+      // The unpaid case carries the numbers with it, so the screen can say
+      // how much is left rather than making him go and look.
+      if (result.error === "unpaid") {
+        return res.status(status).json({
+          message,
+          code: "UNPAID",
+          outstanding: result.outstanding,
+          received: result.received,
+          total: result.total,
+        });
+      }
+      return res.status(status).json({ message, code: result.error });
     }
 
     res.status(result.created ? 201 : 200).json(result.invoice);

@@ -5,6 +5,7 @@ import {
   ShoppingBag,
   MessageSquare,
   FileText,
+  Truck,
   Settings,
   UserCog,
   Sparkles,
@@ -44,6 +45,9 @@ const NAV = [
     needs: "orders",
   },
   { path: "/seller/invoices", label: "Invoices", icon: FileText, needs: "invoices" },
+  // Sits under Invoices because it is the other half of the same job: what
+  // went out before the bill could be raised.
+  { path: "/seller/challans", label: "Challans", icon: Truck, needs: "invoices" },
   { path: "/seller/messages", label: "Messages", icon: MessageSquare, badge: "unread" },
   // Off behind FEATURES.PROMOTIONS, not deleted. See the flag for why.
   {
@@ -79,6 +83,7 @@ const PREFETCH = {
   "/seller/products": () => import("../pages/dashboard/MyProducts"),
   "/seller/sales": () => import("../pages/dashboard/Sales"),
   "/seller/orders": () => import("../pages/dashboard/Orders"),
+  "/seller/challans": () => import("../pages/dashboard/Challans"),
   "/seller/staff": () => import("../pages/dashboard/Staff"),
   "/seller/settings": () => import("../pages/dashboard/Settings"),
 };

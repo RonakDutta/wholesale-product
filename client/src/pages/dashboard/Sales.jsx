@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Receipt } from "lucide-react";
+import { Receipt, Truck } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
 
@@ -130,6 +130,18 @@ const Sales = () => {
                         {sale.sale_number} · {dateLabel(sale.sale_date)} ·{" "}
                         {sale.line_count}{" "}
                         {Number(sale.line_count) === 1 ? "item" : "items"}
+                        {/* Goods already out on a challan, so he can see at a
+                            glance which sales have stock away from the godown
+                            without opening each one. */}
+                        {Number(sale.challan_count) > 0 && (
+                          <span className="ml-1.5 inline-flex items-center gap-1 text-amber-700">
+                            <Truck className="h-3 w-3" />
+                            {sale.challan_count}{" "}
+                            {Number(sale.challan_count) === 1
+                              ? "challan"
+                              : "challans"}
+                          </span>
+                        )}
                       </p>
                     </div>
 

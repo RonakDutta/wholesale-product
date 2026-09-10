@@ -188,6 +188,81 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   );
 
   // ---------------------------------------------------------------
+  console.log("\nWhat the screens need to show the right buttons");
+  // ---------------------------------------------------------------
+  const shown = await call(sales.getSaleById, { ...asOwner, params: { id: unpaid.id } });
+  check(
+    shown.body?.settlement && shown.body.settlement.settled === false,
+    "the sale detail says whether it is settled",
+    { settlement: shown.body?.settlement },
+  );
+  check(
+    Number(shown.body?.settlement?.total) === 1050,
+    "with the figures behind it, so the screen need not add them up",
+    { total: shown.body?.settlement?.total, received: shown.body?.settlement?.received },
+  );
+  check(shown.body?.challansOn === true, "and whether challans are switched on at all");
+
+  const settledShown = await call(sales.getSaleById, { ...asOwner, params: { id: settled.id } });
+  check(
+    settledShown.body?.settlement?.settled === true,
+    "a settled sale says so, so the offer is not made",
+  );
+
+  const listed = await call(sales.listSales, { ...asOwner, query: {} });
+  const unpaidRow = (listed.body || []).find((r) => r.id === unpaid.id);
+  check(
+    Number(unpaidRow?.challan_count) === 1,
+    "the sales list counts challans per sale",
+    { got: unpaidRow?.challan_count },
+  );
+  const settledRow = (listed.body || []).find((r) => r.id === settled.id);
+  check(
+    Number(settledRow?.challan_count) === 0,
+    "and shows zero where none went out",
+    { got: settledRow?.challan_count },
+  );
+
+  const all = await call(challans.listChallans, asOwner);
+  // Three by this point: one on the unpaid sale and two on the half paid one.
+  // The settled sale was refused, and the old-invoice case below adds a
+  // fourth after this.
+  check(
+    (all.body || []).length === 3,
+    "the challans screen lists every one of them",
+    { n: (all.body || []).length },
+  );
+  check(
+    (all.body || []).every((c) => c.challan_number && c.recipient_name),
+    "each carrying its number and who it went to",
+  );
+  check(
+    (all.body || []).filter((c) => c.invoice_id).length === 2,
+    "two of which are now billed",
+    { billed: (all.body || []).filter((c) => c.invoice_id).length },
+  );
+
+  // A sale that already has a bill can still send goods out, because it can:
+  // this is the case a wholesaler hit on 10 Sept with an invoice raised
+  // before the rule existed.
+  const billedButDue = await makeSale(0);
+  await testPool.query(
+    `INSERT INTO invoices (invoice_number, sale_id, party_id, supplier_id, buyer_id,
+                           subtotal, taxable_amount, grand_total, payment_status,
+                           invoice_status, issue_date, due_date)
+     VALUES ($1,$2,$3,$4,NULL,1000,1000,1050,'Pending','Generated',CURRENT_DATE,CURRENT_DATE)`,
+    [`OLD-${uniq().slice(-6)}`, billedButDue.id, party.body.id, seller],
+  );
+  const stillAllowed = await call(challans.createForSale, {
+    ...asOwner, params: { id: billedButDue.id }, body: {},
+  });
+  check(
+    stillAllowed.statusCode === 201,
+    "a sale billed before it was settled can still send goods out",
+    { s: stillAllowed.statusCode, why: "an invoice raised under the old rule does not trap the goods" },
+  );
+
+  // ---------------------------------------------------------------
   console.log("\nThe invoice number, Rule 46(b)");
   // ---------------------------------------------------------------
   check(numbering.financialYear(new Date("2026-03-31")) === "25-26", "31 March is the old year");

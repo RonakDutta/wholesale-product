@@ -64,6 +64,7 @@ const Overview = lazy(() => import("./pages/dashboard/Overview"));
 const MoneyBreakdown = lazy(() => import("./pages/dashboard/MoneyBreakdown"));
 const SellerOrderDetail = lazy(() => import("./pages/dashboard/SellerOrderDetail"));
 const Staff = lazy(() => import("./pages/dashboard/Staff"));
+const Challans = lazy(() => import("./pages/dashboard/Challans"));
 
 const SellerFallback = () => (
   <div className="flex min-h-dvh items-center justify-center bg-slate-100">
@@ -146,6 +147,8 @@ const router = createBrowserRouter([
       // The rows behind each figure on the overview.
       { path: "money/:metric", element: <MoneyBreakdown /> },
       { path: "invoices", element: <Invoices /> },
+      // Goods sent out before the money came in. Not a tax document.
+      { path: "challans", element: <Challans /> },
       { path: "invoices/create", element: <CreateInvoice /> },
       { path: "invoices/reports", element: <InvoiceReports /> },
       { path: "invoices/settings", element: <InvoiceSettings /> },

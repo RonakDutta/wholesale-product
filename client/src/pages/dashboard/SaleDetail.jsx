@@ -253,7 +253,20 @@ const SaleDetail = () => {
     );
   }
 
-  const { sale, lines, payments } = data;
+  const { sale, lines, payments, settlement, challansOn } = data;
+
+  // The server owns the rule. An order backed sale has money on the order as
+  // well as in party_payments, so summing the rows on this screen would say
+  // a settled sale still owed money.
+  const settled = settlement ? settlement.settled : false;
+  const outstanding = settlement
+    ? Number((settlement.total - settlement.received).toFixed(2))
+    : 0;
+  // Goods can go out on a challan whenever the sale is live and unsettled.
+  // This used to appear only after pressing "Make invoice" and being refused,
+  // which meant the right button was hidden behind the wrong one.
+  const canChallan =
+    challansOn && !settled && sale.status !== "draft" && sale.status !== "cancelled";
   const received = payments.reduce((sum, p) => sum + Number(p.amount), 0);
   const due = Number(sale.total) - received;
 
@@ -473,19 +486,22 @@ const SaleDetail = () => {
             </div>
           )}
 
-          {/* The bill waits until the money is in, so the offer here is to
-              send the goods out on a delivery challan meanwhile. Only shown
-              after the server has actually refused, so a wholesaler who is
-              paid in full never sees it. */}
-          {unpaid && !invoice && (
+          {/* Standing, not hidden behind a failed billing attempt. Goods go
+              out whenever they go out, and the wholesaler should not have to
+              press the wrong button to find the right one.
+
+              Shown even when an invoice already exists, because it can: a
+              sale billed before this rule came in, or billed by hand, can
+              still have goods leaving against an unpaid balance. */}
+          {canChallan && (
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
               <p className="text-sm font-bold text-amber-900">
-                ₹{money(unpaid.outstanding)} is still to come in
+                ₹{money(unpaid?.outstanding ?? outstanding)} is still to come in
               </p>
               <p className="mt-1 text-xs text-amber-800">
-                The tax invoice is raised once this sale is settled. Until then
-                you can send the goods out on a delivery challan, which is not
-                a tax invoice and carries no GST.
+                {invoice
+                  ? "This sale already has a bill against it, raised before it was settled. You can still send goods out on a delivery challan, which is not a tax invoice and carries no GST."
+                  : "The tax invoice is raised once this sale is settled. Until then you can send the goods out on a delivery challan, which is not a tax invoice and carries no GST."}
               </p>
               <button
                 onClick={makeChallan}
@@ -493,7 +509,11 @@ const SaleDetail = () => {
                 className="mt-3 flex items-center gap-2 rounded-lg bg-amber-700 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-amber-800 disabled:opacity-50"
               >
                 <Truck className="h-4 w-4" />
-                {makingChallan ? "Making challan..." : "Make delivery challan"}
+                {makingChallan
+                  ? "Making challan..."
+                  : challans.length > 0
+                    ? "Make another delivery challan"
+                    : "Make delivery challan"}
               </button>
             </div>
           )}

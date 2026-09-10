@@ -5,6 +5,7 @@ import { useCart } from "../context/CartContext";
 import { toast } from "sonner";
 import api from "../utils/axios";
 import LocationPicker from "../components/LocationPicker";
+import { INDIAN_STATES } from "../utils/gstin";
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -264,16 +265,21 @@ const Checkout = () => {
                     <label className="block text-sm font-semibold text-slate-700 mb-2">
                       State <span className="text-rose-500">*</span>
                     </label>
-                    <input
-                      type="text"
+                    <select
                       name="state"
                       value={addressForm.state}
                       onChange={handleInputChange}
-                      placeholder="e.g., Karnataka"
-                      className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay/20 ${
+                      className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay/20 bg-white cursor-pointer ${
                         errors.state ? "border-rose-300" : "border-slate-200"
-                      }`}
-                    />
+                      } ${!addressForm.state ? "text-slate-400" : ""}`}
+                    >
+                      <option value="" className="text-slate-400">Select your state</option>
+                      {INDIAN_STATES.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
                     {errors.state && <p className="text-xs text-rose-500 mt-1">{errors.state}</p>}
                   </div>
 

@@ -74,7 +74,25 @@ exports.register = async (req, res) => {
       console.warn("Welcome notification skipped:", notifyErr.message);
     }
 
-    res.status(201).json({ message: "User registered successfully" });
+    // Issue a token so the client can log the user in immediately after signup
+    // instead of forcing a separate login.
+    const token = jwt.sign(
+      { id: newUser.rows[0].id, role: newUser.rows[0].role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || "30d" },
+    );
+
+    res.status(201).json({
+      message: "User registered successfully",
+      token,
+      user: {
+        id: newUser.rows[0].id,
+        role: newUser.rows[0].role,
+        firstName,
+        lastName,
+        email,
+      },
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });

@@ -49,6 +49,10 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (userData) => {
     const response = await api.post("/api/auth/register", userData);
+    // The server now returns a token on registration so we can auto-login.
+    if (response.data.token) {
+      await login(response.data.token);
+    }
     return response.data;
   };
 

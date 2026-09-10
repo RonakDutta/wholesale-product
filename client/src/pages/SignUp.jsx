@@ -195,7 +195,7 @@ const SignUp = () => {
     setLoading(true);
 
     try {
-      await register({
+      const result = await register({
         firstName,
         lastName,
         email,
@@ -205,8 +205,16 @@ const SignUp = () => {
         state: sells ? state : undefined,
       });
 
-      toast.success("Account created! Check your email for verification.");
-      navigate("/login");
+      toast.success("Welcome! Your account is ready.");
+
+      // register() already called login() under the hood, so the user is
+      // authenticated. Navigate straight to their workspace.
+      const userRole = result.user?.role || bizType;
+      if (userRole === "seller" || userRole === "both") {
+        navigate("/seller");
+      } else {
+        navigate("/");
+      }
     } catch (error) {
       const errorMessage =
         error.response?.data?.message ||

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, QrCode, IndianRupee, CheckCircle, AlertCircle, Loader2, Ban } from "lucide-react";
+import { ArrowLeft, QrCode, IndianRupee, CheckCircle, AlertCircle, Loader2, Ban, CreditCard, ShieldCheck } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react"; // Standardized named export to resolve Vite bundler error
 import { toast } from "sonner";
 import api from "../utils/axios";
@@ -162,6 +162,82 @@ const Payment = () => {
     }
   };
 
+  // ── Razorpay integration ──────────────────────────────────────────────
+  const [paymentMode, setPaymentMode] = useState("qr"); // "qr" | "razorpay"
+  const [razorpayLoading, setRazorpayLoading] = useState(false);
+
+  const handleRazorpayPayment = async () => {
+    setRazorpayLoading(true);
+    try {
+      // 1. Create Razorpay order on the server
+      const { data } = await api.post("/api/payment/create-order", { orderId });
+
+      if (!data.success) {
+        toast.error("Could not initiate payment. Try again.");
+        return;
+      }
+
+      // 2. Open Razorpay Checkout
+      const options = {
+        key: data.key || import.meta.env.VITE_RAZORPAY_KEY_ID,
+        amount: data.amount,
+        currency: data.currency,
+        name: paymentDetails.supplierName || "Wholesale Marketplace",
+        description: `Order #${orderId}`,
+        order_id: data.razorpayOrderId,
+        handler: async (response) => {
+          // 3. Verify payment on the server
+          try {
+            const verifyRes = await api.post("/api/payment/verify", {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              orderId,
+            });
+
+            if (verifyRes.data.success) {
+              resolvedRef.current = true;
+              toast.success(
+                verifyRes.data.fullyPaid
+                  ? "Payment successful! Your order is confirmed."
+                  : `₹${Number(verifyRes.data.amountPaid).toLocaleString("en-IN")} paid. ₹${Number(verifyRes.data.remainingAmount).toLocaleString("en-IN")} remaining.`
+              );
+              navigate("/order-success", { replace: true });
+            }
+          } catch (verifyErr) {
+            console.error("Payment verification error:", verifyErr);
+            toast.error("Payment verification failed. Contact support if amount was deducted.");
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setRazorpayLoading(false);
+            toast.info("Payment window closed");
+          },
+        },
+        prefill: {
+          name: paymentDetails.deliveryAddress?.name || "",
+          contact: paymentDetails.deliveryAddress?.phone || "",
+        },
+        theme: {
+          color: "#c56b4a", // clay
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on("payment.failed", (response) => {
+        toast.error(response.error?.description || "Payment failed. Please try again.");
+        setRazorpayLoading(false);
+      });
+      rzp.open();
+    } catch (err) {
+      console.error("Razorpay init error:", err);
+      toast.error(err.response?.data?.message || "Could not start payment. Please try again.");
+    } finally {
+      setRazorpayLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -318,54 +394,140 @@ const Payment = () => {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* QR Code Section */}
+          {/* Payment Methods Section */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <QrCode className="w-5 h-5 text-clay" />
-              <h2 className="text-lg font-bold text-slate-900">Scan QR Code to Pay</h2>
+            {/* Payment mode tabs */}
+            <div className="flex gap-2 mb-6 bg-slate-100 rounded-lg p-1">
+              <button
+                onClick={() => setPaymentMode("qr")}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-semibold transition-all cursor-pointer ${
+                  paymentMode === "qr"
+                    ? "bg-white text-clay shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                <QrCode className="w-4 h-4" />
+                UPI QR Code
+              </button>
+              <button
+                onClick={() => setPaymentMode("razorpay")}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-semibold transition-all cursor-pointer ${
+                  paymentMode === "razorpay"
+                    ? "bg-white text-clay shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                <CreditCard className="w-4 h-4" />
+                Pay Online
+              </button>
             </div>
 
-            <div className="flex flex-col items-center">
-              <div className="bg-white p-6 rounded-xl border-2 border-slate-200 mb-6">
-                {upiUrl && paymentDetails.supplierUpiId ? (
-                  <QRCodeSVG
-                    value={upiUrl}
-                    size={200}
-                    includeMargin={true}
-                    className="rounded-lg"
-                  />
-                ) : (
-                  <div className="w-48 h-48 bg-slate-100 rounded-lg flex flex-col items-center justify-center p-4 text-center gap-2 border border-dashed">
-                    <AlertCircle className="w-8 h-8 text-rose-500" />
-                    <p className="text-xs text-rose-600 font-medium">Supplier has not configured a UPI ID yet.</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="text-center space-y-2 mb-6">
-                <div className="flex items-center justify-center gap-2">
-                  <IndianRupee className="w-5 h-5 text-clay" />
-                  <span className="text-3xl font-bold text-clay">
-                    {paymentDetails.amount.toLocaleString("en-IN")}
-                  </span>
+            {paymentMode === "qr" ? (
+              /* ── UPI QR Code ──────────────────────────────────────────── */
+              <>
+                <div className="flex items-center gap-3 mb-6">
+                  <QrCode className="w-5 h-5 text-clay" />
+                  <h2 className="text-lg font-bold text-slate-900">Scan QR Code to Pay</h2>
                 </div>
-                <p className="text-sm text-slate-600">Pay To: {paymentDetails.supplierName}</p>
-                <p className="text-xs text-slate-500 font-mono">UPI ID: {paymentDetails.supplierUpiId || "Not Provided"}</p>
-              </div>
 
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 w-full">
-                <p className="text-sm text-amber-800">
-                  <strong>Instructions:</strong>
+                <div className="flex flex-col items-center">
+                  <div className="bg-white p-6 rounded-xl border-2 border-slate-200 mb-6">
+                    {upiUrl && paymentDetails.supplierUpiId ? (
+                      <QRCodeSVG
+                        value={upiUrl}
+                        size={200}
+                        includeMargin={true}
+                        className="rounded-lg"
+                      />
+                    ) : (
+                      <div className="w-48 h-48 bg-slate-100 rounded-lg flex flex-col items-center justify-center p-4 text-center gap-2 border border-dashed">
+                        <AlertCircle className="w-8 h-8 text-rose-500" />
+                        <p className="text-xs text-rose-600 font-medium">Supplier has not configured a UPI ID yet.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="text-center space-y-2 mb-6">
+                    <div className="flex items-center justify-center gap-2">
+                      <IndianRupee className="w-5 h-5 text-clay" />
+                      <span className="text-3xl font-bold text-clay">
+                        {paymentDetails.amount.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-600">Pay To: {paymentDetails.supplierName}</p>
+                    <p className="text-xs text-slate-500 font-mono">UPI ID: {paymentDetails.supplierUpiId || "Not Provided"}</p>
+                  </div>
+
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 w-full">
+                    <p className="text-sm text-amber-800">
+                      <strong>Instructions:</strong>
+                    </p>
+                    <ol className="text-xs text-amber-700 mt-2 space-y-1 list-decimal list-inside">
+                      <li>Open any UPI app (Google Pay, PhonePe, Paytm)</li>
+                      <li>Scan the QR code above</li>
+                      <li>Confirm the payment amount</li>
+                      <li>Complete the payment</li>
+                      <li>Click "I have completed payment" below</li>
+                    </ol>
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* ── Razorpay Online Payment ──────────────────────────────── */
+              <div className="flex flex-col items-center text-center">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-clay/10 to-clay/5 flex items-center justify-center mb-6">
+                  <ShieldCheck className="w-10 h-10 text-clay" />
+                </div>
+
+                <h2 className="text-lg font-bold text-slate-900 mb-2">Secure Online Payment</h2>
+                <p className="text-sm text-slate-500 mb-6 max-w-xs">
+                  Pay instantly using UPI, cards, net banking, or wallets through Razorpay's secure checkout.
                 </p>
-                <ol className="text-xs text-amber-700 mt-2 space-y-1 list-decimal list-inside">
-                  <li>Open any UPI app (Google Pay, PhonePe, Paytm)</li>
-                  <li>Scan the QR code above</li>
-                  <li>Confirm the payment amount</li>
-                  <li>Complete the payment</li>
-                  <li>Click "I have completed payment" below</li>
-                </ol>
+
+                <div className="text-center space-y-2 mb-8">
+                  <div className="flex items-center justify-center gap-2">
+                    <IndianRupee className="w-5 h-5 text-clay" />
+                    <span className="text-3xl font-bold text-clay">
+                      {paymentDetails.amount.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-600">Pay To: {paymentDetails.supplierName}</p>
+                </div>
+
+                <button
+                  onClick={handleRazorpayPayment}
+                  disabled={razorpayLoading || updating}
+                  className="w-full bg-clay text-white text-sm font-bold py-4 rounded-lg hover:bg-espresso transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {razorpayLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Opening payment window...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-5 h-5" />
+                      Pay ₹{paymentDetails.amount.toLocaleString("en-IN")} Now
+                    </>
+                  )}
+                </button>
+
+                <div className="mt-6 grid grid-cols-4 gap-3 w-full">
+                  {["UPI", "Cards", "Netbanking", "Wallets"].map((method) => (
+                    <div key={method} className="text-center">
+                      <div className="w-full py-2 bg-slate-50 rounded-lg border border-slate-100">
+                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{method}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-[11px] text-slate-400 mt-4 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  Secured by Razorpay. Your payment info is encrypted.
+                </p>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Order Details */}

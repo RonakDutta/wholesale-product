@@ -212,7 +212,46 @@ export default function App() {
 						<CartProvider>
 							<WishlistProvider>
 								<LocationProvider>
-									<Toaster richColors position="bottom-right" />
+									<Toaster
+									richColors
+									position="top-right"
+									closeButton
+									toastOptions={{
+										duration: 4000,
+										className: "font-dmsans",
+										style: {
+											borderRadius: "12px",
+											padding: "14px 18px",
+											fontSize: "13.5px",
+											fontWeight: 500,
+											boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
+											border: "1px solid rgba(0,0,0,0.06)",
+										},
+										success: {
+											duration: 3000,
+											style: {
+												background: "#f0fdf4",
+												color: "#166534",
+												border: "1px solid #bbf7d0",
+											},
+										},
+										error: {
+											duration: 6000,
+											style: {
+												background: "#fef2f2",
+												color: "#991b1b",
+												border: "1px solid #fecaca",
+											},
+										},
+										info: {
+											style: {
+												background: "#faf6ef",
+												color: "#3d2e24",
+												border: "1px solid #e8dfd4",
+											},
+										},
+									}}
+								/>
 									<RouterProvider router={router} />
 								</LocationProvider>
 							</WishlistProvider>

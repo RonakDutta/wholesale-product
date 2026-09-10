@@ -18,6 +18,7 @@ const overviewRoutes = require("./routes/overviewRoutes");
 const creditNoteRoutes = require("./routes/creditNoteRoutes");
 const staffRoutes = require("./routes/staffRoutes");
 const hsnRoutes = require("./routes/hsnRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
 
 const app = express();
 
@@ -51,5 +52,7 @@ app.use("/api/credit-notes", creditNoteRoutes);
 app.use("/api/staff", staffRoutes);
 // HSN suggestions for the boxes on the product and sale screens.
 app.use("/api/hsn", hsnRoutes);
+// Razorpay payment gateway.
+app.use("/api/payment", paymentRoutes);
 
 module.exports = app;

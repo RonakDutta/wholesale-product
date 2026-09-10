@@ -1,8 +1,8 @@
 import { lazy, Suspense } from "react";
 import {
-  createBrowserRouter,
-  RouterProvider,
-  Navigate,
+	createBrowserRouter,
+	RouterProvider,
+	Navigate,
 } from "react-router-dom";
 import { Toaster } from "sonner";
 import { CartProvider } from "./context/CartContext";
@@ -62,162 +62,164 @@ const RecordSale = lazy(() => import("./pages/dashboard/RecordSale"));
 const SaleDetail = lazy(() => import("./pages/dashboard/SaleDetail"));
 const Overview = lazy(() => import("./pages/dashboard/Overview"));
 const MoneyBreakdown = lazy(() => import("./pages/dashboard/MoneyBreakdown"));
-const SellerOrderDetail = lazy(() => import("./pages/dashboard/SellerOrderDetail"));
+const SellerOrderDetail = lazy(
+	() => import("./pages/dashboard/SellerOrderDetail"),
+);
 const Staff = lazy(() => import("./pages/dashboard/Staff"));
 
 const SellerFallback = () => (
-  <div className="flex min-h-dvh items-center justify-center bg-slate-100">
-    <div className="h-8 w-8 animate-spin rounded-full border-4 border-clay border-t-transparent" />
-  </div>
+	<div className="flex min-h-dvh items-center justify-center bg-slate-100">
+		<div className="h-8 w-8 animate-spin rounded-full border-4 border-clay border-t-transparent" />
+	</div>
 );
 
 // Wraps the seller shell in its role guard and Suspense boundary.
 const SellerArea = () => (
-  <RequireRole roles={["seller", "both"]}>
-    <Suspense fallback={<SellerFallback />}>
-      <SellerLayout />
-    </Suspense>
-  </RequireRole>
+	<RequireRole roles={["seller", "both"]}>
+		<Suspense fallback={<SellerFallback />}>
+			<SellerLayout />
+		</Suspense>
+	</RequireRole>
 );
 
 // Marketplace-only screens. Kept in the tree and still compiled, but not
 // routable while FEATURES.MARKETPLACE is off. Flipping the flag brings the
 // whole browsing side back with no other change.
 const MARKETPLACE_ROUTES = [
-  { path: "product/:id", element: <ProductDetails /> },
-  { path: "wholesaler/:id", element: <WholesalerProfile /> },
-  { path: "wishlist", element: <Wishlist /> },
-  { path: "search", element: <SearchResults /> },
-  { path: "checkout", element: <Checkout /> },
-  { path: "payment/:orderId", element: <Payment /> },
-  { path: "order-success", element: <OrderSuccess /> },
-  { path: "retail-dashboard", element: <RetailDashboard /> },
+	{ path: "product/:id", element: <ProductDetails /> },
+	{ path: "wholesaler/:id", element: <WholesalerProfile /> },
+	{ path: "wishlist", element: <Wishlist /> },
+	{ path: "search", element: <SearchResults /> },
+	{ path: "checkout", element: <Checkout /> },
+	{ path: "payment/:orderId", element: <Payment /> },
+	{ path: "order-success", element: <OrderSuccess /> },
+	{ path: "retail-dashboard", element: <RetailDashboard /> },
 ];
 
 const router = createBrowserRouter([
-  {
-    path: "*",
-    element: <NotFound />,
-  },
-  // Driver tracking link: standalone, unauthenticated, no marketplace shell.
-  { path: "/track/:token", element: <DriverTracking /> },
-  {
-    path: "/",
-    element: <MainLayout />,
-    children: [
-      { index: true, element: <Home /> },
-      ...(FEATURES.MARKETPLACE ? MARKETPLACE_ROUTES : []),
-      // A share link is reached by its URL, not by browsing, so it survives
-      // the marketplace being switched off.
-      { path: "listing/:inventoryId", element: <SharedListing /> },
-      { path: "messages", element: <Messages /> },
-      { path: "messages/:vendorId", element: <Messages /> },
-      { path: "orders", element: <MyOrders /> },
-      { path: "notifications", element: <NotificationCenter /> },
-      { path: "orders/:orderId", element: <OrderDetails /> },
-    ],
-  },
-  {
-    path: "/seller",
-    element: <SellerArea />,
-    children: [
-      // Always the 3.0 overview, marketplace or not. The old dashboard
-      // reported a buyer rating and a listing count, which is not what a
-      // wholesaler opens this for.
-      { index: true, element: <Overview /> },
-      { path: "customers", element: <Parties /> },
-      { path: "customers/:id", element: <PartyDetail /> },
-      { path: "customers/:id/statement", element: <PartyStatement /> },
-      { path: "sales", element: <Sales /> },
-      // Before "sales/:id" so the word is not read as a sale id.
-      { path: "sales/new", element: <RecordSale /> },
-      { path: "sales/:id", element: <SaleDetail /> },
-      { path: "sales/:id/edit", element: <RecordSale /> },
-      // The rate list is now one list with the shop listings. The old address
-      // keeps working so a bookmark or an old link does not land on "not
-      // found".
-      { path: "rates", element: <Navigate to="/seller/products" replace /> },
-      { path: "products", element: <MyProducts /> },
-      { path: "products/new", element: <AddProduct /> },
-      { path: "products/edit/:id", element: <EditProduct /> },
-      { path: "orders", element: <Orders /> },
-      // One order in full, beside the list rather than instead of it.
-      { path: "orders/:orderId", element: <SellerOrderDetail /> },
-      // The rows behind each figure on the overview.
-      { path: "money/:metric", element: <MoneyBreakdown /> },
-      { path: "invoices", element: <Invoices /> },
-      { path: "invoices/create", element: <CreateInvoice /> },
-      { path: "invoices/reports", element: <InvoiceReports /> },
-      { path: "invoices/settings", element: <InvoiceSettings /> },
-      { path: "invoices/:id", element: <InvoiceDetails /> },
-      { path: "promotions", element: <Promotions /> },
-      { path: "messages", element: <Messages /> },
-      { path: "messages/:vendorId", element: <Messages /> },
-      { path: "settings", element: <Settings /> },
-      // Owner only, and the server refuses an employee outright.
-      { path: "staff", element: <Staff /> },
-    ],
-  },
-  // Old dashboard links and bookmarks keep working.
-  { path: "/dashboard", element: <Navigate to="/seller" replace /> },
-  { path: "/dashboard/*", element: <Navigate to="/seller" replace /> },
-  {
-    element: <InfoLayout />,
-    children: [
-      {
-        path: "browse-products",
-        element: <FooterInfoPage page="browse-products" />,
-      },
-      {
-        path: "verified-sellers",
-        element: <FooterInfoPage page="verified-sellers" />,
-      },
-      { path: "help-center", element: <FooterInfoPage page="help-center" /> },
-      { path: "upi-guide", element: <FooterInfoPage page="upi-guide" /> },
-      { path: "contact-us", element: <FooterInfoPage page="contact-us" /> },
-      {
-        path: "terms-of-service",
-        element: <FooterInfoPage page="terms-of-service" />,
-      },
-      {
-        path: "privacy-policy",
-        element: <FooterInfoPage page="privacy-policy" />,
-      },
-      {
-        path: "seller-agreement",
-        element: <FooterInfoPage page="seller-agreement" />,
-      },
-    ],
-  },
-  {
-    element: <AuthLayout />,
-    children: [
-      { path: "login", element: <Login /> },
-      { path: "signup", element: <SignUp /> },
-      // An employee turning his owner's code into an account. Public, because
-      // he has no login yet; the code in the form is the credential.
-      { path: "join", element: <JoinShop /> },
-    ],
-  },
+	{
+		path: "*",
+		element: <NotFound />,
+	},
+	// Driver tracking link: standalone, unauthenticated, no marketplace shell.
+	{ path: "/track/:token", element: <DriverTracking /> },
+	{
+		path: "/",
+		element: <MainLayout />,
+		children: [
+			{ index: true, element: <Home /> },
+			...(FEATURES.MARKETPLACE ? MARKETPLACE_ROUTES : []),
+			// A share link is reached by its URL, not by browsing, so it survives
+			// the marketplace being switched off.
+			{ path: "listing/:inventoryId", element: <SharedListing /> },
+			{ path: "messages", element: <Messages /> },
+			{ path: "messages/:vendorId", element: <Messages /> },
+			{ path: "orders", element: <MyOrders /> },
+			{ path: "notifications", element: <NotificationCenter /> },
+			{ path: "orders/:orderId", element: <OrderDetails /> },
+		],
+	},
+	{
+		path: "/seller",
+		element: <SellerArea />,
+		children: [
+			// Always the 3.0 overview, marketplace or not. The old dashboard
+			// reported a buyer rating and a listing count, which is not what a
+			// wholesaler opens this for.
+			{ index: true, element: <Overview /> },
+			{ path: "customers", element: <Parties /> },
+			{ path: "customers/:id", element: <PartyDetail /> },
+			{ path: "customers/:id/statement", element: <PartyStatement /> },
+			{ path: "sales", element: <Sales /> },
+			// Before "sales/:id" so the word is not read as a sale id.
+			{ path: "sales/new", element: <RecordSale /> },
+			{ path: "sales/:id", element: <SaleDetail /> },
+			{ path: "sales/:id/edit", element: <RecordSale /> },
+			// The rate list is now one list with the shop listings. The old address
+			// keeps working so a bookmark or an old link does not land on "not
+			// found".
+			{ path: "rates", element: <Navigate to="/seller/products" replace /> },
+			{ path: "products", element: <MyProducts /> },
+			{ path: "products/new", element: <AddProduct /> },
+			{ path: "products/edit/:id", element: <EditProduct /> },
+			{ path: "orders", element: <Orders /> },
+			// One order in full, beside the list rather than instead of it.
+			{ path: "orders/:orderId", element: <SellerOrderDetail /> },
+			// The rows behind each figure on the overview.
+			{ path: "money/:metric", element: <MoneyBreakdown /> },
+			{ path: "invoices", element: <Invoices /> },
+			{ path: "invoices/create", element: <CreateInvoice /> },
+			{ path: "invoices/reports", element: <InvoiceReports /> },
+			{ path: "invoices/settings", element: <InvoiceSettings /> },
+			{ path: "invoices/:id", element: <InvoiceDetails /> },
+			// { path: "promotions", element: <Promotions /> },
+			{ path: "messages", element: <Messages /> },
+			{ path: "messages/:vendorId", element: <Messages /> },
+			{ path: "settings", element: <Settings /> },
+			// Owner only, and the server refuses an employee outright.
+			{ path: "staff", element: <Staff /> },
+		],
+	},
+	// Old dashboard links and bookmarks keep working.
+	{ path: "/dashboard", element: <Navigate to="/seller" replace /> },
+	{ path: "/dashboard/*", element: <Navigate to="/seller" replace /> },
+	{
+		element: <InfoLayout />,
+		children: [
+			{
+				path: "browse-products",
+				element: <FooterInfoPage page="browse-products" />,
+			},
+			{
+				path: "verified-sellers",
+				element: <FooterInfoPage page="verified-sellers" />,
+			},
+			{ path: "help-center", element: <FooterInfoPage page="help-center" /> },
+			{ path: "upi-guide", element: <FooterInfoPage page="upi-guide" /> },
+			{ path: "contact-us", element: <FooterInfoPage page="contact-us" /> },
+			{
+				path: "terms-of-service",
+				element: <FooterInfoPage page="terms-of-service" />,
+			},
+			{
+				path: "privacy-policy",
+				element: <FooterInfoPage page="privacy-policy" />,
+			},
+			{
+				path: "seller-agreement",
+				element: <FooterInfoPage page="seller-agreement" />,
+			},
+		],
+	},
+	{
+		element: <AuthLayout />,
+		children: [
+			{ path: "login", element: <Login /> },
+			{ path: "signup", element: <SignUp /> },
+			// An employee turning his owner's code into an account. Public, because
+			// he has no login yet; the code in the form is the credential.
+			{ path: "join", element: <JoinShop /> },
+		],
+	},
 ]);
 
 export default function App() {
-  return (
-    <AuthProvider>
-      <SocketProvider>
-        <NotificationProvider>
-          <UnreadProvider>
-            <CartProvider>
-              <WishlistProvider>
-                <LocationProvider>
-                  <Toaster richColors position="bottom-right" />
-                  <RouterProvider router={router} />
-                </LocationProvider>
-              </WishlistProvider>
-            </CartProvider>
-          </UnreadProvider>
-        </NotificationProvider>
-      </SocketProvider>
-    </AuthProvider>
-  );
+	return (
+		<AuthProvider>
+			<SocketProvider>
+				<NotificationProvider>
+					<UnreadProvider>
+						<CartProvider>
+							<WishlistProvider>
+								<LocationProvider>
+									<Toaster richColors position="bottom-right" />
+									<RouterProvider router={router} />
+								</LocationProvider>
+							</WishlistProvider>
+						</CartProvider>
+					</UnreadProvider>
+				</NotificationProvider>
+			</SocketProvider>
+		</AuthProvider>
+	);
 }

@@ -51,6 +51,18 @@ duplicates cannot appear whether or not the index exists.
 
 Backfills, safe to run more than once, in this order:
 
+One more, for the customer names already stored wrong. Dry run by default,
+and safe to run more than once:
+
+```bash
+node scripts/repair_invoice_names.js            # show what would change
+node scripts/repair_invoice_names.js --apply    # fill blanks, re-address
+```
+
+Part 3 of it only REPORTS orders holding two invoices. Do not merge those with
+a script: payments can be split across the two numbers, and which one stands is
+a judgement call.
+
 ```bash
 node scripts/backfill_order_parties.js    # every order gets a customer
 node scripts/backfill_order_payments.js   # shop payments into the khata   (done)
@@ -60,6 +72,36 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 ---
 
 ## Done
+
+### 10 Sept 2026, later
+
+**The name on the bill did not match the name on the order.** Reported from
+real use, reproduced, and it was two faults sitting on top of each other.
+
+The Orders tab reads `wholesaler_profiles.company_name` off the buyer's
+account. The invoice reads the party, and the party created at checkout was
+given the delivery address name and nothing else. So the same man was "Kishan
+Cloth House" on one tab and "Kishan Kumar" on the other. Checkout now passes
+his firm and his GST number into the customer book, filling blanks only, so
+nothing a wholesaler wrote himself is rewritten.
+
+The GST number is the half that costs money: no order placed through the shop
+has ever carried the customer's GSTIN onto the invoice snapshot, and a bill
+without it is one his customer cannot claim input credit against. It only
+looked right on screen because the list falls back to joining the account,
+which is the fallback the snapshot columns exist to avoid.
+
+**And there were genuinely two invoices.** Checkout raises one from the order
+in the background; pressing "raise bill" on the sale raised a second, because
+that path only looked for an invoice against the sale. One lot of goods, two
+numbers, two rows in the tab, under two different names. Both directions are
+closed now and both take the same advisory lock, which matters because the
+checkout one is not awaited and loses the race about half the time.
+
+`scripts/repair_invoice_names.js` handles rows already stored. Dry run by
+default; `--apply` does the two safe parts. Duplicates are REPORTED only,
+because payments may be split across the two numbers and deciding which one
+stands is a person's job.
 
 ### 10 Sept 2026
 
@@ -370,7 +412,7 @@ for many taxpayers. That is a commercial decision and it shapes the schema.
 
 ## Testing
 
-Nineteen suites in `server/scripts/*_check.js`, 456 checks. They drive the real
+Twenty suites in `server/scripts/*_check.js`, 478 checks. They drive the real
 controllers against a local Postgres, so they catch schema drift that reading
 the code does not.
 

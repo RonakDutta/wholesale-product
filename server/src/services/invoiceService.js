@@ -49,6 +49,42 @@ class InvoiceService {
         return raced;
       }
 
+      /**
+       * The same goods can also be billed from the other side.
+       *
+       * An accepted order writes a sale, and the wholesaler can press "raise
+       * bill" on that sale. That invoice carries a sale_id and no order_id, so
+       * the check above did not see it, and this method went on to raise a
+       * second one: one lot of goods, two invoice numbers, and two rows in the
+       * invoices tab under two different names.
+       *
+       * saleInvoiceService closes the other direction by adopting this
+       * invoice when it already exists. This is the same guard the other way
+       * round, for the ordering where the sale is billed first. Both take this
+       * advisory lock on the order, so one of them always waits for the other
+       * rather than both reading "nothing yet".
+       */
+      const bridged = await invoiceRepository.schemaExtras();
+      const billedAsSale = bridged.has_sale_id && bridged.has_sale_order_id
+        ? await client.query(
+            `SELECT i.* FROM invoices i
+               JOIN sales s ON s.id = i.sale_id
+              WHERE s.order_id = $1
+              LIMIT 1`,
+            [orderId],
+          )
+        : { rows: [] };
+      if (billedAsSale.rows.length > 0) {
+        // Point it at the order too, so a later reconcile finds it by either
+        // road and the payments land on one document.
+        const linked = await client.query(
+          "UPDATE invoices SET order_id = $2 WHERE id = $1 RETURNING *",
+          [billedAsSale.rows[0].id, orderId],
+        );
+        if (shouldManageTransaction) await client.query("COMMIT");
+        return linked.rows[0];
+      }
+
       // Fetch order metadata along with buyer and supplier profiles
       const orderQuery = `
         SELECT 

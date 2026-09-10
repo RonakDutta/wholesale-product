@@ -351,8 +351,19 @@ const createOrder = async (req, res) => {
     let partyId = null;
     const partyLinked = await hasPartyLink(client);
     if (partyLinked) {
+      // The firm and the GST number come off the buyer's own account, and both
+      // reach the bill. Without them the customer page showed the man's firm
+      // and his invoice showed his personal name, because the order screen
+      // reads wholesaler_profiles.company_name and the invoice reads the
+      // party, and nothing ever copied one to the other. The GST number is
+      // worse than cosmetic: a bill without it is a bill his customer cannot
+      // claim input credit against.
       const buyer = await client.query(
-        "SELECT first_name, last_name, phone FROM users WHERE id = $1",
+        `SELECT u.first_name, u.last_name, u.phone,
+                wp.company_name, wp.gstin
+           FROM users u
+           LEFT JOIN wholesaler_profiles wp ON wp.user_id = u.id
+          WHERE u.id = $1`,
         [buyerId],
       );
       const b = buyer.rows[0] || {};
@@ -362,6 +373,8 @@ const createOrder = async (req, res) => {
         // The name on the delivery address is who the goods are actually for,
         // so it beats the account name when the two differ.
         name: clean(deliveryAddress.name) || fullName(b.first_name, b.last_name),
+        businessName: clean(b.company_name),
+        gstin: clean(b.gstin),
         phone: clean(deliveryAddress.phone) || clean(b.phone),
         city: clean(deliveryAddress.city),
         address: clean(deliveryAddress.street || deliveryAddress.address),

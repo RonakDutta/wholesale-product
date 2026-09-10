@@ -5,6 +5,7 @@ const creditNoteService = require("../services/creditNoteService");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const gstService = require("../services/gstService");
 const { checkHsn } = require("../services/hsnService");
+const challanService = require("../services/challanService");
 const { businessId } = require("../middlewares/businessContext");
 
 /**
@@ -332,13 +333,22 @@ exports.listSales = async (req, res) => {
       where += ` AND s.status = $${params.length}`;
     }
 
+    // Goods out on a challan, counted per sale so the list can show it. Only
+    // once the migration has been run; before that the column is a plain zero
+    // rather than the query failing.
+    const hasChallans = await challanService.challanTablesExist();
+    const challanCount = hasChallans
+      ? `,
+         (SELECT COUNT(*) FROM delivery_challans dc WHERE dc.sale_id = s.id) AS challan_count`
+      : ",\n         0 AS challan_count";
+
     const result = await pool.query(
       `SELECT
          s.id, s.sale_number, s.sale_date, s.status, s.source, s.total,
          p.name AS party_name, p.business_name AS party_business_name,
          (SELECT COUNT(*) FROM sale_lines sl WHERE sl.sale_id = s.id) AS line_count,
          COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
-                    WHERE pp.sale_id = s.id), 0) AS received
+                    WHERE pp.sale_id = s.id), 0) AS received${challanCount}
        FROM sales s
        JOIN parties p ON p.id = s.party_id
        WHERE ${where}
@@ -400,11 +410,22 @@ exports.getSaleById = async (req, res) => {
       creditNoteService.findBySaleId(id, wholesalerId),
     ]);
 
+    // Whether this sale is settled is the one question the billing rule turns
+    // on, so it comes from the same function the server uses rather than
+    // being worked out again on the screen from a different set of rows. An
+    // order backed sale has money on the order as well as in party_payments,
+    // which a client side sum would miss.
+    const settlement = await challanService.settlementForSale(id, wholesalerId);
+
     res.status(200).json({
       sale: sale.rows[0],
       lines: lines.rows,
       payments: payments.rows,
       creditNote,
+      settlement,
+      // Whether a challan may be raised at all, so the screen does not have
+      // to know the rule.
+      challansOn: challanService.challanEnabled() && (await challanService.challanTablesExist()),
     });
   } catch (err) {
     console.error("Error fetching sale:", err);

@@ -1,4 +1,5 @@
 import { useNavigate, Link } from "react-router-dom";
+import { BRAND } from "../config/brand";
 import { ArrowLeft, Home, Search, PackageX } from "lucide-react";
 
 const NotFound = () => {
@@ -66,7 +67,7 @@ const NotFound = () => {
 
       {/* Minimal Footer */}
       <footer className="py-6 text-center text-xs text-slate-400 font-medium">
-        &copy; {new Date().getFullYear()} Marketplace. All rights reserved.
+        &copy; {new Date().getFullYear()} {BRAND.name}. All rights reserved.
       </footer>
     </div>
   );

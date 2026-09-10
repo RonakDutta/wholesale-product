@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const { checkGstin } = require("../utils/gstin");
 const { asState } = require("../services/placeOfSupply");
+const { BRAND } = require("../config/brand");
 const jwt = require("jsonwebtoken");
 const pool = require("../config/db");
 const {
@@ -59,13 +60,13 @@ exports.register = async (req, res) => {
       await createNotificationPreference(newUser.rows[0].id);
       await enqueueNotification({
         userId: newUser.rows[0].id,
-        title: "Welcome to Marketplace",
+        title: `Welcome to ${BRAND.name}`,
         message: "Your account was created successfully. Start buying or selling with confidence.",
         notificationType: NOTIFICATION_TYPES.auth,
         channels: [NOTIFICATION_CHANNELS.IN_APP, NOTIFICATION_CHANNELS.EMAIL],
         emailPayload: {
           to: email,
-          subject: "Welcome to Marketplace",
+          subject: `Welcome to ${BRAND.name}`,
           templateName: "registration_success",
           variables: { firstName },
         },

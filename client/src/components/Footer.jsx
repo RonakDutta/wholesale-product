@@ -1,4 +1,6 @@
 import { Link } from "react-router-dom";
+import Wordmark from "./Wordmark";
+import { BRAND } from "../config/brand";
 
 const footerSections = [
   {
@@ -33,7 +35,7 @@ const Footer = () => {
         <div className="mb-8 grid grid-cols-2 gap-8 md:grid-cols-4">
           <div className="col-span-2 md:col-span-1">
             <div className="mb-4 text-xl font-black tracking-tighter text-espresso">
-              market<span className="text-clay">place</span>
+              <Wordmark />
             </div>
             <p className="text-xs leading-relaxed text-espresso/70">
               The premier B2B unified marketplace for seamless wholesale
@@ -64,7 +66,7 @@ const Footer = () => {
 
         <div className="flex flex-col items-center justify-between gap-4 border-t border-sage/20 pt-6 sm:flex-row">
           <p className="text-xs text-espresso/60">
-            © 2026 marketplace. All rights reserved.
+            © 2026 {BRAND.name}. All rights reserved.
           </p>
         </div>
       </div>

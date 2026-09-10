@@ -20,6 +20,23 @@
  *
  *     node scripts/invoice_payment_check.js <database>
  */
+/**
+ * NOTE, added 10 Sept 2026.
+ *
+ * This suite tests the 50/50 instalment plan and how an invoice mirrors a
+ * part payment. Both need an invoice to EXIST while money is still
+ * outstanding, which the delivery challan rule specified on 10 Sept forbids:
+ * under that rule the bill waits until the sale is settled, so an invoice can
+ * never be in the "Partial" state at all.
+ *
+ * The two are genuinely in conflict, and this is the honest way to say so.
+ * The flag is turned off here, so this suite goes on testing the behaviour
+ * the flag exists to preserve. If the challan rule survives its legal review,
+ * the instalment plan and the whole partial-payment path on an invoice need
+ * revisiting rather than quietly leaving broken.
+ */
+process.env.CHALLAN_WHEN_UNPAID = "false";
+
 const Module = require("module");
 const { Pool } = require("pg");
 

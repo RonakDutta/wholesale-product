@@ -2,6 +2,8 @@ const pool = require("../config/db");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const invoiceNumberService = require("./invoiceNumberService");
 const gstService = require("./gstService");
+const challanService = require("./challanService");
+const { placeOfSupply } = require("./placeOfSupply");
 const pdfService = require("./pdfService");
 const emailService = require("./emailService");
 
@@ -89,7 +91,7 @@ class InvoiceService {
       const orderQuery = `
         SELECT 
           o.id, o.order_number, o.buyer_id, o.supplier_id, o.total_amount,
-          o.subtotal, o.status, o.payment_status, o.created_at, o.delivery_address,
+          o.subtotal, o.status, o.payment_status, o.amount_paid, o.created_at, o.delivery_address,
           bu.first_name AS buyer_first_name, bu.last_name AS buyer_last_name, bu.email AS buyer_email,
           bwp.company_name AS buyer_company, bwp.gstin AS buyer_gstin, bwp.city AS buyer_city,
           su.first_name AS supplier_first_name, su.last_name AS supplier_last_name, su.email AS supplier_email,
@@ -108,6 +110,31 @@ class InvoiceService {
         throw new Error("Order not found for automatic invoice creation");
       }
       const order = orderResult.rows[0];
+
+      /**
+       * A tax invoice only once the money is in, on this side too.
+       *
+       * Checkout calls this in the background the moment an order is placed,
+       * so without this an unpaid order would be invoiced within a second of
+       * being created and the rule asked for on 10 Sept would only hold on
+       * the sales book side.
+       *
+       * Not an error: an unpaid order having no bill yet is the intended
+       * state, and the caller ignores the return anyway. When the money
+       * lands, reconcileInvoiceForOrder calls back in here and the invoice is
+       * raised then.
+       *
+       * Behind the same flag. See challanService.js for why this rule is not
+       * what section 31(1) says.
+       */
+      if (challanService.challanEnabled() && await challanService.challanTablesExist(client)) {
+        const total = Number(order.total_amount || 0);
+        const paid = Number(order.amount_paid || 0);
+        if (total > 0 && paid < total - 0.01) {
+          if (shouldManageTransaction) await client.query("ROLLBACK");
+          return null;
+        }
+      }
 
       // Fetch order line items
       const itemsQuery = `
@@ -172,11 +199,14 @@ class InvoiceService {
       });
 
       // Sequential within this wholesaler's own run, not the platform's.
+      const pos = placeOfSupply(buyerLocation);
+
       const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(
         client,
         settings.prefix,
         null,
         order.supplier_id,
+        { suffix: settings.numberSuffix, padTo: settings.numberPadTo },
       );
 
       const issueDate = new Date();
@@ -201,6 +231,11 @@ class InvoiceService {
         igst: gstCalculation.igst,
         totalTax: gstCalculation.totalTax,
         grandTotal: gstCalculation.grandTotal,
+        placeOfSupply: pos.state,
+        placeOfSupplyCode: pos.code,
+        supplierState: gstCalculation.supplierState,
+        reverseCharge: false,
+        roundOff: gstCalculation.roundOff,
         paymentStatus: initialPaymentStatus,
         invoiceStatus: initialInvoiceStatus,
         issueDate,
@@ -502,11 +537,14 @@ class InvoiceService {
         buyerLocation: { gstin: buyerUser.gstin, city: buyerUser.city },
       });
 
+      const pos = placeOfSupply({ gstin: buyerUser.gstin, city: buyerUser.city });
+
       const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(
         client,
         settings.prefix,
         null,
         supplierId,
+        { suffix: settings.numberSuffix, padTo: settings.numberPadTo },
       );
 
       const invoiceData = {
@@ -523,6 +561,11 @@ class InvoiceService {
         igst: gstCalculation.igst,
         totalTax: gstCalculation.totalTax,
         grandTotal: gstCalculation.grandTotal,
+        placeOfSupply: pos.state,
+        placeOfSupplyCode: pos.code,
+        supplierState: gstCalculation.supplierState,
+        reverseCharge: false,
+        roundOff: gstCalculation.roundOff,
         paymentStatus: "Pending",
         invoiceStatus: "Generated",
         issueDate: new Date(),

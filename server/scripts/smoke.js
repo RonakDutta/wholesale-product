@@ -14,7 +14,7 @@
  *   node scripts/smoke.js withtax   every migration applied
  *
  * Expects a local Postgres on 127.0.0.1:5433 with that database already
- * carrying users, wholesaler_profiles, parties, sales and items. See CLAUDE.md
+ * carrying users, wholesaler_profiles, parties, sales and listings. See CLAUDE.md
  * for why it cannot use the app's own pool.
  *
  * Exits non zero on the first failure, so it can gate a commit.
@@ -32,9 +32,10 @@ stub.exports = testPool; stub.loaded = true;
 require.cache[dbPath] = stub;
 
 const repo = require("../src/repositories/invoiceRepository");
-const items = require("../src/controllers/itemController");
 const parties = require("../src/controllers/partyController");
 const sales = require("../src/controllers/saleController");
+const products = require("../src/controllers/productController");
+const dashboard = require("../src/controllers/dashboardController");
 const invoices = require("../src/controllers/invoiceController");
 const creditNotes = require("../src/controllers/creditNoteController");
 const pdf = require("../src/services/pdfService");
@@ -67,9 +68,13 @@ const check = (cond, label, v) => { if (!cond) fails++;
     VALUES ($1,'Ram Textiles','24AAAAA0000A1Z8','Surat','Gujarat')`, [wid]);
   const user = { id: wid, role: "seller" };
 
-  const it = await call(items.createItem, { user, body: { name: "Cotton shirting", unit: "mtr", rate: 142, hsnCode: "5208", gstPercent: 5 } });
-  check(it.statusCode === 201, "create product", { s: it.statusCode });
-  check((await call(items.listItems, { user, query: {} })).statusCode === 200, "list products", {});
+  // A shop listing, which is where a product's unit, HSN and tax rate live
+  // now. This used to create a rate list row, a second product table that has
+  // been merged into the listings and deleted.
+  const it = await call(products.addProduct, { user, body: { name: "Cotton shirting", category: "Fabric",
+    price: 142, moq: 1, stock: 100, shippingDays: 2, unit: "mtr", hsnCode: "5208", gstPercent: 5 } });
+  check(it.statusCode === 201, "create product", { s: it.statusCode, m: it.body?.message });
+  check((await call(dashboard.getInventory, { user, query: {} })).statusCode === 200, "list products", {});
 
   const p = await call(parties.createParty, { user, body: { name: "Kishan Cloth House", city: "Surat", gstin: "24BBBBB1111B1ZT", phone: "9820011223" } });
   check(p.statusCode === 201, "create customer", { s: p.statusCode });

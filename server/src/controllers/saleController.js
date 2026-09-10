@@ -70,10 +70,16 @@ const resolveRates = async (client, wholesalerId, lines) => {
   const settings = await invoiceRepository.getSettings(wholesalerId);
   const fallback = Number(settings.defaultTaxRate ?? 18);
 
-  // The rate list only carries a GST rate once the migration has been run.
-  // Until then every line falls back to the wholesaler's default.
+  // Read off his shop listings, which is where a product's tax rate now
+  // lives. It used to read the rate list, a second product table that has
+  // since been merged into the listings and whose screen is gone: a rate
+  // edited on the product page would have been ignored here, and a sale of
+  // the same goods would have been taxed at whatever the dead table said.
+  //
+  // The column arrives with wholesale3_listing_billing_fields.sql. Until that
+  // has been run every line falls back to the wholesaler's default rate.
   const has = await invoiceRepository.schemaExtras();
-  if (!has.has_item_gst) {
+  if (!has.has_listing_billing) {
     return lines.map((line) => ({
       ...line,
       gstPercent: line.gstPercent ?? fallback,
@@ -82,9 +88,11 @@ const resolveRates = async (client, wholesalerId, lines) => {
 
   const named = lines.map((line) => line.itemName.toLowerCase());
   const known = await client.query(
-    `SELECT lower(name) AS name, gst_percent FROM items
-      WHERE wholesaler_id = $1 AND gst_percent IS NOT NULL
-        AND lower(name) = ANY($2::text[])`,
+    `SELECT lower(p.name) AS name, si.gst_percent
+       FROM supplier_inventory si
+       JOIN products p ON p.id = si.product_id
+      WHERE si.supplier_id = $1 AND si.gst_percent IS NOT NULL
+        AND lower(p.name) = ANY($2::text[])`,
     [wholesalerId, named],
   );
   const byName = new Map(known.rows.map((row) => [row.name, Number(row.gst_percent)]));

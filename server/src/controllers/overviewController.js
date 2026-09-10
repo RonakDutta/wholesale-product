@@ -70,8 +70,12 @@ exports.getOverview = async (req, res) => {
           `SELECT
              (SELECT COUNT(*) FROM parties
                WHERE wholesaler_id = $1 AND status = 'active') AS parties,
-             (SELECT COUNT(*) FROM items
-               WHERE wholesaler_id = $1 AND status = 'active') AS items,
+             -- His products, counted off his shop listings. This used to count
+             -- the rate list, which is retired: the two lists were merged into
+             -- one and the rate list screen is gone, so counting it would have
+             -- frozen at whatever was in it on the day of the merge.
+             (SELECT COUNT(*) FROM supplier_inventory
+               WHERE supplier_id = $1 AND status = 'Active') AS items,
              (SELECT COUNT(*) FROM sales
                WHERE wholesaler_id = $1
                  AND status <> 'cancelled'

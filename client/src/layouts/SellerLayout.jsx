@@ -45,11 +45,12 @@ const NAV = [
   },
   { path: "/seller/invoices", label: "Invoices", icon: FileText, needs: "invoices" },
   { path: "/seller/messages", label: "Messages", icon: MessageSquare, badge: "unread" },
+  // Off behind FEATURES.PROMOTIONS, not deleted. See the flag for why.
   {
     path: "/seller/promotions",
     label: "Promotions",
     icon: Sparkles,
-    flag: "MARKETPLACE",
+    flag: "PROMOTIONS",
   },
   {
     path: "/seller/analytics",
@@ -78,7 +79,6 @@ const PREFETCH = {
   "/seller/products": () => import("../pages/dashboard/MyProducts"),
   "/seller/sales": () => import("../pages/dashboard/Sales"),
   "/seller/orders": () => import("../pages/dashboard/Orders"),
-  "/seller/promotions": () => import("../pages/dashboard/Promotions"),
   "/seller/staff": () => import("../pages/dashboard/Staff"),
   "/seller/settings": () => import("../pages/dashboard/Settings"),
 };

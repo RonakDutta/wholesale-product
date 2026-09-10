@@ -150,7 +150,12 @@ const router = createBrowserRouter([
       { path: "invoices/reports", element: <InvoiceReports /> },
       { path: "invoices/settings", element: <InvoiceSettings /> },
       { path: "invoices/:id", element: <InvoiceDetails /> },
-      { path: "promotions", element: <Promotions /> },
+      // Hidden, not deleted. The nav entry follows the same flag, so this is
+      // only reachable by an old bookmark; sending those to the dashboard is
+      // kinder than a "not found" for a page that still exists.
+      ...(FEATURES.PROMOTIONS
+        ? [{ path: "promotions", element: <Promotions /> }]
+        : [{ path: "promotions", element: <Navigate to="/seller" replace /> }]),
       { path: "messages", element: <Messages /> },
       { path: "messages/:vendorId", element: <Messages /> },
       { path: "settings", element: <Settings /> },

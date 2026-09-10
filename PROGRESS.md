@@ -26,7 +26,16 @@ cd server && npm run migrate
 | `wholesale3_one_invoice_per_order.sql` | Unique index so one order cannot hold two invoices | run 7 Sept |
 | `wholesale3_staff_accounts.sql` | Employees who work on a wholesaler's book | run 7 Sept |
 
-Nothing outstanding. To confirm all three actually landed, since two of them use
+| `wholesale3_delivery_challans.sql` | Goods-out note when a sale is not fully paid | **NOT RUN** |
+| `wholesale3_invoice_number_format.sql` | Invoice number prefix, suffix and padding | **NOT RUN** |
+| `wholesale3_invoice_rule46_fields.sql` | Place of supply, reverse charge, round off | **NOT RUN** |
+
+Three outstanding, all added 10 Sept. Run them in any order; none depends on
+another. Until they are run the code stands down cleanly: the challan feature
+reports "needs its migration", the invoice number keeps its old format, and
+the new Rule 46 fields are simply absent from the document.
+
+To confirm the earlier three landed, since two of them use
 IF NOT EXISTS and one can be refused by existing data without stopping the run:
 
 ```sql
@@ -72,6 +81,58 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 ---
 
 ## Done
+
+### 10 Sept 2026, third batch
+
+**Renamed to KhazanaBMS.** Five screens each held their own copy of the
+wordmark; they now read from one constant through a `Wordmark` component. The
+browser tab said "wholesale-product". Server side too: email header, welcome
+notification, and the fallback on an invoice when a wholesaler has not filled
+in his own company name. The support address and the mail sender still point
+at marketplace domains, because inventing an address that bounces is worse
+than the inconsistency.
+
+**The sign in buttons stopped jumping.** Pressing "Create Account" moved them
+126px up the screen, out from under the cursor that had just clicked them,
+because the column was vertically centred and Create Account is 252px taller.
+Reserving a height would not have fixed it: the column is 436, 688, 790 and
+798px in four reachable states. The top edge is anchored instead. Measured
+zero movement at 900, 800 and 720.
+
+**Promotions is hidden** behind `FEATURES.PROMOTIONS`, not deleted. The route
+redirects rather than 404s. It was never usable: creating a flash sale is
+admin only and there is no admin console.
+
+**Delivery challans, to the specification given.** While a sale is unpaid or
+part paid the wholesaler gets a challan and the tax invoice waits. No tax on
+the challan. This is NOT what section 31(1) says, the wholesaler knows, and it
+is going to a legal advisor; it is behind `CHALLAN_WHEN_UNPAID` so it can be
+switched off in one word. Rule 55's three copies, provisional quantity and the
+six month approval window were deferred by instruction.
+
+One conflict came out of it and is recorded rather than hidden: this rule and
+the 50/50 instalment plan cannot both be true, because an invoice that only
+exists once settled can never be in the Partial state. `invoice_payment_check`
+now sets the flag off and says why.
+
+**The invoice number ring.** Both defects fixed. The counter keys on the
+FINANCIAL year, so it no longer rolls over on 1 January and reuses a serial
+inside one return period. The whole composed number is checked against Rule
+46(b)'s 16 characters and allowed characters, where before only the prefix was
+clipped. The shape follows the Busy dialog: prefix, number, suffix, optional
+padding, so `OM/2/26-27` is reproducible, and `compose()` is pure so a screen
+can show a live sample.
+
+**Six Rule 46 particulars now print.** Copy title, supplier PAN (read out of
+the GSTIN, not a second field), total quantity, amount in words, and the
+HSN-wise tax summary needed no new data. Place of supply with its state code,
+reverse charge and round off got columns. Old invoices are untouched, because
+a tax document must not change after it has been handed over.
+
+Verified: 21 suites, 515 checks, plus both smoke shapes. Both PDFs rendered
+and looked at, which caught the challan disagreeing with itself: its line
+column summed to the pre-tax figure while its total showed the tax inclusive
+one.
 
 ### 10 Sept 2026, later
 
@@ -332,6 +393,11 @@ Requested in one go and deliberately not started. Written down here so the
 shape is agreed before any of it is typed. Photos of the app this is modelled
 on are coming; several of the decisions below wait on them.
 
+**Read `docs/MASTER_AND_TRANSACTIONS.md` and `docs/BUSY_MODEL.md` first.**
+The first is the plan: what the master dashboard holds, what a purchase record
+needs, what to refine in sales and orders, and everything parked. The second is
+the reading it came from.
+
 **Read `docs/BUSY_MODEL.md` first.** Fourteen screenshots of a live Busy 21
 were shared on 10 Sept and are written up there field by field: the Masters
 menu, the whole Transactions menu, a real tax invoice with its IRN and e-way
@@ -540,7 +606,7 @@ for many taxpayers. That is a commercial decision and it shapes the schema.
 
 ## Testing
 
-Twenty suites in `server/scripts/*_check.js`, 478 checks. They drive the real
+Twenty one suites in `server/scripts/*_check.js`, 515 checks. They drive the real
 controllers against a local Postgres, so they catch schema drift that reading
 the code does not.
 

@@ -138,7 +138,7 @@ const Login = () => {
         className="mb-7 form-stagger"
         style={{ opacity: 0, transform: "translateY(20px)" }}
       >
-        <h2 className="font-dmsans text-2xl font-black text-espresso tracking-tight">
+        <h2 className="font-dmsans text-xl font-black text-espresso tracking-tight">
           Welcome back
         </h2>
         <p className="text-slate-500 text-sm mt-1 font-dmsans">
@@ -147,7 +147,7 @@ const Login = () => {
       </div>
 
       {/* <div
-        className="flex gap-3 mb-6 form-stagger"
+        className="flex gap-3 mb-5 form-stagger"
         style={{ opacity: 0, transform: "translateY(20px)" }}
       >
         <button
@@ -169,7 +169,7 @@ const Login = () => {
       </div>
 
       <div
-        className="flex items-center gap-3 mb-6 form-stagger"
+        className="flex items-center gap-3 mb-5 form-stagger"
         style={{ opacity: 0, transform: "translateY(20px)" }}
       >
         <div className="divider-line flex-1 h-px bg-slate-200" />
@@ -294,7 +294,7 @@ const Login = () => {
           <button
             type="submit"
             disabled={loading}
-            className="font-inter w-full group flex items-center justify-center gap-2 bg-espresso text-cream py-3.5 rounded-xl font-semibold text-sm hover:bg-clay transition-all duration-300 cursor-pointer hover:shadow-lg hover:shadow-clay/20 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
+            className="font-inter w-full group flex items-center justify-center gap-2 bg-espresso text-cream py-3 rounded-xl font-semibold text-sm hover:bg-clay transition-all duration-300 cursor-pointer hover:shadow-lg hover:shadow-clay/20 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
           >
             <span>{loading ? "Please wait..." : "Sign In"}</span>
             {loading ? (

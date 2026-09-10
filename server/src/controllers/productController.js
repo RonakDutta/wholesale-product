@@ -2,6 +2,8 @@ const pool = require("../config/db");
 const { FEATURES } = require("../config/features");
 const { clean, optionalNumber } = require("../utils/money");
 const invoiceRepository = require("../repositories/invoiceRepository");
+const { checkHsn } = require("../services/hsnService");
+const { businessId } = require("../middlewares/businessContext");
 const {
   CITY_SQL,
   CITY_KEY_SQL,
@@ -75,7 +77,7 @@ exports.addProduct = async (req, res) => {
     gstPercent,
     notes,
   } = req.body;
-  const supplierId = req.user.id;
+  const supplierId = businessId(req);
 
   try {
     let finalProductId = productId;
@@ -87,6 +89,12 @@ exports.addProduct = async (req, res) => {
       );
       finalProductId = newProduct.rows[0].id;
     }
+
+    // Digits only, and 4, 6 or 8 of them. Refused rather than stored, because
+    // a code of the wrong length ends up printed on a tax invoice describing
+    // the goods as something they are not.
+    const hsn = checkHsn(hsnCode);
+    if (!hsn.ok) return res.status(400).json({ message: hsn.reason });
 
     // The billing columns arrive with wholesale3_listing_billing_fields.sql.
     // Until it has been run a product can still be listed, it just carries no
@@ -100,7 +108,7 @@ exports.addProduct = async (req, res) => {
       ? [
           clean(unit) || "pcs",
           optionalNumber(packSize),
-          clean(hsnCode),
+          hsn.hsn,
           optionalNumber(gstPercent),
           clean(notes),
         ]
@@ -596,7 +604,7 @@ exports.getWholesalerById = async (req, res) => {
 // @route   PUT /api/products/inventory/:id
 exports.updateInventoryItem = async (req, res) => {
   const { id } = req.params;
-  const supplierId = req.user.id;
+  const supplierId = businessId(req);
   const {
     price,
     bulkPrice,
@@ -623,6 +631,10 @@ exports.updateInventoryItem = async (req, res) => {
         });
       }
     }
+
+    // Same check as when a product is added, for the same reason.
+    const hsn = checkHsn(hsnCode);
+    if (!hsn.ok) return res.status(400).json({ message: hsn.reason });
 
     /**
      * Only the columns the caller actually sent are written.
@@ -661,7 +673,7 @@ exports.updateInventoryItem = async (req, res) => {
       // is a caller not mentioning it rather than a wholesaler clearing it.
       if (sent("unit") && clean(unit)) put("unit", clean(unit));
       if (sent("packSize")) put("pack_size", optionalNumber(packSize));
-      if (sent("hsnCode")) put("hsn_code", clean(hsnCode));
+      if (sent("hsnCode")) put("hsn_code", hsn.hsn);
       if (sent("gstPercent")) put("gst_percent", optionalNumber(gstPercent));
       if (sent("notes")) put("notes", clean(notes));
     }
@@ -703,7 +715,7 @@ exports.updateInventoryItem = async (req, res) => {
 // @route   GET /api/products/inventory/:id
 exports.getInventoryItemById = async (req, res) => {
   const { id } = req.params;
-  const supplierId = req.user.id;
+  const supplierId = businessId(req);
 
   try {
     const result = await pool.query(
@@ -729,7 +741,7 @@ exports.getInventoryItemById = async (req, res) => {
 // @route   DELETE /api/products/inventory/:id
 exports.deleteInventoryItem = async (req, res) => {
   const { id } = req.params;
-  const supplierId = req.user.id;
+  const supplierId = businessId(req);
 
   try {
     const listing = await pool.query(

@@ -74,6 +74,41 @@ class SaleInvoiceService {
   }
 
   /**
+   * Ties an invoice to its sale and freezes who it is addressed to.
+   *
+   * The recipient is stored on the invoice rather than joined from the party,
+   * because a tax document must not change when a contact is edited later.
+   * The firm comes first: an invoice is addressed to the registered business,
+   * and the person's name is the fallback for a customer who has no firm.
+   *
+   * Written so it can also adopt an invoice the order raised, which starts
+   * with none of this filled in.
+   */
+  async stampRecipient(client, invoiceId, sale) {
+    const stamped = await client.query(
+      `UPDATE invoices SET
+         sale_id = $2, party_id = $3,
+         recipient_name = $4, recipient_gstin = $5, recipient_city = $6,
+         recipient_address = $7, recipient_phone = $8,
+         pdf_url = $9
+       WHERE id = $1
+       RETURNING *`,
+      [
+        invoiceId,
+        sale.id,
+        sale.party_id,
+        sale.party_business_name || sale.party_name,
+        sale.party_gstin,
+        sale.party_city,
+        sale.party_address,
+        sale.party_phone,
+        `/api/invoices/${invoiceId}/pdf`,
+      ],
+    );
+    return stamped.rows[0];
+  }
+
+  /**
    * Creates the invoice, or returns the one that already exists. Never
    * creates a second bill for the same sale: the unique index on sale_id
    * enforces that too, but returning early keeps the caller simple.
@@ -103,6 +138,46 @@ class SaleInvoiceService {
       }
 
       const { sale, lines, received } = loaded;
+
+      /**
+       * A sale from a shop order is billed by the order's invoice.
+       *
+       * Checkout raises one automatically, in the background, the moment the
+       * order is placed. This method only ever looked for an invoice against
+       * the SALE, so pressing "raise bill" on the sale made a second one: two
+       * invoice numbers, two entries in the invoices tab, for one lot of
+       * goods. They even showed different names, because the order's invoice
+       * falls back to the buyer's account and the sale's is addressed to the
+       * party.
+       *
+       * The order's invoice is the older document and the one the customer was
+       * emailed, so that is the one that stands. It is adopted rather than
+       * duplicated: the sale, the party and the recipient snapshot are stamped
+       * onto it, so it is now reachable from both screens and reads the same
+       * on both.
+       */
+      if (sale.order_id) {
+        // The same lock invoiceService takes, on the same key, so the two
+        // sides cannot both read "nothing yet" and both create. Checkout
+        // raises its invoice in the background, so this really does race.
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
+          [sale.order_id],
+        );
+        const fromOrder = await client.query(
+          "SELECT * FROM invoices WHERE order_id = $1 FOR UPDATE",
+          [sale.order_id],
+        );
+        if (fromOrder.rows.length > 0) {
+          const adopted = await this.stampRecipient(
+            client,
+            fromOrder.rows[0].id,
+            sale,
+          );
+          await client.query("COMMIT");
+          return { invoice: adopted, created: false };
+        }
+      }
 
       if (sale.status === "cancelled") {
         await client.query("ROLLBACK");
@@ -169,9 +244,21 @@ class SaleInvoiceService {
         })),
         discount: Number(sale.discount || 0),
         shippingCharge: 0,
-        supplierLocation:
-          seller.warehouse_state || seller.warehouse_city || seller.city || "Delhi",
-        buyerLocation: sale.party_city || seller.city || "Delhi",
+        // The customer's GST number settles his state outright, which matters
+        // most here: a party is usually entered with a name, a phone and a
+        // city, and half the cities in India are not in any map we hold.
+        //
+        // A customer with neither a GST number nor a city known to that map
+        // comes back unknown, and unknown is read as the same state, so his
+        // bill is CGST plus SGST. That is what a local sale is, and it is what
+        // the previous code did too, by pretending he lived where the seller
+        // lives.
+        supplierLocation: {
+          state: seller.warehouse_state,
+          gstin: seller.gstin,
+          city: seller.warehouse_city || seller.city,
+        },
+        buyerLocation: { gstin: sale.party_gstin, city: sale.party_city },
         isTaxInclusive: fromShop || legacyInclusive ? true : TAX_INCLUSIVE,
       });
 
@@ -222,26 +309,7 @@ class SaleInvoiceService {
 
       // The link back to the sale, and the recipient frozen as of today.
       // See the migration for why these are stored rather than joined.
-      const stamped = await client.query(
-        `UPDATE invoices SET
-           sale_id = $2, party_id = $3,
-           recipient_name = $4, recipient_gstin = $5, recipient_city = $6,
-           recipient_address = $7, recipient_phone = $8,
-           pdf_url = $9
-         WHERE id = $1
-         RETURNING *`,
-        [
-          invoice.id,
-          sale.id,
-          sale.party_id,
-          sale.party_business_name || sale.party_name,
-          sale.party_gstin,
-          sale.party_city,
-          sale.party_address,
-          sale.party_phone,
-          `/api/invoices/${invoice.id}/pdf`,
-        ],
-      );
+      const stamped = { rows: [await this.stampRecipient(client, invoice.id, sale)] };
 
       await invoiceRepository.addLog(
         {

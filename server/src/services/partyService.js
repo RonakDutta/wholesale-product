@@ -60,13 +60,54 @@ const findOrCreateParty = async (client, details) => {
 
   const key = phoneKey(phone);
 
+  /**
+   * Fill in what this party does not know yet, and nothing else.
+   *
+   * A customer who orders through the shop carries details his wholesaler may
+   * never have written down: the name of his firm, and his GST number. Both
+   * belong on the bill. The firm is who a tax invoice is addressed to, and
+   * without the GST number the customer cannot claim his input credit, which
+   * costs him money.
+   *
+   * Strictly blanks only. What the wholesaler typed into his own book is his,
+   * and an order must never talk over it. That is the same rule the user_id
+   * link below already follows.
+   */
+  const fillBlanks = async (party) => {
+    const wanted = {
+      business_name: clean(businessName),
+      gstin: clean(gstin),
+      phone: clean(phone),
+      city: clean(city),
+      address: clean(address),
+    };
+
+    const sets = [];
+    const params = [party.id];
+    for (const [column, value] of Object.entries(wanted)) {
+      const held = party[column];
+      if (!value) continue;
+      if (held !== null && held !== undefined && String(held).trim() !== "") continue;
+      params.push(value);
+      sets.push(`${column} = $${params.length}`);
+    }
+    if (sets.length === 0) return party;
+
+    const filled = await client.query(
+      `UPDATE parties SET ${sets.join(", ")}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1 RETURNING *`,
+      params,
+    );
+    return filled.rows[0] || party;
+  };
+
   // 1. Already linked to this account.
   if (userId) {
     const byUser = await client.query(
       "SELECT * FROM parties WHERE wholesaler_id = $1 AND user_id = $2 LIMIT 1",
       [wholesalerId, userId],
     );
-    if (byUser.rows.length > 0) return byUser.rows[0];
+    if (byUser.rows.length > 0) return fillBlanks(byUser.rows[0]);
   }
 
   // 2. Same phone number, however it was typed. Scoped to one wholesaler, so
@@ -92,9 +133,9 @@ const findOrCreateParty = async (client, details) => {
            RETURNING *`,
           [userId, party.id],
         );
-        if (linked.rows.length > 0) return linked.rows[0];
+        if (linked.rows.length > 0) return fillBlanks(linked.rows[0]);
       }
-      return party;
+      return fillBlanks(party);
     }
   }
 

@@ -12,8 +12,10 @@ import {
   Building2,
   Phone,
   ChevronDown,
+  MapPin,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { INDIAN_STATES } from "../utils/gstin";
 
 const GoogleIcon = () => (
   <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -72,6 +74,11 @@ const SignUp = () => {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [bizType, setBizType] = useState("");
+  // Asked once, here, because every bill this account ever raises depends on
+  // it: same state as the customer is CGST plus SGST, a different state is
+  // IGST. It used to be asked nowhere at all, and a new wholesaler's profile
+  // simply said Delhi.
+  const [state, setState] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -80,6 +87,9 @@ const SignUp = () => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [shakeFields, setShakeFields] = useState({});
+
+  // Who raises bills, and so who has to be asked where he is.
+  const sells = bizType === "seller" || bizType === "both";
 
   const showError = useCallback((field, msg) => {
     setErrors((prev) => ({ ...prev, [field]: msg }));
@@ -147,6 +157,12 @@ const SignUp = () => {
       showError("bizType", "Please select a business type");
       valid = false;
     }
+    // Only for someone who will raise bills. A retailer buying for his shop
+    // does not need to be asked, and asking him would be a field for nothing.
+    if (sells && !state) {
+      showError("state", "Please choose your state");
+      valid = false;
+    }
     if (!email) {
       showError("email", "Work email is required");
       valid = false;
@@ -186,6 +202,7 @@ const SignUp = () => {
         phone: rawPhone,
         password,
         role: bizType,
+        state: sells ? state : undefined,
       });
 
       toast.success("Account created! Check your email for verification.");
@@ -209,7 +226,7 @@ const SignUp = () => {
         className="mb-7 form-stagger"
         style={{ opacity: 0, transform: "translateY(20px)" }}
       >
-        <h2 className="font-dmsans text-2xl font-black text-espresso tracking-tight">
+        <h2 className="font-dmsans text-xl font-black text-espresso tracking-tight">
           Create your account
         </h2>
         <p className="text-slate-500 text-sm mt-1 font-dmsans">
@@ -218,7 +235,7 @@ const SignUp = () => {
       </div>
 
       {/* <div
-        className="flex gap-3 mb-6 form-stagger"
+        className="flex gap-3 mb-5 form-stagger"
         style={{ opacity: 0, transform: "translateY(20px)" }}
       >
         <button
@@ -240,7 +257,7 @@ const SignUp = () => {
       </div>
 
       <div
-        className="flex items-center gap-3 mb-6 form-stagger"
+        className="flex items-center gap-3 mb-5 form-stagger"
         style={{ opacity: 0, transform: "translateY(20px)" }}
       >
         <div className="divider-line flex-1 h-px bg-slate-200" />
@@ -359,6 +376,52 @@ const SignUp = () => {
             {errors.bizType}
           </p>
         </div>
+
+        {/* Shown only once he says he sells. A list rather than a text box on
+            purpose: this is the field that decides CGST and SGST against IGST,
+            and "Gujrat" typed by hand is a state nothing recognises. */}
+        {sells && (
+          <div
+            className={`input-wrapper relative mb-5 ${
+              shakeFields.state ? "error-shake" : ""
+            }`}
+          >
+            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
+              Which state do you sell from?
+            </label>
+            <div className="relative">
+              <MapPin className="input-icon absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 transition-colors duration-300" />
+              <select
+                value={state}
+                onChange={(e) => {
+                  setState(e.target.value);
+                  clearError("state");
+                }}
+                className="w-full bg-transparent border-b-2 border-slate-200 focus:border-clay outline-none pl-7 pb-2.5 pt-1 text-sm text-espresso font-medium transition-colors duration-300 appearance-none cursor-pointer"
+                style={errStyle("state")}
+              >
+                <option value="" className="text-slate-400">
+                  Choose your state
+                </option>
+                {INDIAN_STATES.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <div className="input-line" />
+            </div>
+            <p
+              className={`text-xs mt-1.5 font-medium ${
+                errors.state ? "text-red-500" : "text-slate-400"
+              }`}
+            >
+              {errors.state ||
+                "Your bills charge CGST and SGST inside your state, IGST outside it."}
+            </p>
+          </div>
+        )}
 
         <div
           className={`input-wrapper relative mb-5 form-stagger ${
@@ -548,7 +611,7 @@ const SignUp = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full group flex items-center justify-center gap-2 bg-clay text-cream py-3.5 rounded-xl font-semibold text-sm hover:bg-espresso transition-all duration-300 cursor-pointer hover:shadow-lg hover:shadow-espresso/20 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
+            className="w-full group flex items-center justify-center gap-2 bg-clay text-cream py-3 rounded-xl font-semibold text-sm hover:bg-espresso transition-all duration-300 cursor-pointer hover:shadow-lg hover:shadow-espresso/20 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
           >
             <span>{loading ? "Please wait..." : "Create Account"}</span>
             {loading ? (

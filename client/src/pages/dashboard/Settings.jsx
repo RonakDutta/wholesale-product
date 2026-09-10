@@ -15,7 +15,7 @@ import {
 import { toast } from "sonner";
 import api from "../../utils/axios";
 import { FEATURES } from "../../config/features";
-import { gstinFeedback } from "../../utils/gstin";
+import { gstinFeedback, INDIAN_STATES } from "../../utils/gstin";
 
 /**
  * The wholesaler's own details.
@@ -288,7 +288,8 @@ const Settings = () => {
             <h3 className="font-bold text-espresso">Where you send goods from</h3>
             <p className="mt-0.5 text-xs text-slate-500">
               The state here decides whether a bill charges CGST and SGST, or
-              IGST. Leave it blank and your city above is used instead.
+              IGST. Leave it blank and your GST number is read instead, since
+              its first two digits are the state.
             </p>
           </div>
         </div>
@@ -337,15 +338,24 @@ const Settings = () => {
               >
                 State
               </label>
-              <input
+              {/* A list, not a box. This one field decides whether every bill
+                  charges CGST and SGST or IGST, and a typed "Gujrat" matches
+                  no customer's state, so every local sale would go out as
+                  inter-state. */}
+              <select
                 id="settings-wstate"
-                type="text"
                 name="warehouseState"
                 value={formData.warehouseState}
                 onChange={handleChange}
-                placeholder="Gujarat"
-                className={field}
-              />
+                className={`${field} cursor-pointer`}
+              >
+                <option value="">Not set</option>
+                {INDIAN_STATES.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label

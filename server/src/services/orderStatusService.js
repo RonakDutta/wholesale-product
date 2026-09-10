@@ -174,7 +174,39 @@ const updateOrderStatus = async (orderId, newStatus, userId, userRole, remarks =
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [orderId, newStatus, currentStatus, userId, userRole, remarks]
     );
-    
+
+    /**
+     * The sales book follows the order.
+     *
+     * An accepted order writes itself a sale, and that sale used to carry its
+     * own "Mark delivered" button, so the same event had two switches and
+     * nothing kept them in step. A wholesaler who marked the order delivered
+     * left the sale reading "confirmed" for ever; one who marked the sale
+     * delivered left the order sitting at "shipped" with no delivery date, so
+     * the return window had nothing to count from.
+     *
+     * Now the order is the only switch and the sale mirrors it. Cancelling
+     * already worked this way, in cancelOrder below.
+     */
+    if (newStatus === 'delivered') {
+      const bridged = await client.query(
+        `SELECT EXISTS (
+           SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'sales' AND column_name = 'order_id'
+         ) AS yes`
+      );
+      if (bridged.rows[0].yes) {
+        // Only from confirmed. A cancelled sale stays cancelled: an order
+        // that somehow reaches delivered after its sale was written off is a
+        // problem for a person to look at, not one to paper over here.
+        await client.query(
+          `UPDATE sales SET status = 'delivered', updated_at = CURRENT_TIMESTAMP
+            WHERE order_id = $1 AND status = 'confirmed'`,
+          [orderId]
+        );
+      }
+    }
+
     await client.query('COMMIT');
     
     return { success: true, currentStatus, newStatus };
@@ -215,7 +247,11 @@ const updateOrderStatus = async (orderId, newStatus, userId, userRole, remarks =
  * it is a refund, which is a decision a person makes, not a side effect of
  * pressing cancel.
  */
-const cancelOrder = async (orderId, userId, reason = null) => {
+const cancelOrder = async (orderId, userId, reason = null, actingFor = null) => {
+  // Who the permission belongs to. An employee refusing an order on his
+  // employer's behalf is the supplier here; the history row below still
+  // records him by name, because he is the one who did it.
+  const businessId = actingFor || userId;
   const client = await pool.connect();
 
   try {
@@ -239,7 +275,7 @@ const cancelOrder = async (orderId, userId, reason = null) => {
     // of his own order, so this asks who this person is on THIS order rather
     // than what their account role says.
     const isBuyer = order.buyer_id === userId;
-    const isSupplier = order.supplier_id === userId;
+    const isSupplier = order.supplier_id === businessId;
     if (!isBuyer && !isSupplier) {
       throw new Error('You cannot cancel this order');
     }

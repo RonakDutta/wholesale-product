@@ -140,13 +140,35 @@ on 401 only. Clearing it on 403 logs users out mid-browse.
 early when an invoice exists, so calling it again after payment leaves the
 invoice stamped UNPAID. Use `reconcileInvoiceForOrder`.
 
+**Which state somebody is in decides the tax.** Same state as the customer is
+CGST plus SGST, a different state is IGST, and it is a number on a legal
+document. Ask `services/placeOfSupply.js` and nothing else: it reads a declared
+state, then the state the GST number carries (the first two digits of a GSTIN
+ARE the state), then the city. Do not add a fourth chain of COALESCEs, and do
+not default an unknown location to a real place: `null` means "not told", which
+the service reads as the same state so a local sale bills correctly.
+
+**A sale from a shop order follows that order.** Accepting an order writes a
+sale, and the order lifecycle is the authority over both. Its status and its
+amounts cannot be changed from the sale side, which returns 409 with
+`code: "FOLLOWS_ORDER"`. The sale owes exactly what the customer agreed at
+checkout; recomputing or retyping it moves the debt away from the figure he
+pressed pay on.
+
+**HSN codes are validated, never guessed.** `services/hsnService.js` checks the
+shape (4, 6 or 8 digits) and suggests from the wholesaler's own history plus a
+short curated textile list labelled as common rather than as verified. Nothing
+maps an HSN to a GST rate and nothing should: rates change and the same heading
+carries different rates by price slab.
+
 ## Repository layout
 
 ```
 server/src/
   controllers/   route handlers, most business logic lives here
   services/      orderStatusService (lifecycle), invoiceService, pdfService,
-                 gstService, notificationManager, geocodingService
+                 gstService, placeOfSupply, hsnService, notificationManager,
+                 geocodingService
   repositories/  invoiceRepository, the only repository-style module
   routes/        mounted under /api/* in app.js
   migrations/    hand-applied SQL
@@ -173,8 +195,11 @@ the instructions every session loads do not grow a changelog inside them.
 - Seller-side search ("textile wholesalers in Surat") is not built. The shop
   page exists; discovery of it does not.
 - `README.md` is substantially out of date.
-- Git history contains a committed password and an invoice PDF. Rotating the
-  credential and rewriting history is outstanding.
+- Git history contains a committed password and an invoice PDF. The credential
+  has been rotated; rewriting history is outstanding.
+- The home page falls back to invented demo products when the catalogue fails
+  to load, and search invents a 4.5 star rating for a wholesaler who has none.
+  Both are on the list to delete.
 
 ## Working style expected here
 

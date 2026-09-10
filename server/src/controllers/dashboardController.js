@@ -1,12 +1,13 @@
 const pool = require("../config/db");
 const { FEATURES } = require("../config/features");
 const invoiceRepository = require("../repositories/invoiceRepository");
+const { businessId } = require("../middlewares/businessContext");
 
 // See productController: a zero count means "unknown" while stock is hidden.
 const IN_STOCK = FEATURES.STOCK_TRACKING ? " AND stock > 0" : "";
 
 exports.getInventory = async (req, res) => {
-  const supplierId = req.user.id;
+  const supplierId = businessId(req);
   try {
     // The billing columns arrive with wholesale3_listing_billing_fields.sql.
     // Naming them unconditionally takes the whole product screen down with a
@@ -44,7 +45,7 @@ exports.getInventory = async (req, res) => {
 };
 
 exports.getDashboardStats = async (req, res) => {
-  const supplierId = req.user.id;
+  const supplierId = businessId(req);
 
   // Orders reach a supplier through the inventory item; newer ones also carry
   // supplier_id directly. Match either so nothing is missed.

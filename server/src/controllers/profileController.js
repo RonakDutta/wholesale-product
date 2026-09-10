@@ -1,5 +1,7 @@
 const pool = require("../config/db");
 const { checkGstin } = require("../utils/gstin");
+const { asState } = require("../services/placeOfSupply");
+const { businessId } = require("../middlewares/businessContext");
 
 // @desc    Get wholesaler profile
 // @route   GET /api/profile
@@ -10,7 +12,10 @@ exports.getProfile = async (req, res) => {
        FROM wholesaler_profiles wp 
        JOIN users u ON wp.user_id = u.id 
        WHERE wp.user_id = $1`,
-      [req.user.id],
+      // The business, so an employee sees the shop he actually works in
+      // rather than an empty profile of his own. Changing it is owner only,
+      // enforced at the router: the GSTIN here goes on every invoice.
+      [businessId(req)],
     );
 
     if (profile.rows.length === 0) {
@@ -49,6 +54,22 @@ exports.updateProfile = async (req, res) => {
     gstinValue = result.gstin;
   }
 
+  // The state is not free text, whatever the screen sends. It decides CGST
+  // plus SGST against IGST on every bill this wholesaler raises, and a value
+  // no customer's state can ever equal would send every local sale out as
+  // inter-state. Stored in the one spelling the rest of the system compares
+  // against, so "gujarat" and "GUJARAT" cannot become two different states.
+  let stateValue = warehouseState;
+  if (warehouseState !== undefined && warehouseState !== null && String(warehouseState).trim() !== "") {
+    const known = asState(warehouseState);
+    if (!known) {
+      return res.status(400).json({
+        message: `"${String(warehouseState).trim()}" is not a state we recognise. Please pick one from the list.`,
+      });
+    }
+    stateValue = known;
+  }
+
   try {
     const updatedProfile = await pool.query(
       `UPDATE wholesaler_profiles 
@@ -73,7 +94,7 @@ exports.updateProfile = async (req, res) => {
        RETURNING *`,
       [
         companyName, contactPhone, gstinValue, upiId, city, country,
-        warehouseAddress, warehouseCity, warehouseState, warehousePincode,
+        warehouseAddress, warehouseCity, stateValue, warehousePincode,
         hasPin ? lat : null, hasPin ? lng : null,
         req.user.id,
       ],

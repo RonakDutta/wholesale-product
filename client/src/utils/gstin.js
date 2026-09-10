@@ -29,6 +29,24 @@ const STATE_NAMES = {
   38: "Ladakh", 97: "Other Territory", 99: "Centre",
 };
 
+/**
+ * The states a wholesaler can pick from.
+ *
+ * Built from the table above, the same way the server builds its copy, so the
+ * list on the dropdown and the list a GST number is read against are the same
+ * list. 97 and 99 are left out: they are the offshore area and a UN body.
+ *
+ * "Andhra Pradesh" holds two codes because the state was split, so the name is
+ * deduplicated. The name is what gets stored.
+ */
+export const INDIAN_STATES = [
+  ...new Set(
+    Object.entries(STATE_NAMES)
+      .filter(([code]) => Number(code) >= 1 && Number(code) <= 38)
+      .map(([, name]) => name),
+  ),
+].sort((a, b) => a.localeCompare(b));
+
 export const tidyGstin = (value) =>
   String(value ?? "").toUpperCase().replace(/[\s-]/g, "");
 

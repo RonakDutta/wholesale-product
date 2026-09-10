@@ -14,9 +14,10 @@ const invoiceRoutes = require("./routes/invoiceRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const partyRoutes = require("./routes/partyRoutes");
 const saleRoutes = require("./routes/saleRoutes");
-const itemRoutes = require("./routes/itemRoutes");
 const overviewRoutes = require("./routes/overviewRoutes");
 const creditNoteRoutes = require("./routes/creditNoteRoutes");
+const staffRoutes = require("./routes/staffRoutes");
+const hsnRoutes = require("./routes/hsnRoutes");
 
 const app = express();
 
@@ -44,8 +45,11 @@ app.use("/api/notifications", notificationRoutes);
 // Wholesale 3.0: the wholesaler's own customer book.
 app.use("/api/parties", partyRoutes);
 app.use("/api/sales", saleRoutes);
-app.use("/api/items", itemRoutes);
 app.use("/api/overview", overviewRoutes);
 app.use("/api/credit-notes", creditNoteRoutes);
+// A wholesaler's employees. Owner only, except the invite acceptance.
+app.use("/api/staff", staffRoutes);
+// HSN suggestions for the boxes on the product and sale screens.
+app.use("/api/hsn", hsnRoutes);
 
 module.exports = app;

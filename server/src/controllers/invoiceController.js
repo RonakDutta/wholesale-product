@@ -2,11 +2,14 @@ const pool = require("../config/db");
 const invoiceService = require("../services/invoiceService");
 const pdfService = require("../services/pdfService");
 const invoiceRepository = require("../repositories/invoiceRepository");
+// Whose invoices these are. The person doing the work is still req.user.id:
+// he is the name on a log entry, not the business the bill belongs to.
+const { businessId } = require("../middlewares/businessContext");
 
 class InvoiceController {
   async getInvoices(req, res) {
     try {
-      const result = await invoiceService.getInvoices(req.query, req.user.id, req.user.role);
+      const result = await invoiceService.getInvoices(req.query, businessId(req), req.user.role);
       res.json({ success: true, ...result });
     } catch (err) {
       console.error("Error fetching invoices:", err);
@@ -16,7 +19,7 @@ class InvoiceController {
 
   async getInvoiceById(req, res) {
     try {
-      const invoice = await invoiceService.getInvoiceById(req.params.id, req.user.id, req.user.role);
+      const invoice = await invoiceService.getInvoiceById(req.params.id, businessId(req), req.user.role);
       res.json({ success: true, invoice });
     } catch (err) {
       console.error("Error fetching invoice details:", err);
@@ -26,7 +29,7 @@ class InvoiceController {
 
   async getInvoicePDF(req, res) {
     try {
-      const invoice = await invoiceService.getInvoiceById(req.params.id, req.user.id, req.user.role);
+      const invoice = await invoiceService.getInvoiceById(req.params.id, businessId(req), req.user.role);
       
       // Log PDF download event
       await invoiceRepository.addLog({
@@ -47,7 +50,7 @@ class InvoiceController {
     try {
       const invoice = await invoiceService.getInvoiceForOrder(
         req.params.orderId,
-        req.user.id,
+        businessId(req),
         req.user.role,
       );
       res.json({ success: true, invoice });
@@ -62,7 +65,7 @@ class InvoiceController {
     try {
       const invoice = await invoiceService.getInvoiceForOrder(
         req.params.orderId,
-        req.user.id,
+        businessId(req),
         req.user.role,
       );
 
@@ -83,7 +86,7 @@ class InvoiceController {
 
   async createInvoice(req, res) {
     try {
-      const invoice = await invoiceService.createManualInvoice(req.body, req.user.id);
+      const invoice = await invoiceService.createManualInvoice(req.body, businessId(req));
       res.status(201).json({ success: true, invoice });
     } catch (err) {
       console.error("Error creating manual invoice:", err);
@@ -93,7 +96,7 @@ class InvoiceController {
 
   async updateInvoice(req, res) {
     try {
-      const invoice = await invoiceService.getInvoiceById(req.params.id, req.user.id, req.user.role);
+      const invoice = await invoiceService.getInvoiceById(req.params.id, businessId(req), req.user.role);
       if (invoice.payment_status === "Paid" && req.user.role !== "admin") {
         return res.status(400).json({ success: false, message: "Paid invoices cannot be modified." });
       }
@@ -116,7 +119,7 @@ class InvoiceController {
 
   async deleteInvoice(req, res) {
     try {
-      const invoice = await invoiceService.getInvoiceById(req.params.id, req.user.id, req.user.role);
+      const invoice = await invoiceService.getInvoiceById(req.params.id, businessId(req), req.user.role);
       
       await invoiceRepository.updateInvoice(req.params.id, {
         invoice_status: "Cancelled",
@@ -139,7 +142,7 @@ class InvoiceController {
 
   async sendInvoice(req, res) {
     try {
-      const result = await invoiceService.sendInvoiceEmail(req.params.id, req.user.id, req.user.role);
+      const result = await invoiceService.sendInvoiceEmail(req.params.id, businessId(req), req.user.role);
       res.json({ success: true, ...result });
     } catch (err) {
       console.error("Error sending invoice email:", err);
@@ -149,7 +152,7 @@ class InvoiceController {
 
   async sendReminder(req, res) {
     try {
-      const result = await invoiceService.sendPaymentReminder(req.params.id, req.user.id, req.user.role);
+      const result = await invoiceService.sendPaymentReminder(req.params.id, businessId(req), req.user.role);
       res.json({ success: true, ...result });
     } catch (err) {
       console.error("Error sending payment reminder:", err);
@@ -182,7 +185,7 @@ class InvoiceController {
           : `SELECT NULL AS sale_id, NULL AS party_id, NULL AS note_number
                FROM invoices i
               WHERE i.id = $1 AND i.supplier_id = $2`,
-        [req.params.id, req.user.id],
+        [req.params.id, businessId(req)],
       );
       // A reversed bill is not owed, so nothing can be received against it.
       if (owned.rows.length > 0 && owned.rows[0].note_number) {
@@ -200,7 +203,7 @@ class InvoiceController {
         });
       }
 
-      const result = await invoiceService.recordPayment(req.params.id, req.body, req.user.id, req.user.role);
+      const result = await invoiceService.recordPayment(req.params.id, req.body, businessId(req), req.user.role);
       res.json({ success: true, ...result });
     } catch (err) {
       console.error("Error recording payment:", err);
@@ -210,7 +213,7 @@ class InvoiceController {
 
   async getDashboardStats(req, res) {
     try {
-      const stats = await invoiceService.getDashboardStats(req.user.id, req.user.role, req.query.side);
+      const stats = await invoiceService.getDashboardStats(businessId(req), req.user.role, req.query.side);
       res.json({ success: true, stats });
     } catch (err) {
       console.error("Error fetching invoice dashboard stats:", err);
@@ -221,7 +224,7 @@ class InvoiceController {
   async getReportData(req, res) {
     try {
       const { startDate, endDate, side } = req.query;
-      const report = await invoiceService.getReportData(req.user.id, req.user.role, startDate, endDate, side);
+      const report = await invoiceService.getReportData(businessId(req), req.user.role, startDate, endDate, side);
       res.json({ success: true, report });
     } catch (err) {
       console.error("Error fetching report data:", err);
@@ -231,7 +234,7 @@ class InvoiceController {
 
   async exportCSV(req, res) {
     try {
-      const csv = await invoiceService.exportInvoicesCSV(req.user.id, req.user.role, req.query);
+      const csv = await invoiceService.exportInvoicesCSV(businessId(req), req.user.role, req.query);
       res.setHeader("Content-Type", "text/csv");
       res.setHeader("Content-Disposition", "attachment; filename=invoices_export.csv");
       res.status(200).send(csv);
@@ -243,7 +246,7 @@ class InvoiceController {
 
   async exportExcel(req, res) {
     try {
-      const csv = await invoiceService.exportInvoicesCSV(req.user.id, req.user.role, req.query);
+      const csv = await invoiceService.exportInvoicesCSV(businessId(req), req.user.role, req.query);
       res.setHeader("Content-Type", "application/vnd.ms-excel");
       res.setHeader("Content-Disposition", "attachment; filename=invoices_export.xls");
       res.status(200).send(csv);
@@ -257,7 +260,7 @@ class InvoiceController {
     try {
       const data = await invoiceRepository.findInvoices({
         ...req.query,
-        userId: req.user.id,
+        userId: businessId(req),
         role: req.user.role,
         page: 1,
         limit: 100,
@@ -288,7 +291,7 @@ class InvoiceController {
 
   async getSettings(req, res) {
     try {
-      const settings = await invoiceRepository.getSettings(req.user.id);
+      const settings = await invoiceRepository.getSettings(businessId(req));
       res.json({ success: true, settings });
     } catch (err) {
       console.error("Error fetching invoice settings:", err);
@@ -309,7 +312,7 @@ class InvoiceController {
         return res.status(400).json({ success: false, message: "GST rate must be between 0 and 100." });
       }
 
-      const settings = await invoiceRepository.saveSettings(req.user.id, {
+      const settings = await invoiceRepository.saveSettings(businessId(req), {
         prefix,
         dueDays: Math.round(dueDays),
         defaultTaxRate,
@@ -326,7 +329,7 @@ class InvoiceController {
 
   async getBuyers(req, res) {
     try {
-      const buyers = await invoiceRepository.getBuyers(req.user.id);
+      const buyers = await invoiceRepository.getBuyers(businessId(req));
       res.json({ success: true, buyers });
     } catch (err) {
       console.error("Error fetching buyers:", err);

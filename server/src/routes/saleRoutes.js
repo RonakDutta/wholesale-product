@@ -10,6 +10,7 @@ const {
 } = require("../controllers/saleController");
 const authenticateToken = require("../middlewares/authMiddleware");
 const authorizeRoles = require("../middlewares/roleMiddleware");
+const { requirePermission } = require("../middlewares/businessContext");
 
 const router = express.Router();
 
@@ -17,12 +18,12 @@ const router = express.Router();
 // a separate route when ordering is built; these are the ones he records.
 router.use(authenticateToken, authorizeRoles("seller", "both"));
 
-router.get("/", listSales);
-router.post("/", createSale);
-router.get("/:id", getSaleById);
-router.put("/:id", updateSale);
-router.patch("/:id/status", updateSaleStatus);
-router.get("/:id/invoice", getInvoiceForSale);
-router.post("/:id/invoice", createInvoiceForSale);
+router.get("/", requirePermission("sales"), listSales);
+router.post("/", requirePermission("sales"), createSale);
+router.get("/:id", requirePermission("sales"), getSaleById);
+router.put("/:id", requirePermission("sales"), updateSale);
+router.patch("/:id/status", requirePermission("sales"), updateSaleStatus);
+router.get("/:id/invoice", requirePermission("invoices"), getInvoiceForSale);
+router.post("/:id/invoice", requirePermission("invoices"), createInvoiceForSale);
 
 module.exports = router;

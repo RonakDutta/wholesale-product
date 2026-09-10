@@ -9,6 +9,7 @@ const {
 const { createSaleFromOrder, hasSaleLink } = require("../services/orderSaleService");
 const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange, cancelOrder } = require("../services/orderStatusService");
 const { geocodeOrderDestination } = require("../services/geocodingService");
+const { businessId } = require("../middlewares/businessContext");
 const {
   RETURN_WINDOW_DAYS,
   returnWindowForOrder,
@@ -91,7 +92,14 @@ const nextInstalment = (order) => {
 };
 
 const ensureOrderAccess = async (req, res, orderId, { requireBuyer = true, requireSupplier = true } = {}) => {
-  const userId = req.user?.id;
+  // The business, not the person. An employee working on his employer's book
+  // is the supplier on that book's orders; comparing his own id would refuse
+  // him every order his employer has, which is all of them.
+  //
+  // Buying is still personal: an order he placed himself is his, not his
+  // employer's, so both ids are considered.
+  const userId = businessId(req);
+  const personId = req.user?.id;
   if (!userId) {
     res.status(401).json({ success: false, message: "Unauthorized: Missing user credentials." });
     return null;
@@ -113,7 +121,7 @@ const ensureOrderAccess = async (req, res, orderId, { requireBuyer = true, requi
   }
 
   const order = orderResult.rows[0];
-  const isBuyer = order.buyer_id === userId;
+  const isBuyer = order.buyer_id === userId || order.buyer_id === personId;
   const isSupplier = order.supplier_id === userId;
 
   if (role === "buyer") {
@@ -138,7 +146,7 @@ const ensureOrderAccess = async (req, res, orderId, { requireBuyer = true, requi
 };
 
 const getSupplierOrders = async (req, res) => {
-  const supplierId = req.user.id;
+  const supplierId = businessId(req);
 
   try {
     const query = `
@@ -343,8 +351,19 @@ const createOrder = async (req, res) => {
     let partyId = null;
     const partyLinked = await hasPartyLink(client);
     if (partyLinked) {
+      // The firm and the GST number come off the buyer's own account, and both
+      // reach the bill. Without them the customer page showed the man's firm
+      // and his invoice showed his personal name, because the order screen
+      // reads wholesaler_profiles.company_name and the invoice reads the
+      // party, and nothing ever copied one to the other. The GST number is
+      // worse than cosmetic: a bill without it is a bill his customer cannot
+      // claim input credit against.
       const buyer = await client.query(
-        "SELECT first_name, last_name, phone FROM users WHERE id = $1",
+        `SELECT u.first_name, u.last_name, u.phone,
+                wp.company_name, wp.gstin
+           FROM users u
+           LEFT JOIN wholesaler_profiles wp ON wp.user_id = u.id
+          WHERE u.id = $1`,
         [buyerId],
       );
       const b = buyer.rows[0] || {};
@@ -354,6 +373,8 @@ const createOrder = async (req, res) => {
         // The name on the delivery address is who the goods are actually for,
         // so it beats the account name when the two differ.
         name: clean(deliveryAddress.name) || fullName(b.first_name, b.last_name),
+        businessName: clean(b.company_name),
+        gstin: clean(b.gstin),
         phone: clean(deliveryAddress.phone) || clean(b.phone),
         city: clean(deliveryAddress.city),
         address: clean(deliveryAddress.street || deliveryAddress.address),
@@ -1115,7 +1136,7 @@ const refundOrder = async (req, res) => {
 
     // Only the wholesaler can pay money back, because he is the one paying it.
     // Not role gated at the route, because a 403 clears the token.
-    if (order.supplier_id !== req.user.id) {
+    if (order.supplier_id !== businessId(req)) {
       await client.query("ROLLBACK");
       return res.status(403).json({
         success: false,
@@ -1326,7 +1347,7 @@ const cancelOrderHandler = async (req, res) => {
     });
     if (!accessCheck) return;
 
-    const result = await cancelOrder(orderId, req.user.id, reason);
+    const result = await cancelOrder(orderId, req.user.id, reason, businessId(req));
     res.json(result);
   } catch (error) {
     // The service throws for the ordinary refusals as well as for faults:
@@ -1560,7 +1581,7 @@ const sendInstallmentReminder = async (req, res) => {
 
     const order = rows[0];
     // Only the seller on the order, never another seller who guessed the id.
-    if (req.user.role !== "admin" && String(order.supplier_id) !== String(req.user.id)) {
+    if (req.user.role !== "admin" && String(order.supplier_id) !== String(businessId(req))) {
       return res.status(403).json({ success: false, message: "This is not your order." });
     }
 

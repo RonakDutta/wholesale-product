@@ -5,6 +5,7 @@ import {
   Check,
   Download,
   FileText,
+  Package,
   Pencil,
   RotateCcw,
   Truck,
@@ -207,8 +208,16 @@ const SaleDetail = () => {
   const { sale, lines, payments } = data;
   const received = payments.reduce((sum, p) => sum + Number(p.amount), 0);
   const due = Number(sale.total) - received;
-  const actions = NEXT_ACTIONS[sale.status] || [];
-  const canEdit = sale.status !== "cancelled" && !invoice;
+
+  // A sale written from a shop order belongs to that order. It gets no
+  // buttons of its own, because delivering the goods is one event and it had
+  // two switches: the order's, which stamps a delivery date and opens the
+  // return window, and this page's, which did neither. The server refuses the
+  // change anyway; hiding the button is so nobody presses it and reads an
+  // error he did not deserve.
+  const fromOrder = Boolean(sale.order_id);
+  const actions = fromOrder ? [] : NEXT_ACTIONS[sale.status] || [];
+  const canEdit = !fromOrder && sale.status !== "cancelled" && !invoice;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -266,7 +275,25 @@ const SaleDetail = () => {
           </div>
         </div>
 
-        {(actions.length > 0 || canEdit) && (
+        {/* Where the switches used to be, for a sale that has none. Saying
+            which order runs it is more use than an empty strip. */}
+        {fromOrder && (
+          <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 pt-5">
+            <Link
+              to={`/seller/orders/${sale.order_id}`}
+              className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+            >
+              <Package className="h-4 w-4" />
+              Open order {sale.order_number || ""}
+            </Link>
+            <p className="text-xs text-slate-500">
+              This sale follows its order. Confirm, deliver or cancel it there
+              and this updates with it.
+            </p>
+          </div>
+        )}
+
+        {!fromOrder && (actions.length > 0 || canEdit) && (
           <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-5">
             {/* Once an invoice exists the sale is frozen: an invoice is a fixed
                 document and is corrected with a credit note, not by editing

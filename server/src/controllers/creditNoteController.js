@@ -1,5 +1,6 @@
 const creditNoteService = require("../services/creditNoteService");
 const pdfService = require("../services/pdfService");
+const { businessId } = require("../middlewares/businessContext");
 
 /**
  * Credit notes are the wholesaler's own documents, so every route is scoped
@@ -13,7 +14,7 @@ const FAILURES = {
 };
 
 exports.createCreditNote = async (req, res) => {
-  const wholesalerId = req.user.id;
+  const wholesalerId = businessId(req);
   const { invoiceId, reason, reasonNote, issueDate } = req.body;
 
   if (!invoiceId) {
@@ -50,7 +51,7 @@ exports.createCreditNote = async (req, res) => {
 
 exports.listCreditNotes = async (req, res) => {
   try {
-    const notes = await creditNoteService.listCreditNotes(req.user.id, {
+    const notes = await creditNoteService.listCreditNotes(businessId(req), {
       partyId: req.query.partyId || null,
     });
     res.status(200).json(notes);
@@ -62,7 +63,7 @@ exports.listCreditNotes = async (req, res) => {
 
 exports.getCreditNote = async (req, res) => {
   try {
-    const note = await creditNoteService.getCreditNote(req.params.id, req.user.id);
+    const note = await creditNoteService.getCreditNote(req.params.id, businessId(req));
     if (!note) return res.status(404).json({ message: "Credit note not found" });
     res.status(200).json(note);
   } catch (err) {
@@ -73,7 +74,7 @@ exports.getCreditNote = async (req, res) => {
 
 exports.getCreditNotePDF = async (req, res) => {
   try {
-    const note = await creditNoteService.getCreditNote(req.params.id, req.user.id);
+    const note = await creditNoteService.getCreditNote(req.params.id, businessId(req));
     if (!note) return res.status(404).json({ message: "Credit note not found" });
     await pdfService.generateCreditNotePDF(note, res);
   } catch (err) {
@@ -86,7 +87,7 @@ exports.getCreditNoteForInvoice = async (req, res) => {
   try {
     const note = await creditNoteService.findByInvoiceId(
       req.params.invoiceId,
-      req.user.id,
+      businessId(req),
     );
     if (!note) {
       return res.status(404).json({ message: "No credit note against this bill" });

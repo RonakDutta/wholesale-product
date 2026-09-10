@@ -13,6 +13,7 @@ const {
 } = require("../controllers/productController");
 const authenticateToken = require("../middlewares/authMiddleware");
 const authorizeRoles = require("../middlewares/roleMiddleware");
+const { requirePermission } = require("../middlewares/businessContext");
 
 const router = express.Router();
 
@@ -24,9 +25,9 @@ router.get("/wholesaler/:id", getWholesalerById);
 router.get("/listing/:inventoryId", getListingById);
 router.get("/:id/contact", authenticateToken, contactSupplier);
 router.get("/:id", getProductById);
-router.post("/", authenticateToken, authorizeRoles("seller", "both"), addProduct);
+router.post("/", authenticateToken, authorizeRoles("seller", "both"), requirePermission("products"), addProduct);
 router.get("/inventory/:id", authenticateToken, authorizeRoles("seller", "both"), getInventoryItemById);
-router.put("/inventory/:id", authenticateToken, authorizeRoles("seller", "both"), updateInventoryItem);
-router.delete("/inventory/:id", authenticateToken, authorizeRoles("seller", "both"), deleteInventoryItem);
+router.put("/inventory/:id", authenticateToken, authorizeRoles("seller", "both"), requirePermission("products"), updateInventoryItem);
+router.delete("/inventory/:id", authenticateToken, authorizeRoles("seller", "both"), requirePermission("products"), deleteInventoryItem);
 
 module.exports = router;

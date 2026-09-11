@@ -1,6 +1,7 @@
 const pool = require("../config/db");
 const { clean, fromPaise, toPaise } = require("../utils/money");
 const saleInvoiceService = require("../services/saleInvoiceService");
+const creditApplyService = require("../services/creditApplyService");
 const { hasPartyLink } = require("../services/partyService");
 const { hasSaleLink } = require("../services/orderSaleService");
 const { checkGstin } = require("../utils/gstin");
@@ -668,6 +669,82 @@ exports.getPartyStats = async (req, res) => {
     });
   } catch (err) {
     console.error("Error fetching party stats:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/**
+ * The credit this customer has, and what it could be set against.
+ *
+ * See services/creditApplyService.js for what a credit is and why setting it
+ * against an order is a re-addressing of money rather than a new payment.
+ */
+exports.getCreditOffer = async (req, res) => {
+  try {
+    const party = await pool.query(
+      "SELECT id FROM parties WHERE id = $1 AND wholesaler_id = $2",
+      [req.params.id, businessId(req)],
+    );
+    if (party.rows.length === 0) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+    res.status(200).json(await creditApplyService.offer(req.params.id, businessId(req)));
+  } catch (err) {
+    console.error("Error reading a customer's credit:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+const CREDIT_REASONS = {
+  notFound: [404, "That sale is not on this customer's account"],
+  noCredit: [400, "You are not holding any of this customer's money"],
+  settled: [400, "That sale is already paid"],
+  dead: [400, "That sale is cancelled or still a draft"],
+  nothing: [400, "There is nothing to set against it"],
+};
+
+exports.applyCredit = async (req, res) => {
+  const wholesalerId = businessId(req);
+  const { saleId, amount } = req.body || {};
+
+  if (!clean(saleId)) {
+    return res.status(400).json({ message: "Choose what to set it against" });
+  }
+
+  try {
+    const party = await pool.query(
+      "SELECT id FROM parties WHERE id = $1 AND wholesaler_id = $2",
+      [req.params.id, wholesalerId],
+    );
+    if (party.rows.length === 0) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+
+    const result = await creditApplyService.apply(
+      req.params.id,
+      wholesalerId,
+      clean(saleId),
+      amount === undefined || amount === null || amount === "" ? null : Number(amount),
+    );
+
+    if (result.error) {
+      const [status, message] = CREDIT_REASONS[result.error] || [400, "Could not set this credit"];
+      return res.status(status).json({ message, code: result.error });
+    }
+
+    // The sale may now be settled, in which case the bill follows, exactly as
+    // it does when cash comes in. Best effort: the money has moved and that is
+    // what matters, a stale bill is recoverable.
+    try {
+      await saleInvoiceService.billIfSettled(clean(saleId), wholesalerId);
+      await saleInvoiceService.syncInvoiceFromLedger(clean(saleId));
+    } catch (billErr) {
+      console.error("Could not refresh the bill after setting credit:", billErr.message);
+    }
+
+    res.status(200).json(result);
+  } catch (err) {
+    console.error("Error setting a customer's credit:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

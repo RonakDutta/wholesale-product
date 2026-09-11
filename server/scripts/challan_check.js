@@ -27,6 +27,8 @@ require.cache[dbPath] = stub;
 const sales = require("../src/controllers/saleController");
 const parties = require("../src/controllers/partyController");
 const challans = require("../src/controllers/challanController");
+const orders = require("../src/controllers/orderController");
+const orderSale = require("../src/services/orderSaleService");
 const challanService = require("../src/services/challanService");
 const numbering = require("../src/services/invoiceNumberService");
 const pdfService = require("../src/services/pdfService");
@@ -161,7 +163,14 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   // ---------------------------------------------------------------
   const settled = await makeSale(1050);
   const billed = await call(sales.createInvoiceForSale, { ...asOwner, params: { id: settled.id } });
-  check(billed.statusCode === 201, "now the bill is raised", { s: billed.statusCode });
+  // 201 if this call made it, 200 if the sale had already billed itself in the
+  // background. Either is right; asserting 201 made the suite race its own
+  // auto-billing.
+  check(
+    (billed.statusCode === 201 || billed.statusCode === 200) && Boolean(billed.body?.id),
+    "now the bill is raised",
+    { s: billed.statusCode, number: billed.body?.invoice_number },
+  );
 
   const noChallan = await call(challans.createForSale, { ...asOwner, params: { id: settled.id }, body: {} });
   check(noChallan.statusCode === 400, "and a challan is refused on a settled sale", {
@@ -176,8 +185,21 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
     params: { id: party.body.id },
     body: { amount: 550, method: "cash", saleId: half.id },
   });
+  // The payment raises the bill on its own now, so the button is no longer
+  // what does it. It used to be, and this check used to expect a 201 from it.
+  const afterLast = await testPool.query(
+    "SELECT id, invoice_number FROM invoices WHERE sale_id = $1", [half.id]);
+  check(
+    afterLast.rows.length === 1,
+    "the rest arrives and the bill follows",
+    { number: afterLast.rows[0]?.invoice_number },
+  );
   const late = await call(sales.createInvoiceForSale, { ...asOwner, params: { id: half.id } });
-  check(late.statusCode === 201, "the rest arrives and the bill follows", { s: late.statusCode });
+  check(
+    late.statusCode === 200 && String(late.body?.id) === String(afterLast.rows[0]?.id),
+    "and pressing the button afterwards hands back the same one",
+    { s: late.statusCode },
+  );
 
   const stamped = await testPool.query(
     "SELECT invoice_id FROM delivery_challans WHERE sale_id = $1", [half.id]);
@@ -185,6 +207,88 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
     stamped.rows.length === 2 && stamped.rows.every((r) => r.invoice_id),
     "both its challans point at the bill that superseded them",
     { rows: stamped.rows.length, stamped: stamped.rows.filter((r) => r.invoice_id).length },
+  );
+
+  // ---------------------------------------------------------------
+  console.log("\nThe bill raises itself once the sale is settled");
+  // ---------------------------------------------------------------
+  // The last step used to be a button nobody had to press, so a wholesaler
+  // could settle a sale and his customer would never get a bill. The order
+  // side has always done this; the sales book did not.
+  const auto = await makeSale(0);
+  const noneYet = await testPool.query(
+    "SELECT id FROM invoices WHERE sale_id = $1", [auto.id]);
+  check(noneYet.rows.length === 0, "unpaid, so no bill", { n: noneYet.rows.length });
+
+  await call(parties.recordPayment, {
+    ...asOwner, params: { id: party.body.id },
+    body: { amount: 600, method: "cash", saleId: auto.id },
+  });
+  const stillNone = await testPool.query(
+    "SELECT id FROM invoices WHERE sale_id = $1", [auto.id]);
+  check(stillNone.rows.length === 0, "part paid, still no bill", { n: stillNone.rows.length });
+
+  await call(parties.recordPayment, {
+    ...asOwner, params: { id: party.body.id },
+    body: { amount: 450, method: "cash", saleId: auto.id },
+  });
+  const raised = await testPool.query(
+    "SELECT invoice_number, payment_status FROM invoices WHERE sale_id = $1", [auto.id]);
+  check(
+    raised.rows.length === 1,
+    "the last rupee raises the bill on its own",
+    { number: raised.rows[0]?.invoice_number, was: "nothing until somebody pressed a button" },
+  );
+  check(
+    raised.rows[0]?.payment_status === "Paid",
+    "stamped Paid, not Pending",
+    { got: raised.rows[0]?.payment_status },
+  );
+
+  // A counter sale written down as already paid is settled the moment it
+  // exists, so it should not wait either.
+  const cashSale = await makeSale(1050);
+  await new Promise((r) => setTimeout(r, 400));
+  const cashBill = await testPool.query(
+    "SELECT invoice_number FROM invoices WHERE sale_id = $1", [cashSale.id]);
+  check(
+    cashBill.rows.length === 1,
+    "a cash sale paid at the counter bills itself too",
+    { number: cashBill.rows[0]?.invoice_number },
+  );
+
+  // Twice must not make two.
+  await call(parties.recordPayment, {
+    ...asOwner, params: { id: party.body.id },
+    body: { amount: 1, method: "cash", saleId: auto.id },
+  });
+  const stillOne = await testPool.query(
+    "SELECT id FROM invoices WHERE sale_id = $1", [auto.id]);
+  check(stillOne.rows.length === 1, "a further payment does not make a second bill", {
+    n: stillOne.rows.length,
+  });
+
+  // Two callers at the same instant, which is what a settled sale now has:
+  // the payment billing it in the background while the wholesaler presses the
+  // button. Both used to read "no invoice yet" and both went on to write one.
+  const racy = await makeSale(0);
+  await Promise.all([
+    call(parties.recordPayment, {
+      ...asOwner, params: { id: party.body.id },
+      body: { amount: 1050, method: "cash", saleId: racy.id },
+    }),
+    (async () => {
+      await new Promise((r) => setTimeout(r, 5));
+      return call(sales.createInvoiceForSale, { ...asOwner, params: { id: racy.id } });
+    })(),
+  ]);
+  await new Promise((r) => setTimeout(r, 400));
+  const once = await testPool.query(
+    "SELECT id FROM invoices WHERE sale_id = $1", [racy.id]);
+  check(
+    once.rows.length === 1,
+    "the button and the auto bill racing still make one",
+    { n: once.rows.length },
   );
 
   // ---------------------------------------------------------------
@@ -319,6 +423,120 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   const challanRow = await challanService.findById(madeOne.body.id, seller);
   const challanPdf = await pdfService.generateChallanPDF(challanRow);
   check(challanPdf.length > 1000, "and so does the challan PDF", { bytes: challanPdf.length });
+
+  // ---------------------------------------------------------------
+  console.log("\nThe same thing from the order screen");
+  // ---------------------------------------------------------------
+  orderSale.resetSaleLink();
+
+  const buyer = (await testPool.query(
+    `INSERT INTO users (first_name,last_name,email,phone,password_hash,role)
+     VALUES ('Kishan','Kumar',$1,$2,'x','buyer') RETURNING id`,
+    [`kishan+${uniq()}@dc.local`, `97${uniq().slice(-8)}`])).rows[0].id;
+
+  /** An order for 1420, with `paid` of it received. */
+  const makeOrder = async (paid = 0) => {
+    const product = (await testPool.query(
+      `INSERT INTO products (name, category) VALUES ($1,'Fabric') RETURNING id`,
+      [`Cotton shirting ${uniq()}`])).rows[0].id;
+    const listing = (await testPool.query(
+      `INSERT INTO supplier_inventory
+         (supplier_id, product_id, price, moq, stock, shipping_days, unit, hsn_code, gst_percent)
+       VALUES ($1,$2,142,1,100,2,'mtr','5208',5) RETURNING id`,
+      [seller, product])).rows[0].id;
+    const id = (await testPool.query(
+      `INSERT INTO orders (buyer_id, supplier_id, party_id, inventory_item_id, quantity,
+                           total_amount, subtotal, amount_paid, status, payment_status, order_number)
+       VALUES ($1,$2,$3,$4,10,1420,1420,$5,'supplier_accepted','pending',$6) RETURNING id`,
+      [buyer, seller, party.body.id, listing, paid, `ORD${uniq().slice(-10)}`])).rows[0].id;
+    await testPool.query(
+      `INSERT INTO order_items (order_id, inventory_item_id, product_name, quantity, unit_price, total_price, moq)
+       VALUES ($1,$2,'Cotton shirting',10,142,1420,1)`,
+      [id, listing],
+    );
+    return id;
+  };
+
+  // Not accepted yet, so there is nothing in the book to send out against.
+  const notAccepted = await makeOrder(0);
+  const beforeAccept = await call(challans.listForOrder, { ...asOwner, params: { id: notAccepted } });
+  check(
+    beforeAccept.body?.hasSale === false,
+    "an order with no sale behind it says so",
+    { hasSale: beforeAccept.body?.hasSale },
+  );
+  const tooEarly = await call(challans.createForOrder, {
+    ...asOwner, params: { id: notAccepted }, body: {},
+  });
+  check(tooEarly.statusCode === 400, "and refuses to make a challan", { s: tooEarly.statusCode });
+  check(tooEarly.body?.code === "noSale", "with a reason the screen can read", {
+    code: tooEarly.body?.code,
+  });
+
+  // Accepted, half paid: exactly the case the button exists for.
+  const partOrder = await makeOrder(700);
+  const clientA = await testPool.connect();
+  await orderSale.createSaleFromOrder(clientA, partOrder);
+  clientA.release();
+
+  const before = await call(challans.listForOrder, { ...asOwner, params: { id: partOrder } });
+  check(before.body?.hasSale === true, "an accepted order has its sale behind it");
+  check(
+    before.body?.settlement?.settled === false,
+    "and the order screen is told it is not settled",
+    { settlement: before.body?.settlement },
+  );
+  check(
+    Number(before.body?.settlement?.received) === 700,
+    "with what has come in read off the order, not the sale",
+    { received: before.body?.settlement?.received },
+  );
+  check((before.body?.challans || []).length === 0, "no challans on it yet");
+
+  const fromOrder = await call(challans.createForOrder, {
+    ...asOwner, params: { id: partOrder }, body: {},
+  });
+  check(fromOrder.statusCode === 201, "a challan can be made from the order", {
+    s: fromOrder.statusCode,
+  });
+  check(
+    Number(fromOrder.body?.total_value) === 1420,
+    "carrying the order's goods",
+    { total: fromOrder.body?.total_value },
+  );
+
+  const after = await call(challans.listForOrder, { ...asOwner, params: { id: partOrder } });
+  check(
+    (after.body?.challans || []).length === 1,
+    "and it is listed against the order afterwards",
+    { n: (after.body?.challans || []).length },
+  );
+
+  const supplierList = await call(orders.getSupplierOrders, asOwner);
+  const withChallan = (supplierList.body || []).find((o) => String(o.id) === String(partOrder));
+  check(
+    Number(withChallan?.challan_count) === 1,
+    "the orders list counts challans per order",
+    { got: withChallan?.challan_count },
+  );
+  const withoutChallan = (supplierList.body || []).find((o) => String(o.id) === String(notAccepted));
+  check(
+    Number(withoutChallan?.challan_count) === 0,
+    "and shows zero where none went out",
+    { got: withoutChallan?.challan_count },
+  );
+
+  // Paid in full, so the button should not be offered at all.
+  const paidOrder = await makeOrder(1420);
+  const clientB = await testPool.connect();
+  await orderSale.createSaleFromOrder(clientB, paidOrder);
+  clientB.release();
+  const paidView = await call(challans.listForOrder, { ...asOwner, params: { id: paidOrder } });
+  check(
+    paidView.body?.settlement?.settled === true,
+    "a fully paid order says settled, so the offer is not made",
+    { settlement: paidView.body?.settlement },
+  );
 
   // ---------------------------------------------------------------
   console.log("\nAnother wholesaler cannot reach any of it");

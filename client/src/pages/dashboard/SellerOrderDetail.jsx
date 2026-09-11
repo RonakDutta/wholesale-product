@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Clock,
+  Download,
   IndianRupee,
   Package,
   Phone,
@@ -13,6 +14,7 @@ import {
   XCircle,
 } from "lucide-react";
 import api from "../../utils/axios";
+import { downloadFile } from "../../utils/download";
 import { toast } from "sonner";
 import OrderTracking from "../../components/OrderTracking";
 import DispatchModal from "../../components/DispatchModal";
@@ -82,6 +84,23 @@ const byWhom = (role) => BY[String(role || "").toLowerCase()] || null;
 const worthShowing = (remark) =>
   Boolean(remark) && !/^status updated to /i.test(String(remark).trim());
 
+/**
+ * Statuses where nothing is going out of the godown any more, so there is
+ * nothing to write a delivery challan for. Everything else, including a
+ * refused return, still has goods with the customer against money owed.
+ */
+const DEAD = ["cancelled", "refunded", "payment_failed"];
+const isDead = (status) => DEAD.includes(String(status || "").toLowerCase());
+
+const dateLabel = (value) =>
+  value
+    ? new Date(value).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "";
+
 const when = (value) =>
   value
     ? new Date(value).toLocaleString("en-IN", {
@@ -117,6 +136,11 @@ const SellerOrderDetail = () => {
   const [dispatching, setDispatching] = useState(false);
   const [refusing, setRefusing] = useState(false);
   const [refunding, setRefunding] = useState(false);
+  // Goods sent out against this order while money was still outstanding. The
+  // server owns the rule, so the whole answer comes back in one reply.
+  const [challanInfo, setChallanInfo] = useState(null);
+  const [makingChallan, setMakingChallan] = useState(false);
+  const [downloading, setDownloading] = useState("");
   // Bumped after anything that moves the order, so the page is rebuilt from
   // what the server actually did rather than from what the button hoped for.
   const [reloadKey, setReloadKey] = useState(0);
@@ -139,6 +163,16 @@ const SellerOrderDetail = () => {
         console.error("Failed to load the order", error);
         if (alive) toast.error("Could not load this order.");
       }
+
+      // Asked separately, because an order that cannot make a challan is still
+      // an order worth showing. A failure here leaves the panel out.
+      try {
+        const res = await api.get(`/api/challans/order/${orderId}`);
+        if (alive) setChallanInfo(res.data || null);
+      } catch {
+        if (alive) setChallanInfo(null);
+      }
+
       if (alive) setLoading(false);
     };
     load();
@@ -166,6 +200,36 @@ const SellerOrderDetail = () => {
     }
   };
 
+  const makeChallan = async () => {
+    setMakingChallan(true);
+    try {
+      const { data: made } = await api.post(`/api/challans/order/${orderId}`, {});
+      setChallanInfo((prev) => ({
+        ...(prev || {}),
+        challans: [made, ...(prev?.challans || [])],
+      }));
+      toast.success(`Delivery challan ${made.challan_number} is ready.`);
+    } catch (err) {
+      toast.error(
+        err.response?.data?.message || "Could not make the delivery challan.",
+      );
+    }
+    setMakingChallan(false);
+  };
+
+  const downloadChallan = async (challan) => {
+    setDownloading(challan.id);
+    try {
+      await downloadFile(
+        `/api/challans/${challan.id}/pdf`,
+        `${challan.challan_number}.pdf`,
+      );
+    } catch (err) {
+      toast.error(err.message || "Could not download the challan");
+    }
+    setDownloading("");
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -190,6 +254,18 @@ const SellerOrderDetail = () => {
   const paid = Number(order.amount_paid || 0);
   const due = Math.max(total - paid, 0);
   const lines = items.length > 0 ? items : [];
+
+  // The same rule the sale page uses, read off the order: goods can go out on
+  // a challan while the order is live and the money is not all in. The bill
+  // follows on its own once it is.
+  const challans = challanInfo?.challans || [];
+  const settled = challanInfo?.settlement?.settled ?? false;
+  const canChallan = Boolean(
+    challanInfo?.challansOn &&
+      challanInfo?.hasSale &&
+      !settled &&
+      !isDead(order.status),
+  );
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
@@ -377,6 +453,74 @@ const SellerOrderDetail = () => {
           </dl>
         </Card>
       </div>
+
+      {/* Goods out before the money is in. Standing on the order screen as
+          well as the sale page, because this is where a wholesaler is when he
+          decides to send the bales. */}
+      {(canChallan || challans.length > 0) && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          {canChallan && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-bold text-amber-900">
+                ₹{money(due)} is still to come in
+              </p>
+              <p className="mt-1 text-xs text-amber-800">
+                The bill follows once this is paid in full. Send goods out on a
+                challan meanwhile.
+              </p>
+              <button
+                onClick={makeChallan}
+                disabled={makingChallan}
+                className="mt-3 flex cursor-pointer items-center gap-2 rounded-lg bg-amber-700 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-amber-800 disabled:opacity-50"
+              >
+                <Truck className="h-4 w-4" />
+                {makingChallan
+                  ? "Making challan..."
+                  : challans.length > 0
+                    ? "Make another delivery challan"
+                    : "Make delivery challan"}
+              </button>
+            </div>
+          )}
+
+          {challans.length > 0 && (
+            <div className={canChallan ? "mt-4 border-t border-slate-100 pt-4" : ""}>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+                Delivery challans
+              </p>
+              <ul className="space-y-1.5">
+                {challans.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                  >
+                    <span className="flex items-center gap-2 text-espresso">
+                      <Truck className="h-3.5 w-3.5 text-slate-400" />
+                      <span className="font-bold">{c.challan_number}</span>
+                      <span className="text-xs text-slate-500">
+                        {dateLabel(c.issue_date)}
+                      </span>
+                      {c.invoice_id && (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                          Billed
+                        </span>
+                      )}
+                    </span>
+                    <button
+                      onClick={() => downloadChallan(c)}
+                      disabled={downloading === c.id}
+                      className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      {downloading === c.id ? "..." : "PDF"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       <Card title={`What is in it (${lines.length || 1})`} icon={Package}>
         {lines.length === 0 ? (

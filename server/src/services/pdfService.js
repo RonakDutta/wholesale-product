@@ -680,7 +680,7 @@ class PDFService {
         doc.fillColor("#ffffff").fontSize(18).font("Helvetica-Bold");
         doc.text("DELIVERY CHALLAN", 50, 52);
         doc.fontSize(8).font("Helvetica").fillColor("#e5e7eb");
-        doc.text("Not a tax invoice. No input tax credit can be claimed against this document.", 50, 76);
+        doc.text("Not a tax invoice. No input tax credit against this document.", 50, 76);
         doc.fillColor("#ffffff").fontSize(12).font("Helvetica-Bold");
         doc.text(challan.challan_number || "", 360, 52, { align: "right", width: 185 });
         doc.fontSize(8).font("Helvetica").fillColor("#e5e7eb");
@@ -792,10 +792,10 @@ class PDFService {
         // The whole point of the document, said plainly.
         doc.rect(36, y, 523, 40).fill("#fef3c7");
         doc.fillColor("#92400e").fontSize(8).font("Helvetica-Bold");
-        doc.text("This is a delivery challan, not a tax invoice.", 44, y + 8);
+        doc.text("Delivery challan, not a tax invoice.", 44, y + 8);
         doc.font("Helvetica").fontSize(7.5);
         doc.text(
-          "It records goods sent out while payment is outstanding. A tax invoice will follow once the balance is settled. Please do not claim input tax credit against this document.",
+          "Goods sent out while payment is outstanding. A tax invoice follows once the balance is settled. Do not claim input tax credit against this document.",
           44, y + 20, { width: 500 },
         );
         y += 56;

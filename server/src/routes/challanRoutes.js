@@ -1,6 +1,8 @@
 const express = require("express");
 const {
   createForSale,
+  createForOrder,
+  listForOrder,
   listChallans,
   listForSale,
   getChallan,
@@ -19,6 +21,9 @@ router.use(authenticateToken, authorizeRoles("seller", "both"));
 router.get("/", requirePermission("invoices"), listChallans);
 router.get("/sale/:id", requirePermission("invoices"), listForSale);
 router.post("/sale/:id", requirePermission("invoices"), createForSale);
+// The same, from the order screen. An accepted order has a sale behind it.
+router.get("/order/:id", requirePermission("invoices"), listForOrder);
+router.post("/order/:id", requirePermission("invoices"), createForOrder);
 router.get("/:id", requirePermission("invoices"), getChallan);
 router.get("/:id/pdf", requirePermission("invoices"), getChallanPdf);
 

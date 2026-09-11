@@ -322,8 +322,14 @@ exports.recordPayment = async (req, res) => {
 
     // Money against a billed sale has to move that bill's status too, or the
     // invoice and the customer's balance start telling different stories.
+    //
+    // And if this payment settled the sale, the bill is raised here rather
+    // than waiting for somebody to press a button. That button could be
+    // forgotten, and a settled sale with no bill is a customer with nothing
+    // to put in his books. The order side has always worked this way.
     if (clean(saleId)) {
       try {
+        await saleInvoiceService.billIfSettled(saleId, wholesalerId);
         await saleInvoiceService.syncInvoiceFromLedger(saleId);
       } catch (syncError) {
         // The payment is recorded and that is what matters. A stale invoice

@@ -466,23 +466,30 @@ const SaleDetail = () => {
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-sm font-bold text-espresso">
-                  No invoice raised for this sale
-                </p>
+                <p className="text-sm font-bold text-espresso">No invoice yet</p>
                 <p className="mt-1 text-xs text-slate-500">
                   {sale.status === "draft"
-                    ? "Confirm the sale first, then you can raise its invoice."
-                    : "Raise it once and the number is fixed. It cannot be raised twice."}
+                    ? "Confirm the sale first."
+                    : settled
+                      ? "Raise it once. The number is then fixed."
+                      : "The bill is raised on its own once this sale is paid in full."}
                 </p>
               </div>
-              <button
-                onClick={makeBill}
-                disabled={billing || sale.status === "draft" || sale.status === "cancelled"}
-                className="flex items-center gap-2 rounded-lg bg-clay px-4 py-2 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-50"
-              >
-                <FileText className="h-4 w-4" />
-                {billing ? "Making invoice..." : "Make invoice"}
-              </button>
+              {/* Only offered when the sale is settled. It used to show while
+                  money was still due, where pressing it got a refusal and
+                  changed nothing on screen: the wrong button sitting next to
+                  the right one. The bill normally raises itself now, so this
+                  is the fallback for a sale settled before that landed. */}
+              {settled && sale.status !== "cancelled" && (
+                <button
+                  onClick={makeBill}
+                  disabled={billing}
+                  className="flex items-center gap-2 rounded-lg bg-clay px-4 py-2 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-50"
+                >
+                  <FileText className="h-4 w-4" />
+                  {billing ? "Making..." : "Make invoice"}
+                </button>
+              )}
             </div>
           )}
 
@@ -500,8 +507,8 @@ const SaleDetail = () => {
               </p>
               <p className="mt-1 text-xs text-amber-800">
                 {invoice
-                  ? "This sale already has a bill against it, raised before it was settled. You can still send goods out on a delivery challan, which is not a tax invoice and carries no GST."
-                  : "The tax invoice is raised once this sale is settled. Until then you can send the goods out on a delivery challan, which is not a tax invoice and carries no GST."}
+                  ? "Already billed, before it was settled. Goods can still go out on a challan."
+                  : "The bill follows once this is paid in full. Send goods out on a challan meanwhile."}
               </p>
               <button
                 onClick={makeChallan}

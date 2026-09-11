@@ -237,6 +237,76 @@ class ChallanService {
     }
   }
 
+  /**
+   * The same thing, reached from the order rather than the sale.
+   *
+   * A shop order writes a sale when it is accepted, and that sale is what
+   * carries the lines and the money. So this finds it and delegates: the
+   * challan belongs to the sale either way, and a wholesaler looking at an
+   * order should not have to go and find the sale first.
+   *
+   * Extra error: `noSale`, for an order that has not been accepted yet and so
+   * has nothing in the book to send out against.
+   */
+  async createChallanForOrder(orderId, wholesalerId, reason = "payment_pending", reasonNote = null) {
+    if (!challanEnabled()) return { error: "disabled" };
+    if (!(await challanTablesExist())) return { error: "notReady" };
+
+    const saleId = await this.saleIdForOrder(orderId, wholesalerId);
+    if (!saleId) return { error: "noSale" };
+
+    return this.createChallanForSale(saleId, wholesalerId, reason, reasonNote);
+  }
+
+  /**
+   * The sale an order wrote when it was accepted, if it has one.
+   *
+   * An order that is still waiting on the wholesaler has nothing in the book
+   * behind it, so there is nothing to send goods out against. The order screen
+   * asks this so it knows whether to offer the button at all.
+   */
+  async saleIdForOrder(orderId, wholesalerId) {
+    const found = await pool.query(
+      "SELECT id FROM sales WHERE order_id = $1 AND wholesaler_id = $2",
+      [orderId, wholesalerId],
+    );
+    return found.rows.length > 0 ? found.rows[0].id : null;
+  }
+
+  /** Every challan against an order, through its sale. */
+  async listForOrder(orderId, wholesalerId) {
+    if (!(await challanTablesExist())) return [];
+    const rows = await pool.query(
+      `SELECT dc.id, dc.challan_number, dc.issue_date, dc.total_value,
+              dc.amount_paid, dc.invoice_id
+         FROM delivery_challans dc
+        WHERE dc.wholesaler_id = $1
+          AND (dc.order_id = $2
+               OR dc.sale_id IN (SELECT id FROM sales WHERE order_id = $2))
+        ORDER BY dc.created_at DESC`,
+      [wholesalerId, orderId],
+    );
+    return rows.rows;
+  }
+
+  /**
+   * Is this order settled, and what is outstanding?
+   *
+   * Read off the order rather than the sale, because that is where a shop
+   * payment lands and it is the figure the order screen already shows.
+   */
+  async settlementForOrder(orderId, wholesalerId) {
+    const found = await pool.query(
+      `SELECT total_amount, COALESCE(amount_paid, 0) AS amount_paid
+         FROM orders WHERE id = $1 AND supplier_id = $2`,
+      [orderId, wholesalerId],
+    );
+    if (found.rows.length === 0) return null;
+    const total = Number(found.rows[0].total_amount || 0);
+    const received = Number(found.rows[0].amount_paid || 0);
+    return { total, received, settled: received >= total - 0.01 && total > 0 };
+  }
+
   /** One challan with its lines, scoped to its owner. */
   async findById(challanId, wholesalerId) {
     if (!(await challanTablesExist())) return null;

@@ -25,6 +25,24 @@ import {
   RETURN_ANSWERS,
 } from "../../utils/orderStatus";
 
+/**
+ * Goods already out on a delivery challan against this order.
+ *
+ * Sits next to the product line so he can see at a glance which orders have
+ * stock away from the godown while money is still owed, without opening each
+ * one. Nothing shows when there are none, which is the ordinary case.
+ */
+const ChallanCount = ({ count }) => {
+  const n = Number(count || 0);
+  if (n <= 0) return null;
+  return (
+    <span className="ml-1.5 inline-flex items-center gap-1 text-amber-700">
+      <Truck className="h-3 w-3" />
+      {n} {n === 1 ? "challan" : "challans"}
+    </span>
+  );
+};
+
 const Orders = () => {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
@@ -237,6 +255,7 @@ const Orders = () => {
                           {" "}+ {order.item_count - 1} more
                         </span>
                       )}
+                      <ChallanCount count={order.challan_count} />
                     </p>
                   </div>
                   <span
@@ -366,6 +385,7 @@ const Orders = () => {
                               {" "}+ {order.item_count - 1} more
                             </span>
                           )}
+                          <ChallanCount count={order.challan_count} />
                         </span>
                         <span className="text-xs font-semibold text-slate-400 flex items-center gap-1 mt-0.5">
                           <Clock className="w-3 h-3" />

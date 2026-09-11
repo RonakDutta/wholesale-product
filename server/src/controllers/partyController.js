@@ -9,6 +9,7 @@ const {
   bridgedGuard,
   balanceExpression,
   collectionTotals,
+  totalsExpression,
 } = require("../services/khataBalance");
 const pdfService = require("../services/pdfService");
 const { businessId } = require("../middlewares/businessContext");
@@ -632,17 +633,25 @@ exports.getPartyStats = async (req, res) => {
     const hasOrderParty = await hasPartyLink(pool);
     const hasBridge = await hasSaleLink(pool);
 
+    /**
+     * Billed and received read the one rule as well, not just the balance.
+     *
+     * These two were still counting sales alone, while "still to collect"
+     * beside them counted shop orders too. A wholesaler with an order he had
+     * not accepted yet read "Total billed 0" next to "Still to collect 710" on
+     * the same header: nothing billed, 710 to go and get. Both true under
+     * their own sums, and together nonsense.
+     */
+    const totals = totalsExpression({ hasOrderParty, hasBridge });
+
     const [result, collect] = await Promise.all([
       pool.query(
         `SELECT
            (SELECT COUNT(*) FROM parties
              WHERE wholesaler_id = $1 AND status = 'active') AS active_parties,
            (SELECT COUNT(*) FROM parties WHERE wholesaler_id = $1) AS total_parties,
-           COALESCE((SELECT SUM(s.total) FROM sales s
-              WHERE s.wholesaler_id = $1
-                AND s.status IN ('confirmed', 'delivered')), 0) AS total_billed,
-           COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
-              WHERE pp.wholesaler_id = $1), 0) AS total_received`,
+           ${totals.billed} AS total_billed,
+           ${totals.received} AS total_received`,
         [wholesalerId],
       ),
       pool.query(collectionTotals({ hasOrderParty, hasBridge }), [wholesalerId]),

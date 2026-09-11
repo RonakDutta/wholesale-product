@@ -164,4 +164,30 @@ const createSaleFromOrder = async (client, orderId) => {
   return sale.rows[0];
 };
 
-module.exports = { createSaleFromOrder, hasSaleLink, resetSaleLink };
+/**
+ * The order was delivered, so its sale was delivered.
+ *
+ * One copy, called from both places that move an order to `delivered`:
+ * orderStatusService.updateOrderStatus and the PATCH /status route in
+ * orderController, which writes the status itself rather than going through
+ * the service. It lived only in the service, and the screens call the route,
+ * so in the running product marking an order delivered left its sale sitting
+ * at "confirmed" for ever: the wholesaler's own book said he still owed the
+ * man his goods. follows_order_check.js did not catch it because it drives
+ * the service, which was the half that was right.
+ *
+ * Only from confirmed. A cancelled sale stays cancelled: an order that
+ * somehow reaches delivered after its sale was written off is a problem for
+ * a person to look at, not one to paper over here.
+ */
+const markSaleDelivered = async (client, orderId) => {
+  if (!(await hasSaleLink(client))) return 0;
+  const done = await client.query(
+    `UPDATE sales SET status = 'delivered', updated_at = CURRENT_TIMESTAMP
+      WHERE order_id = $1 AND status = 'confirmed'`,
+    [orderId],
+  );
+  return done.rowCount;
+};
+
+module.exports = { createSaleFromOrder, hasSaleLink, resetSaleLink, markSaleDelivered };

@@ -6,7 +6,7 @@ const {
   hasPartyLink,
   recordOrderPayment,
 } = require("../services/partyService");
-const { createSaleFromOrder, hasSaleLink } = require("../services/orderSaleService");
+const { createSaleFromOrder, hasSaleLink, markSaleDelivered } = require("../services/orderSaleService");
 const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange, cancelOrder } = require("../services/orderStatusService");
 const { geocodeOrderDestination } = require("../services/geocodingService");
 const { businessId } = require("../middlewares/businessContext");
@@ -1263,6 +1263,30 @@ const updateOrderStatus = async (req, res) => {
       return res.status(400).json({ success: false, message: validation.message });
     }
 
+    /**
+     * Two states are not a step, they are an unwinding, and this route cannot
+     * do one.
+     *
+     * Cancelling has to cancel the sale behind the order, put the reserved
+     * stock back and account for anything already paid. Refunding has to move
+     * money. Both live in their own handlers, POST /cancel and POST /refund,
+     * and both were reachable through here as a plain status write: the order
+     * went to `cancelled`, the sale stayed `confirmed`, and the customer went
+     * on being billed for goods he was never going to get. The screens use the
+     * proper endpoints, so nothing in the product did this; the route allowed
+     * it, which is enough.
+     */
+    if (status === "cancelled" || status === "refunded") {
+      return res.status(400).json({
+        success: false,
+        message:
+          status === "cancelled"
+            ? "Use the refuse or cancel button. Cancelling has to return the stock and unwind the sale."
+            : "Use the refund button. A refund has to move the money, not just the status.",
+        code: "USE_DEDICATED_ROUTE",
+      });
+    }
+
     // The delivery date is stamped here as well as in orderStatusService,
     // because this route writes the status itself rather than going through
     // it. The return window is counted from that date, and the column had
@@ -1325,6 +1349,28 @@ const updateOrderStatus = async (req, res) => {
 
     if (status === "return_completed") {
       await unwindReturnedOrder(orderId, userId);
+    }
+
+    /**
+     * The sales book follows the order, from this route too.
+     *
+     * This lived only in orderStatusService, and the screens do not go through
+     * it: the "Mark delivered" button PATCHes here, which writes the status
+     * itself. So in the running product an order could be marked delivered
+     * and its sale would sit at "confirmed" for ever, which is the exact
+     * drift the sale's own delivered button was removed to prevent.
+     */
+    if (status === "delivered") {
+      const saleClient = await pool.connect();
+      try {
+        await markSaleDelivered(saleClient, orderId);
+      } catch (mirrorErr) {
+        console.warn(
+          `Order ${orderId} delivered but its sale was not: ${mirrorErr.message}`,
+        );
+      } finally {
+        saleClient.release();
+      }
     }
 
     // No default remark. The screen already prints the status in plain

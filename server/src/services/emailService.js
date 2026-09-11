@@ -1,11 +1,12 @@
 const nodemailer = require("nodemailer");
 const sgMail = require("@sendgrid/mail");
 const { renderEmailTemplate } = require("./emailTemplates");
+const { BRAND } = require("../config/brand");
 const invoiceRepository = require("../repositories/invoiceRepository");
 
 const provider = process.env.EMAIL_PROVIDER || "smtp";
 const fromAddress = process.env.EMAIL_FROM || "no-reply@marketplace.example.com";
-const fromName = process.env.EMAIL_FROM_NAME || "B2B Wholesale Marketplace";
+const fromName = process.env.EMAIL_FROM_NAME || BRAND.name;
 
 if (provider === "sendgrid" && process.env.SENDGRID_API_KEY) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
@@ -80,7 +81,7 @@ const sendInvoiceEmailWithRetry = async ({
     throw new Error("No buyer email available for invoice dispatch");
   }
 
-  const subject = `Invoice ${invoice.invoice_number} from ${invoice.supplier_company || invoice.supplier_name || "B2B Wholesale Marketplace"}`;
+  const subject = `Invoice ${invoice.invoice_number} from ${invoice.supplier_company || invoice.supplier_name || BRAND.name}`;
 
   const emailVariables = {
     buyerName: invoice.buyer_company || invoice.buyer_name || "Valued Customer",

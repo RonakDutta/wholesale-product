@@ -28,7 +28,7 @@
  * are in the same state" are not the same fact and the old code treated both
  * as Delhi.
  */
-const { gstinState, stateKey, INDIAN_STATES } = require("../utils/gstin");
+const { gstinState, stateKey, INDIAN_STATES, STATE_NAMES } = require("../utils/gstin");
 
 // Written any way, read back one way. Two people typing "tamil nadu" and
 // "Tamil Nadu" are in the same state and a bill must not say otherwise.
@@ -199,4 +199,60 @@ const isIntraState = (supplier, buyer) => {
   return stateKey(a) === stateKey(b);
 };
 
-module.exports = { resolveState, stateOf, asState, isIntraState, STATE_BY_CITY };
+/**
+ * The two digit GST state code for a state name, or null.
+ *
+ * The invoice prints "Haryana (06)", because the code is what a return is
+ * filed against and what an accountant reconciles on. Built by turning the
+ * GSTIN table around rather than typing a second list, so the two can never
+ * disagree.
+ *
+ * Where a name holds two codes, because a state was split or two union
+ * territories merged, the LOWER code wins: 28 rather than 37 for Andhra
+ * Pradesh, 25 rather than 26 for Daman and Diu. That is a coin toss on old
+ * registrations and it is why the code shown is taken from the customer's own
+ * GSTIN when he has one, in preference to this.
+ */
+const CODE_BY_STATE = (() => {
+  const out = {};
+  for (const [code, name] of Object.entries(STATE_NAMES)) {
+    const n = Number(code);
+    if (n < 1 || n > 38) continue;
+    const key = stateKey(name);
+    const padded = String(code).padStart(2, "0");
+    if (!out[key] || padded < out[key]) out[key] = padded;
+  }
+  return out;
+})();
+
+const stateCode = (name) => CODE_BY_STATE[stateKey(name)] || null;
+
+/**
+ * The place of supply as it goes on the document: the state, its code, and
+ * where the answer came from.
+ *
+ * The buyer's own GSTIN wins outright when he has one, because its first two
+ * digits ARE his state code and no lookup can beat that.
+ */
+const placeOfSupply = (buyer = {}) => {
+  const fromGstin = gstinState(buyer.gstin);
+  if (fromGstin && fromGstin.name) {
+    return { state: fromGstin.name, code: fromGstin.code, from: "gstin" };
+  }
+  const resolved = resolveState(buyer);
+  return {
+    state: resolved.state,
+    code: resolved.state ? stateCode(resolved.state) : null,
+    from: resolved.from,
+  };
+};
+
+module.exports = {
+  resolveState,
+  stateOf,
+  asState,
+  isIntraState,
+  stateCode,
+  placeOfSupply,
+  STATE_BY_CITY,
+};

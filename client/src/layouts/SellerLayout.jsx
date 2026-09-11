@@ -5,6 +5,7 @@ import {
   ShoppingBag,
   MessageSquare,
   FileText,
+  Truck,
   Settings,
   UserCog,
   Sparkles,
@@ -21,6 +22,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useUnread } from "../context/UnreadContext";
 import { FEATURES } from "../config/features";
+import Wordmark from "../components/Wordmark";
 
 // Wholesale 3.0 nav. "Customers" sits second because the customer book is the
 // thing a wholesaler opens the app for. The marketplace-era entries are kept
@@ -43,12 +45,16 @@ const NAV = [
     needs: "orders",
   },
   { path: "/seller/invoices", label: "Invoices", icon: FileText, needs: "invoices" },
+  // Sits under Invoices because it is the other half of the same job: what
+  // went out before the bill could be raised.
+  { path: "/seller/challans", label: "Challans", icon: Truck, needs: "invoices" },
   { path: "/seller/messages", label: "Messages", icon: MessageSquare, badge: "unread" },
+  // Off behind FEATURES.PROMOTIONS, not deleted. See the flag for why.
   {
     path: "/seller/promotions",
     label: "Promotions",
     icon: Sparkles,
-    flag: "MARKETPLACE",
+    flag: "PROMOTIONS",
   },
   {
     path: "/seller/analytics",
@@ -77,7 +83,7 @@ const PREFETCH = {
   "/seller/products": () => import("../pages/dashboard/MyProducts"),
   "/seller/sales": () => import("../pages/dashboard/Sales"),
   "/seller/orders": () => import("../pages/dashboard/Orders"),
-  "/seller/promotions": () => import("../pages/dashboard/Promotions"),
+  "/seller/challans": () => import("../pages/dashboard/Challans"),
   "/seller/staff": () => import("../pages/dashboard/Staff"),
   "/seller/settings": () => import("../pages/dashboard/Settings"),
 };
@@ -161,7 +167,7 @@ const SellerLayout = () => {
         <div className="flex h-16 shrink-0 items-center justify-between px-5">
           <div>
             <p className="text-base font-black leading-none tracking-tight">
-              market<span className="text-clay">place.</span>
+              <Wordmark />
             </p>
             <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-cream/40">
               Seller Workspace

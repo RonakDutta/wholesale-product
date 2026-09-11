@@ -36,6 +36,19 @@ export const FEATURES = {
    */
   BUYER_RETURNS: false,
 
+  /**
+   * Flash sales and coupons on the seller dashboard.
+   *
+   * Switched off 10 Sept at the wholesaler's request, not deleted. The screen,
+   * its route and its controller all stay compiled, so turning this back on is
+   * the only change needed and the code cannot quietly rot in the meantime.
+   *
+   * It was never usable anyway: creating a flash sale is admin only and there
+   * is no admin console, so the page could show a wholesaler what was running
+   * and offer him nothing to do about it.
+   */
+  PROMOTIONS: false,
+
   // Wholesaler only, and intended to sit behind a subscription plan later.
   // Off until there is real data to report on, because an analytics screen
   // with nothing in it teaches a wholesaler the product is empty.

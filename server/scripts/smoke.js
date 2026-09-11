@@ -36,6 +36,7 @@ const parties = require("../src/controllers/partyController");
 const sales = require("../src/controllers/saleController");
 const products = require("../src/controllers/productController");
 const dashboard = require("../src/controllers/dashboardController");
+const challans = require("../src/controllers/challanController");
 const invoices = require("../src/controllers/invoiceController");
 const creditNotes = require("../src/controllers/creditNoteController");
 const pdf = require("../src/services/pdfService");
@@ -90,14 +91,33 @@ const check = (cond, label, v) => { if (!cond) fails++;
     body: { lines: [{ itemName: "Cotton shirting", quantity: 3, rate: 142 }] } });
   check(e.statusCode === 200, "edit sale", { total: e.body.total });
 
-  const b = await call(sales.createInvoiceForSale, { user, params: { id: s.body.id } });
-  check(b.statusCode === 201, "raise invoice", { total: b.body.grand_total });
-  check(Number(b.body.grand_total) === Number(e.body.total), "bill equals sale", { sale: e.body.total, bill: b.body.grand_total });
+  // Since 10 Sept the bill waits until the sale is settled, and the goods go
+  // out on a delivery challan meanwhile. The whole rule stands down on a
+  // database whose migration has not been run, which is the case this file
+  // exists to cover, so both shapes are walked.
+  const challanService = require("../src/services/challanService");
+  challanService.resetChallanTables();
+  const hasChallans = await challanService.challanTablesExist();
+  console.log(`  (delivery challans ${hasChallans ? "on" : "not migrated, gate stands down"})`);
 
-  const full = await repo.findInvoiceById(b.body.id);
-  check((await pdf.generateInvoicePDF(full)).length > 1000, "invoice pdf", {});
+  if (hasChallans) {
+    const early = await call(sales.createInvoiceForSale, { user, params: { id: s.body.id } });
+    check(early.statusCode === 409 && early.body?.code === "UNPAID", "part paid sale is not billed",
+      { s: early.statusCode, outstanding: early.body?.outstanding });
 
-  const pay = await call(parties.recordPayment, { user, params: { id: p.body.id }, body: { amount: 50, method: "upi" } });
+    const dc = await call(challans.createForSale, { user, business: { id: wid, owner: true }, params: { id: s.body.id }, body: {} });
+    check(dc.statusCode === 201, "delivery challan instead", { n: dc.body?.challan_number });
+    const dcFull = await challanService.findById(dc.body.id, wid);
+    check((await pdf.generateChallanPDF(dcFull)).length > 1000, "challan pdf", {});
+  } else {
+    const early = await call(sales.createInvoiceForSale, { user, params: { id: s.body.id } });
+    check(early.statusCode === 201, "without the migration a part paid sale still bills",
+      { s: early.statusCode });
+  }
+
+  // Tagged to the sale. An untagged payment is money from the customer but
+  // not money against THIS sale, so it would not move it towards settled.
+  const pay = await call(parties.recordPayment, { user, params: { id: p.body.id }, body: { amount: 50, method: "upi", saleId: s.body.id } });
   check(pay.statusCode === 201, "record payment", {});
 
   const st = await call(parties.getPartyStatement, { user, params: { id: p.body.id }, query: {} });
@@ -105,6 +125,25 @@ const check = (cond, label, v) => { if (!cond) fails++;
   check(Number(st.body.closingBalance) === Number(bal.body.party.outstanding), "statement equals khata",
     { statement: st.body.closingBalance, khata: bal.body.party.outstanding });
   check((await pdf.generateStatementPDF(st.body, {})).length > 1000, "statement pdf", {});
+
+  // The rest of the money arrives, so now the bill can be raised.
+  const rest = await call(parties.recordPayment, { user, params: { id: p.body.id },
+    body: { amount: 297.30, method: "cash", saleId: s.body.id } });
+  check(rest.statusCode === 201, "the balance is settled", {});
+
+  // Idempotent either way: on the older shape the bill already exists and this
+  // hands back the same one.
+  const b = await call(sales.createInvoiceForSale, { user, params: { id: s.body.id } });
+  check(b.statusCode === 200 || b.statusCode === 201, "raise invoice", { s: b.statusCode, total: b.body?.grand_total });
+  check(Number(b.body.grand_total) === Number(e.body.total), "bill equals sale", { sale: e.body.total, bill: b.body.grand_total });
+
+  const full = await repo.findInvoiceById(b.body.id);
+  check((await pdf.generateInvoicePDF(full)).length > 1000, "invoice pdf", {});
+
+  if (hasChallans) {
+    const stamped = await testPool.query("SELECT invoice_id FROM delivery_challans WHERE sale_id = $1", [s.body.id]);
+    check(!!stamped.rows[0]?.invoice_id, "the challan points at the bill that superseded it", {});
+  }
 
   const cn = await call(creditNotes.createCreditNote, { user, body: { invoiceId: b.body.id, reason: "goods_returned" } });
   check(cn.statusCode === 201, "credit note", { n: cn.body.note_number });

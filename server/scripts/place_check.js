@@ -296,6 +296,10 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
     "two customers, one nearby and one out of state",
   );
 
+  // Paid in full at the point of sale. This suite is about which tax comes
+  // out, not about when a bill may be raised, and since 10 Sept an unpaid
+  // sale gets a delivery challan rather than an invoice. Settling it keeps
+  // the subject of the test the subject of the test.
   const saleFor = async (partyId) => {
     const s = await call(sales.createSale, {
       ...asOwner,
@@ -303,6 +307,8 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
         partyId,
         status: "confirmed",
         lines: [{ itemName: "Cotton shirting", quantity: 10, unit: "mtr", rate: 100, gstPercent: 5 }],
+        amountPaid: 1050,
+        paymentMethod: "cash",
       },
     });
     const bill = await call(sales.createInvoiceForSale, { ...asOwner, params: { id: s.body.id } });

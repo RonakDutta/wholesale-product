@@ -26,7 +26,16 @@ cd server && npm run migrate
 | `wholesale3_one_invoice_per_order.sql` | Unique index so one order cannot hold two invoices | run 7 Sept |
 | `wholesale3_staff_accounts.sql` | Employees who work on a wholesaler's book | run 7 Sept |
 
-Nothing outstanding. To confirm all three actually landed, since two of them use
+| `wholesale3_delivery_challans.sql` | Goods-out note when a sale is not fully paid | **NOT RUN** |
+| `wholesale3_invoice_number_format.sql` | Invoice number prefix, suffix and padding | **NOT RUN** |
+| `wholesale3_invoice_rule46_fields.sql` | Place of supply, reverse charge, round off | **NOT RUN** |
+
+Three outstanding, all added 10 Sept. Run them in any order; none depends on
+another. Until they are run the code stands down cleanly: the challan feature
+reports "needs its migration", the invoice number keeps its old format, and
+the new Rule 46 fields are simply absent from the document.
+
+To confirm the earlier three landed, since two of them use
 IF NOT EXISTS and one can be refused by existing data without stopping the run:
 
 ```sql
@@ -72,6 +81,58 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 ---
 
 ## Done
+
+### 10 Sept 2026, third batch
+
+**Renamed to KhazanaBMS.** Five screens each held their own copy of the
+wordmark; they now read from one constant through a `Wordmark` component. The
+browser tab said "wholesale-product". Server side too: email header, welcome
+notification, and the fallback on an invoice when a wholesaler has not filled
+in his own company name. The support address and the mail sender still point
+at marketplace domains, because inventing an address that bounces is worse
+than the inconsistency.
+
+**The sign in buttons stopped jumping.** Pressing "Create Account" moved them
+126px up the screen, out from under the cursor that had just clicked them,
+because the column was vertically centred and Create Account is 252px taller.
+Reserving a height would not have fixed it: the column is 436, 688, 790 and
+798px in four reachable states. The top edge is anchored instead. Measured
+zero movement at 900, 800 and 720.
+
+**Promotions is hidden** behind `FEATURES.PROMOTIONS`, not deleted. The route
+redirects rather than 404s. It was never usable: creating a flash sale is
+admin only and there is no admin console.
+
+**Delivery challans, to the specification given.** While a sale is unpaid or
+part paid the wholesaler gets a challan and the tax invoice waits. No tax on
+the challan. This is NOT what section 31(1) says, the wholesaler knows, and it
+is going to a legal advisor; it is behind `CHALLAN_WHEN_UNPAID` so it can be
+switched off in one word. Rule 55's three copies, provisional quantity and the
+six month approval window were deferred by instruction.
+
+One conflict came out of it and is recorded rather than hidden: this rule and
+the 50/50 instalment plan cannot both be true, because an invoice that only
+exists once settled can never be in the Partial state. `invoice_payment_check`
+now sets the flag off and says why.
+
+**The invoice number ring.** Both defects fixed. The counter keys on the
+FINANCIAL year, so it no longer rolls over on 1 January and reuses a serial
+inside one return period. The whole composed number is checked against Rule
+46(b)'s 16 characters and allowed characters, where before only the prefix was
+clipped. The shape follows the Busy dialog: prefix, number, suffix, optional
+padding, so `OM/2/26-27` is reproducible, and `compose()` is pure so a screen
+can show a live sample.
+
+**Six Rule 46 particulars now print.** Copy title, supplier PAN (read out of
+the GSTIN, not a second field), total quantity, amount in words, and the
+HSN-wise tax summary needed no new data. Place of supply with its state code,
+reverse charge and round off got columns. Old invoices are untouched, because
+a tax document must not change after it has been handed over.
+
+Verified: 21 suites, 515 checks, plus both smoke shapes. Both PDFs rendered
+and looked at, which caught the challan disagreeing with itself: its line
+column summed to the pre-tax figure while its total showed the tax inclusive
+one.
 
 ### 10 Sept 2026, later
 
@@ -326,6 +387,130 @@ numbering; shop prices treated as tax inclusive.
 
 ---
 
+## The next phase, noted 10 Sept, nothing built yet
+
+Requested in one go and deliberately not started. Written down here so the
+shape is agreed before any of it is typed. Photos of the app this is modelled
+on are coming; several of the decisions below wait on them.
+
+**Read `docs/MASTER_AND_TRANSACTIONS.md` and `docs/BUSY_MODEL.md` first.**
+The first is the plan: what the master dashboard holds, what a purchase record
+needs, what to refine in sales and orders, and everything parked. The second is
+the reading it came from.
+
+**Read `docs/BUSY_MODEL.md` first.** Fourteen screenshots of a live Busy 21
+were shared on 10 Sept and are written up there field by field: the Masters
+menu, the whole Transactions menu, a real tax invoice with its IRN and e-way
+bill number, the voucher numbering dialog, the regional settings and the GST
+config. Most of the questions below are answered by it, and several guesses in
+this section turned out to be right for the wrong reasons.
+
+### The shape: masters, transactions, reports
+
+This is how Tally, Busy and Marg are laid out, and it is what a wholesaler who
+has used any of them expects. Masters are the things that exist; transactions
+are the things that happen; reports read both.
+
+  masters        customers, suppliers, items, units, tax rates, states, HSN
+  transactions   sales, purchases, receipts, payments, credit and debit notes
+  reports        khata, statement, GST returns, stock
+
+We already have most of the nouns, under other names: `parties` is the party
+master, `supplier_inventory` is the item master, `sales` is the sales register.
+What is missing is a **purchase** side, which is half the transactions column,
+and the menu that says which is which. A wholesaler buys as well as sells, and
+right now the product can only describe one direction.
+
+### Super admin, and the platform masters
+
+Some masters belong to the platform, not to any one wholesaler: the state list,
+the HSN list, tax rates, the number formats. Today they are constants in the
+code, so changing one is a deploy.
+
+**One thing found while looking:** `users.role` carries a CHECK constraint
+allowing only `buyer`, `seller` and `both`. `promotionController` already
+tests for role `'admin'`, which the database can never contain, so that code
+is unreachable rather than merely unbuilt. A super admin needs that constraint
+changed, which is a migration, and it is the first step of this whole block.
+
+### GST Rule 46, and two real defects in what we ship
+
+Rule 46 of the CGST Rules lists 16 mandatory particulars for a tax invoice.
+Missing or wrong ones cost the customer his input credit and carry a penalty
+of up to Rs 25,000 per invoice under Section 122. Against our invoice today,
+two are genuinely wrong rather than merely absent:
+
+**The invoice number resets on the wrong day.** `invoiceNumberService` uses
+`new Date().getFullYear()`, so the counter rolls over on 1 January. Rule 46(b)
+wants a serial unique for the FINANCIAL year, 1 April to 31 March. An invoice
+raised in January 2027 would reuse a number already issued in FY 2026-27.
+This is live today and it will bite on 1 January.
+
+**The number can exceed 16 characters.** Rule 46(b) caps the serial at 16.
+`INV-2026-000001` is 15 and fine, but the prefix is only clipped at 10
+characters, so a wholesaler who sets a 10 character prefix gets a 22 character
+number. `invoices.invoice_number` is `varchar(50)`, so nothing refuses it.
+This is what "fixing the length" means, and the fix is to cap the whole
+composed number, not the prefix.
+
+Also missing from the document: **place of supply** is computed but never
+printed, the **reverse charge** indicator does not exist, and the delivery
+address is not shown for an unregistered buyer over Rs 50,000. Signature is
+handled by the "computer generated, no signature required" line, which is
+accepted practice.
+
+### Delivery challan, Rule 55
+
+Correctly understood as not a tax invoice. Worth being precise about why,
+because the reason matters for what it may say: a challan is for moving goods
+where a tax invoice cannot yet be raised, and it carries a **provisional**
+quantity and value. Rule 55(2) wants three copies, marked Original for
+Consignee, Duplicate for Transporter, Triplicate for Consigner.
+
+One correction to the plan as put: a challan is not "the document you use when
+the whole amount has not been paid". Part payment does not change what a
+supply is. A tax invoice is still due on a credit sale, which is most of what
+a wholesaler does, and that invoice is what the customer claims his credit
+against. The challan belongs with **movement**, not with payment. This one
+needs settling before it is built, or we will hand wholesalers a document that
+does not do what they think it does.
+
+### Razorpay
+
+For verifying that a UPI payment really happened, which is the honest gap in
+what we have: payments today are self declared, the buyer presses a button to
+say he paid.
+
+Two things to design around, both found while reading:
+
+  the signature   a webhook is signed with an HMAC SHA256 of the raw body
+                  under the webhook secret, in `X-Razorpay-Signature`. The
+                  raw body, so the JSON body parser has to be bypassed on
+                  that route or the signature will never match
+  UPI Collect     deprecated by NPCI from 28 February 2026, which has already
+                  passed. Any integration has to use UPI Intent or UPI QR
+
+Handlers have to be idempotent, because the same event arrives more than once.
+That is the same discipline the invoice reconcile already needed.
+
+### Keyboard first
+
+No mouse: numpad for moving up and down, shortcut keys for everything else.
+This is the single thing most likely to decide whether a working wholesaler
+adopts this over the software he already has, and it is also the one that has
+to be designed before it is built rather than sprinkled on afterwards, because
+it constrains every screen. It wants its own pass.
+
+### Numbers
+
+Decimal and thousands separators, configurable. Worth doing carefully: the
+Indian grouping is 12,34,567 not 1,234,567, and the codebase already calls
+`toLocaleString("en-IN")` in about fourteen places with its own copy of a
+`money()` helper. Those want collapsing into one formatter first, or a setting
+will reach some screens and not others.
+
+---
+
 ## Left to do
 
 Roughly in the order agreed.
@@ -406,13 +591,22 @@ for many taxpayers. That is a commercial decision and it shapes the schema.
   then sorts and filters on it. Same rule that removed `trust_score`.
 - **The client bundle is about 1.8MB** and there are 14 non identical copies of
   a `money()` helper.
+- **The invoice number rolls over on 1 January, not 1 April.** Rule 46(b)
+  wants a serial unique for the financial year. Live today, and it will
+  produce a duplicate serial the moment somebody raises an invoice in January.
+  See the next phase notes above.
+- **A long prefix makes an invoice number over 16 characters,** which Rule
+  46(b) does not allow. The column is `varchar(50)` so nothing refuses it.
+- **`promotionController` checks for role `'admin'`,** which the `chk_role`
+  constraint on `users` can never contain. That code is unreachable, not
+  merely unbuilt.
 - **`README.md` is substantially out of date.**
 
 ---
 
 ## Testing
 
-Twenty suites in `server/scripts/*_check.js`, 478 checks. They drive the real
+Twenty one suites in `server/scripts/*_check.js`, 515 checks. They drive the real
 controllers against a local Postgres, so they catch schema drift that reading
 the code does not.
 

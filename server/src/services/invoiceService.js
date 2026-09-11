@@ -2,6 +2,8 @@ const pool = require("../config/db");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const invoiceNumberService = require("./invoiceNumberService");
 const gstService = require("./gstService");
+const challanService = require("./challanService");
+const { placeOfSupply } = require("./placeOfSupply");
 const pdfService = require("./pdfService");
 const emailService = require("./emailService");
 
@@ -89,7 +91,7 @@ class InvoiceService {
       const orderQuery = `
         SELECT 
           o.id, o.order_number, o.buyer_id, o.supplier_id, o.total_amount,
-          o.subtotal, o.status, o.payment_status, o.created_at, o.delivery_address,
+          o.subtotal, o.status, o.payment_status, o.amount_paid, o.created_at, o.delivery_address,
           bu.first_name AS buyer_first_name, bu.last_name AS buyer_last_name, bu.email AS buyer_email,
           bwp.company_name AS buyer_company, bwp.gstin AS buyer_gstin, bwp.city AS buyer_city,
           su.first_name AS supplier_first_name, su.last_name AS supplier_last_name, su.email AS supplier_email,
@@ -108,6 +110,31 @@ class InvoiceService {
         throw new Error("Order not found for automatic invoice creation");
       }
       const order = orderResult.rows[0];
+
+      /**
+       * A tax invoice only once the money is in, on this side too.
+       *
+       * Checkout calls this in the background the moment an order is placed,
+       * so without this an unpaid order would be invoiced within a second of
+       * being created and the rule asked for on 10 Sept would only hold on
+       * the sales book side.
+       *
+       * Not an error: an unpaid order having no bill yet is the intended
+       * state, and the caller ignores the return anyway. When the money
+       * lands, reconcileInvoiceForOrder calls back in here and the invoice is
+       * raised then.
+       *
+       * Behind the same flag. See challanService.js for why this rule is not
+       * what section 31(1) says.
+       */
+      if (challanService.challanEnabled() && await challanService.challanTablesExist(client)) {
+        const total = Number(order.total_amount || 0);
+        const paid = Number(order.amount_paid || 0);
+        if (total > 0 && paid < total - 0.01) {
+          if (shouldManageTransaction) await client.query("ROLLBACK");
+          return null;
+        }
+      }
 
       // Fetch order line items
       const itemsQuery = `
@@ -172,11 +199,14 @@ class InvoiceService {
       });
 
       // Sequential within this wholesaler's own run, not the platform's.
+      const pos = placeOfSupply(buyerLocation);
+
       const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(
         client,
         settings.prefix,
         null,
         order.supplier_id,
+        { suffix: settings.numberSuffix, padTo: settings.numberPadTo },
       );
 
       const issueDate = new Date();
@@ -201,6 +231,11 @@ class InvoiceService {
         igst: gstCalculation.igst,
         totalTax: gstCalculation.totalTax,
         grandTotal: gstCalculation.grandTotal,
+        placeOfSupply: pos.state,
+        placeOfSupplyCode: pos.code,
+        supplierState: gstCalculation.supplierState,
+        reverseCharge: false,
+        roundOff: gstCalculation.roundOff,
         paymentStatus: initialPaymentStatus,
         invoiceStatus: initialInvoiceStatus,
         issueDate,
@@ -226,6 +261,13 @@ class InvoiceService {
         },
         client
       );
+
+      // Goods may already have gone out on one or more challans while the
+      // money was outstanding. Point them at the bill that superseded them,
+      // so they stop reading as open. The sale side has always done this; this
+      // side never did, so a challan raised against an order sat in "Not
+      // billed yet" for ever.
+      await challanService.markInvoicedForOrder(client, order.id, createdInvoice.id);
 
       // If already paid, record initial payment entry
       if (initialPaymentStatus === "Paid") {
@@ -285,11 +327,29 @@ class InvoiceService {
    * a bill that disagreed with it. The invoice now mirrors what the order says
    * has been received, instalment by instalment.
    */
-  async reconcileInvoiceForOrder(orderId) {
+  async reconcileInvoiceForOrder(orderId, retried = false) {
     const invoice = await invoiceRepository.findInvoiceByOrderId(orderId);
     if (!invoice) {
-      // Nothing to reconcile yet; creation stamps the right status itself.
-      return this.createInvoiceFromOrder(orderId);
+      /**
+       * Nothing to reconcile yet, so create. Creation stamps the status from
+       * the order as it stood at that moment.
+       *
+       * Then ask again, once. Checkout raises the invoice in the background,
+       * so a buyer who pays straight away has two callers arriving together:
+       * checkout creating the bill from an order with nothing on it, and this
+       * one finding no bill, creating, losing the race under the lock, and
+       * being handed back the other one with the payment never recorded. The
+       * bill then read Pending with nothing received while the order screen
+       * showed a receipt for half the money, which is exactly the fault
+       * invoice_payment_check was written to stop, coming back through a race.
+       *
+       * Only reachable with CHALLAN_WHEN_UNPAID=false, because with the rule
+       * on there is no bill until the money is all in. The flag is expected to
+       * be flipped after legal review, so this is fixed rather than left.
+       */
+      const created = await this.createInvoiceFromOrder(orderId);
+      if (!created || retried) return created;
+      return this.reconcileInvoiceForOrder(orderId, true);
     }
 
     const orderResult = await pool.query(
@@ -402,6 +462,12 @@ class InvoiceService {
         client,
       );
 
+      // Any challan still reading as open against this order now points at
+      // the bill. Creation does this too; it is repeated here for a challan
+      // written after the bill existed, which a sale billed under the old
+      // rule can still have.
+      await challanService.markInvoicedForOrder(client, orderId, invoice.id);
+
       await client.query("COMMIT");
     } catch (err) {
       await client.query("ROLLBACK");
@@ -502,11 +568,14 @@ class InvoiceService {
         buyerLocation: { gstin: buyerUser.gstin, city: buyerUser.city },
       });
 
+      const pos = placeOfSupply({ gstin: buyerUser.gstin, city: buyerUser.city });
+
       const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(
         client,
         settings.prefix,
         null,
         supplierId,
+        { suffix: settings.numberSuffix, padTo: settings.numberPadTo },
       );
 
       const invoiceData = {
@@ -523,6 +592,11 @@ class InvoiceService {
         igst: gstCalculation.igst,
         totalTax: gstCalculation.totalTax,
         grandTotal: gstCalculation.grandTotal,
+        placeOfSupply: pos.state,
+        placeOfSupplyCode: pos.code,
+        supplierState: gstCalculation.supplierState,
+        reverseCharge: false,
+        roundOff: gstCalculation.roundOff,
         paymentStatus: "Pending",
         invoiceStatus: "Generated",
         issueDate: new Date(),

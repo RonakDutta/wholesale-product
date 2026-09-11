@@ -64,6 +64,7 @@ const Overview = lazy(() => import("./pages/dashboard/Overview"));
 const MoneyBreakdown = lazy(() => import("./pages/dashboard/MoneyBreakdown"));
 const SellerOrderDetail = lazy(() => import("./pages/dashboard/SellerOrderDetail"));
 const Staff = lazy(() => import("./pages/dashboard/Staff"));
+const Challans = lazy(() => import("./pages/dashboard/Challans"));
 
 const SellerFallback = () => (
   <div className="flex min-h-dvh items-center justify-center bg-slate-100">
@@ -146,11 +147,18 @@ const router = createBrowserRouter([
       // The rows behind each figure on the overview.
       { path: "money/:metric", element: <MoneyBreakdown /> },
       { path: "invoices", element: <Invoices /> },
+      // Goods sent out before the money came in. Not a tax document.
+      { path: "challans", element: <Challans /> },
       { path: "invoices/create", element: <CreateInvoice /> },
       { path: "invoices/reports", element: <InvoiceReports /> },
       { path: "invoices/settings", element: <InvoiceSettings /> },
       { path: "invoices/:id", element: <InvoiceDetails /> },
-      { path: "promotions", element: <Promotions /> },
+      // Hidden, not deleted. The nav entry follows the same flag, so this is
+      // only reachable by an old bookmark; sending those to the dashboard is
+      // kinder than a "not found" for a page that still exists.
+      ...(FEATURES.PROMOTIONS
+        ? [{ path: "promotions", element: <Promotions /> }]
+        : [{ path: "promotions", element: <Navigate to="/seller" replace /> }]),
       { path: "messages", element: <Messages /> },
       { path: "messages/:vendorId", element: <Messages /> },
       { path: "settings", element: <Settings /> },

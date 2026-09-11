@@ -5,6 +5,7 @@ const creditNoteService = require("../services/creditNoteService");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const gstService = require("../services/gstService");
 const { checkHsn } = require("../services/hsnService");
+const challanService = require("../services/challanService");
 const { businessId } = require("../middlewares/businessContext");
 
 /**
@@ -301,6 +302,15 @@ exports.createSale = async (req, res) => {
 
     await client.query("COMMIT");
 
+    // A cash sale settled at the counter is settled the moment it is written
+    // down, so its bill is raised here rather than waiting for a button. Does
+    // nothing when money is still owed. After the commit, because the sale has
+    // to exist before it can be billed, and never awaited into the response:
+    // the sale is recorded either way and a bill can always be raised again.
+    saleInvoiceService
+      .billIfSettled(sale.rows[0].id, wholesalerId)
+      .catch((err) => console.warn("Bill on a settled sale skipped:", err.message));
+
     res.status(201).json({
       ...sale.rows[0],
       party_name: party.rows[0].name,
@@ -332,13 +342,45 @@ exports.listSales = async (req, res) => {
       where += ` AND s.status = $${params.length}`;
     }
 
+    // Goods out on a challan, counted per sale so the list can show it. Only
+    // once the migration has been run; before that the column is a plain zero
+    // rather than the query failing.
+    const hasChallans = await challanService.challanTablesExist();
+    const challanCount = hasChallans
+      ? `,
+         (SELECT COUNT(*) FROM delivery_challans dc WHERE dc.sale_id = s.id) AS challan_count`
+      : ",\n         0 AS challan_count";
+
+    /**
+     * What has actually come in against this sale.
+     *
+     * party_payments alone is not the answer for a sale written from a shop
+     * order. The buyer pays at checkout, and that money lands on
+     * orders.amount_paid; nothing tags a row to the sale. So a fully paid
+     * order produced a sale in his book reading "the whole amount still due",
+     * while the order it came from read "all paid". A wholesaler reported
+     * exactly that.
+     *
+     * GREATEST rather than a sum, and the same rule challanService.settlementOf
+     * uses, because a payment he also entered by hand against the sale is the
+     * same money arriving twice on paper, not twice in the till.
+     */
+    const listed = await invoiceRepository.schemaExtras();
+    const received = listed.has_sale_order_id
+      ? `GREATEST(
+           COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
+                      WHERE pp.sale_id = s.id), 0),
+           COALESCE((SELECT o.amount_paid FROM orders o WHERE o.id = s.order_id), 0)
+         )`
+      : `COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
+                    WHERE pp.sale_id = s.id), 0)`;
+
     const result = await pool.query(
       `SELECT
          s.id, s.sale_number, s.sale_date, s.status, s.source, s.total,
          p.name AS party_name, p.business_name AS party_business_name,
          (SELECT COUNT(*) FROM sale_lines sl WHERE sl.sale_id = s.id) AS line_count,
-         COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
-                    WHERE pp.sale_id = s.id), 0) AS received
+         ${received} AS received${challanCount}
        FROM sales s
        JOIN parties p ON p.id = s.party_id
        WHERE ${where}
@@ -400,11 +442,22 @@ exports.getSaleById = async (req, res) => {
       creditNoteService.findBySaleId(id, wholesalerId),
     ]);
 
+    // Whether this sale is settled is the one question the billing rule turns
+    // on, so it comes from the same function the server uses rather than
+    // being worked out again on the screen from a different set of rows. An
+    // order backed sale has money on the order as well as in party_payments,
+    // which a client side sum would miss.
+    const settlement = await challanService.settlementForSale(id, wholesalerId);
+
     res.status(200).json({
       sale: sale.rows[0],
       lines: lines.rows,
       payments: payments.rows,
       creditNote,
+      settlement,
+      // Whether a challan may be raised at all, so the screen does not have
+      // to know the rule.
+      challansOn: challanService.challanEnabled() && (await challanService.challanTablesExist()),
     });
   } catch (err) {
     console.error("Error fetching sale:", err);
@@ -524,6 +577,9 @@ exports.createInvoiceForSale = async (req, res) => {
     cancelled: [400, "A cancelled sale cannot be billed"],
     draft: [400, "Confirm this sale before raising a bill"],
     empty: [400, "This sale has no items to bill"],
+    // Not a failure so much as "not yet". The screen turns this into an
+    // offer to send the goods out on a delivery challan instead.
+    unpaid: [409, "This sale is not fully paid yet, so the bill waits"],
   };
 
   try {
@@ -531,7 +587,18 @@ exports.createInvoiceForSale = async (req, res) => {
 
     if (result.error) {
       const [status, message] = REASONS[result.error] || [400, "Cannot bill this sale"];
-      return res.status(status).json({ message });
+      // The unpaid case carries the numbers with it, so the screen can say
+      // how much is left rather than making him go and look.
+      if (result.error === "unpaid") {
+        return res.status(status).json({
+          message,
+          code: "UNPAID",
+          outstanding: result.outstanding,
+          received: result.received,
+          total: result.total,
+        });
+      }
+      return res.status(status).json({ message, code: result.error });
     }
 
     res.status(result.created ? 201 : 200).json(result.invoice);

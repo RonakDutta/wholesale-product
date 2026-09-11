@@ -1,6 +1,7 @@
 const pool = require("../config/db");
 const { clean, fromPaise, toPaise } = require("../utils/money");
 const saleInvoiceService = require("../services/saleInvoiceService");
+const creditApplyService = require("../services/creditApplyService");
 const { hasPartyLink } = require("../services/partyService");
 const { hasSaleLink } = require("../services/orderSaleService");
 const { checkGstin } = require("../utils/gstin");
@@ -9,6 +10,7 @@ const {
   bridgedGuard,
   balanceExpression,
   collectionTotals,
+  totalsExpression,
 } = require("../services/khataBalance");
 const pdfService = require("../services/pdfService");
 const { businessId } = require("../middlewares/businessContext");
@@ -322,8 +324,14 @@ exports.recordPayment = async (req, res) => {
 
     // Money against a billed sale has to move that bill's status too, or the
     // invoice and the customer's balance start telling different stories.
+    //
+    // And if this payment settled the sale, the bill is raised here rather
+    // than waiting for somebody to press a button. That button could be
+    // forgotten, and a settled sale with no bill is a customer with nothing
+    // to put in his books. The order side has always worked this way.
     if (clean(saleId)) {
       try {
+        await saleInvoiceService.billIfSettled(saleId, wholesalerId);
         await saleInvoiceService.syncInvoiceFromLedger(saleId);
       } catch (syncError) {
         // The payment is recorded and that is what matters. A stale invoice
@@ -626,17 +634,25 @@ exports.getPartyStats = async (req, res) => {
     const hasOrderParty = await hasPartyLink(pool);
     const hasBridge = await hasSaleLink(pool);
 
+    /**
+     * Billed and received read the one rule as well, not just the balance.
+     *
+     * These two were still counting sales alone, while "still to collect"
+     * beside them counted shop orders too. A wholesaler with an order he had
+     * not accepted yet read "Total billed 0" next to "Still to collect 710" on
+     * the same header: nothing billed, 710 to go and get. Both true under
+     * their own sums, and together nonsense.
+     */
+    const totals = totalsExpression({ hasOrderParty, hasBridge });
+
     const [result, collect] = await Promise.all([
       pool.query(
         `SELECT
            (SELECT COUNT(*) FROM parties
              WHERE wholesaler_id = $1 AND status = 'active') AS active_parties,
            (SELECT COUNT(*) FROM parties WHERE wholesaler_id = $1) AS total_parties,
-           COALESCE((SELECT SUM(s.total) FROM sales s
-              WHERE s.wholesaler_id = $1
-                AND s.status IN ('confirmed', 'delivered')), 0) AS total_billed,
-           COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
-              WHERE pp.wholesaler_id = $1), 0) AS total_received`,
+           ${totals.billed} AS total_billed,
+           ${totals.received} AS total_received`,
         [wholesalerId],
       ),
       pool.query(collectionTotals({ hasOrderParty, hasBridge }), [wholesalerId]),
@@ -653,6 +669,82 @@ exports.getPartyStats = async (req, res) => {
     });
   } catch (err) {
     console.error("Error fetching party stats:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/**
+ * The credit this customer has, and what it could be set against.
+ *
+ * See services/creditApplyService.js for what a credit is and why setting it
+ * against an order is a re-addressing of money rather than a new payment.
+ */
+exports.getCreditOffer = async (req, res) => {
+  try {
+    const party = await pool.query(
+      "SELECT id FROM parties WHERE id = $1 AND wholesaler_id = $2",
+      [req.params.id, businessId(req)],
+    );
+    if (party.rows.length === 0) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+    res.status(200).json(await creditApplyService.offer(req.params.id, businessId(req)));
+  } catch (err) {
+    console.error("Error reading a customer's credit:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+const CREDIT_REASONS = {
+  notFound: [404, "That sale is not on this customer's account"],
+  noCredit: [400, "You are not holding any of this customer's money"],
+  settled: [400, "That sale is already paid"],
+  dead: [400, "That sale is cancelled or still a draft"],
+  nothing: [400, "There is nothing to set against it"],
+};
+
+exports.applyCredit = async (req, res) => {
+  const wholesalerId = businessId(req);
+  const { saleId, amount } = req.body || {};
+
+  if (!clean(saleId)) {
+    return res.status(400).json({ message: "Choose what to set it against" });
+  }
+
+  try {
+    const party = await pool.query(
+      "SELECT id FROM parties WHERE id = $1 AND wholesaler_id = $2",
+      [req.params.id, wholesalerId],
+    );
+    if (party.rows.length === 0) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+
+    const result = await creditApplyService.apply(
+      req.params.id,
+      wholesalerId,
+      clean(saleId),
+      amount === undefined || amount === null || amount === "" ? null : Number(amount),
+    );
+
+    if (result.error) {
+      const [status, message] = CREDIT_REASONS[result.error] || [400, "Could not set this credit"];
+      return res.status(status).json({ message, code: result.error });
+    }
+
+    // The sale may now be settled, in which case the bill follows, exactly as
+    // it does when cash comes in. Best effort: the money has moved and that is
+    // what matters, a stale bill is recoverable.
+    try {
+      await saleInvoiceService.billIfSettled(clean(saleId), wholesalerId);
+      await saleInvoiceService.syncInvoiceFromLedger(clean(saleId));
+    } catch (billErr) {
+      console.error("Could not refresh the bill after setting credit:", billErr.message);
+    }
+
+    res.status(200).json(result);
+  } catch (err) {
+    console.error("Error setting a customer's credit:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

@@ -1,6 +1,8 @@
 const pool = require("../config/db");
 const { fullName } = require("../utils/money");
 const invoiceRepository = require("../repositories/invoiceRepository");
+const challanService = require("./challanService");
+const { placeOfSupply } = require("./placeOfSupply");
 const invoiceNumberService = require("./invoiceNumberService");
 const gstService = require("./gstService");
 
@@ -140,6 +142,34 @@ class SaleInvoiceService {
       const { sale, lines, received } = loaded;
 
       /**
+       * One bill per sale, even with two callers arriving at once.
+       *
+       * The check above this transaction reads outside any lock, so two
+       * callers can both see "no invoice yet" and both go on to create one.
+       * That was harmless while a bill was only ever raised by a person
+       * pressing a button. It is not any more: a settled sale now bills
+       * itself, so recording the last payment and pressing "Make invoice" are
+       * two callers doing the same work at the same moment. Caught by the
+       * challan suite, which did exactly that and got a duplicate key error
+       * off idx_invoices_sale.
+       *
+       * The lock is taken on the sale, and the question is asked again under
+       * it. The loser finds the winner's invoice and hands that back.
+       */
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
+        [`sale:${sale.id}`],
+      );
+      const raced = await client.query(
+        "SELECT * FROM invoices WHERE sale_id = $1",
+        [sale.id],
+      );
+      if (raced.rows.length > 0) {
+        await client.query("COMMIT");
+        return { invoice: raced.rows[0], created: false };
+      }
+
+      /**
        * A sale from a shop order is billed by the order's invoice.
        *
        * Checkout raises one automatically, in the background, the moment the
@@ -190,6 +220,31 @@ class SaleInvoiceService {
       if (lines.length === 0) {
         await client.query("ROLLBACK");
         return { error: "empty" };
+      }
+
+      /**
+       * A tax invoice only once the money is in.
+       *
+       * Asked for on 10 Sept: while a sale is part paid or unpaid the
+       * wholesaler gets a delivery challan instead, and the bill waits.
+       *
+       * This is not what section 31(1) says, which ties the invoice to
+       * removal of the goods rather than to payment. See the header of
+       * challanService.js. It is behind a flag for exactly that reason:
+       * CHALLAN_WHEN_UNPAID=false restores the old behaviour, where a bill
+       * could be raised whenever it was asked for.
+       */
+      if (challanService.challanEnabled() && await challanService.challanTablesExist(client)) {
+        const money = await challanService.settlementOf(client, sale);
+        if (!money.settled) {
+          await client.query("ROLLBACK");
+          return {
+            error: "unpaid",
+            outstanding: Number((money.total - money.received).toFixed(2)),
+            received: money.received,
+            total: money.total,
+          };
+        }
       }
 
       const supplier = await client.query(
@@ -262,11 +317,14 @@ class SaleInvoiceService {
         isTaxInclusive: fromShop || legacyInclusive ? true : TAX_INCLUSIVE,
       });
 
+      const pos = placeOfSupply({ gstin: sale.party_gstin, city: sale.party_city });
+
       const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(
         client,
         settings.prefix,
         null,
         wholesalerId,
+        { suffix: settings.numberSuffix, padTo: settings.numberPadTo },
       );
 
       const issueDate = new Date(sale.sale_date || Date.now());
@@ -292,6 +350,16 @@ class SaleInvoiceService {
         igst: gst.igst,
         totalTax: gst.totalTax,
         grandTotal: gst.grandTotal,
+        // Rule 46 particulars, frozen at issue. The place of supply is the
+        // state the goods went TO, which is what decides IGST against CGST
+        // plus SGST, and it has been computed all along without being stored.
+        placeOfSupply: pos.state,
+        placeOfSupplyCode: pos.code,
+        supplierState: gst.supplierState,
+        // No reverse charge path exists yet, so this is always false. The
+        // field is required on the document even when the answer is no.
+        reverseCharge: false,
+        roundOff: gst.roundOff,
         paymentStatus: paid ? "Paid" : "Pending",
         invoiceStatus: "Generated",
         issueDate,
@@ -310,6 +378,11 @@ class SaleInvoiceService {
       // The link back to the sale, and the recipient frozen as of today.
       // See the migration for why these are stored rather than joined.
       const stamped = { rows: [await this.stampRecipient(client, invoice.id, sale)] };
+
+      // The goods may have gone out on one or more challans while the money
+      // was outstanding. Point them at the bill that superseded them, so they
+      // stop reading as open.
+      await challanService.markInvoiced(client, sale.id, invoice.id);
 
       await invoiceRepository.addLog(
         {
@@ -350,6 +423,38 @@ class SaleInvoiceService {
    * owing. Nothing writes that table for a sale invoice any more; this
    * recomputes the status from what actually came in.
    */
+  /**
+   * Raise the bill the moment a sale is settled, if it has none yet.
+   *
+   * The rule is that a tax invoice waits until the sale is fully paid. That
+   * left the last step to a button nobody had to press: a wholesaler could
+   * settle a sale and his customer would simply never get a bill.
+   *
+   * The order side already worked this way, through reconcileInvoiceForOrder,
+   * so this closes an asymmetry rather than inventing a behaviour: the same
+   * event had two outcomes depending on which screen the money came in on.
+   *
+   * Safe to call on every payment. It does nothing when the sale is short,
+   * already billed, cancelled or a draft, and createInvoiceFromSale is
+   * idempotent besides.
+   *
+   * Never throws. A payment that is recorded is the thing that matters; a
+   * bill that did not raise itself can be raised again by the next payment or
+   * by hand.
+   */
+  async billIfSettled(saleId, wholesalerId) {
+    if (!saleId || !wholesalerId) return null;
+    try {
+      const money = await challanService.settlementForSale(saleId, wholesalerId);
+      if (!money || !money.settled) return null;
+      const result = await this.createInvoiceFromSale(saleId, wholesalerId);
+      return result.invoice || null;
+    } catch (err) {
+      console.error("Could not raise the bill for a settled sale:", err.message);
+      return null;
+    }
+  }
+
   async syncInvoiceFromLedger(saleId, externalClient = null) {
     const db = externalClient || pool;
 

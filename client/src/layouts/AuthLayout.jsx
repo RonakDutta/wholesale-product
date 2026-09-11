@@ -2,6 +2,8 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import { Box, ArrowLeft } from "lucide-react";
+import Wordmark from "../components/Wordmark";
+import { BRAND } from "../config/brand";
 
 // The example page. Two customers owing and one settled, because a book in
 // which everybody owes is not what a real one looks like, and the settled row
@@ -82,9 +84,10 @@ const AuthLayout = () => {
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-clay">
               <Box className="h-4.5 w-4.5 text-cream" />
             </div>
-            <span className="font-dmsans text-lg font-bold tracking-tight text-cream">
-              marketplace.
-            </span>
+            <Wordmark
+              className="font-dmsans text-lg font-bold tracking-tight text-cream"
+              accent="text-clay"
+            />
           </Link>
         </div>
 
@@ -166,9 +169,7 @@ const AuthLayout = () => {
             <div className="w-9 h-9 bg-clay rounded-lg flex items-center justify-center">
               <Box className="w-4 h-4 text-cream" />
             </div>
-            <span className="text-espresso font-dmsans font-bold text-lg tracking-tight">
-              marketplace.
-            </span>
+            <Wordmark className="text-espresso font-dmsans font-bold text-lg tracking-tight" />
           </div>
 
           <button
@@ -181,7 +182,18 @@ const AuthLayout = () => {
           </button>
         </div>
 
-        <div className="flex flex-1 items-start justify-center px-6 pt-5 pb-10 lg:items-center lg:px-0 lg:py-6">
+        {/* Anchored to the top, never centred.
+            Centring made the position of everything depend on how tall the
+            form happened to be, so the Sign In and Create Account buttons
+            moved 126px up the screen the moment you pressed one, which is
+            under the cursor that just clicked. Measured at 1440x900.
+
+            Reserving a height instead would not have fixed it: the form is
+            436px on Sign In, 688px on Create Account, 790px once "I sell
+            wholesale" reveals the state field and 798px with every validation
+            message showing, so any fixed reserve is wrong for something. The
+            top edge is the only thing that can hold still, so it does. */}
+        <div className="flex flex-1 items-start justify-center px-6 pt-5 pb-10 lg:px-0 lg:pt-20 lg:pb-10">
           <div className="w-full max-w-96">
             {showSwitcher && (
             <div className="relative bg-white rounded-xl p-1 mb-6 shadow-sm border border-slate-200/60">
@@ -220,7 +232,7 @@ const AuthLayout = () => {
 
         <div className="font-inter mx-auto w-full max-w-96 shrink-0 px-6 pb-5 text-center lg:px-0">
           <p className="text-[11px] text-slate-500 font-medium">
-            2026 <i>marketplace.</i> All rights reserved.
+            2026 <i>{BRAND.name}</i>. All rights reserved.
           </p>
         </div>
       </div>

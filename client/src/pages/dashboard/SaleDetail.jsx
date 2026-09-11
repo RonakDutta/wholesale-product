@@ -71,6 +71,11 @@ const SaleDetail = () => {
   // rather than inside it because it is a document in its own right.
   const [creditNote, setCreditNote] = useState(null);
   const [downloading, setDownloading] = useState("");
+  // Set when the server refuses to bill because money is still outstanding.
+  // Carries the figures, so the panel can say how much is left.
+  const [unpaid, setUnpaid] = useState(null);
+  const [challans, setChallans] = useState([]);
+  const [makingChallan, setMakingChallan] = useState(false);
 
   const handleDownloadInvoice = async () => {
     if (!invoice) return;
@@ -136,6 +141,15 @@ const SaleDetail = () => {
         }
       }
 
+      // Goods may already have gone out on one or more challans while the
+      // money was outstanding. An empty list is the ordinary case.
+      try {
+        const res = await api.get(`/api/challans/sale/${id}`);
+        if (alive) setChallans(Array.isArray(res.data) ? res.data : []);
+      } catch {
+        if (alive) setChallans([]);
+      }
+
       if (alive) setLoading(false);
     };
     load();
@@ -149,13 +163,47 @@ const SaleDetail = () => {
     try {
       const { data: raised } = await api.post(`/api/sales/${id}/invoice`);
       setInvoice(raised);
+      setUnpaid(null);
       toast.success(`Invoice ${raised.invoice_number} is ready.`);
     } catch (error) {
-      toast.error(
-        error.response?.data?.message || "Could not raise the invoice.",
-      );
+      // Not paid in full is not a failure, it is "not yet". The panel turns
+      // it into an offer to send the goods out on a delivery challan.
+      if (error.response?.data?.code === "UNPAID") {
+        setUnpaid(error.response.data);
+      } else {
+        toast.error(
+          error.response?.data?.message || "Could not raise the invoice.",
+        );
+      }
     }
     setBilling(false);
+  };
+
+  const makeChallan = async () => {
+    setMakingChallan(true);
+    try {
+      const { data } = await api.post(`/api/challans/sale/${id}`, {});
+      setChallans((prev) => [data, ...prev]);
+      toast.success(`Delivery challan ${data.challan_number} is ready.`);
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message || "Could not make the delivery challan.",
+      );
+    }
+    setMakingChallan(false);
+  };
+
+  const downloadChallan = async (challan) => {
+    setDownloading(challan.id);
+    try {
+      await downloadFile(
+        `/api/challans/${challan.id}/pdf`,
+        `${challan.challan_number}.pdf`,
+      );
+    } catch (err) {
+      toast.error(err.message || "Could not download the challan");
+    }
+    setDownloading("");
   };
 
   const changeStatus = async (status) => {
@@ -205,9 +253,39 @@ const SaleDetail = () => {
     );
   }
 
-  const { sale, lines, payments } = data;
-  const received = payments.reduce((sum, p) => sum + Number(p.amount), 0);
-  const due = Number(sale.total) - received;
+  const { sale, lines, payments, settlement, challansOn } = data;
+
+  // The server owns the rule. An order backed sale has money on the order as
+  // well as in party_payments, so summing the rows on this screen would say
+  // a settled sale still owed money.
+  const settled = settlement ? settlement.settled : false;
+  const outstanding = settlement
+    ? Number((settlement.total - settlement.received).toFixed(2))
+    : 0;
+  // Goods can go out on a challan whenever the sale is live and unsettled.
+  // This used to appear only after pressing "Make invoice" and being refused,
+  // which meant the right button was hidden behind the wrong one.
+  const canChallan =
+    challansOn && !settled && sale.status !== "draft" && sale.status !== "cancelled";
+
+  /**
+   * What is still owed, from the server's figure and not from this list.
+   *
+   * The list below holds party_payments tagged to this sale, and a sale
+   * written from a shop order has none: the buyer paid at checkout and that
+   * money sits on the order. Adding up the list gave zero, so a fully paid
+   * order showed a sale reading "₹1,420 still due" while the order it links
+   * to read "all paid". Reported by a wholesaler, and it was the same rule
+   * being answered by two different sums.
+   */
+  const received = settlement
+    ? Number(settlement.received)
+    : payments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const due = Number((Number(sale.total) - received).toFixed(2));
+  // Money that came in through the shop rather than being entered here, so
+  // the empty payments list below is explained rather than just puzzling.
+  const paidElsewhere =
+    received - payments.reduce((sum, p) => sum + Number(p.amount), 0);
 
   // A sale written from a shop order belongs to that order. It gets no
   // buttons of its own, because delivering the goods is one event and it had
@@ -405,23 +483,99 @@ const SaleDetail = () => {
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-sm font-bold text-espresso">
-                  No invoice raised for this sale
-                </p>
+                <p className="text-sm font-bold text-espresso">No invoice yet</p>
                 <p className="mt-1 text-xs text-slate-500">
                   {sale.status === "draft"
-                    ? "Confirm the sale first, then you can raise its invoice."
-                    : "Raise it once and the number is fixed. It cannot be raised twice."}
+                    ? "Confirm the sale first."
+                    : settled
+                      ? "Raise it once. The number is then fixed."
+                      : "The bill is raised on its own once this sale is paid in full."}
                 </p>
               </div>
+              {/* Only offered when the sale is settled. It used to show while
+                  money was still due, where pressing it got a refusal and
+                  changed nothing on screen: the wrong button sitting next to
+                  the right one. The bill normally raises itself now, so this
+                  is the fallback for a sale settled before that landed. */}
+              {settled && sale.status !== "cancelled" && (
+                <button
+                  onClick={makeBill}
+                  disabled={billing}
+                  className="flex items-center gap-2 rounded-lg bg-clay px-4 py-2 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-50"
+                >
+                  <FileText className="h-4 w-4" />
+                  {billing ? "Making..." : "Make invoice"}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Standing, not hidden behind a failed billing attempt. Goods go
+              out whenever they go out, and the wholesaler should not have to
+              press the wrong button to find the right one.
+
+              Shown even when an invoice already exists, because it can: a
+              sale billed before this rule came in, or billed by hand, can
+              still have goods leaving against an unpaid balance. */}
+          {canChallan && (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-bold text-amber-900">
+                ₹{money(unpaid?.outstanding ?? outstanding)} is still to come in
+              </p>
+              <p className="mt-1 text-xs text-amber-800">
+                {invoice
+                  ? "Already billed, before it was settled. Goods can still go out on a challan."
+                  : "The bill follows once this is paid in full. Send goods out on a challan meanwhile."}
+              </p>
               <button
-                onClick={makeBill}
-                disabled={billing || sale.status === "draft" || sale.status === "cancelled"}
-                className="flex items-center gap-2 rounded-lg bg-clay px-4 py-2 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-50"
+                onClick={makeChallan}
+                disabled={makingChallan}
+                className="mt-3 flex items-center gap-2 rounded-lg bg-amber-700 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-amber-800 disabled:opacity-50"
               >
-                <FileText className="h-4 w-4" />
-                {billing ? "Making invoice..." : "Make invoice"}
+                <Truck className="h-4 w-4" />
+                {makingChallan
+                  ? "Making challan..."
+                  : challans.length > 0
+                    ? "Make another delivery challan"
+                    : "Make delivery challan"}
               </button>
+            </div>
+          )}
+
+          {challans.length > 0 && (
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+                Delivery challans
+              </p>
+              <ul className="space-y-1.5">
+                {challans.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                  >
+                    <span className="flex items-center gap-2 text-espresso">
+                      <Truck className="h-3.5 w-3.5 text-slate-400" />
+                      <span className="font-bold">{c.challan_number}</span>
+                      <span className="text-xs text-slate-500">
+                        {dateLabel(c.issue_date)}
+                      </span>
+                      {c.invoice_id && (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                          Billed
+                        </span>
+                      )}
+                    </span>
+                    <button
+                      onClick={() => downloadChallan(c)}
+                      disabled={downloading === c.id}
+                      className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      {downloading === c.id ? "..." : "PDF"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>
@@ -519,8 +673,19 @@ const SaleDetail = () => {
 
         {payments.length === 0 ? (
           <p className="px-6 py-8 text-center text-sm text-slate-500">
-            Nothing received against this sale yet. Payments recorded on the
-            customer's account without naming a sale are not listed here.
+            {paidElsewhere > 0.01 ? (
+              <>
+                ₹{money(paidElsewhere)} came in through the shop, on order{" "}
+                {sale.order_number || ""}. Payments entered here would be
+                listed below.
+              </>
+            ) : (
+              <>
+                Nothing received against this sale yet. Payments recorded on
+                the customer's account without naming a sale are not listed
+                here.
+              </>
+            )}
           </p>
         ) : (
           <ul className="divide-y divide-slate-100">

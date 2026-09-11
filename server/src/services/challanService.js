@@ -407,6 +407,33 @@ class ChallanService {
     );
     return done.rowCount;
   }
+
+  /**
+   * The same, reached from the order.
+   *
+   * A shop order raises its own bill, from invoiceService, which knows nothing
+   * about sales and so never stamped anything. So goods that went out on a
+   * challan against an order stayed "Not billed" on the Challans screen for
+   * ever, long after the bill for the same goods existed. Caught by
+   * flow_check, walking one order the whole way through.
+   *
+   * Matched both ways, because a challan can be written with an order_id or
+   * with the sale_id of the sale behind that order depending on which screen
+   * raised it, and both describe the same goods.
+   */
+  async markInvoicedForOrder(client, orderId, invoiceId) {
+    if (!orderId || !invoiceId) return 0;
+    if (!(await challanTablesExist(client))) return 0;
+    const done = await client.query(
+      `UPDATE delivery_challans
+          SET invoice_id = $2, updated_at = CURRENT_TIMESTAMP
+        WHERE invoice_id IS NULL
+          AND (order_id = $1
+               OR sale_id IN (SELECT id FROM sales WHERE order_id = $1))`,
+      [orderId, invoiceId],
+    );
+    return done.rowCount;
+  }
 }
 
 module.exports = new ChallanService();

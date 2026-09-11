@@ -262,6 +262,13 @@ class InvoiceService {
         client
       );
 
+      // Goods may already have gone out on one or more challans while the
+      // money was outstanding. Point them at the bill that superseded them,
+      // so they stop reading as open. The sale side has always done this; this
+      // side never did, so a challan raised against an order sat in "Not
+      // billed yet" for ever.
+      await challanService.markInvoicedForOrder(client, order.id, createdInvoice.id);
+
       // If already paid, record initial payment entry
       if (initialPaymentStatus === "Paid") {
         await invoiceRepository.addPayment(
@@ -320,11 +327,29 @@ class InvoiceService {
    * a bill that disagreed with it. The invoice now mirrors what the order says
    * has been received, instalment by instalment.
    */
-  async reconcileInvoiceForOrder(orderId) {
+  async reconcileInvoiceForOrder(orderId, retried = false) {
     const invoice = await invoiceRepository.findInvoiceByOrderId(orderId);
     if (!invoice) {
-      // Nothing to reconcile yet; creation stamps the right status itself.
-      return this.createInvoiceFromOrder(orderId);
+      /**
+       * Nothing to reconcile yet, so create. Creation stamps the status from
+       * the order as it stood at that moment.
+       *
+       * Then ask again, once. Checkout raises the invoice in the background,
+       * so a buyer who pays straight away has two callers arriving together:
+       * checkout creating the bill from an order with nothing on it, and this
+       * one finding no bill, creating, losing the race under the lock, and
+       * being handed back the other one with the payment never recorded. The
+       * bill then read Pending with nothing received while the order screen
+       * showed a receipt for half the money, which is exactly the fault
+       * invoice_payment_check was written to stop, coming back through a race.
+       *
+       * Only reachable with CHALLAN_WHEN_UNPAID=false, because with the rule
+       * on there is no bill until the money is all in. The flag is expected to
+       * be flipped after legal review, so this is fixed rather than left.
+       */
+      const created = await this.createInvoiceFromOrder(orderId);
+      if (!created || retried) return created;
+      return this.reconcileInvoiceForOrder(orderId, true);
     }
 
     const orderResult = await pool.query(
@@ -436,6 +461,12 @@ class InvoiceService {
         },
         client,
       );
+
+      // Any challan still reading as open against this order now points at
+      // the bill. Creation does this too; it is repeated here for a challan
+      // written after the bill existed, which a sale billed under the old
+      // rule can still have.
+      await challanService.markInvoicedForOrder(client, orderId, invoice.id);
 
       await client.query("COMMIT");
     } catch (err) {

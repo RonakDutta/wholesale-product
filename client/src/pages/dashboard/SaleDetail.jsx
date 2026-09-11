@@ -267,8 +267,25 @@ const SaleDetail = () => {
   // which meant the right button was hidden behind the wrong one.
   const canChallan =
     challansOn && !settled && sale.status !== "draft" && sale.status !== "cancelled";
-  const received = payments.reduce((sum, p) => sum + Number(p.amount), 0);
-  const due = Number(sale.total) - received;
+
+  /**
+   * What is still owed, from the server's figure and not from this list.
+   *
+   * The list below holds party_payments tagged to this sale, and a sale
+   * written from a shop order has none: the buyer paid at checkout and that
+   * money sits on the order. Adding up the list gave zero, so a fully paid
+   * order showed a sale reading "₹1,420 still due" while the order it links
+   * to read "all paid". Reported by a wholesaler, and it was the same rule
+   * being answered by two different sums.
+   */
+  const received = settlement
+    ? Number(settlement.received)
+    : payments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const due = Number((Number(sale.total) - received).toFixed(2));
+  // Money that came in through the shop rather than being entered here, so
+  // the empty payments list below is explained rather than just puzzling.
+  const paidElsewhere =
+    received - payments.reduce((sum, p) => sum + Number(p.amount), 0);
 
   // A sale written from a shop order belongs to that order. It gets no
   // buttons of its own, because delivering the goods is one event and it had
@@ -656,8 +673,19 @@ const SaleDetail = () => {
 
         {payments.length === 0 ? (
           <p className="px-6 py-8 text-center text-sm text-slate-500">
-            Nothing received against this sale yet. Payments recorded on the
-            customer's account without naming a sale are not listed here.
+            {paidElsewhere > 0.01 ? (
+              <>
+                ₹{money(paidElsewhere)} came in through the shop, on order{" "}
+                {sale.order_number || ""}. Payments entered here would be
+                listed below.
+              </>
+            ) : (
+              <>
+                Nothing received against this sale yet. Payments recorded on
+                the customer's account without naming a sale are not listed
+                here.
+              </>
+            )}
           </p>
         ) : (
           <ul className="divide-y divide-slate-100">

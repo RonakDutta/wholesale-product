@@ -55,6 +55,12 @@ const PartyDetail = () => {
   const [showEdit, setShowEdit] = useState(false);
   // Bumped after a payment is recorded so the balance and both lists reload.
   const [refreshKey, setRefreshKey] = useState(0);
+  // Money of his the wholesaler is holding loose, and what it could be set
+  // against. Asked for separately because the balance on this page nets the
+  // two together and so cannot answer it: the moment he orders again, his
+  // credit is cancelled out by the new bill and the page reads zero.
+  const [credit, setCredit] = useState(null);
+  const [applying, setApplying] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -72,6 +78,15 @@ const PartyDetail = () => {
           );
         }
       }
+      // A 403 here is an employee without the payments permission, which is
+      // not an error worth shouting about: the panel simply does not appear.
+      try {
+        const res = await api.get(`/api/parties/${id}/credit`);
+        if (alive) setCredit(res.data);
+      } catch {
+        if (alive) setCredit(null);
+      }
+
       if (alive) setLoading(false);
     };
     load();
@@ -79,6 +94,25 @@ const PartyDetail = () => {
       alive = false;
     };
   }, [id, refreshKey]);
+
+  const setAgainst = async (target) => {
+    setApplying(target.saleId);
+    try {
+      const { data: done } = await api.post(`/api/parties/${id}/credit`, {
+        saleId: target.saleId,
+      });
+      toast.success(
+        `₹${money(done.applied)} set against ${done.saleNumber}.` +
+          (done.creditLeft > 0 ? ` ₹${money(done.creditLeft)} of his money left.` : ""),
+      );
+      setRefreshKey((k) => k + 1);
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message || "Could not set this against that bill.",
+      );
+    }
+    setApplying("");
+  };
 
   if (loading) {
     return (
@@ -179,6 +213,57 @@ const PartyDetail = () => {
             </p>
           </div>
         </div>
+
+        {/* Money of his that nothing is standing against.
+            
+            Shown apart from the balance above, because that balance is one
+            netted number and netting is what hid this: he returns a 2 lakh
+            order, orders 4 lakh, and his page reads zero while 2 lakh of his
+            money is plainly still in the till. Then he pays the bill in full
+            and the 2 lakh reappears as a debt the wholesaler owes. */}
+        {credit && credit.credit > 0 && (
+          <div className="mt-5 rounded-xl border border-sky-200 bg-sky-50 p-4">
+            <p className="text-sm font-bold text-sky-900">
+              You are holding ₹{money(credit.credit)} of his money
+            </p>
+            <p className="mt-1 text-xs text-sky-800">
+              {credit.targets.length > 0
+                ? "He paid for something that was cancelled or came back. Set it against a bill of his, or pay it back."
+                : "He paid for something that was cancelled or came back. He has no unpaid bill to set it against, so pay it back."}
+            </p>
+            {credit.targets.length > 0 && (
+              <ul className="mt-3 space-y-2">
+                {credit.targets.map((t) => (
+                  <li
+                    key={t.saleId}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-3 py-2"
+                  >
+                    <span className="min-w-0 text-sm">
+                      <span className="font-bold text-espresso">
+                        {t.saleNumber}
+                      </span>
+                      {t.orderNumber ? (
+                        <span className="text-slate-500"> · {t.orderNumber}</span>
+                      ) : null}
+                      <span className="text-slate-500">
+                        {" "}· ₹{money(t.outstanding)} owed
+                      </span>
+                    </span>
+                    <button
+                      onClick={() => setAgainst(t)}
+                      disabled={Boolean(applying)}
+                      className="shrink-0 rounded-lg bg-sky-700 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-sky-800 disabled:opacity-50"
+                    >
+                      {applying === t.saleId
+                        ? "Setting..."
+                        : `Put ₹${money(t.canApply)} against it`}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-5">
           <Link

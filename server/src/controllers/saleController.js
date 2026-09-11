@@ -351,13 +351,36 @@ exports.listSales = async (req, res) => {
          (SELECT COUNT(*) FROM delivery_challans dc WHERE dc.sale_id = s.id) AS challan_count`
       : ",\n         0 AS challan_count";
 
+    /**
+     * What has actually come in against this sale.
+     *
+     * party_payments alone is not the answer for a sale written from a shop
+     * order. The buyer pays at checkout, and that money lands on
+     * orders.amount_paid; nothing tags a row to the sale. So a fully paid
+     * order produced a sale in his book reading "the whole amount still due",
+     * while the order it came from read "all paid". A wholesaler reported
+     * exactly that.
+     *
+     * GREATEST rather than a sum, and the same rule challanService.settlementOf
+     * uses, because a payment he also entered by hand against the sale is the
+     * same money arriving twice on paper, not twice in the till.
+     */
+    const listed = await invoiceRepository.schemaExtras();
+    const received = listed.has_sale_order_id
+      ? `GREATEST(
+           COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
+                      WHERE pp.sale_id = s.id), 0),
+           COALESCE((SELECT o.amount_paid FROM orders o WHERE o.id = s.order_id), 0)
+         )`
+      : `COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
+                    WHERE pp.sale_id = s.id), 0)`;
+
     const result = await pool.query(
       `SELECT
          s.id, s.sale_number, s.sale_date, s.status, s.source, s.total,
          p.name AS party_name, p.business_name AS party_business_name,
          (SELECT COUNT(*) FROM sale_lines sl WHERE sl.sale_id = s.id) AS line_count,
-         COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
-                    WHERE pp.sale_id = s.id), 0) AS received${challanCount}
+         ${received} AS received${challanCount}
        FROM sales s
        JOIN parties p ON p.id = s.party_id
        WHERE ${where}

@@ -49,6 +49,7 @@ stub.loaded = true;
 require.cache[dbPath] = stub;
 
 const orders = require("../src/controllers/orderController");
+const invoiceController = require("../src/controllers/invoiceController");
 const invoiceService = require("../src/services/invoiceService");
 const invoiceRepository = require("../src/repositories/invoiceRepository");
 const partyService = require("../src/services/partyService");
@@ -254,6 +255,65 @@ const mkUser = async (role, phone) =>
     "a cancelled bill stays cancelled", { s: b3.invoice_status });
   check((b3.payments || []).length === 1,
     "and takes on no further payments", { rows: (b3.payments || []).length });
+
+  // ---- the three cards on the Invoices tab agree with each other --------
+  //
+  // They were counted off payment_status rather than off money, and on a part
+  // paid bill none of the three was right: "Still to come in" took the whole
+  // grand_total, "Received" counted only fully paid bills so the money already
+  // in appeared on neither card, and the count beside the first read 0 while
+  // its amount read the full bill.
+  //
+  // The third order also pays the moment it is placed, without waiting for
+  // checkout to finish raising the bill. That race used to lose the payment
+  // entirely: both callers found no invoice, one created it, the other was
+  // handed it back and never recorded the money.
+  const buyer3 = await mkUser("buyer", "9820011225");
+  const placed3 = await call(orders.createOrder, {
+    user: { id: buyer3 },
+    body: {
+      products: [{ productId: p, inventoryId: inv, quantity: 5 }],
+      deliveryAddress: { name: "Third Shop", phone: "9820011225", city: "Surat" },
+      paymentPlan: "installment_50_50",
+    },
+  });
+  const orderId3 = placed3.body.orderId;
+  await call(orders.initiatePayment, {
+    user: { id: buyer3 }, params: { orderId: orderId3 }, body: { installment: 1 },
+  });
+  await call(orders.updatePaymentStatus, {
+    user: { id: buyer3 }, params: { orderId: orderId3 }, body: { paymentStatus: "paid" },
+  });
+  await new Promise((r) => setTimeout(r, 1200));
+
+  const bill3 = await invoiceRepository.findInvoiceByOrderId(orderId3);
+  const onBill3 = money((bill3?.payments || []).reduce((s, x) => s + Number(x.amount), 0));
+  check(onBill3 > 0, "the first instalment reaches the bill even when he pays at once", {
+    on: onBill3,
+    why: "checkout raises the bill in the background, so the two race",
+  });
+
+  const head = mk();
+  await invoiceController.getDashboardStats(
+    { user: { id: wid, role: "seller" }, business: { id: wid, owner: true, isOwner: true }, query: {} },
+    head,
+  );
+  const card = head.body?.stats?.summary || head.body?.stats || {};
+  const still = money(card.pending_amount);
+  const got = money(card.paid_amount);
+  const bills = money(
+    (await q(
+      `SELECT COALESCE(SUM(grand_total),0) n FROM invoices
+        WHERE supplier_id = $1 AND invoice_status <> 'Cancelled'
+          AND buyer_id IS DISTINCT FROM supplier_id`, [wid])).rows[0].n);
+  check(money(still + got) === bills,
+    "still to come in, plus received, is the value of the bills",
+    { still, received: got, bills });
+  check(
+    (still > 0) === (Number(card.pending_count) > 0),
+    "and the count beside the amount is not zero while the amount is not",
+    { amount: still, count: card.pending_count },
+  );
 
   console.log(fails ? `\n${fails} FAILED\n` : "\nall good\n");
   await testPool.end();

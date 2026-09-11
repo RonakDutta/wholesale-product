@@ -36,6 +36,7 @@ const parties = require("../src/controllers/partyController");
 const orderStatus = require("../src/services/orderStatusService");
 const orderSale = require("../src/services/orderSaleService");
 const partyService = require("../src/services/partyService");
+const orderRoute = require("../src/controllers/orderController");
 
 const mk = () => {
   const r = { statusCode: 200, body: null };
@@ -204,6 +205,66 @@ const acceptedOrder = async (sellerId, buyerId, partyId) => {
     stamped.rows[0].actual_delivery_date !== null,
     "and the delivery date is stamped, so the return window can count",
     { on: stamped.rows[0].actual_delivery_date },
+  );
+
+  /**
+   * The same thing again, through the route the screens actually use.
+   *
+   * Everything above drives orderStatusService. The "Mark delivered" button
+   * does not: it PATCHes /orders/:id/status, which writes the status itself.
+   * The mirror lived only in the service, so in the running product the sale
+   * sat at "confirmed" for ever and this suite said it did not, because it
+   * was asking the half that was right. Both paths now share one helper and
+   * both are checked here.
+   */
+  const viaRoute = await acceptedOrder(sellerId, buyerId, partyId);
+  for (const next of ["processing", "packed", "ready_for_pickup", "shipped",
+                      "in_transit", "out_for_delivery", "delivered"]) {
+    const moved = await call(orderRoute.updateOrderStatus, {
+      user: { id: sellerId, role: "seller" },
+      business: { id: sellerId, owner: true },
+      params: { orderId: viaRoute.orderId },
+      body: { status: next },
+    });
+    if (moved.statusCode >= 400) {
+      check(false, `the route could not move the order to ${next}`, { m: moved.body?.message });
+      break;
+    }
+  }
+  const routeSale = await testPool.query(
+    "SELECT status FROM sales WHERE id = $1", [viaRoute.sale.id]);
+  check(
+    routeSale.rows[0].status === "delivered",
+    "the button the screens press delivers the sale too",
+    { got: routeSale.rows[0].status, was: "confirmed, because the mirror was only in the service" },
+  );
+
+  /**
+   * And the route cannot kill an order behind the cancel handler's back.
+   *
+   * `cancelled` was a legal target here, so a status write could put an order
+   * in the ground while its sale stood, its stock stayed reserved and its
+   * customer kept owing. The screens use POST /cancel; the route allowed it,
+   * which was enough.
+   */
+  const notKillable = await acceptedOrder(sellerId, buyerId, partyId);
+  const killAttempt = await call(orderRoute.updateOrderStatus, {
+    user: { id: sellerId, role: "seller" },
+    business: { id: sellerId, owner: true },
+    params: { orderId: notKillable.orderId },
+    body: { status: "cancelled" },
+  });
+  check(
+    killAttempt.statusCode === 400 && killAttempt.body?.code === "USE_DEDICATED_ROUTE",
+    "the status route refuses to cancel, and says where to go",
+    { s: killAttempt.statusCode, code: killAttempt.body?.code },
+  );
+  const survived = await testPool.query(
+    "SELECT status FROM sales WHERE id = $1", [notKillable.sale.id]);
+  check(
+    survived.rows[0].status === "confirmed",
+    "so the sale behind it is left standing rather than orphaned",
+    { got: survived.rows[0].status },
   );
 
   // ---------------------------------------------------------------

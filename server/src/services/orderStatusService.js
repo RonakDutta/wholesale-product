@@ -1,5 +1,6 @@
 const pool = require("../config/db");
 const { FEATURES } = require("../config/features");
+const { markSaleDelivered } = require("./orderSaleService");
 
 /**
  * Order Status Service
@@ -189,22 +190,7 @@ const updateOrderStatus = async (orderId, newStatus, userId, userRole, remarks =
      * already worked this way, in cancelOrder below.
      */
     if (newStatus === 'delivered') {
-      const bridged = await client.query(
-        `SELECT EXISTS (
-           SELECT 1 FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'sales' AND column_name = 'order_id'
-         ) AS yes`
-      );
-      if (bridged.rows[0].yes) {
-        // Only from confirmed. A cancelled sale stays cancelled: an order
-        // that somehow reaches delivered after its sale was written off is a
-        // problem for a person to look at, not one to paper over here.
-        await client.query(
-          `UPDATE sales SET status = 'delivered', updated_at = CURRENT_TIMESTAMP
-            WHERE order_id = $1 AND status = 'confirmed'`,
-          [orderId]
-        );
-      }
+      await markSaleDelivered(client, orderId);
     }
 
     await client.query('COMMIT');

@@ -302,6 +302,15 @@ exports.createSale = async (req, res) => {
 
     await client.query("COMMIT");
 
+    // A cash sale settled at the counter is settled the moment it is written
+    // down, so its bill is raised here rather than waiting for a button. Does
+    // nothing when money is still owed. After the commit, because the sale has
+    // to exist before it can be billed, and never awaited into the response:
+    // the sale is recorded either way and a bill can always be raised again.
+    saleInvoiceService
+      .billIfSettled(sale.rows[0].id, wholesalerId)
+      .catch((err) => console.warn("Bill on a settled sale skipped:", err.message));
+
     res.status(201).json({
       ...sale.rows[0],
       party_name: party.rows[0].name,

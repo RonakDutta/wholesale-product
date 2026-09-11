@@ -18,6 +18,7 @@ const REASONS = {
   empty: [400, "This sale has no items"],
   settled: [400, "This sale is fully paid, so raise the bill instead"],
   reason: [400, "That is not a reason we know"],
+  noSale: [400, "Accept this order first, then goods can go out against it"],
 };
 
 exports.createForSale = async (req, res) => {
@@ -41,6 +42,61 @@ exports.createForSale = async (req, res) => {
     res.status(201).json(result.challan);
   } catch (err) {
     console.error("Error making a delivery challan:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/**
+ * The same thing from the order screen.
+ *
+ * An accepted order has a sale behind it, and that sale is what carries the
+ * goods and the money, so this delegates. A wholesaler looking at an order
+ * should not have to go and find its sale first.
+ */
+exports.createForOrder = async (req, res) => {
+  const wholesalerId = businessId(req);
+  const { id } = req.params;
+  const { reason, reasonNote } = req.body || {};
+
+  try {
+    const result = await challanService.createChallanForOrder(
+      id,
+      wholesalerId,
+      reason || "payment_pending",
+      reasonNote || null,
+    );
+
+    if (result.error) {
+      const [status, message] = REASONS[result.error] || [400, "Could not make this challan"];
+      return res.status(status).json({ message, code: result.error });
+    }
+
+    res.status(201).json(result.challan);
+  } catch (err) {
+    console.error("Error making a delivery challan for an order:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+exports.listForOrder = async (req, res) => {
+  const wholesalerId = businessId(req);
+  try {
+    const [challans, settlement, saleId] = await Promise.all([
+      challanService.listForOrder(req.params.id, wholesalerId),
+      challanService.settlementForOrder(req.params.id, wholesalerId),
+      challanService.saleIdForOrder(req.params.id, wholesalerId),
+    ]);
+    // The settlement and whether the order has a sale behind it ride along, so
+    // the order screen knows whether to offer the button without working the
+    // rule out for itself.
+    res.status(200).json({
+      challans,
+      settlement,
+      hasSale: Boolean(saleId),
+      challansOn: challanService.challanEnabled() && (await challanService.challanTablesExist()),
+    });
+  } catch (err) {
+    console.error("Error listing challans for an order:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

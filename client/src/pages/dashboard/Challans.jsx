@@ -86,9 +86,7 @@ const Challans = () => {
       <div>
         <h2 className="text-2xl font-black text-espresso">Delivery challans</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Goods you sent out before the money came in. A challan is not a tax
-          invoice and carries no GST; the bill follows once the sale is
-          settled.
+          Goods sent out before the money came in. Not a tax invoice, no GST.
         </p>
       </div>
 
@@ -126,7 +124,7 @@ const Challans = () => {
             <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
               {filter
                 ? "Try a different filter."
-                : "Open a sale that is not fully paid and you can send the goods out on a challan from there."}
+                : "Open a sale that is not fully paid to send goods out on a challan."}
             </p>
             {!filter && (
               <Link

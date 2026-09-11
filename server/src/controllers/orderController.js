@@ -15,6 +15,7 @@ const {
   returnWindowForOrder,
 } = require("../services/orderWindows");
 const invoiceService = require("../services/invoiceService");
+const challanService = require("../services/challanService");
 const creditNoteService = require("../services/creditNoteService");
 const pdfService = require("../services/pdfService");
 const {
@@ -149,6 +150,16 @@ const getSupplierOrders = async (req, res) => {
   const supplierId = businessId(req);
 
   try {
+    // Goods already out on a challan, so the list can show which orders have
+    // stock away from the godown. Zero until the migration has been run,
+    // rather than the whole list failing.
+    const hasChallans = await challanService.challanTablesExist();
+    const challanCount = hasChallans
+      ? `(SELECT COUNT(*) FROM delivery_challans dc
+           WHERE dc.order_id = o.id
+              OR dc.sale_id IN (SELECT id FROM sales s WHERE s.order_id = o.id))`
+      : "0";
+
     const query = `
       SELECT 
         o.id,
@@ -165,6 +176,7 @@ const getSupplierOrders = async (req, res) => {
         o.amount_paid,
         o.status,
         o.payment_status,
+        ${challanCount}::int AS challan_count,
         o.created_at as date
       FROM orders o
       LEFT JOIN supplier_inventory si ON o.inventory_item_id = si.id

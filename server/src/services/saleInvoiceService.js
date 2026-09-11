@@ -142,6 +142,34 @@ class SaleInvoiceService {
       const { sale, lines, received } = loaded;
 
       /**
+       * One bill per sale, even with two callers arriving at once.
+       *
+       * The check above this transaction reads outside any lock, so two
+       * callers can both see "no invoice yet" and both go on to create one.
+       * That was harmless while a bill was only ever raised by a person
+       * pressing a button. It is not any more: a settled sale now bills
+       * itself, so recording the last payment and pressing "Make invoice" are
+       * two callers doing the same work at the same moment. Caught by the
+       * challan suite, which did exactly that and got a duplicate key error
+       * off idx_invoices_sale.
+       *
+       * The lock is taken on the sale, and the question is asked again under
+       * it. The loser finds the winner's invoice and hands that back.
+       */
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
+        [`sale:${sale.id}`],
+      );
+      const raced = await client.query(
+        "SELECT * FROM invoices WHERE sale_id = $1",
+        [sale.id],
+      );
+      if (raced.rows.length > 0) {
+        await client.query("COMMIT");
+        return { invoice: raced.rows[0], created: false };
+      }
+
+      /**
        * A sale from a shop order is billed by the order's invoice.
        *
        * Checkout raises one automatically, in the background, the moment the
@@ -395,6 +423,38 @@ class SaleInvoiceService {
    * owing. Nothing writes that table for a sale invoice any more; this
    * recomputes the status from what actually came in.
    */
+  /**
+   * Raise the bill the moment a sale is settled, if it has none yet.
+   *
+   * The rule is that a tax invoice waits until the sale is fully paid. That
+   * left the last step to a button nobody had to press: a wholesaler could
+   * settle a sale and his customer would simply never get a bill.
+   *
+   * The order side already worked this way, through reconcileInvoiceForOrder,
+   * so this closes an asymmetry rather than inventing a behaviour: the same
+   * event had two outcomes depending on which screen the money came in on.
+   *
+   * Safe to call on every payment. It does nothing when the sale is short,
+   * already billed, cancelled or a draft, and createInvoiceFromSale is
+   * idempotent besides.
+   *
+   * Never throws. A payment that is recorded is the thing that matters; a
+   * bill that did not raise itself can be raised again by the next payment or
+   * by hand.
+   */
+  async billIfSettled(saleId, wholesalerId) {
+    if (!saleId || !wholesalerId) return null;
+    try {
+      const money = await challanService.settlementForSale(saleId, wholesalerId);
+      if (!money || !money.settled) return null;
+      const result = await this.createInvoiceFromSale(saleId, wholesalerId);
+      return result.invoice || null;
+    } catch (err) {
+      console.error("Could not raise the bill for a settled sale:", err.message);
+      return null;
+    }
+  }
+
   async syncInvoiceFromLedger(saleId, externalClient = null) {
     const db = externalClient || pool;
 

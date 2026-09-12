@@ -116,6 +116,46 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 
 ### 12 Sept 2026
 
+**The platform master dashboard,** at `/master`, its own area with its own
+layout and its own guard. States, units, tax rates and HSN codes, all
+editable, plus an overview that says what is there.
+
+A separate area rather than a page inside the seller workspace, for three
+reasons pointing the same way: `/seller/*` is guarded by role seller|both, so
+a Master screen inside it would be unreachable to a platform admin who does
+not also sell; CLAUDE.md already says the seller dashboard is for wholesalers;
+and they are different jobs. An admin who is also a wholesaler gets a
+"Platform master" link in his sidebar footer and his account label reads
+"Admin account" rather than "Wholesaler account". That label is presentation
+only, the role stays what it is.
+
+**Deactivate, never delete.** Every list carries `active`, switching a row off
+stops it being offered, and the row stays because a document already issued
+may name it. The screen says so where a person can see it. The last active row
+in a list cannot be switched off, and the attempt is put back rather than left
+half done.
+
+**What is deliberately NOT in master:** a wholesaler's invoice prefix, his due
+days, his default tax rate, his terms. Those are his and they stay on his own
+Invoice defaults screen; if they lived in master, one wholesaler changing his
+prefix would change everybody's. The overview screen says this outright,
+because somebody looking for "invoice settings" will look there first.
+
+Writes sit behind `requirePlatformAdmin`, which reads the flag from the
+database on the request. The client guard only decides whether to draw the
+screens; anyone past it finds every button returning 403. Editing a curated
+HSN row leaves it marked curated rather than quietly relabelling it as the
+admin's own.
+
+**A white screen on the Overview, found while rendering this.** For an
+employee without the money permission `overviewController` sends `money: null`
+rather than zeros, deliberately, so the screen can say "not shown to you"
+instead of claiming the business is owed nothing. The server had done its half
+since the permission was built and the screen never did its own, so that
+employee got a blank page on the first screen he lands on. It now says the
+figures are withheld and shows him the rest of the page.
+
+
 **All three documents are numbered the same way now.** They were three shapes
 with three padding widths and no year on any of them:
 

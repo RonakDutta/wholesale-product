@@ -48,6 +48,15 @@ import NotFound from "./pages/NotFound";
 
 // Seller workspace is lazy-loaded: retailers never download this bundle.
 const SellerLayout = lazy(() => import("./layouts/SellerLayout"));
+// The platform master area. Its own layout and its own guard, because
+// /seller/* is guarded by role seller|both and a platform admin need not be a
+// wholesaler at all. See MasterLayout for the rest of the reasoning.
+const MasterLayout = lazy(() => import("./layouts/MasterLayout"));
+const MasterOverview = lazy(() => import("./pages/master/MasterOverview"));
+const MasterStates = lazy(() => import("./pages/master/lists").then((m) => ({ default: m.MasterStates })));
+const MasterUnits = lazy(() => import("./pages/master/lists").then((m) => ({ default: m.MasterUnits })));
+const MasterTaxRates = lazy(() => import("./pages/master/lists").then((m) => ({ default: m.MasterTaxRates })));
+const MasterHsn = lazy(() => import("./pages/master/lists").then((m) => ({ default: m.MasterHsn })));
 const MyProducts = lazy(() => import("./pages/dashboard/MyProducts"));
 const AddProduct = lazy(() => import("./pages/dashboard/AddProduct"));
 const EditProduct = lazy(() => import("./pages/dashboard/EditProduct"));
@@ -167,6 +176,24 @@ const router = createBrowserRouter([
     ],
   },
   // Old dashboard links and bookmarks keep working.
+  {
+    // Signed in and admin only. MasterLayout does the checking and draws the
+    // refusal itself, so a wholesaler who follows a link here is told what the
+    // area is rather than bounced somewhere confusing.
+    path: "/master",
+    element: (
+      <Suspense fallback={<SellerFallback />}>
+        <MasterLayout />
+      </Suspense>
+    ),
+    children: [
+      { index: true, element: <MasterOverview /> },
+      { path: "states", element: <MasterStates /> },
+      { path: "units", element: <MasterUnits /> },
+      { path: "tax-rates", element: <MasterTaxRates /> },
+      { path: "hsn", element: <MasterHsn /> },
+    ],
+  },
   { path: "/dashboard", element: <Navigate to="/seller" replace /> },
   { path: "/dashboard/*", element: <Navigate to="/seller" replace /> },
   {

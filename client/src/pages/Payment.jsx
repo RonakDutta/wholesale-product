@@ -4,6 +4,7 @@ import { ArrowLeft, QrCode, IndianRupee, CheckCircle, AlertCircle, Loader2, Ban 
 import { QRCodeSVG } from "qrcode.react"; // Standardized named export to resolve Vite bundler error
 import { toast } from "sonner";
 import api from "../utils/axios";
+import RazorpayPanel from "../components/RazorpayPanel";
 
 const Payment = () => {
   const { orderId } = useParams();
@@ -314,6 +315,23 @@ const Payment = () => {
                 }}
               />
             </div>
+          </div>
+        )}
+
+        {/* Razorpay, scaffolded. Above the QR code because it is the way this
+            is meant to go eventually, and offered alongside rather than
+            instead: scanning and typing a reference is what actually works
+            today, and it is what every one of these buyers already does. */}
+        {payable && (
+          <div className="mb-8">
+            <RazorpayPanel
+              orderId={orderId}
+              amount={paymentDetails.amount}
+              onPaid={() => {
+                resolvedRef.current = true;
+                navigate("/order-success", { replace: true });
+              }}
+            />
           </div>
         )}
 

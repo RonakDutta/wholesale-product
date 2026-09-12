@@ -21,6 +21,11 @@ const authorizeRoles = require("../middlewares/roleMiddleware");
 const { requirePermission } = require("../middlewares/businessContext");
 const { getTracking, addCheckpoint } = require("../controllers/trackingController");
 const { createLink, getOrderLink } = require("../controllers/driverLinkController");
+const {
+  createRazorpayOrder,
+  simulateRazorpayPayment,
+  verifyRazorpayPayment,
+} = require("../controllers/razorpayController");
 
 const router = express.Router();
 
@@ -36,6 +41,14 @@ router.get("/:orderId/payment-details", authenticateToken, getPaymentDetails);
 router.post("/:orderId/payment", authenticateToken, initiatePayment);
 router.post("/:orderId/send-installment-reminder", authenticateToken, authorizeRoles("seller", "both", "admin"), sendInstallmentReminder);
 router.put("/:orderId/payment-status", authenticateToken, updatePaymentStatus);
+
+// Razorpay, scaffolded. Order creation is a stub and verification is real in
+// both modes; see services/razorpayService.js for what that buys and what is
+// still missing. "simulate" stands in for the gateway and refuses to exist the
+// moment a real secret is configured.
+router.post("/:orderId/razorpay/order", authenticateToken, createRazorpayOrder);
+router.post("/:orderId/razorpay/simulate", authenticateToken, simulateRazorpayPayment);
+router.post("/:orderId/razorpay/verify", authenticateToken, verifyRazorpayPayment);
 router.patch("/:orderId/status", authenticateToken, authorizeRoles("seller", "both", "admin"), requirePermission("orders"), updateOrderStatus);
 // Not role gated. Both sides of an order may call it off, and who is allowed
 // is decided against the order itself. Gating this on the seller role would

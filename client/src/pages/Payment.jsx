@@ -327,6 +327,7 @@ const Payment = () => {
             <RazorpayPanel
               orderId={orderId}
               amount={paymentDetails.amount}
+              merchant={paymentDetails.supplierName}
               onPaid={() => {
                 resolvedRef.current = true;
                 navigate("/order-success", { replace: true });

@@ -57,10 +57,25 @@ const STATUS_STYLES = {
  * A negative "still to collect" reads red rather than amber. It means he owes
  * his customers money, which is a different fact from being owed some.
  */
-const MoneyCard = ({ label, value, hint, to, tone = "espresso" }) => (
+/**
+ * `wide` is the phone only.
+ *
+ * Three cards across a 320px screen left each amount 57px of room for a figure
+ * that needs 82px, so every one of them was clipped, and it was still clipped
+ * at 390px. Measured, not guessed: that is what "the dashboard numbers feel
+ * weird" was.
+ *
+ * The fix is not a smaller font. What a wholesaler opens this screen for is
+ * what he is owed, so that figure takes the full width and the two month to
+ * date totals share the row underneath. Back to three across from sm: up,
+ * where they always fitted.
+ */
+const MoneyCard = ({ label, value, hint, to, tone = "espresso", wide = false }) => (
   <Link
     to={to}
-    className="group block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-clay sm:rounded-2xl sm:p-5"
+    className={`group block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-clay sm:rounded-2xl sm:p-5 ${
+      wide ? "col-span-2 sm:col-span-1" : ""
+    }`}
   >
     <div className="flex items-start justify-between gap-1">
       <p className="text-[11px] font-semibold leading-tight text-slate-500 sm:text-sm">
@@ -71,7 +86,7 @@ const MoneyCard = ({ label, value, hint, to, tone = "espresso" }) => (
       <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300 sm:hidden" />
     </div>
     <p
-      className={`mt-1 text-lg font-black sm:text-2xl ${
+      className={`mt-1 font-black sm:text-2xl ${wide ? "text-2xl" : "text-lg"} ${
         Number(value) < 0
           ? "text-rose-600"
           : tone === "amber"
@@ -262,13 +277,14 @@ const Overview = () => {
           </p>
         </div>
       ) : (
-      <div className="grid grid-cols-3 gap-2 sm:gap-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-4">
         <MoneyCard
           label="Still to collect"
           value={m.outstanding}
           hint="What your customers owe you"
           to="/seller/money/outstanding"
           tone={m.outstanding > 0 ? "amber" : "espresso"}
+          wide
         />
         <MoneyCard
           label="Billed this month"

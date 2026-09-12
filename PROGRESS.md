@@ -123,8 +123,19 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 ### 12 Sept 2026
 
 **Razorpay, scaffolded.** Asked for as "absolutely no need to make it working,
-just setup fake". Three endpoints under `/api/orders/:orderId/razorpay/`, a
-stub checkout panel on the payment screen, and no gateway behind any of it.
+just setup fake", then completed "with modal and all, in testing only". Three
+endpoints under `/api/orders/:orderId/razorpay/`, a full checkout window, and
+no gateway behind any of it.
+
+`RazorpayCheckoutModal` imitates the real window: merchant, amount, gateway
+order id, the four methods, a form per method, and a declined path because a
+checkout that can only succeed teaches nobody what the screen behind it does
+when it does not. Nothing typed into it is read, validated or posted, and the
+file is written to be DELETED rather than extended when the real gateway goes
+in, since Razorpay collects card details inside its own iframe precisely so
+they never touch our code. The test banner is not dismissible: a convincing
+fake payment screen is the one thing here that could mislead somebody into
+thinking money had moved.
 
 **The one decision worth knowing:** the stub signs its fake payments with REAL
 HMAC-SHA256, over the same string Razorpay signs, and `verifySignature` is the
@@ -911,6 +922,41 @@ numbering; shop prices treated as tax inclusive.
 
 Taken off the master overview screen and put here, because the screen is for
 doing the work and this is the reasoning behind it.
+
+### The UPI QR code: how do we know he actually paid?
+
+Raised 12 Sept, and it is the sharpest open question in the product.
+
+**Today there is no verification at all.** The buyer scans the wholesaler's UPI
+QR, pays in his own bank app, comes back, and presses a button to say he paid.
+`updatePaymentStatus` caps the claim at what is owed, and that is the entire
+check. Nothing confirms the money moved. A buyer can press the button having
+paid nothing, and the order will read paid, the khata will credit him, and the
+invoice will be raised.
+
+It has held so far because this is a closed network where the two parties know
+each other and the wholesaler sees his own bank alerts. It does not scale, and
+the reconcile button is the wholesaler's only recourse.
+
+**The options, roughly in order of cost:**
+
+| Approach | What it buys | What it costs |
+|---|---|---|
+| Wholesaler confirms receipt | A second pair of eyes before the khata moves | A step, and a delay, on every order |
+| UPI reference typed by the buyer | Something to match against a bank statement | Still self-declared, just harder to fake casually |
+| Bank statement import, matched on reference and amount | Real confirmation, no gateway needed | Parsing per bank, and a matching rule |
+| A payment gateway with a webhook (Razorpay) | Actual confirmation from the network | Fees, KYC, and Route for per-wholesaler settlement |
+
+The reference field already exists and is already stored, so option two is
+mostly wiring. Option four is scaffolded, see the Razorpay note above, and the
+real blocker there is not the integration but Razorpay Route: money must land
+with the wholesaler who was bought from, not in one platform account.
+
+**The question to settle before building any of it:** does the wholesaler want
+the money confirmed before the customer's khata moves, or after? Confirming
+first is correct and slows every order down. Confirming after is what happens
+now and means a khata that can be wrong until somebody notices. That is a
+trade for the wholesaler to make, not for us.
 
 ### The purchase side, next steps
 

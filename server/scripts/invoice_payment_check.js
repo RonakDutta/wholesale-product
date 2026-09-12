@@ -383,6 +383,75 @@ const mkUser = async (role, phone) =>
     "rather than under Still to come in",
     { still: card2.pending_amount, why: "which is where they all landed before" });
 
+  /**
+   * A bill reversed by a credit note is not money to collect.
+   *
+   * Found 12 Sept while sweeping the invoice screens. Cancelling a bill and
+   * crediting one are two different instruments and only the first was
+   * excluded from these cards. A credit note deliberately leaves the invoice
+   * Generated and Pending, because under GST the document stands and is
+   * reversed by another document, so a fully credited bill went on being
+   * counted as money still to come in and as revenue.
+   *
+   * The list beside the cards already showed such a row as "Credited". The
+   * card above it asked him to chase the money anyway.
+   */
+  console.log("\n-- a credited bill is not money to collect --");
+
+  const headA = mk();
+  await invoiceController.getDashboardStats(
+    { user: { id: wid, role: "seller" }, business: { id: wid, owner: true, isOwner: true }, query: {} },
+    headA,
+  );
+  const cardA = headA.body?.stats?.summary || headA.body?.stats || {};
+
+  const creditMe = (await q(
+    `INSERT INTO invoices (invoice_number, supplier_id, buyer_id, grand_total,
+       total_tax, invoice_status, payment_status, issue_date, due_date)
+     VALUES ($1,$2,$3,40000,0,'Generated','Pending',CURRENT_DATE,CURRENT_DATE + 30)
+     RETURNING id`,
+    [`CRD-${stamp}`, wid, buyer])).rows[0].id;
+
+  const headB = mk();
+  await invoiceController.getDashboardStats(
+    { user: { id: wid, role: "seller" }, business: { id: wid, owner: true, isOwner: true }, query: {} },
+    headB,
+  );
+  const cardB = headB.body?.stats?.summary || headB.body?.stats || {};
+  check(
+    money(cardB.pending_amount) === money(cardA.pending_amount) + 40000,
+    "a live unpaid bill is counted as still to come in",
+    { before: cardA.pending_amount, after: cardB.pending_amount },
+  );
+
+  await q(
+    `INSERT INTO credit_notes (note_number, invoice_id, wholesaler_id, reason,
+       subtotal, taxable_amount, grand_total)
+     VALUES ($1,$2,$3,'sale_cancelled',40000,40000,40000)`,
+    [`CN-${stamp}`, creditMe, wid]);
+
+  const headC = mk();
+  await invoiceController.getDashboardStats(
+    { user: { id: wid, role: "seller" }, business: { id: wid, owner: true, isOwner: true }, query: {} },
+    headC,
+  );
+  const cardC = headC.body?.stats?.summary || headC.body?.stats || {};
+  check(
+    money(cardC.pending_amount) === money(cardA.pending_amount),
+    "and once a credit note reverses it, it stops being counted",
+    { still: cardC.pending_amount, expected: cardA.pending_amount },
+  );
+  check(
+    money(cardC.total_revenue) === money(cardA.total_revenue),
+    "and it stops counting towards revenue too",
+    { revenue: cardC.total_revenue, expected: cardA.total_revenue },
+  );
+  check(
+    Number(cardC.pending_count) === Number(cardA.pending_count),
+    "and the count beside the card agrees with the amount",
+    { count: cardC.pending_count, expected: cardA.pending_count },
+  );
+
   console.log(fails ? `\n${fails} FAILED\n` : "\nall good\n");
   await testPool.end();
   process.exit(fails ? 1 : 0);

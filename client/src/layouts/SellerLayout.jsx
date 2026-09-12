@@ -3,6 +3,8 @@ import {
   LayoutDashboard,
   Package,
   ShoppingBag,
+  ShoppingCart,
+  Factory,
   MessageSquare,
   FileText,
   Truck,
@@ -46,6 +48,11 @@ const NAV = [
     flag: "MARKETPLACE",
     needs: "orders",
   },
+  // The other direction. Purchases sits next to Sales because they are the
+  // two halves of the same day, and Suppliers next to it because a purchase
+  // is always from somebody, the way a sale is always to somebody.
+  { path: "/seller/purchases", label: "Purchases", icon: ShoppingCart, needs: "purchases" },
+  { path: "/seller/suppliers", label: "Suppliers", icon: Factory, needs: "purchases" },
   { path: "/seller/invoices", label: "Invoices", icon: FileText, needs: "invoices" },
   // Sits under Invoices because it is the other half of the same job: what
   // went out before the bill could be raised.

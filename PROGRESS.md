@@ -30,12 +30,18 @@ cd server && npm run migrate
 | `wholesale3_invoice_number_format.sql` | Invoice number prefix, suffix and padding | run 10 Sept |
 | `wholesale3_invoice_rule46_fields.sql` | Place of supply, reverse charge, round off | run 10 Sept |
 | `wholesale3_platform_masters.sql` | Super admin flag, and the state, unit, tax rate and HSN masters | run 12 Sept |
-| `wholesale3_series_financial_year.sql` | Sale and challan numbers restart each financial year | **NOT RUN** |
+| `wholesale3_series_financial_year.sql` | Sale and challan numbers restart each financial year | run 12 Sept, confirmed by a sale coming out `S/10/26-27` |
+| `wholesale3_purchases.sql` | Suppliers, purchases, purchase lines, money paid out, purchase numbering | **NOT RUN** |
 
-One outstanding, added 12 Sept. Until it is run the product behaves exactly as
-it did before: every master read falls back to the constant it replaced, and
-the admin flag reads false for everybody, so the admin areas are unreachable
-rather than open.
+One outstanding, added 12 Sept. Until it is run every purchase and supplier
+route answers `503 PURCHASES_NOT_SET_UP` and the four screens say "the
+purchase book is not switched on yet". Nothing else in the product is
+affected, and no existing screen changes. Verified against a database without
+the tables: all eleven routes degrade, none returns a 500.
+
+Restart the server after running it. The schema probe is cached per process,
+so a running server goes on believing the tables are absent, which is what
+caught the sale numbering out on 12 Sept.
 
 After running it, make the first admin by hand. There is no way to do it from
 inside the product, by design:
@@ -115,6 +121,103 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 ## Done
 
 ### 12 Sept 2026
+
+**The purchase book,** the other half of the trader's day. Goods coming in,
+who they came from, what is owed for them, and what tax on them can be
+claimed back. Five screens under `/seller/purchases` and `/seller/suppliers`,
+and the deliberate mirror of the sales spine rather than a new idea:
+
+| Sales | Purchases |
+|---|---|
+| `parties` | `suppliers` |
+| `sales` | `purchases` |
+| `sale_lines` | `purchase_lines` |
+| `party_payments` | `supplier_payments` (money out) |
+| `sale_sequences` | `purchase_sequences` |
+| `khataBalance.js` | `supplierBalance.js` |
+
+**Suppliers are a separate table, not a `kind` column on parties.** That was
+the first idea and it is the wrong one. A party row means "he owes me", and
+that meaning is baked into seventeen queries across five files: the customer
+list, the overview totals, the statement, the credit service, `khataBalance`.
+Every one would need a new filter, and the first one missed puts a supplier in
+the customer list with his balance pointing the wrong way. The cost is that a
+firm a wholesaler both buys from and sells to is two rows, which is the same
+trade `parties` already made, and it fails in the safe direction.
+
+**Three things a purchase has that a sale does not:**
+
+- **The supplier's own bill number and its date**, because that is what GSTR-2B
+  matches on and it cannot be reconstructed later. Unique per supplier per
+  wholesaler, so the same bill cannot be entered twice. That is not tidiness:
+  entering a purchase bill twice claims its input tax credit twice, and both
+  rows look correct on their own afterwards.
+- **`itc_eligible` per line.** Section 17(5) blocks credit on a list of things
+  a trader genuinely buys, and one supplier bill can carry both kinds. The
+  purchase page reports claimable credit separately from the bill's own GST,
+  and says so when they differ.
+- **No invoice.** The bill is the supplier's document, not ours.
+
+**Nothing touches stock, on purpose.** The obvious next thought is that a
+purchase should raise stock. It must not yet, because a sale does not lower
+it: `sale_lines` stores an item name as text and touches no inventory row.
+Wiring one side only gives a figure that climbs forever and is wrong from the
+first purchase onward, which is worse than the honest nothing there is today.
+
+**Known limit, stated rather than hidden.** The bill total is computed through
+`gstService`, the same function the sale and the invoice use, so there is one
+arithmetic. But the authority on a purchase is the paper the supplier handed
+over, and his software may round a line differently, so a computed total can
+land a rupee from the printed one. That gap matters when it is claimed and
+matched against GSTR-2B. The form tells the wholesaler to check against the
+printed figure and that the printed one is the one that counts. Letting him
+state the tax off the bill is the correct next step.
+
+**The permission is new and fails closed.** `purchases` is its own key, kept
+apart from `sales` because a man trusted to write sales is not automatically
+trusted to see what stock costs, and apart from `payments` because that is the
+right to take money IN. An employee taken on before this existed has a stored
+list that does not contain it, so the owner has to tick it. That is the
+direction `staffAccess` already chose deliberately.
+
+**Two bugs fixed while sweeping, both found by running the code:**
+
+- **A bill reversed by a credit note still counted as money to collect.**
+  `getDashboardStats` excluded cancelled invoices and not credited ones.
+  Cancelling and crediting are different instruments, and a credit note
+  deliberately leaves the invoice `Generated` and `Pending`, because under GST
+  the document stands and is reversed by another document. So a fully credited
+  bill went on counting towards "still to come in", towards revenue, and
+  towards the unpaid count. The list beside the card already showed the row as
+  "Credited": the card and the row underneath it disagreed, and the wholesaler
+  was shown money to chase that he had already credited back. Reproduced with
+  four bills, fixed, and locked down by four new checks in
+  `invoice_payment_check.js`. This is the same shape as the complaint on
+  11 Sept about bills reading unpaid when they were paid.
+- **The two purchase detail screens said "not found" when the migration had
+  not been run.** The server answers `503 PURCHASES_NOT_SET_UP`; the list
+  screens read it, the detail screens read anything-but-404 as a generic
+  failure and fell through to "Purchase not found". Telling a wholesaler his
+  bill does not exist when the truth is the feature is not installed is the
+  wrong answer to give about his records. Found by rendering the screens
+  against a mock in that state.
+
+**`client/src/utils/money.js`,** the destination the eighteen local `money()`
+helpers collapse into. Not a nineteenth copy: the purchase screens use it from
+the day they are written so the new work does not add to the pile, and the
+existing screens move onto it one at a time. That ordering is what unblocks
+`/master/settings`, which cannot control decimals and grouping while eighteen
+components each format their own.
+
+**Verified:** 861 checks across 26 suites, every database carrying every
+migration. A new `purchase_check.js` drives 55 of them through the real
+controllers: scoping on every id, the duplicate supplier bill, paying more
+than a bill owes, editing a total below what has been paid, cancelling
+releasing payments onto the account rather than deleting them, the totals not
+netting across suppliers, blocked input credit, and eight concurrent
+purchases taking eight distinct numbers. The five screens rendered at 1280px
+and 400px, plus the not-set-up and empty states, with no sideways scroll and
+no `NaN` or `undefined` on any of them.
 
 **The platform master dashboard,** at `/master`, its own area with its own
 layout and its own guard. States, units, tax rates and HSN codes, all
@@ -758,6 +861,31 @@ numbering; shop prices treated as tax inclusive.
 
 Taken off the master overview screen and put here, because the screen is for
 doing the work and this is the reasoning behind it.
+
+### The purchase side, next steps
+
+Built on 12 Sept, and these are the pieces deliberately left out.
+
+- **Let the wholesaler state the tax off the supplier's bill** instead of only
+  computing it. See the known limit above: a computed total can land a rupee
+  from the printed one, and the printed one is what GSTR-2B matches.
+- **Stock movement, both directions at once.** A purchase raising stock while
+  a sale does not lower it is worse than neither. Doing it means giving
+  `sale_lines` and `purchase_lines` a real link to an inventory row, which is
+  a piece of work in its own right, not a column.
+- **A purchase return, or debit note.** The mirror of the credit note. Goods
+  going back to a supplier reverses part of a claim already made.
+- **An input credit total for a period**, across purchases, set against the
+  GST charged on sales. Each bill already reports its own claimable figure;
+  what is missing is the sum over a month and the comparison.
+- **A supplier statement and its PDF**, the mirror of the party statement.
+- **Purchases on the Overview.** The home screen answers "who owes me" and
+  says nothing yet about who he owes. `payableTotals()` already returns the
+  two figures it would need.
+- **Enter a purchase from a product.** The form takes typed item names only;
+  the sale form has `ItemPicker` reading his own listings, but a supplier's
+  description of the goods is usually not his own, so this needs thought
+  rather than copying the component across.
 
 ### What belongs in master, and what stays with the wholesaler
 

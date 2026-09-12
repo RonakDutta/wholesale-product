@@ -44,6 +44,12 @@ const PERMISSIONS = [
     detail: "Add a new customer, correct a phone number or an address.",
   },
   {
+    key: "purchases",
+    label: "Keep the purchase book",
+    detail:
+      "Enter bills from suppliers, add a supplier, and record money paid out to one. Turn this off for somebody who should not see what stock costs you.",
+  },
+  {
     key: "products",
     label: "Add and change products",
     detail: "List new stock and change prices.",
@@ -83,6 +89,12 @@ const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
  * an owner who forgets to grant something finds out when his man cannot work,
  * which is annoying. An owner who forgets to revoke something finds out
  * differently.
+ *
+ * This applies to a permission ADDED LATER too. An employee taken on before
+ * "purchases" existed has a stored list that does not contain it, so he cannot
+ * open the purchase book until the owner ticks it. Backfilling every existing
+ * employee into a new permission would be the other kind of mistake, and this
+ * one in particular shows a man what his stock costs.
  */
 const DEFAULT_PERMISSIONS = [...PERMISSION_KEYS];
 

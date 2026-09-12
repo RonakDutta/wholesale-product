@@ -122,6 +122,56 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 
 ### 12 Sept 2026
 
+**Razorpay, scaffolded.** Asked for as "absolutely no need to make it working,
+just setup fake". Three endpoints under `/api/orders/:orderId/razorpay/`, a
+stub checkout panel on the payment screen, and no gateway behind any of it.
+
+**The one decision worth knowing:** the stub signs its fake payments with REAL
+HMAC-SHA256, over the same string Razorpay signs, and `verifySignature` is the
+same function in both modes. Returning `true` in stub mode would have been less
+code and is how a fake gateway becomes a live hole: somebody sets a key one
+afternoon, the branch is the wrong way round, and the verify endpoint accepts a
+payment id posted by anyone holding the order number. Money is the one place
+where the untested path must not be the one that says yes. Going live changes
+the keys and the order-creation call, and changes nothing about what is trusted.
+
+Stub mode is the ABSENCE of a secret, not a flag: a flag and a credential can
+disagree, and the failure when they do is the expensive one. The `simulate`
+endpoint, which mints valid signatures, 404s the moment a real secret exists.
+
+Nothing in the Razorpay code settles money. Once a signature checks out it
+hands to `orderController.updatePaymentStatus`, which is the one place that
+knows what is owed, caps at it, mirrors into the khata, reconciles the invoice
+and moves the order. A second settlement path would be a second copy of those
+rules.
+
+**Found while building it:** order creation leaves its own pending
+`payment_transactions` row, for the whole subtotal, which `initiatePayment`
+later supersedes with the correct instalment. Opening a gateway order against
+that placeholder would have asked a buyer on the 50/50 plan for the full amount
+instead of his first half. The session is now matched on `buyer_id`, which only
+`initiatePayment` fills. Not on `payment_type`, which looks like the obvious
+choice and is not: a legacy BEFORE INSERT trigger on that table copies
+`payment_method` into `payment_type`, so the placeholder comes out with a type
+nobody set.
+
+**Still needed before it is real**, all listed in `razorpayService.js`: the
+Basic-auth POST to `api.razorpay.com/v1/orders`, which is refused loudly rather
+than faked; a webhook at `/api/webhooks/razorpay` verifying
+`X-Razorpay-Signature` over the raw body, because the browser handler never
+arrives if the buyer's browser dies after paying; and Razorpay Route with
+linked accounts, since every rupee here would land in ONE account and this is a
+marketplace where the money belongs to whichever wholesaler was bought from.
+That last one is the real work behind "the UPI needs to be of each wholesaler
+we are buying from".
+
+**Verified:** 29 checks in `razorpay_check.js`, weighted towards what it
+refuses: a forged signature, a signature that is genuinely valid for a pair the
+attacker chose (which catches trusting the order id in the request body), an
+empty payload, another buyer driving someone else's payment, an amount in the
+request body, and replaying a handler payload to pay twice. 890 checks across
+27 suites all green.
+
 **The purchase book,** the other half of the trader's day. Goods coming in,
 who they came from, what is owed for them, and what tax on them can be
 claimed back. Five screens under `/seller/purchases` and `/seller/suppliers`,

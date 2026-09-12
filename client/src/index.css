@@ -184,3 +184,28 @@ html {
 .nav-scrollbar:hover::-webkit-scrollbar-thumb {
   background-color: rgb(250 246 239 / 0.32);
 }
+
+/* The same idea on a light ground: scrolling lists inside a white panel, such
+   as the notification dropdown. A default bar reads as a grey stripe glued to
+   the inside of a rounded card, and there is no room in a 384px panel to spend
+   17px of it on chrome. */
+.panel-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(61 46 36 / 0.18) transparent;
+}
+.panel-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.panel-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.panel-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgb(61 46 36 / 0.18);
+  border-radius: 9999px;
+}
+.panel-scrollbar:hover {
+  scrollbar-color: rgb(61 46 36 / 0.32) transparent;
+}
+.panel-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: rgb(61 46 36 / 0.32);
+}

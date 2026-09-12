@@ -923,6 +923,31 @@ numbering; shop prices treated as tax inclusive.
 Taken off the master overview screen and put here, because the screen is for
 doing the work and this is the reasoning behind it.
 
+### Why our own checkout window and not Razorpay's?
+
+Asked 12 Sept. Left open deliberately, not answered.
+
+What exists today is `RazorpayCheckoutModal`, a local imitation of the checkout
+window: our markup, our method list, our fields. The real integration loads
+`checkout.razorpay.com/v1/checkout.js` and calls
+`new window.Razorpay(options).open()`, which renders Razorpay's own window in
+an iframe they control.
+
+The question to settle is whether the imitation should have been built at all,
+or whether the real script should have gone in from the start with test keys
+(`rzp_test_...`) driving Razorpay's own sandbox.
+
+Worth weighing tomorrow, without prejudging it:
+
+- What the imitation costs if it is thrown away, against what it taught.
+- Whether Razorpay's test mode needs an account and keys before anything can
+  be seen on screen, and whether we have them.
+- That card details must never reach our code, which is the reason their window
+  is an iframe. Any path where our fields become real is the wrong path.
+- Whether the sandbox works offline and in this repository's test setup.
+- What is genuinely shared either way: the two server calls around the window,
+  which is where the signature check lives and which do not change.
+
 ### The UPI QR code: how do we know he actually paid?
 
 Raised 12 Sept, and it is the sharpest open question in the product.

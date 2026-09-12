@@ -96,7 +96,74 @@ const mkSeller = async (name) => (await q(
       "numbering still works before the migration", { ram: issued.ram.map(tail) });
   }
 
-  console.log(fails ? `\n${fails} FAILED\n` : "\nall good\n");
+    // ---- the number format is reachable, and the sample tells the truth -----
+  //
+  // invoice_settings has carried number_suffix and number_pad_to since
+  // 10 Sept, and the save route dropped both, so the columns were unreachable
+  // and every wholesaler was stuck on whatever the default produced.
+  const settingsCtrl = require("../src/controllers/invoiceController");
+  const mk = () => { const r = { statusCode: 200, body: null };
+    r.status = (c) => ((r.statusCode = c), r); r.json = (b) => ((r.body = b), r); return r; };
+  const call = async (fn, req) => { const r = mk(); await fn(req, r); return r; };
+  const wholesaler = await mkSeller("Format Tester");
+  const asOwner = {
+    user: { id: wholesaler, role: "seller" },
+    business: { id: wholesaler, owner: true, isOwner: true },
+    query: {}, body: {},
+  };
+
+  const saved = await call(settingsCtrl.saveSettings.bind(settingsCtrl), {
+    ...asOwner,
+    body: { prefix: "OM/", numberSuffix: "/{FY}", numberPadTo: 0,
+            dueDays: 15, defaultTaxRate: 5 },
+  });
+  check(saved.body?.success === true, "a number format can be saved", {
+    m: saved.body?.message,
+  });
+  check(saved.body?.settings?.numberSuffix === "/{FY}",
+    "and comes back with the suffix on it",
+    { got: saved.body?.settings?.numberSuffix });
+
+  const shaped = await numbers.generateInvoiceNumber(
+    testPool, "OM/", null, wholesaler, { suffix: "/{FY}", padTo: 0 });
+  check(/^OM\/\d+\/\d\d-\d\d$/.test(shaped),
+    "and a real number comes out in Busy's shape",
+    { got: shaped, busy: "OM/2/26-27" });
+
+  // An illegal shape is refused while he is looking at the setting.
+  const tooLong = await call(settingsCtrl.saveSettings.bind(settingsCtrl), {
+    ...asOwner,
+    body: { prefix: "VERYLONGPREFIX/", numberSuffix: "/{FY}", numberPadTo: 0,
+            dueDays: 15, defaultTaxRate: 5 },
+  });
+  check(tooLong.statusCode === 400 && tooLong.body?.code === "BAD_NUMBER_FORMAT",
+    "a format that breaks Rule 46(b) is refused at save time",
+    { s: tooLong.statusCode, m: tooLong.body?.message });
+
+  // The preview takes no number and saves nothing.
+  const before = (await testPool.query(
+    "SELECT last_number FROM invoice_sequences WHERE wholesaler_id = $1", [wholesaler])).rows[0];
+  const shown = await call(settingsCtrl.previewNumber.bind(settingsCtrl), {
+    ...asOwner, query: { prefix: "INV/", suffix: "/{FY}", padTo: "0" },
+  });
+  const after = (await testPool.query(
+    "SELECT last_number FROM invoice_sequences WHERE wholesaler_id = $1", [wholesaler])).rows[0];
+  check(shown.body?.ok === true && /^INV\/1\/\d\d-\d\d$/.test(shown.body?.sample),
+    "the live sample shows the shape", { sample: shown.body?.sample });
+  check(Number(before?.last_number) === Number(after?.last_number),
+    "and takes no number to do it",
+    { before: before?.last_number, after: after?.last_number });
+  check(shown.body?.roomFor === 6,
+    "it says how far the shape can run before sixteen characters",
+    { roomFor: shown.body?.roomFor });
+
+  const bad = await call(settingsCtrl.previewNumber.bind(settingsCtrl), {
+    ...asOwner, query: { prefix: "VERYLONGPREFIX/", suffix: "/{FY}", padTo: "0" },
+  });
+  check(bad.body?.ok === false && String(bad.body?.reason).includes("16"),
+    "and says plainly when a shape will not do", { reason: bad.body?.reason });
+
+console.log(fails ? `\n${fails} FAILED\n` : "\nall good\n");
   await testPool.end();
   process.exit(fails ? 1 : 0);
 })().catch((e) => { console.error("THREW", e); process.exit(1); });

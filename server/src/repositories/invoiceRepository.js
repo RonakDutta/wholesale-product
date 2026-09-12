@@ -1096,8 +1096,31 @@ class InvoiceRepository {
     );
 
     const row = result.rows[0] || {};
+
+    /**
+     * The shape of a number for a wholesaler who has never set one.
+     *
+     * It used to be prefix INV, no suffix, padded to six, which reads
+     * INV-000001: six leading zeros and no hint of which year it belongs to.
+     *
+     * The default now carries the financial year, which is how every Indian
+     * accounting package a wholesaler has used already writes it. Busy's own
+     * sample is OM/1/26-27. {FY} is substituted when the number is taken, so
+     * it follows the year forward on its own; a suffix typed as the literal
+     * "26-27" would still say 26-27 next April, which is a wrong year on a
+     * legal document.
+     *
+     * Padding drops to zero because the year already makes the number read as
+     * a series. INV/1/26-27 is ten characters and leaves room to grow inside
+     * Rule 46(b)'s sixteen; INV/000001/26-27 is sixteen exactly, with no room
+     * at all.
+     *
+     * A wholesaler who has saved a format keeps it. This only decides what
+     * somebody who has never opened the screen gets.
+     */
+    const saved = Object.keys(row).length > 0;
     return {
-      prefix: row.prefix || "INV",
+      prefix: row.prefix || (saved ? "INV" : "INV/"),
       dueDays: Number(row.due_days ?? 15),
       defaultTaxRate: Number(row.default_tax_rate ?? 18),
       defaultNotes: row.default_notes ?? "Thank you for your business!",
@@ -1105,8 +1128,8 @@ class InvoiceRepository {
         row.default_terms ??
         "1. Goods once sold will not be returned.\n2. Payment is due within the agreed credit period.",
       // How his invoice number is shaped. See invoiceNumberService.
-      numberSuffix: row.number_suffix ?? "",
-      numberPadTo: Number(row.number_pad_to ?? 6),
+      numberSuffix: row.number_suffix ?? (saved ? "" : "/{FY}"),
+      numberPadTo: Number(row.number_pad_to ?? (saved ? 6 : 0)),
     };
   }
 
@@ -1169,6 +1192,17 @@ class InvoiceRepository {
       defaultTaxRate: Number(row.default_tax_rate),
       defaultNotes: row.default_notes,
       defaultTerms: row.default_terms,
+      // The query has been RETURNING these on a migrated database all along
+      // and this mapping dropped them, so a screen that saved a number format
+      // got a reply that did not mention it and had no way of telling whether
+      // it had been written. Absent when the migration has not been run, which
+      // is what getSettings falls back on too.
+      ...(row.number_suffix !== undefined
+        ? {
+            numberSuffix: row.number_suffix ?? "",
+            numberPadTo: Number(row.number_pad_to ?? 0),
+          }
+        : {}),
     };
   }
 

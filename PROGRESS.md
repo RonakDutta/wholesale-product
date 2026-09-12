@@ -96,6 +96,40 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 
 ### 12 Sept 2026
 
+**The invoice number carries its financial year now.** A new wholesaler's
+default shape is `INV/1/26-27` rather than `INV-000001`: six leading zeros and
+no hint of which year it belonged to. Busy's own sample is `OM/1/26-27` and
+our compose() reproduces it exactly.
+
+The `{FY}` placeholder is substituted when the number is taken, so it follows
+the year forward on its own. A suffix typed as the literal "26-27" would still
+say 26-27 next April, which is a wrong year on a legal document, and the field
+hint says so.
+
+Padding drops to 0 by default because the year already makes it read as a
+series. `INV/1/26-27` is eleven characters with room for six digits inside
+Rule 46(b)'s sixteen; `INV/000001/26-27` is sixteen exactly, with no room at
+all. A wholesaler who has already saved a format keeps it; this only decides
+what somebody who has never opened the screen gets.
+
+**Two dead paths found while doing it.** `invoice_settings` has carried
+`number_suffix` and `number_pad_to` since 10 Sept, and the repository has
+always written them, but the save route dropped both from the request and the
+save mapping dropped both from the reply. So the columns were unreachable from
+either direction and every wholesaler was stuck on the default whatever he
+set. Both are wired now.
+
+**A live sample, which Busy has and we did not.** `compose()` and `roomFor()`
+were written on 10 Sept, exported, and never called by anything.
+`GET /api/invoices/number-preview` now serves them and the settings screen
+shows the sample as he types, with the financial year and how far the shape
+can run. Asked of the server rather than worked out in the client, so the
+sixteen character rule is checked by the same function that enforces it: a
+second copy in the client is how a screen ends up promising a number the
+server then refuses. An illegal shape is also refused at save time, tested
+against the widest sequence it will ever reach rather than against number 1.
+
+
 **Platform masters, and the super admin who owns them.** Four lists that were
 constants in code, so correcting one meant a deploy: 37 states with their GST
 codes, 7 units, 7 tax slabs, 32 HSN codes. `wholesale3_platform_masters.sql`

@@ -186,6 +186,7 @@ class InvoiceNumberService {
 
 module.exports = new InvoiceNumberService();
 module.exports.financialYear = financialYear;
+module.exports.financialYear = financialYear;
 module.exports.financialYearKey = financialYearKey;
 module.exports.compose = compose;
 module.exports.roomFor = roomFor;

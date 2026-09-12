@@ -2,6 +2,7 @@ const pool = require("../config/db");
 const { toPaise, fromPaise } = require("../utils/money");
 const { hasSaleLink } = require("./orderSaleService");
 const { NOT_OWED_SQL } = require("./khataBalance");
+const { receivedOn } = require("./saleSettlement");
 
 /**
  * Setting a customer's credit against something he has ordered.
@@ -106,25 +107,14 @@ const creditOf = async (client, partyId, wholesalerId) => {
   return rows.reduce((sum, row) => sum + toPaise(row.amount), 0);
 };
 
-/** What is still owed on one sale, in paise, by the rule the sale page uses. */
-const outstandingOnSale = async (client, sale) => {
-  const tagged = await client.query(
-    "SELECT COALESCE(SUM(amount), 0) AS n FROM party_payments WHERE sale_id = $1",
-    [sale.id],
-  );
-  let received = toPaise(tagged.rows[0].n);
-  if (sale.order_id) {
-    const order = await client.query(
-      "SELECT COALESCE(amount_paid, 0) AS n FROM orders WHERE id = $1",
-      [sale.order_id],
-    );
-    // The greater of the two, not the sum. An order paid through the shop puts
-    // the money on the order; a payment the wholesaler also typed in puts it
-    // on the sale. That is one lot of money written down twice.
-    received = Math.max(received, toPaise(order.rows[0]?.n || 0));
-  }
-  return toPaise(sale.total) - received;
-};
+/**
+ * What is still owed on one sale, in paise.
+ *
+ * The received figure comes from services/saleSettlement.js, the one rule, so
+ * this cannot drift from what the sale page and the challan rule say.
+ */
+const outstandingOnSale = async (client, sale) =>
+  toPaise(sale.total) - (await receivedOn(client, sale));
 
 class CreditApplyService {
   /**
@@ -250,11 +240,18 @@ class CreditApplyService {
         if (left <= 0) break;
         const rowPaise = toPaise(row.amount);
         if (rowPaise <= left) {
+          // order_id follows the sale: the order this money is now set
+          // against, or NULL when the sale has no order behind it. That is
+          // not bookkeeping neatness, it is what stops the money being
+          // counted twice. saleSettlement adds up only the khata rows with no
+          // order_id, on top of orders.amount_paid, and the bump below puts
+          // the applied amount into amount_paid. Leaving these rows order-less
+          // made a 4 lakh sale read 6 lakh received.
           await client.query(
             `UPDATE party_payments
-                SET sale_id = $2, note = $3
+                SET sale_id = $2, order_id = $3, note = $4
               WHERE id = $1`,
-            [row.id, sale.id, note],
+            [row.id, sale.id, sale.order_id || null, note],
           );
           left -= rowPaise;
         } else {
@@ -263,10 +260,13 @@ class CreditApplyService {
             [row.id, fromPaise(rowPaise - left)],
           );
           await client.query(
+            // The split half, carrying the same order_id as the whole would
+            // have, for the same double counting reason.
             `INSERT INTO party_payments
-               (wholesaler_id, party_id, sale_id, amount, method, paid_on, note)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [wholesalerId, partyId, sale.id, fromPaise(left), row.method, row.paid_on, note],
+               (wholesaler_id, party_id, sale_id, order_id, amount, method, paid_on, note)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [wholesalerId, partyId, sale.id, sale.order_id || null,
+             fromPaise(left), row.method, row.paid_on, note],
           );
           left = 0;
         }

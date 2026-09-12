@@ -1,5 +1,7 @@
 const pool = require("../config/db");
 const invoiceRepository = require("../repositories/invoiceRepository");
+const { receivedOn } = require("./saleSettlement");
+const { fromPaise } = require("../utils/money");
 
 /**
  * Delivery challans, as specified on 10 Sept 2026.
@@ -89,26 +91,13 @@ const nextChallanNumber = async (client, wholesalerId) => {
 /**
  * What has been received against a sale, and what it comes to.
  *
- * Payments live in party_payments against the sale. An order backed sale also
- * has orders.amount_paid, which is the same money seen from the shop side, so
- * the larger of the two is taken rather than the sum: adding them would count
- * a shop payment twice on a sale that has both.
+ * The rule lives in services/saleSettlement.js, which explains why it is not
+ * the sum of the two places money sits and not the greater of them either.
+ * This used to keep its own copy taking the greater, which swallowed cash the
+ * wholesaler took at the counter and typed into the khata.
  */
 const settlementOf = async (db, sale) => {
-  const paid = await db.query(
-    "SELECT COALESCE(SUM(amount), 0) AS total FROM party_payments WHERE sale_id = $1",
-    [sale.id],
-  );
-  let received = Number(paid.rows[0].total);
-
-  if (sale.order_id) {
-    const order = await db.query(
-      "SELECT COALESCE(amount_paid, 0) AS paid FROM orders WHERE id = $1",
-      [sale.order_id],
-    );
-    received = Math.max(received, Number(order.rows[0]?.paid || 0));
-  }
-
+  const received = fromPaise(await receivedOn(db, sale));
   const total = Number(sale.total || 0);
   // A paisa of slack. Money is stored to two places and a 50/50 split of an
   // odd total can land a paisa out; refusing to bill over that would strand

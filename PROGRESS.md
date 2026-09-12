@@ -26,14 +26,15 @@ cd server && npm run migrate
 | `wholesale3_one_invoice_per_order.sql` | Unique index so one order cannot hold two invoices | run 7 Sept |
 | `wholesale3_staff_accounts.sql` | Employees who work on a wholesaler's book | run 7 Sept |
 
-| `wholesale3_delivery_challans.sql` | Goods-out note when a sale is not fully paid | **NOT RUN** |
-| `wholesale3_invoice_number_format.sql` | Invoice number prefix, suffix and padding | **NOT RUN** |
-| `wholesale3_invoice_rule46_fields.sql` | Place of supply, reverse charge, round off | **NOT RUN** |
+| `wholesale3_delivery_challans.sql` | Goods-out note when a sale is not fully paid | run 10 Sept |
+| `wholesale3_invoice_number_format.sql` | Invoice number prefix, suffix and padding | run 10 Sept |
+| `wholesale3_invoice_rule46_fields.sql` | Place of supply, reverse charge, round off | run 10 Sept |
 
-Three outstanding, all added 10 Sept. Run them in any order; none depends on
-another. Until they are run the code stands down cleanly: the challan feature
-reports "needs its migration", the invoice number keeps its old format, and
-the new Rule 46 fields are simply absent from the document.
+Nothing outstanding. Every migration above has been run against Neon.
+
+Nothing added on 11 Sept needs one: the credit feature moves existing rows and
+adds no columns, and removing the "Partial" payment status is code only, since
+`invoices.payment_status` carries no CHECK constraint.
 
 To confirm the earlier three landed, since two of them use
 IF NOT EXISTS and one can be refused by existing data without stopping the run:
@@ -81,6 +82,196 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 ---
 
 ## Done
+
+### 12 Sept 2026
+
+**"Partial" is gone from invoices.** Decided today, closing the conflict this
+file had carried since the 10th. A bill exists only once the money is all in,
+so it can never honestly be half paid: `payment_status` is Pending or Paid and
+nothing between. What HAS come in is still carried by the payment rows, which
+is where the Invoices header reads it from, so nothing is lost and only the
+status word stopped describing a state that is not supposed to exist. The list
+filter for "Not paid" also matches legacy `Partial` rows, or a bill with money
+owing would drop out of the list meant to chase it.
+
+**One rule for what has come in against a sale,** in `services/saleSettlement.js`.
+Three places each kept their own copy and no two agreed. Money on an
+order-backed sale sits in two places, and the khata holds two KINDS of row:
+
+  - a mirror of the shop payment, written with `order_id` and
+    `payment_transaction_id` set, so the customer's balance is right
+  - money the wholesaler took himself and typed in, with a `sale_id` and
+    neither of those
+
+Adding them counts the shop payment twice, which is why the rule had been
+GREATEST. But GREATEST has the opposite fault and it is worse: a wholesaler
+who takes the second instalment in cash and records it adds a row that never
+exceeds `orders.amount_paid` on its own, so it is swallowed whole. The sale
+never settles, the bill is never raised, and the customer's page says he is
+square while the sale page says he still owes. The same complaint made on
+11 Sept, arriving by the other road. The rule is now `orders.amount_paid` plus
+only the khata rows carrying no `order_id`.
+
+**A returned order could be left with a tax invoice and nothing reversing it.**
+`unwindReturnedOrder` looked only at `invoices.order_id` and missed two cases:
+
+  - a bill raised from the SALE, which is what a cash settled order-backed
+    sale produces: it carries a `sale_id` and no `order_id`
+  - a bill that had not landed yet, because both billing paths run in the
+    background, so a briskly completed return outran it
+
+It now finds the bill by either road, and raises it first if the order is
+settled but its bill has not caught up, because the sale is cancelled moments
+later and both billing paths correctly refuse a cancelled sale.
+
+This is the fault that had been showing up as `return_check` failing only when
+the suites were run back to back and the database was busy. It was dismissed
+as a flake on 11 Sept. It was not a flake.
+
+### 11 Sept 2026
+
+A day of hunting rather than building. Two faults a wholesaler reported, seven
+more of the same kind found by going looking, and one feature that turned out
+to be the real answer to the second report.
+
+**The challan reached the order side.** The button and the challan list are on
+the seller's order detail screen, not only on the sale page, and the orders
+list carries a challan count the way the sales list does. Both go through the
+sale behind the order, so there is still one document trail. `createForOrder`
+returns `noSale` for an order nobody has accepted yet, and the screen is told
+`hasSale` so it can stay quiet rather than offer a button that will refuse.
+
+**A settled sale bills itself.** `billIfSettled` runs after a payment is
+recorded and after a cash sale is written, so the last rupee raises the bill
+instead of it waiting for somebody to remember. The "Make invoice" button now
+only appears when the sale is actually settled; it used to show on any
+confirmed sale, and pressing it on an unpaid one returned a 409 and redrew the
+same screen, which read as a button that did nothing.
+
+That second caller exposed a hole in the first: `createInvoiceFromSale`
+checked for an existing invoice outside its transaction, so the auto bill and
+the button could both read "none yet" and both write one. Harmless while a
+person was the only caller. The check is now repeated under an advisory lock
+on the sale, and the loser hands back the winner's invoice.
+
+**The status route was leaving two things behind.** Found by walking every
+cell of the challan grid against the route the screens actually use rather
+than the service behind it.
+
+- Marking an order delivered did not deliver its sale. The mirror lived in
+  `orderStatusService`, and the "Mark delivered" button does not go there: it
+  PATCHes `/orders/:id/status`, which writes the status itself. So the order
+  read delivered and the sale read confirmed for ever, which is the exact
+  drift the sale's own delivered button was removed to prevent.
+  `follows_order_check` passed throughout because it drives the service, which
+  was the half that was right. One helper now, `markSaleDelivered`, called
+  from both, and the suite checks both.
+- The same route would also cancel an order, writing the word and nothing
+  else: sale left standing, stock left reserved, customer still owing for
+  goods that were never coming. Cancelling belongs to `POST /cancel` and
+  refunding to `POST /refund`; both are refused here now with a message saying
+  where to go. Nothing in the product used that path, so no visible behaviour
+  changed. The route allowed it, which was enough.
+
+**Four screens were answering one question with different sums.** The first
+was reported: an order reading "all paid" whose sale read "the whole amount
+still due".
+
+- **The sale.** Money from a shop order lands on `orders.amount_paid` and
+  nothing tags a `party_payments` row to the sale, so the Sales list and the
+  sale page, which both added up `party_payments` alone, answered zero. Both
+  now read the figure the server already computes for the challan rule, which
+  takes the greater of the two rather than the sum: that is one lot of money
+  written down twice, not twice in the till. The sale page also says where the
+  money came in, so an empty payments list is explained instead of puzzling.
+- **The Customers page header.** Total billed counted sales alone while "Still
+  to collect" beside it counted shop orders too, so a wholesaler with an order
+  he had not accepted read "Total billed 0" next to "Still to collect 710". It
+  reads `khataBalance`'s one rule now, the same one the Overview reads.
+- **The Invoices tab header, all three cards.** "Still to come in" took the
+  whole `grand_total` of a part paid bill, so 710 already received still
+  showed as 1,420 to come. "Received" counted only bills stamped Paid, so that
+  710 appeared on neither card: money in the till, on no card. And the count
+  beside the first counted Pending while its amount included Partial, so the
+  card could read "1,420 - 0 unpaid". Each bill's own balance is worked out
+  first now and the cards are sums of balances.
+- **A race hid that last one.** Checkout raises the bill in the background, so
+  a buyer who pays at once has two callers arriving together: checkout
+  creating the bill from an order with nothing on it, and the reconcile
+  finding no bill, creating, losing under the lock and being handed the other
+  one back with the payment never recorded. The bill then sat Pending with
+  nothing on it until the final instalment healed it. `reconcileInvoiceForOrder`
+  asks once more after creating. Only reachable with `CHALLAN_WHEN_UNPAID=false`.
+
+**A challan raised against an order stayed "Not billed" for ever.** The sale
+side stamped its challans when it billed; the order side, which is where a
+shop order's bill comes from, never did. `markInvoicedForOrder` closes it,
+called from both creation and reconcile.
+
+**Setting a customer's credit against his order.** The second report, in the
+wholesaler's own words: "I was owed nothing, he paid me, and now I owe him 2
+lakh."
+
+Every figure along the way was arithmetically right:
+
+    he returns a 2 lakh order, not refunded    you owe him 2,00,000
+    he orders 4 lakh, pays half                he owes 0
+    he pays the other half                     you owe him 2,00,000
+
+The credit was never spent. The khata is one netted number per customer, so
+billing him 4 lakh cancelled his 2 lakh on the display and settling that bill
+uncovered it again. Underneath, he had been asked to pay the whole 4 lakh
+while 2 lakh of his money sat in the till, because nothing could set a credit
+against an order, although two screens offered to: the Overview says "Refund
+it, or set it against their next order", and the refuse modal says the same.
+Neither had ever meant anything.
+
+`services/creditApplyService.js` implements it, as a panel on the customer's
+page. It does not invent a payment: those rupees are already counted in what
+he has paid, which is why he is in credit, so a fresh row would count them
+twice and double the problem. It re-addresses the payments that no live goods
+are standing against, pointing them at the bill the wholesaler chooses, and
+splits a row where the credit is bigger than the bill. His balance does not
+move, because nothing has happened between the two of them; the bill reads as
+paid because it now is; and the credit is gone. The order is told too, so it
+stops asking for money already handed over, with a line in its history saying
+where that money came from.
+
+The credit is measured as the loose rows rather than as the balance, because
+the balance is exactly what hid it: asked at the moment it mattered, it
+answered "no credit" while 2 lakh was plainly in the till.
+
+Cancelling was considered for removal and kept. It is not the source: the case
+above is a RETURN, and refunds and overpayments do the same thing.
+
+**Two new suites, and a reset.**
+
+- `challan_matrix_check.js`, 130 checks: every sale status against every
+  settlement state, the order lifecycle walked end to end three ways, the
+  feature flag both ways, the migration missing, every challan reason, and
+  both screens agreeing about the same goods. It found the two status-route
+  faults.
+- `flow_check.js`: one order from listing to catalogue to checkout to
+  acceptance to challan to delivery to bill to return to refund, checking at
+  every step that the khata, the Overview, the statement, the order and the
+  sale still agree. It found three of the four sum mismatches.
+- `credit_check.js`, 22 checks, pinning the report above and the split case.
+- `scripts/reset_books.js` for starting fresh. Scoped to one wholesaler by
+  email, dry run by default, one transaction, explicit deletes in dependency
+  order rather than TRUNCATE CASCADE so it cannot quietly empty a table nobody
+  listed. Clears orders, sales, invoices, challans, credit notes, payments,
+  customers and the numbering counters; keeps logins, profile, staff, products,
+  listings and invoice settings. It does NOT put reserved stock back, because
+  nothing records what the figure was before, so it prints every listing and
+  says to correct them by hand. Rehearsed against a local Postgres holding two
+  wholesalers: 93 rows cleared for the named one, the other untouched.
+
+**Not finished, and worth knowing.** The browser sweep covered 19 of 22 seller
+screens clean; three are still flagged (`overview`, `products`, `promotions`)
+and it is not yet established whether those are real or artefacts of the
+throwaway mock. The buyer side was never rendered at all, and nothing was shot
+at phone width.
+
 
 ### 10 Sept 2026, third batch
 
@@ -590,25 +781,55 @@ for many taxpayers. That is a commercial decision and it shapes the schema.
 - **Search invents a 4.5 star rating** for any wholesaler who has none, and
   then sorts and filters on it. Same rule that removed `trust_score`.
 - **The client bundle is about 1.8MB** and there are 14 non identical copies of
-  a `money()` helper.
-- **The invoice number rolls over on 1 January, not 1 April.** Rule 46(b)
-  wants a serial unique for the financial year. Live today, and it will
-  produce a duplicate serial the moment somebody raises an invoice in January.
-  See the next phase notes above.
-- **A long prefix makes an invoice number over 16 characters,** which Rule
-  46(b) does not allow. The column is `varchar(50)` so nothing refuses it.
+  a `money()` helper. Those copies are why the site shows 12,000 and the
+  invoice shows 12000.00: there is no one place to change it. Collapsing them
+  is the prerequisite for the number formatting the master dashboard is meant
+  to control, and should be done before that setting is added, not after.
+- ~~**The invoice number rolls over on 1 January, not 1 April.**~~ Fixed
+  10 Sept; the "Rule 46(b)" section of `challan_check.js` pins that January
+  does not reset the run and that 1 April starts a new one.
+- ~~**A long prefix makes an invoice number over 16 characters.**~~ Fixed
+  10 Sept; a number over 16 characters, or carrying a character Rule 46(b)
+  does not allow, is refused. Same section of `challan_check.js`.
 - **`promotionController` checks for role `'admin'`,** which the `chk_role`
   constraint on `users` can never contain. That code is unreachable, not
   merely unbuilt.
 - **`README.md` is substantially out of date.**
+- **`/api/dashboard/stats` is dead code.** Nothing in the client calls it. Its
+  "revenue" sums whole order totals for orders marked paid while the comment
+  claims the figure means received, and `awaiting_payment_value` uses the full
+  order total rather than what is outstanding. Same class as the header faults
+  fixed on 11 Sept, but not reachable, so either delete the endpoint or fix it.
+- **`scale_check.js` crashes on an empty database** with a TypeError instead
+  of saying it needs a seeded one. It is a performance script, not part of the
+  correctness battery.
+- **The browser sweep is unfinished.** Three seller screens flagged and not
+  chased down, the whole buyer side never rendered, and no phone-width pass.
+  See 11 Sept above.
 
 ---
 
 ## Testing
 
-Twenty one suites in `server/scripts/*_check.js`, 515 checks. They drive the real
+Twenty four suites in `server/scripts/*_check.js`. They drive the real
 controllers against a local Postgres, so they catch schema drift that reading
 the code does not.
+
+Three of them are worth knowing by name, because they are the ones that find
+things the others cannot:
+
+- `flow_check.js` walks one order the whole way and checks after every step
+  that the khata, the Overview, the statement, the order and the sale agree
+  with each other. Cross-screen disagreement is the failure mode this codebase
+  actually has, and a suite that leans on one seam will never see it.
+- `challan_matrix_check.js` walks the grid rather than the story: every status
+  against every settlement state, and the order lifecycle driven through the
+  CONTROLLER rather than the service. Two faults hid in exactly that gap.
+- `credit_check.js` covers a customer's money being held and then spent.
+
+**Drive the route the screens use, not the service behind it.** Both faults
+found on 11 Sept had a passing suite standing next to them, because the suite
+asked `orderStatusService` and the button asks `PATCH /orders/:id/status`.
 
 ```bash
 # once

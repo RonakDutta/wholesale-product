@@ -754,6 +754,61 @@ numbering; shop prices treated as tax inclusive.
 
 ---
 
+## Next session, agreed 12 Sept
+
+Taken off the master overview screen and put here, because the screen is for
+doing the work and this is the reasoning behind it.
+
+### What belongs in master, and what stays with the wholesaler
+
+The split is the thing most likely to be got wrong, and somebody looking for
+"invoice settings" will look in the master area first.
+
+**His, and staying on his own Invoice defaults screen:** invoice prefix,
+suffix and padding, payment due days, default GST rate, notes, terms, bank
+details, GSTIN. If any of those lived in master, one wholesaler changing his
+prefix would change everybody's.
+
+**The platform's, and still to build in master:**
+
+| Setting | Why it is platform level |
+|---|---|
+| Currency decimal places | one convention for every Indian trader |
+| Number format mask `9,99,99,999.99` | the lakh and crore grouping is not a preference |
+| Currency symbol, character, string and sub-string | the string is what builds the amount in words |
+| Date format | same |
+| Tax rate decimal places | Busy keeps it separate from currency and so should we |
+| Rule 46(b) limits: 16 characters, allowed alphabet | law, so read only in the UI |
+| The number shape a brand new wholesaler starts from | a default, not a rule |
+| Feature flags | marketplace, promotions, the challan rule |
+
+**Per wholesaler with a platform default:** minimum HSN digits. It follows HIS
+turnover, six above 5 crore and four below, so it cannot be one platform
+number. Busy makes it a setting with 0 meaning "do not validate".
+
+**The order still matters.** `/master/settings` can be built and can save, but
+it must not be wired to the display until the fourteen `money()` copies are
+collapsed into one formatter. Wiring it first gives a setting that reaches
+some screens and not others, which is worse than the inconsistency it was
+meant to fix.
+
+### The state master does not yet decide tax
+
+Adding a state in master fills the dropdowns. It does NOT change how tax is
+worked out for it. `placeOfSupply` turns a state name into its GST code
+synchronously, at module load, from a built in list, on the path that decides
+CGST plus SGST against IGST. Making that path asynchronous so it can read the
+table is its own change with its own risk and was deliberately not carried on
+the back of the master work.
+
+Until it is done, a state added in master is a label. The place it would bite:
+a new state or union territory appears, an admin adds it, a wholesaler there
+sets it on his profile, and his bills come out CGST plus SGST when they should
+be IGST. There has been one such change recently enough to matter, Ladakh in
+2019 and the Daman and Diu merger in 2020, so it is not hypothetical.
+
+---
+
 ## The next phase, noted 10 Sept, nothing built yet
 
 Requested in one go and deliberately not started. Written down here so the

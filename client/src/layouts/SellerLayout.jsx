@@ -15,7 +15,7 @@ import {
   Menu,
   X,
   Store,
-  Compass,
+  Home,
   Users,
   BarChart3,
   Plus,
@@ -194,17 +194,11 @@ const SellerLayout = () => {
         }`}
       >
         <div className="flex h-16 shrink-0 items-center justify-between px-5">
-          {/* The name is the way out to the buying side, which is where a
-              person looks for it and which costs no room. It replaced a
-              "Back to marketplace" row in the footer below: that row spent a
-              whole line on a word the product never says to a trader, in a
-              footer that was already eating the nav's scrolling space. */}
+          {/* Clicking the name goes home, which is what clicking the name does
+              everywhere. A convenience that costs no room, not the only way
+              across: that is the Home button in the header. */}
           {FEATURES.MARKETPLACE ? (
-            <Link
-              to="/"
-              className="group"
-              title="Browse and buy from other wholesalers"
-            >
+            <Link to="/" className="group" title="Back to the home page">
               <p className="text-base font-black leading-none tracking-tight transition-opacity group-hover:opacity-80">
                 <Wordmark />
               </p>
@@ -335,28 +329,25 @@ const SellerLayout = () => {
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            {/* The way over to the buying side.
+            {/* Out of the workspace to the home page.
 
                 It used to be a full row in the sidebar footer reading "Back to
-                marketplace", which spent a line on naming a surface rather
-                than saying what is over there, next to "My shop page" which
-                sounds like the same thing and is the opposite: that one is his
-                own page as buyers see it.
+                marketplace", which spent a line on naming a surface, sitting
+                next to "My shop page" which sounds like the same thing and is
+                the opposite: that one is his own page as buyers see it.
 
-                Here instead, secondary to Record sale and visible on every
-                screen. Not on the wordmark alone: a link a person can only
-                find by hovering is not a control. It reads "Buy stock"
-                because that is what he goes there to do, and because it now
-                pairs with the Purchases tab, which is where the bill lands
-                when he gets back. */}
+                Labelled Home, because that is the page it goes to. It was
+                briefly "Buy stock", which was worse: this is the ordinary way
+                out of the dashboard, not an errand, and a button promising a
+                purchase that lands on a home page is a small lie. */}
             {FEATURES.MARKETPLACE && (
               <Link
                 to="/"
                 className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:border-clay hover:text-clay"
-                title="Browse and buy from other wholesalers"
+                title="Back to the home page"
               >
-                <Compass className="h-4 w-4" />
-                <span className="hidden sm:inline">Buy stock</span>
+                <Home className="h-4 w-4" />
+                <span className="hidden sm:inline">Home</span>
               </Link>
             )}
 

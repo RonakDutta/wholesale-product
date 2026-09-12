@@ -1,6 +1,7 @@
 const pool = require("../config/db");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const { receivedOn } = require("./saleSettlement");
+const { nextChallanNumber } = require("./seriesNumbers");
 const { fromPaise } = require("../utils/money");
 
 /**
@@ -76,17 +77,6 @@ const resetChallanTables = () => { ready = null; };
  *
  * Must be called inside a transaction: the upsert locks the row until commit.
  */
-const nextChallanNumber = async (client, wholesalerId) => {
-  const result = await client.query(
-    `INSERT INTO delivery_challan_sequences (wholesaler_id, last_number)
-     VALUES ($1, 1)
-     ON CONFLICT (wholesaler_id)
-     DO UPDATE SET last_number = delivery_challan_sequences.last_number + 1
-     RETURNING last_number`,
-    [wholesalerId],
-  );
-  return `DC-${String(result.rows[0].last_number).padStart(4, "0")}`;
-};
 
 /**
  * What has been received against a sale, and what it comes to.

@@ -114,7 +114,10 @@ const mkUser = async (role, phone) => (await q(
     "the sale owes exactly what the order charged", { sale: sale.total, order: orderTotal });
   check(sale.source === "retailer", "marked as coming from the shop", { source: sale.source });
   check(sale.status === "confirmed", "confirmed, so it counts in the khata", { status: sale.status });
-  check(/^S-\d+/.test(sale.sale_number || ""), "given the wholesaler's own sale number", { n: sale.sale_number });
+  // S/1/26-27 once wholesale3_series_financial_year.sql is run, S-0001 before
+  // it. Both shapes are his own run and neither is the invoice run, which is
+  // what this check is about.
+  check(/^S[-/]\d+/.test(sale.sale_number || ""), "given the wholesaler's own sale number", { n: sale.sale_number });
 
   const lines = await q("SELECT * FROM sale_lines WHERE sale_id = $1 ORDER BY item_name", [sale.id]);
   check(lines.rows.length === 2, "both products carried over, not just the first",

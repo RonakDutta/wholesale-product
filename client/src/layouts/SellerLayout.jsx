@@ -15,10 +15,10 @@ import {
   Menu,
   X,
   Store,
+  Compass,
   Users,
   BarChart3,
   Plus,
-  ChevronLeft,
   ShieldCheck,
 } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -194,14 +194,34 @@ const SellerLayout = () => {
         }`}
       >
         <div className="flex h-16 shrink-0 items-center justify-between px-5">
-          <div>
-            <p className="text-base font-black leading-none tracking-tight">
-              <Wordmark />
-            </p>
-            <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-cream/40">
-              Seller Workspace
-            </p>
-          </div>
+          {/* The name is the way out to the buying side, which is where a
+              person looks for it and which costs no room. It replaced a
+              "Back to marketplace" row in the footer below: that row spent a
+              whole line on a word the product never says to a trader, in a
+              footer that was already eating the nav's scrolling space. */}
+          {FEATURES.MARKETPLACE ? (
+            <Link
+              to="/"
+              className="group"
+              title="Browse and buy from other wholesalers"
+            >
+              <p className="text-base font-black leading-none tracking-tight transition-opacity group-hover:opacity-80">
+                <Wordmark />
+              </p>
+              <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-cream/40">
+                Seller Workspace
+              </p>
+            </Link>
+          ) : (
+            <div>
+              <p className="text-base font-black leading-none tracking-tight">
+                <Wordmark />
+              </p>
+              <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-cream/40">
+                Seller Workspace
+              </p>
+            </div>
+          )}
           <button
             onClick={() => setIsSidebarOpen(false)}
             className="rounded-lg p-1.5 text-cream/50 transition-colors hover:bg-white/10 hover:text-cream md:hidden"
@@ -211,7 +231,7 @@ const SellerLayout = () => {
           </button>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-4">
+        <nav className="nav-scrollbar flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-4">
           {nav.map((item) => {
             const active = isActive(item);
             const showBadge = item.badge === "unread" && unreadCount > 0;
@@ -273,15 +293,6 @@ const SellerLayout = () => {
               My shop page
             </Link>
           )}
-          {FEATURES.MARKETPLACE && (
-            <Link
-              to="/"
-              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-cream/60 transition-colors hover:bg-white/5 hover:text-cream"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Back to marketplace
-            </Link>
-          )}
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-rose-300 transition-colors hover:bg-rose-500/10 hover:text-rose-200"
@@ -323,15 +334,42 @@ const SellerLayout = () => {
             </div>
           </div>
 
-          {/* Recording a sale is the thing a wholesaler does every day, so it
-              is one tap away from every screen. */}
-          <Link
-            to="/seller/sales/new"
-            className="flex shrink-0 items-center gap-2 rounded-lg bg-espresso px-3 py-2 text-xs font-bold text-cream transition-colors hover:bg-clay"
-          >
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Record sale</span>
-          </Link>
+          <div className="flex shrink-0 items-center gap-2">
+            {/* The way over to the buying side.
+
+                It used to be a full row in the sidebar footer reading "Back to
+                marketplace", which spent a line on naming a surface rather
+                than saying what is over there, next to "My shop page" which
+                sounds like the same thing and is the opposite: that one is his
+                own page as buyers see it.
+
+                Here instead, secondary to Record sale and visible on every
+                screen. Not on the wordmark alone: a link a person can only
+                find by hovering is not a control. It reads "Buy stock"
+                because that is what he goes there to do, and because it now
+                pairs with the Purchases tab, which is where the bill lands
+                when he gets back. */}
+            {FEATURES.MARKETPLACE && (
+              <Link
+                to="/"
+                className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:border-clay hover:text-clay"
+                title="Browse and buy from other wholesalers"
+              >
+                <Compass className="h-4 w-4" />
+                <span className="hidden sm:inline">Buy stock</span>
+              </Link>
+            )}
+
+            {/* Recording a sale is the thing a wholesaler does every day, so it
+                is one tap away from every screen. */}
+            <Link
+              to="/seller/sales/new"
+              className="flex shrink-0 items-center gap-2 rounded-lg bg-espresso px-3 py-2 text-xs font-bold text-cream transition-colors hover:bg-clay"
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Record sale</span>
+            </Link>
+          </div>
         </header>
 
         {/* The boundary belongs here, around the content, not around the whole

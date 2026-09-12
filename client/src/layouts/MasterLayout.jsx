@@ -108,14 +108,24 @@ const MasterLayout = () => {
   return (
     <div className="flex min-h-screen bg-slate-50">
       <aside className="hidden w-64 shrink-0 flex-col bg-espresso text-cream lg:flex">
-        <div className="px-6 py-6">
-          <Wordmark />
-          <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-cream/50">
-            Platform master
-          </p>
+        {/* Drawn exactly as the seller sidebar draws it. Wordmark leaves size
+            and weight to the caller, which is right where the callers are
+            genuinely different, the navbar against the dark sign in panel. Two
+            sidebar headers are not different, and leaving this one bare gave
+            the master area the name in the ambient weight while the seller
+            area had it black and tight: the same product looking like two. */}
+        <div className="flex h-16 shrink-0 items-center px-5">
+          <div>
+            <p className="text-base font-black leading-none tracking-tight">
+              <Wordmark />
+            </p>
+            <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-cream/40">
+              Platform master
+            </p>
+          </div>
         </div>
 
-        <nav className="flex-1 space-y-1 px-3">
+        <nav className="nav-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {LINKS.map((link) => (
             <NavLink
               key={link.to}
@@ -147,7 +157,7 @@ const MasterLayout = () => {
       <div className="min-w-0 flex-1">
         {/* The phone nav. The master screens are lists a person edits sitting
             down, so this is a way across rather than a full second nav. */}
-        <div className="flex gap-2 overflow-x-auto bg-espresso px-4 py-3 lg:hidden">
+        <div className="hide-scrollbar flex gap-2 overflow-x-auto bg-espresso px-4 py-3 lg:hidden">
           {LINKS.map((link) => (
             <NavLink
               key={link.to}

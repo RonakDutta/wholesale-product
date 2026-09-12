@@ -244,6 +244,24 @@ const Overview = () => {
         </div>
       )}
 
+      {/* The money block is WITHHELD, not zeroed, for an employee without the
+          money permission: overviewController sends `money: null` rather than
+          zeros, so the screen can say "not shown to you" instead of telling
+          him the business is owed nothing, which would be a lie about it.
+          The server did its half from the start and this screen never did its
+          own, so such an employee got a blank page here, on the first screen
+          he lands on. */}
+      {!m ? (
+        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-6 text-center">
+          <p className="text-sm font-bold text-espresso">
+            The money figures are not shown to you
+          </p>
+          <p className="mx-auto mt-1 max-w-md text-xs text-slate-500">
+            Your employer decides who sees what the business is owed. Everything
+            else on this page is yours to work with.
+          </p>
+        </div>
+      ) : (
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <MoneyCard
           label="Still to collect"
@@ -265,12 +283,13 @@ const Overview = () => {
           to="/seller/money/received"
         />
       </div>
+      )}
 
       {/* Money that is not yours, said out loud rather than quietly taken off
           the figure above. A customer goes into credit when he has paid for
           something that was later cancelled or sent back, and netting it
           against what other customers owe would hide both facts. */}
-      {Number(m.owedBack) > 0 && (
+      {m && Number(m.owedBack) > 0 && (
         <Link
           to="/seller/money/outstanding"
           className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 transition-colors hover:border-amber-300 sm:rounded-2xl sm:px-5"

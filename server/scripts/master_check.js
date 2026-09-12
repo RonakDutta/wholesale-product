@@ -206,6 +206,103 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
     masterService.resetMasters();
   }
 
+  // ---------------------------------------------------------------
+  console.log("\nWriting a master, which only the admin may do");
+  // ---------------------------------------------------------------
+  if (!BARE) {
+    await testPool.query("UPDATE users SET is_platform_admin = TRUE WHERE id = $1", [seller]);
+    const asAdmin = { ...asSeller, params: {}, body: {} };
+
+    // A new unit.
+    const added = await call(masters.saveMasterRow, {
+      ...asAdmin, params: { list: "units" },
+      body: { code: "bale", name: "Bale", allowsDecimals: false, sortOrder: 80 },
+    });
+    check(added.statusCode === 200, "an admin can add a unit", { m: added.body?.message });
+    masterService.resetMasters();
+    check((await masterService.units()).some((u) => u.code === "bale"),
+      "and it appears at once, not in five minutes",
+      { why: "the write clears the read cache" });
+
+    // Editing the same key is an edit, not a duplicate.
+    const edited = await call(masters.saveMasterRow, {
+      ...asAdmin, params: { list: "units" },
+      body: { code: "bale", name: "Bale of cloth", allowsDecimals: false, sortOrder: 80 },
+    });
+    check(edited.body?.row?.name === "Bale of cloth", "saving the same code edits it", {
+      got: edited.body?.row?.name,
+    });
+    const count = await testPool.query("SELECT COUNT(*)::int n FROM master_units WHERE code = 'bale'");
+    check(count.rows[0].n === 1, "rather than adding a second row", { n: count.rows[0].n });
+
+    // Switching off is not deleting.
+    const off = await call(masters.setMasterRowActive, {
+      ...asAdmin, params: { list: "units", key: "bale" }, body: { active: false },
+    });
+    check(off.statusCode === 200, "a unit can be switched off");
+    masterService.resetMasters();
+    check(!(await masterService.units()).some((u) => u.code === "bale"),
+      "and drops out of the list");
+    const stillThere = await testPool.query("SELECT active FROM master_units WHERE code = 'bale'");
+    check(stillThere.rows.length === 1 && stillThere.rows[0].active === false,
+      "but the row survives, because an invoice may already name it",
+      { why: "a document that has gone out must still read properly" });
+
+    // Rubbish is refused, with a reason a person can act on.
+    for (const [list, body, why] of [
+      ["states", { code: "4", name: "Chandigarh" }, "a one digit state code"],
+      ["units", { code: "", name: "Nameless" }, "a unit with no code"],
+      ["tax-rates", { rate: 140 }, "a GST rate of 140 percent"],
+      ["hsn", { code: "52", description: "Cotton" }, "a two digit HSN code"],
+      ["hsn", { code: "5208", description: "" }, "an HSN code describing nothing"],
+    ]) {
+      const bad = await call(masters.saveMasterRow, { ...asAdmin, params: { list }, body });
+      check(bad.statusCode === 400 && Boolean(bad.body?.message), `refused: ${why}`, {
+        said: bad.body?.message,
+      });
+    }
+
+    // An HSN row an admin adds is his, and editing a curated one does not
+    // quietly relabel it.
+    await call(masters.saveMasterRow, {
+      ...asAdmin, params: { list: "hsn" },
+      body: { code: "9999", description: "Something he added" },
+    });
+    const mine = await testPool.query("SELECT source FROM master_hsn WHERE code = '9999'");
+    check(mine.rows[0]?.source === "admin", "an HSN code he adds is marked as his");
+    await call(masters.saveMasterRow, {
+      ...asAdmin, params: { list: "hsn" },
+      body: { code: "5007", description: "Woven silk, edited" },
+    });
+    const curated = await testPool.query("SELECT source, description FROM master_hsn WHERE code = '5007'");
+    check(curated.rows[0]?.source === "curated",
+      "and editing a curated one leaves it curated",
+      { got: curated.rows[0]?.source, why: "so the shipped list stays tellable from what was added" });
+    check(curated.rows[0]?.description === "Woven silk, edited", "though the edit took");
+
+    // The last one standing cannot be switched off.
+    await testPool.query("UPDATE master_tax_rates SET active = FALSE WHERE rate <> 5");
+    const lastOne = await call(masters.setMasterRowActive, {
+      ...asAdmin, params: { list: "tax-rates", key: "5" }, body: { active: false },
+    });
+    check(lastOne.statusCode === 400, "the last tax rate cannot be switched off", {
+      said: lastOne.body?.message,
+    });
+    const survived = await testPool.query("SELECT active FROM master_tax_rates WHERE rate = 5");
+    check(survived.rows[0]?.active === true, "and it is put back rather than left off");
+    await testPool.query("UPDATE master_tax_rates SET active = TRUE");
+
+    // An unknown list is a 404, not a table name going into a query.
+    const nonsense = await call(masters.saveMasterRow, {
+      ...asAdmin, params: { list: "users" }, body: { code: "x" },
+    });
+    check(nonsense.statusCode === 404, "an unknown list is refused outright", {
+      why: "the list name never reaches a query",
+    });
+
+    await testPool.query("UPDATE users SET is_platform_admin = FALSE WHERE id = $1", [seller]);
+  }
+
   console.log(`\n${fails === 0 ? "all good" : `${fails} FAILED`}\n`);
   await testPool.end();
   process.exit(fails === 0 ? 0 : 1);

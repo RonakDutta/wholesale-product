@@ -221,6 +221,30 @@ const Navbar = () => {
         >
           <MessageSquare className="w-4 h-4" />
           Messages
+          {/* The count follows the icon in here on a phone, where the icon
+              itself is not in the bar. Without this the number a person was
+              watching for simply stops existing on small screens. */}
+          {unreadCount > 0 && (
+            <span className="ml-auto rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </Link>
+
+        {/* Only on a phone. On desktop the heart is in the bar, and offering
+            it twice in one screen is clutter rather than convenience. */}
+        <Link
+          to="/wishlist"
+          onClick={() => setIsProfileOpen(false)}
+          className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-clay/5 hover:text-clay rounded-lg transition-colors cursor-pointer md:hidden"
+        >
+          <Heart className="w-4 h-4" />
+          Saved items
+          {wishlistCount > 0 && (
+            <span className="ml-auto rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              {wishlistCount > 9 ? "9+" : wishlistCount}
+            </span>
+          )}
         </Link>
 
         {(user?.role === "seller" || user?.role === "both") && (
@@ -245,7 +269,21 @@ const Navbar = () => {
     </div>
   );
 
-  const actionIcons = () => (
+  /**
+   * The icon row.
+   *
+   * `compact` is the phone. Six icons plus the wordmark measured 39px wider
+   * than a 320px screen, so the whole bar scrolled sideways, and at 360px the
+   * wordmark and the first icon were touching with nothing between them. That
+   * is what "looks weird on mobile" was.
+   *
+   * Compact keeps the two that are about THIS moment, where he is buying from
+   * and what is in his basket, and moves messages and the wishlist into the
+   * profile menu, which is where a phone puts the rest of a navigation. Both
+   * are still one tap away and neither count is lost: they are carried as a
+   * dot on the profile button, see below.
+   */
+  const actionIcons = ({ compact = false } = {}) => (
     <>
       <LocationSelector
         city={city}
@@ -255,7 +293,7 @@ const Navbar = () => {
         label={label}
       />
 
-      {user && (
+      {user && !compact && (
         <Link
           to="/messages"
           aria-label={
@@ -276,7 +314,7 @@ const Navbar = () => {
 
       <Link
         to="/wishlist"
-        className="relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-colors group cursor-pointer"
+        className={`relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-colors group cursor-pointer ${compact ? "hidden" : ""}`}
       >
         <Heart className="w-5 h-5 group-hover:scale-110 transition-transform" />
         {wishlistCount > 0 && (
@@ -317,15 +355,27 @@ const Navbar = () => {
 
             {/* Mobile Icons */}
             <div className="flex items-center gap-0.5 sm:gap-1 md:hidden -mr-2">
-              {actionIcons()}
+              {actionIcons({ compact: true })}
               <NotificationBell />
               {isAuthenticated ? (
                 <div className="relative">
                   <button
                     onClick={() => setIsProfileOpen(!isProfileOpen)}
-                    className="p-2 text-clay hover:bg-slate-50 rounded-md transition-colors cursor-pointer"
+                    className="relative p-2 text-clay hover:bg-slate-50 rounded-md transition-colors cursor-pointer"
+                    aria-label={
+                      unreadCount + wishlistCount > 0
+                        ? "Your account, with unread messages or saved items"
+                        : "Your account"
+                    }
                   >
                     <User className="w-5 h-5" />
+                    {/* A dot, not a number. What is behind it is two different
+                        counts, and adding them together would be a figure that
+                        means nothing. It says "there is something in here",
+                        which is all a person needs to open it. */}
+                    {unreadCount + wishlistCount > 0 && (
+                      <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" />
+                    )}
                   </button>
                   {isProfileOpen && profileMenu()}
                 </div>

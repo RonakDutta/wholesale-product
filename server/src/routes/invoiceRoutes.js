@@ -12,6 +12,9 @@ router.use(authenticateToken);
 
 // ERP Dashboard & Reports
 router.get("/dashboard", (req, res) => invoiceController.getDashboardStats(req, res));
+// What a number in this format would look like. Pure: takes no number and
+// saves nothing, so the settings screen can call it on every keystroke.
+router.get("/number-preview", (req, res) => invoiceController.previewNumber(req, res));
 router.get("/report", (req, res) => invoiceController.getReportData(req, res));
 
 // Data Exports

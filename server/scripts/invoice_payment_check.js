@@ -10,7 +10,7 @@
  *
  * What has to hold:
  *   - the first instalment appears on the invoice, for the right amount
- *   - the bill says Partial, not Paid, while money is still owed
+ *   - the bill says Pending, not Paid, while money is still owed
  *   - the second instalment settles it, and the two entries sum to the bill
  *   - running the reconcile again changes nothing, because it is called on
  *     every payment event and on the backfill
@@ -26,14 +26,20 @@
  * This suite tests the 50/50 instalment plan and how an invoice mirrors a
  * part payment. Both need an invoice to EXIST while money is still
  * outstanding, which the delivery challan rule specified on 10 Sept forbids:
- * under that rule the bill waits until the sale is settled, so an invoice can
- * never be in the "Partial" state at all.
+ * under that rule the bill waits until the sale is settled.
  *
- * The two are genuinely in conflict, and this is the honest way to say so.
- * The flag is turned off here, so this suite goes on testing the behaviour
- * the flag exists to preserve. If the challan rule survives its legal review,
- * the instalment plan and the whole partial-payment path on an invoice need
- * revisiting rather than quietly leaving broken.
+ * Settled 11 Sept: the rule stands, and the "Partial" payment status is gone
+ * with it. A bill is Pending or Paid, nothing in between, because a document
+ * that only exists once it is settled can never honestly be half paid. What
+ * has come in is still recorded as payment rows against the bill, so the
+ * Invoices header shows received and outstanding separately and nothing is
+ * lost; only the status word stopped describing a state that is not supposed
+ * to exist.
+ *
+ * The flag is turned off here so this suite goes on exercising the path the
+ * flag exists to preserve: with the rule off, a bill is raised unpaid and
+ * payments arrive against it over time, and it must still read Pending until
+ * the last rupee.
  */
 process.env.CHALLAN_WHEN_UNPAID = "false";
 
@@ -50,6 +56,8 @@ require.cache[dbPath] = stub;
 
 const orders = require("../src/controllers/orderController");
 const invoiceController = require("../src/controllers/invoiceController");
+const saleCtrl = require("../src/controllers/saleController");
+const parties = require("../src/controllers/partyController");
 const invoiceService = require("../src/services/invoiceService");
 const invoiceRepository = require("../src/repositories/invoiceRepository");
 const partyService = require("../src/services/partyService");
@@ -164,8 +172,13 @@ const mkUser = async (role, phone) =>
   check(onBill.sum === money(afterFirstOrder.amount_paid),
     "for exactly what the order says was received",
     { bill: onBill.sum, order: money(afterFirstOrder.amount_paid) });
-  check(onBill.status.toLowerCase() === "partial",
-    "the bill reads Partial, not Paid", { status: onBill.status });
+  // Pending, not "Partial". Settled 11 Sept: a bill is paid or it is not, and
+  // since a bill only exists once the money is all in, a half paid one is a
+  // state the product should not be able to hold. What HAS come in is carried
+  // by the payment rows above, which is where the Invoices header reads it
+  // from, so nothing is lost by the status word being honest.
+  check(onBill.status.toLowerCase() === "pending",
+    "the bill reads Pending, not Paid", { status: onBill.status, was: "Partial" });
   check(onBill.logs.includes("Payment"),
     "and the timeline has an entry for it", { logs: onBill.logs });
   check(!onBill.logs.includes("Paid"),
@@ -314,6 +327,61 @@ const mkUser = async (role, phone) =>
     "and the count beside the amount is not zero while the amount is not",
     { amount: still, count: card.pending_count },
   );
+
+  // ---- a bill settled from the SALE side still reads as received --------
+  //
+  // Reported 12 Sept: two invoices both marked PAID in the list, above a card
+  // reading "1,35,700 still to come in, 2 unpaid", which was their exact sum.
+  //
+  // A sale-side bill deliberately writes NO row into the invoice module's
+  // payments table, because that money is already in party_payments against
+  // the sale and writing it twice is what once made a bill read Paid while the
+  // customer still owed the lot. So a header counting those rows alone read
+  // every such bill as wholly unpaid.
+  //
+  // Since a bill is now Paid or Pending and nothing between, the stamp answers
+  // it outright and the rows are consulted only for one that is not settled.
+  const cashParty = await call(parties.createParty, {
+    user: { id: wid, role: "seller" }, business: { id: wid, owner: true, isOwner: true },
+    body: { name: "Counter Sale Shop", city: "Surat", phone: `96${Date.now() % 100000000}` },
+  });
+  await call(saleCtrl.createSale, {
+    user: { id: wid, role: "seller" }, business: { id: wid, owner: true, isOwner: true },
+    body: {
+      partyId: cashParty.body.id, status: "confirmed",
+      lines: [{ itemName: "Cloth", quantity: 1, unit: "mtr", rate: 5000, gstPercent: 0 }],
+      amountPaid: 5000, paymentMethod: "cash",
+    },
+  });
+  await new Promise((r) => setTimeout(r, 900));
+
+  const saleBill = (await q(
+    `SELECT i.id, i.grand_total, i.payment_status,
+            (SELECT count(*)::int FROM payments p WHERE p.invoice_id = i.id) AS rows
+       FROM invoices i
+       JOIN sales s ON s.id = i.sale_id
+      WHERE s.party_id = $1`, [cashParty.body.id])).rows[0];
+  check(saleBill?.payment_status === "Paid" && saleBill?.rows === 0,
+    "a cash sale bills itself with no invoice payment row",
+    { status: saleBill?.payment_status, rows: saleBill?.rows });
+
+  const head2 = mk();
+  await invoiceController.getDashboardStats(
+    { user: { id: wid, role: "seller" }, business: { id: wid, owner: true, isOwner: true }, query: {} },
+    head2,
+  );
+  const card2 = head2.body?.stats?.summary || head2.body?.stats || {};
+  const settledTotal = money((await q(
+    `SELECT COALESCE(SUM(grand_total),0) n FROM invoices
+      WHERE supplier_id = $1 AND payment_status = 'Paid'
+        AND invoice_status <> 'Cancelled' AND buyer_id IS DISTINCT FROM supplier_id`,
+    [wid])).rows[0].n);
+  check(money(card2.paid_amount) >= settledTotal,
+    "and every settled bill is counted under Received",
+    { received: card2.paid_amount, settled: settledTotal });
+  check(money(card2.pending_amount) < settledTotal,
+    "rather than under Still to come in",
+    { still: card2.pending_amount, why: "which is where they all landed before" });
 
   console.log(fails ? `\n${fails} FAILED\n` : "\nall good\n");
   await testPool.end();

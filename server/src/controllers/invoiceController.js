@@ -2,6 +2,7 @@ const pool = require("../config/db");
 const invoiceService = require("../services/invoiceService");
 const pdfService = require("../services/pdfService");
 const invoiceRepository = require("../repositories/invoiceRepository");
+const invoiceNumberService = require("../services/invoiceNumberService");
 // Whose invoices these are. The person doing the work is still req.user.id:
 // he is the name on a log entry, not the business the bill belongs to.
 const { businessId } = require("../middlewares/businessContext");
@@ -305,6 +306,42 @@ class InvoiceController {
       const dueDays = Number(req.body.dueDays);
       const defaultTaxRate = Number(req.body.defaultTaxRate);
 
+      /**
+       * The number format, which this route used to drop on the floor.
+       *
+       * invoice_settings has carried number_suffix and number_pad_to since
+       * 10 Sept and the repository has always written them, but this handler
+       * never passed them through, so the columns were unreachable and every
+       * wholesaler was stuck on INV-000001 whatever he set.
+       *
+       * Checked by composing a real number rather than by validating the parts
+       * separately. Rule 46(b) constrains the WHOLE string, sixteen characters
+       * and a short alphabet, so a prefix and a suffix that are each fine can
+       * still be illegal together. Refusing it here means he finds out while he
+       * is looking at the setting, not at invoice 1000.
+       */
+      const numberSuffix = String(req.body.numberSuffix ?? "").trim().slice(0, 16);
+      const padRaw = Number(req.body.numberPadTo);
+      const numberPadTo = Number.isFinite(padRaw)
+        ? Math.min(Math.max(Math.round(padRaw), 0), 9)
+        : 0;
+
+      // The widest sequence this format will ever reach, not just number 1.
+      const worst = invoiceNumberService.compose({
+        prefix,
+        suffix: numberSuffix,
+        padTo: numberPadTo,
+        sequence: 10 ** Math.max(numberPadTo, 1) - 1,
+      });
+      if (!worst.ok) {
+        return res.status(400).json({
+          success: false,
+          message: worst.reason,
+          code: "BAD_NUMBER_FORMAT",
+          sample: worst.number,
+        });
+      }
+
       if (!Number.isFinite(dueDays) || dueDays < 0 || dueDays > 365) {
         return res.status(400).json({ success: false, message: "Payment due days must be between 0 and 365." });
       }
@@ -318,12 +355,56 @@ class InvoiceController {
         defaultTaxRate,
         defaultNotes: req.body.defaultNotes || null,
         defaultTerms: req.body.defaultTerms || null,
+        numberSuffix,
+        numberPadTo,
       });
 
       res.json({ success: true, settings });
     } catch (err) {
       console.error("Error saving invoice settings:", err);
       res.status(500).json({ success: false, message: "Failed to save invoice settings" });
+    }
+  }
+
+  /**
+   * What a number in this format would look like, without taking one.
+   *
+   * Pure: it touches no counter and saves nothing, so the settings screen can
+   * call it on every keystroke. Busy shows a live Sample Voucher No. in its
+   * numbering dialog and it is the reason nobody there configures a format
+   * they cannot use.
+   */
+  async previewNumber(req, res) {
+    try {
+      const prefix = String(req.query.prefix ?? "INV-").slice(0, 10);
+      const suffix = String(req.query.suffix ?? "").slice(0, 16);
+      const padRaw = Number(req.query.padTo);
+      const padTo = Number.isFinite(padRaw)
+        ? Math.min(Math.max(Math.round(padRaw), 0), 9)
+        : 0;
+
+      const first = invoiceNumberService.compose({ prefix, suffix, padTo, sequence: 1 });
+      // Number 1 can fit while number 1000 does not, and the one that matters
+      // is the one he will hit in a year.
+      const later = invoiceNumberService.compose({
+        prefix, suffix, padTo,
+        sequence: 10 ** Math.max(padTo, 1) - 1,
+      });
+
+      res.json({
+        success: true,
+        sample: first.number,
+        ok: first.ok && later.ok,
+        reason: first.reason || later.reason || null,
+        // How high the sequence can go before the whole string breaks the
+        // sixteen character limit.
+        roomFor: invoiceNumberService.roomFor({ prefix, suffix }),
+        financialYear: invoiceNumberService.financialYear(),
+        maxLength: invoiceNumberService.MAX_LENGTH,
+      });
+    } catch (err) {
+      console.error("Error previewing an invoice number:", err);
+      res.status(500).json({ success: false, message: "Could not preview that format" });
     }
   }
 

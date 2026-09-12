@@ -195,7 +195,16 @@ async function schemaExtras(db = pool) {
                    AND column_name = 'gst_percent') AS has_listing_billing,
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'invoice_sequences'
-                   AND column_name = 'wholesaler_id') AS has_invoice_sequence_owner
+                   AND column_name = 'wholesaler_id') AS has_invoice_sequence_owner,
+        -- Sale and challan numbers restart each financial year, which needs a
+        -- financial_year column on both counters. Until then both fall back to
+        -- their old shapes, S-0001 and DC-0001.
+        (EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_name = 'sale_sequences'
+                    AND column_name = 'financial_year')
+         AND EXISTS (SELECT 1 FROM information_schema.columns
+                      WHERE table_name = 'delivery_challan_sequences'
+                        AND column_name = 'financial_year')) AS has_series_fy
     `);
     extras = result.rows[0];
   } catch (err) {
@@ -211,6 +220,7 @@ async function schemaExtras(db = pool) {
       has_sale_tax: false,
       has_sale_order_id: false,
       has_number_format: false,
+      has_series_fy: false,
       has_rule46_fields: false,
       has_line_gst: false,
       has_item_gst: false,
@@ -619,7 +629,15 @@ class InvoiceRepository {
       whereClauses.push(`i.buyer_id IS DISTINCT FROM i.supplier_id`);
 
       if (paymentStatus) {
-        whereClauses.push(`i.payment_status = $${paramIndex++}`);
+        // "Partial" is no longer written, but rows carrying it exist from
+        // before the rule changed. Filtering for "Not paid" has to find them
+        // or a bill with money owing on it drops out of the list that is
+        // supposed to chase it.
+        if (paymentStatus === "Pending") {
+          whereClauses.push(`i.payment_status IN ($${paramIndex++}, 'Partial')`);
+        } else {
+          whereClauses.push(`i.payment_status = $${paramIndex++}`);
+        }
         params.push(paymentStatus);
       }
 
@@ -850,8 +868,30 @@ class InvoiceRepository {
            WHERE ${userClause}
         ), balances AS (
           SELECT *,
-                 GREATEST(grand_total - received, 0) AS balance,
-                 LEAST(received, grand_total) AS counted
+                 /*
+                  * A bill stamped Paid is fully received, by definition.
+                  *
+                  * Not every settled invoice has rows in the payments table. A bill
+                  * raised from the SALE side deliberately writes none: that
+                  * money is already recorded in party_payments against the
+                  * sale, and writing it a second time into the invoice
+                  * module's own table is what once made a bill read Paid while
+                  * the customer still owed the whole amount.
+                  *
+                  * So counting those rows alone read every sale-side bill as
+                  * wholly unpaid. A wholesaler saw two invoices both marked
+                  * PAID in the list, above a card saying 1,35,700 still to
+                  * come in from 2 unpaid, which was their exact sum.
+                  *
+                  * Since 12 Sept a bill is Paid or Pending and there is
+                  * nothing in between, so the stamp answers this outright. The
+                  * payment rows are consulted only for a bill that is NOT
+                  * settled, where they say how much of it has arrived.
+                  */
+                 CASE WHEN payment_status = 'Paid' THEN 0
+                      ELSE GREATEST(grand_total - received, 0) END AS balance,
+                 CASE WHEN payment_status = 'Paid' THEN grand_total
+                      ELSE LEAST(received, grand_total) END AS counted
             FROM live
         )
         SELECT
@@ -1066,8 +1106,31 @@ class InvoiceRepository {
     );
 
     const row = result.rows[0] || {};
+
+    /**
+     * The shape of a number for a wholesaler who has never set one.
+     *
+     * It used to be prefix INV, no suffix, padded to six, which reads
+     * INV-000001: six leading zeros and no hint of which year it belongs to.
+     *
+     * The default now carries the financial year, which is how every Indian
+     * accounting package a wholesaler has used already writes it. Busy's own
+     * sample is OM/1/26-27. {FY} is substituted when the number is taken, so
+     * it follows the year forward on its own; a suffix typed as the literal
+     * "26-27" would still say 26-27 next April, which is a wrong year on a
+     * legal document.
+     *
+     * Padding drops to zero because the year already makes the number read as
+     * a series. INV/1/26-27 is ten characters and leaves room to grow inside
+     * Rule 46(b)'s sixteen; INV/000001/26-27 is sixteen exactly, with no room
+     * at all.
+     *
+     * A wholesaler who has saved a format keeps it. This only decides what
+     * somebody who has never opened the screen gets.
+     */
+    const saved = Object.keys(row).length > 0;
     return {
-      prefix: row.prefix || "INV",
+      prefix: row.prefix || (saved ? "INV" : "INV/"),
       dueDays: Number(row.due_days ?? 15),
       defaultTaxRate: Number(row.default_tax_rate ?? 18),
       defaultNotes: row.default_notes ?? "Thank you for your business!",
@@ -1075,8 +1138,8 @@ class InvoiceRepository {
         row.default_terms ??
         "1. Goods once sold will not be returned.\n2. Payment is due within the agreed credit period.",
       // How his invoice number is shaped. See invoiceNumberService.
-      numberSuffix: row.number_suffix ?? "",
-      numberPadTo: Number(row.number_pad_to ?? 6),
+      numberSuffix: row.number_suffix ?? (saved ? "" : "/{FY}"),
+      numberPadTo: Number(row.number_pad_to ?? (saved ? 6 : 0)),
     };
   }
 
@@ -1139,6 +1202,17 @@ class InvoiceRepository {
       defaultTaxRate: Number(row.default_tax_rate),
       defaultNotes: row.default_notes,
       defaultTerms: row.default_terms,
+      // The query has been RETURNING these on a migrated database all along
+      // and this mapping dropped them, so a screen that saved a number format
+      // got a reply that did not mention it and had no way of telling whether
+      // it had been written. Absent when the migration has not been run, which
+      // is what getSettings falls back on too.
+      ...(row.number_suffix !== undefined
+        ? {
+            numberSuffix: row.number_suffix ?? "",
+            numberPadTo: Number(row.number_pad_to ?? 0),
+          }
+        : {}),
     };
   }
 

@@ -13,6 +13,7 @@
  * would change what he owes after he has already paid part of it.
  */
 const { clean, fromPaise, toPaise } = require("../utils/money");
+const { nextSaleNumber } = require("./seriesNumbers");
 
 /**
  * Is this database ready to link a sale to an order?
@@ -49,18 +50,6 @@ const hasSaleLink = async (client) => {
 
 const resetSaleLink = () => { bridgeReady = null; };
 
-/** This wholesaler's own next sale number. Locks the row until commit. */
-const nextSaleNumber = async (client, wholesalerId) => {
-  const result = await client.query(
-    `INSERT INTO sale_sequences (wholesaler_id, last_number)
-     VALUES ($1, 1)
-     ON CONFLICT (wholesaler_id)
-     DO UPDATE SET last_number = sale_sequences.last_number + 1
-     RETURNING last_number`,
-    [wholesalerId],
-  );
-  return `S-${String(result.rows[0].last_number).padStart(4, "0")}`;
-};
 
 /**
  * Write one accepted order into the sales book.

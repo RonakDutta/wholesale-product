@@ -17,8 +17,10 @@ import {
   BarChart3,
   Plus,
   ChevronLeft,
+  ShieldCheck,
 } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import api from "../utils/axios";
 import { useAuth } from "../context/AuthContext";
 import { useUnread } from "../context/UnreadContext";
 import { FEATURES } from "../config/features";
@@ -116,6 +118,26 @@ const PaneFallback = () => (
 );
 
 const SellerLayout = () => {
+  /**
+   * Whether this person may reach the platform master area.
+   *
+   * Read from the masters endpoint, which already answers it, rather than
+   * from the token: the flag is deliberately not in the token so that taking
+   * it away takes effect at once. This only decides whether to draw a link.
+   * The server refuses every master write on its own authority.
+   */
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    api
+      .get("/api/masters")
+      .then(({ data }) => alive && setIsPlatformAdmin(Boolean(data?.isPlatformAdmin)))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, can, isOwner, staff } = useAuth();
@@ -218,6 +240,22 @@ const SellerLayout = () => {
               with the other ways out rather than in the nav list above.
               Both of these belong to the marketplace, which is switched off
               in 3.0, so they follow the same flag. */}
+          {/* The platform master area, for an admin who is also a wholesaler.
+              A separate area rather than a nav entry above, because it is a
+              different job and because /seller/* is guarded by role, which a
+              platform admin need not have. Shown only when the flag is really
+              set: the endpoint says so and the server refuses every write
+              regardless of what this draws. */}
+          {isPlatformAdmin && (
+            <Link
+              to="/master"
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-cream/60 transition-colors hover:bg-white/5 hover:text-cream"
+              title="The platform's own lists: states, units, tax rates, HSN codes"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              Platform master
+            </Link>
+          )}
           {FEATURES.MARKETPLACE && user?.id && (
             <Link
               to={`/wholesaler/${user.id}`}
@@ -266,7 +304,14 @@ const SellerLayout = () => {
                 {isOwner ? companyName || "Your business" : staff.worksFor}
               </p>
               <p className="truncate text-[11px] font-semibold text-slate-400">
-                {isOwner ? "Wholesaler account" : "You are working here as staff"}
+                {/* An admin is not a fourth kind of trader, so his role stays
+                    what it is and only the label changes. The permission is a
+                    separate flag; this is presentation. */}
+                {!isOwner
+                  ? "You are working here as staff"
+                  : isPlatformAdmin
+                    ? "Admin account"
+                    : "Wholesaler account"}
               </p>
             </div>
           </div>

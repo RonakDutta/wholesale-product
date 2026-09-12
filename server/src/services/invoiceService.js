@@ -443,10 +443,19 @@ class InvoiceService {
         invoice.id,
         nowSettled
           ? { payment_status: "Paid", invoice_status: "Paid" }
-          : // invoice_status is left alone on purpose. It tracks the life of
-            // the document (Generated, Sent, Cancelled), and a part payment
-            // does not change what has happened to the document.
-            { payment_status: "Partial" },
+          : // Pending, not "Partial". A bill is paid or it is not, and there
+            // is no third answer: the rule settled on 11 Sept is that an
+            // invoice exists only once the money is all in, so a half paid
+            // bill is a contradiction the product should not be able to hold.
+            // What HAS come in is still recorded as payment rows against the
+            // bill, so the Invoices header can show received and outstanding
+            // separately; it is only the status word that stops lying about
+            // a state that is not supposed to exist.
+            //
+            // invoice_status is left alone. It tracks the life of the document
+            // (Generated, Sent, Cancelled), and a payment does not change what
+            // has happened to the document.
+            { payment_status: "Pending" },
         client,
       );
 
@@ -708,12 +717,13 @@ class InvoiceService {
       let newPaymentStatus = "Pending";
       let newInvoiceStatus = invoice.invoice_status;
 
+      // Paid or not paid. See reconcileInvoiceForOrder above for why there is
+      // no "Partial": a bill that only exists once it is settled can never
+      // honestly be in a half paid state, and the money that has come in is
+      // carried by the payment rows rather than by the status word.
       if (newTotalPaid >= grandTotal) {
         newPaymentStatus = "Paid";
         newInvoiceStatus = "Paid";
-      } else if (newTotalPaid > 0) {
-        newPaymentStatus = "Partial";
-        newInvoiceStatus = "Partial Paid";
       }
 
       // Add payment entry

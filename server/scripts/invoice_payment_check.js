@@ -56,6 +56,8 @@ require.cache[dbPath] = stub;
 
 const orders = require("../src/controllers/orderController");
 const invoiceController = require("../src/controllers/invoiceController");
+const saleCtrl = require("../src/controllers/saleController");
+const parties = require("../src/controllers/partyController");
 const invoiceService = require("../src/services/invoiceService");
 const invoiceRepository = require("../src/repositories/invoiceRepository");
 const partyService = require("../src/services/partyService");
@@ -325,6 +327,61 @@ const mkUser = async (role, phone) =>
     "and the count beside the amount is not zero while the amount is not",
     { amount: still, count: card.pending_count },
   );
+
+  // ---- a bill settled from the SALE side still reads as received --------
+  //
+  // Reported 12 Sept: two invoices both marked PAID in the list, above a card
+  // reading "1,35,700 still to come in, 2 unpaid", which was their exact sum.
+  //
+  // A sale-side bill deliberately writes NO row into the invoice module's
+  // payments table, because that money is already in party_payments against
+  // the sale and writing it twice is what once made a bill read Paid while the
+  // customer still owed the lot. So a header counting those rows alone read
+  // every such bill as wholly unpaid.
+  //
+  // Since a bill is now Paid or Pending and nothing between, the stamp answers
+  // it outright and the rows are consulted only for one that is not settled.
+  const cashParty = await call(parties.createParty, {
+    user: { id: wid, role: "seller" }, business: { id: wid, owner: true, isOwner: true },
+    body: { name: "Counter Sale Shop", city: "Surat", phone: `96${Date.now() % 100000000}` },
+  });
+  await call(saleCtrl.createSale, {
+    user: { id: wid, role: "seller" }, business: { id: wid, owner: true, isOwner: true },
+    body: {
+      partyId: cashParty.body.id, status: "confirmed",
+      lines: [{ itemName: "Cloth", quantity: 1, unit: "mtr", rate: 5000, gstPercent: 0 }],
+      amountPaid: 5000, paymentMethod: "cash",
+    },
+  });
+  await new Promise((r) => setTimeout(r, 900));
+
+  const saleBill = (await q(
+    `SELECT i.id, i.grand_total, i.payment_status,
+            (SELECT count(*)::int FROM payments p WHERE p.invoice_id = i.id) AS rows
+       FROM invoices i
+       JOIN sales s ON s.id = i.sale_id
+      WHERE s.party_id = $1`, [cashParty.body.id])).rows[0];
+  check(saleBill?.payment_status === "Paid" && saleBill?.rows === 0,
+    "a cash sale bills itself with no invoice payment row",
+    { status: saleBill?.payment_status, rows: saleBill?.rows });
+
+  const head2 = mk();
+  await invoiceController.getDashboardStats(
+    { user: { id: wid, role: "seller" }, business: { id: wid, owner: true, isOwner: true }, query: {} },
+    head2,
+  );
+  const card2 = head2.body?.stats?.summary || head2.body?.stats || {};
+  const settledTotal = money((await q(
+    `SELECT COALESCE(SUM(grand_total),0) n FROM invoices
+      WHERE supplier_id = $1 AND payment_status = 'Paid'
+        AND invoice_status <> 'Cancelled' AND buyer_id IS DISTINCT FROM supplier_id`,
+    [wid])).rows[0].n);
+  check(money(card2.paid_amount) >= settledTotal,
+    "and every settled bill is counted under Received",
+    { received: card2.paid_amount, settled: settledTotal });
+  check(money(card2.pending_amount) < settledTotal,
+    "rather than under Still to come in",
+    { still: card2.pending_amount, why: "which is where they all landed before" });
 
   console.log(fails ? `\n${fails} FAILED\n` : "\nall good\n");
   await testPool.end();

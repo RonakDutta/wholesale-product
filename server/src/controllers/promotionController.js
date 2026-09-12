@@ -16,10 +16,6 @@ const getFlashSales = async (req, res) => {
 };
 
 const createFlashSale = async (req, res) => {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ success: false, message: 'Only admins can manage flash sales' });
-  }
-
   const { name, description, discountType = 'percentage', discountValue, startDate, endDate, productIds = [] } = req.body;
   if (!name || !discountValue || !startDate || !endDate) {
     return res.status(400).json({ success: false, message: 'Missing flash sale fields' });
@@ -49,10 +45,6 @@ const createFlashSale = async (req, res) => {
 };
 
 const updateFlashSale = async (req, res) => {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ success: false, message: 'Only admins can edit flash sales' });
-  }
-
   const { id } = req.params;
   const { name, description, discountType, discountValue, startDate, endDate, isActive } = req.body;
   try {
@@ -68,10 +60,6 @@ const updateFlashSale = async (req, res) => {
 };
 
 const deleteFlashSale = async (req, res) => {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ success: false, message: 'Only admins can delete flash sales' });
-  }
-
   const { id } = req.params;
   try {
     await pool.query('DELETE FROM flash_sales WHERE id = $1', [id]);

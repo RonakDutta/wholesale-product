@@ -19,6 +19,7 @@ const creditNoteRoutes = require("./routes/creditNoteRoutes");
 const staffRoutes = require("./routes/staffRoutes");
 const hsnRoutes = require("./routes/hsnRoutes");
 const challanRoutes = require("./routes/challanRoutes");
+const masterRoutes = require("./routes/masterRoutes");
 
 const app = express();
 
@@ -54,5 +55,7 @@ app.use("/api/staff", staffRoutes);
 app.use("/api/hsn", hsnRoutes);
 // Goods sent out while payment is outstanding. See challanService.js.
 app.use("/api/challans", challanRoutes);
+// The platform masters: states, units, tax slabs, HSN codes.
+app.use("/api/masters", masterRoutes);
 
 module.exports = app;

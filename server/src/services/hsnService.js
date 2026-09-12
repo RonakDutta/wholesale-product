@@ -167,7 +167,11 @@ const suggest = async (db, wholesalerId, query = "", limit = 8) => {
   const digits = tidyHsn(query);
 
   const mine = await historyFor(db, wholesalerId);
-  const curated = TEXTILE_HSN.map((row) => ({ ...row, from: "common" }));
+  // From the master when the migration is in, from the built in list when it
+  // is not. Required lazily: masterService falls back to TEXTILE_HSN, so a
+  // require at the top of the file would be a cycle.
+  const list = await require("./masterService").hsn();
+  const curated = list.map((row) => ({ ...row, from: "common" }));
 
   const matches = (row) => {
     if (!text) return true;

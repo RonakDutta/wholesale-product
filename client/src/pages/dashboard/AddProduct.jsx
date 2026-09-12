@@ -14,9 +14,13 @@ import { toast } from "sonner";
 import HsnField from "../../components/HsnField";
 import api from "../../utils/axios";
 import VisibilityPicker from "../../components/VisibilityPicker";
-import { UNITS, GST_RATES } from "../../constants/products";
+import { useMasters } from "../../hooks/useMasters";
 
 const AddProduct = () => {
+  // Units and GST slabs from the platform masters, falling back to the
+  // built in lists so the dropdowns are never empty.
+  const { units, taxRates } = useMasters();
+
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -572,9 +576,9 @@ const AddProduct = () => {
                 onChange={handleChange}
                 className="w-full bg-slate-50 border border-slate-200 focus:border-clay focus:ring-1 focus:ring-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900 transition-colors"
               >
-                {UNITS.map((u) => (
-                  <option key={u.value} value={u.value}>
-                    {u.label}
+                {units.map((u) => (
+                  <option key={u.code} value={u.code}>
+                    {u.name}
                   </option>
                 ))}
               </select>
@@ -613,9 +617,9 @@ const AddProduct = () => {
                 className="w-full bg-slate-50 border border-slate-200 focus:border-clay focus:ring-1 focus:ring-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900 transition-colors"
               >
                 <option value="">Use my usual rate</option>
-                {GST_RATES.map((rate) => (
-                  <option key={rate} value={rate}>
-                    {rate}%
+                {taxRates.map((slab) => (
+                  <option key={slab.rate} value={slab.rate}>
+                    {slab.rate}%
                   </option>
                 ))}
               </select>

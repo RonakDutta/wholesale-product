@@ -7,7 +7,7 @@ import ItemPicker from "../../components/ItemPicker";
 
 // Short values on purpose here: this select sits beside the quantity box on a
 // phone, where "Kilogram (kg)" would not fit.
-import { UNIT_VALUES as UNITS } from "../../constants/products";
+import { useMasters } from "../../hooks/useMasters";
 
 const money = (value) =>
   Number(value || 0).toLocaleString("en-IN", {
@@ -48,6 +48,11 @@ const blankLine = () => ({
  * be edited at all, which the server enforces.
  */
 const RecordSale = () => {
+  const { units } = useMasters();
+  // Just the codes, for checking whether an item's stored unit is one the
+  // platform still offers.
+  const unitCodes = units.map((u) => u.code);
+
   const navigate = useNavigate();
   const { id: editingId } = useParams();
   const editing = Boolean(editingId);
@@ -179,7 +184,7 @@ const RecordSale = () => {
               ...line,
               itemName: item.name,
               rate: String(Number(item.rate)),
-              unit: UNITS.includes(item.unit) ? item.unit : line.unit,
+              unit: unitCodes.includes(item.unit) ? item.unit : line.unit,
               moq: item.moq === null ? null : Number(item.moq),
               hsnCode: item.hsn_code || null,
               gstPercent:
@@ -447,9 +452,9 @@ const RecordSale = () => {
                         }
                         className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm outline-none transition-colors focus:border-clay"
                       >
-                        {UNITS.map((unit) => (
-                          <option key={unit} value={unit}>
-                            {unit}
+                        {units.map((u) => (
+                          <option key={u.code} value={u.code}>
+                            {u.code}
                           </option>
                         ))}
                       </select>

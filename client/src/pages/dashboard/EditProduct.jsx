@@ -5,9 +5,11 @@ import { toast } from "sonner";
 import api from "../../utils/axios";
 import VisibilityPicker from "../../components/VisibilityPicker";
 import HsnField from "../../components/HsnField";
-import { UNITS, GST_RATES } from "../../constants/products";
+import { useMasters } from "../../hooks/useMasters";
 
 const EditProduct = () => {
+  const { units, taxRates } = useMasters();
+
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -380,9 +382,9 @@ const EditProduct = () => {
                 onChange={handleChange}
                 className="w-full bg-slate-50 border border-slate-200 focus:border-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900"
               >
-                {UNITS.map((u) => (
-                  <option key={u.value} value={u.value}>
-                    {u.label}
+                {units.map((u) => (
+                  <option key={u.code} value={u.code}>
+                    {u.name}
                   </option>
                 ))}
               </select>
@@ -421,9 +423,9 @@ const EditProduct = () => {
                 className="w-full bg-slate-50 border border-slate-200 focus:border-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900"
               >
                 <option value="">Use my usual rate</option>
-                {GST_RATES.map((rate) => (
-                  <option key={rate} value={rate}>
-                    {rate}%
+                {taxRates.map((slab) => (
+                  <option key={slab.rate} value={slab.rate}>
+                    {slab.rate}%
                   </option>
                 ))}
               </select>

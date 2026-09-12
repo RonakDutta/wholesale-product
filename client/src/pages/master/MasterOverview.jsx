@@ -1,15 +1,14 @@
 import { useEffect, useState } from "react";
-import { Link, useOutletContext } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ArrowRight, Hash, MapPin, Percent, Ruler } from "lucide-react";
 import api from "../../utils/axios";
 
 /**
- * What the master dashboard holds, and what it does not.
+ * What the master dashboard holds.
  *
- * Written as a screen rather than left to a README because the platform and
- * wholesaler split is the thing most likely to be got wrong here: somebody
- * looking for "invoice settings" will look in this area first, and should be
- * told plainly why they are not here.
+ * Four lists that were constants in the code, so correcting one meant a
+ * deploy. What belongs here and what stays with each wholesaler is written up
+ * in PROGRESS.md rather than on the screen; the screen is for doing the work.
  */
 
 const CARDS = [
@@ -44,7 +43,6 @@ const CARDS = [
 ];
 
 const MasterOverview = () => {
-  const { fromMasters } = useOutletContext() || {};
   const [counts, setCounts] = useState(null);
 
   useEffect(() => {
@@ -97,39 +95,6 @@ const MasterOverview = () => {
           </Link>
         ))}
       </div>
-
-      {/* The split that is easiest to get wrong, said plainly. */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5">
-        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">
-          What is not here
-        </h3>
-        <p className="mt-2 text-sm text-slate-600">
-          A wholesaler's invoice prefix, his payment due days, his default GST
-          rate, his terms and his bank details are <strong>his</strong>, and
-          they stay on his own Invoice defaults screen. If they lived here, one
-          wholesaler changing his prefix would change everybody's.
-        </p>
-        <p className="mt-2 text-sm text-slate-600">
-          What belongs here is the layer above them: the Rule 46(b) limits every
-          invoice number has to obey, the shape a brand new wholesaler starts
-          from, and number formatting. Those are still to build.
-        </p>
-      </div>
-
-      {fromMasters && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">
-            One limit worth knowing
-          </h3>
-          <p className="mt-2 text-sm text-slate-600">
-            Adding a state here fills the dropdowns, but it does{" "}
-            <strong>not</strong> yet change how tax is worked out for it. The
-            code that turns a state name into its GST code still reads a built
-            in list, on the path that decides CGST plus SGST against IGST.
-            Moving that is its own change.
-          </p>
-        </div>
-      )}
     </div>
   );
 };

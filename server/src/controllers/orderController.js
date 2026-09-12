@@ -15,6 +15,7 @@ const {
   returnWindowForOrder,
 } = require("../services/orderWindows");
 const invoiceService = require("../services/invoiceService");
+const invoiceRepository = require("../repositories/invoiceRepository");
 const challanService = require("../services/challanService");
 const creditNoteService = require("../services/creditNoteService");
 const pdfService = require("../services/pdfService");
@@ -1068,7 +1069,56 @@ const RETURN_ANSWERS = {
  * is worth a line in the log; it is not worth refusing to accept goods that
  * are physically back.
  */
+/**
+ * The bill for these goods, by whichever road it was raised.
+ *
+ * Looking only at invoices.order_id missed two real cases and left a returned
+ * order with a tax invoice standing and nothing reversing it:
+ *
+ *   the bill was raised from the SALE, which happens whenever the wholesaler
+ *   takes the balance in cash and records it on the khata. That invoice
+ *   carries a sale_id and no order_id.
+ *
+ *   the bill had not landed yet. Checkout and the payment handler both raise
+ *   it in the background, so a return completed briskly, or on a busy
+ *   database, can outrun it.
+ */
+const billForOrder = async (client, orderId) => {
+  const bridged = await invoiceRepository.schemaExtras();
+  const bySale = bridged.has_sale_id && bridged.has_sale_order_id
+    ? `OR i.sale_id IN (SELECT id FROM sales WHERE order_id = $1)`
+    : "";
+  const found = await client.query(
+    `SELECT i.id, i.supplier_id FROM invoices i
+      WHERE i.order_id = $1 ${bySale}
+      LIMIT 1`,
+    [orderId],
+  );
+  return found.rows[0] || null;
+};
+
 const unwindReturnedOrder = async (orderId, userId) => {
+  /**
+   * Make sure the bill exists BEFORE anything is cancelled.
+   *
+   * Raising it afterwards is not possible: the sale is cancelled two lines
+   * below and both billing paths refuse a cancelled sale, which is correct.
+   * So an order that is settled but whose bill has not caught up gets it
+   * raised here, and is then reversed properly. An order that was never paid
+   * has no bill and there is nothing to reverse, which is also right.
+   *
+   * Outside the transaction, because reconcile opens its own.
+   */
+  let existing = await billForOrder(pool, orderId);
+  if (!existing) {
+    try {
+      await invoiceService.reconcileInvoiceForOrder(orderId);
+      existing = await billForOrder(pool, orderId);
+    } catch (billErr) {
+      console.warn(`Order ${orderId} returned, could not settle its bill first: ${billErr.message}`);
+    }
+  }
+
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -1082,10 +1132,7 @@ const unwindReturnedOrder = async (orderId, userId) => {
       );
     }
 
-    const invoice = await client.query(
-      "SELECT id, supplier_id FROM invoices WHERE order_id = $1 LIMIT 1",
-      [orderId],
-    );
+    const invoice = { rows: existing ? [existing] : [] };
     if (invoice.rows.length > 0) {
       const result = await creditNoteService.createCreditNote(
         {

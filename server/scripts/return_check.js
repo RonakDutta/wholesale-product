@@ -175,6 +175,56 @@ const mkUser = async (role, phone) =>
   check(note.rows.length === 1, "a credit note is raised against the invoice", note.rows[0]?.note_number);
   check(note.rows[0]?.reason === "goods_returned", "for the right reason", note.rows[0]?.reason);
 
+  // ---- the bill is found by whichever road it was raised on -------------
+  //
+  // unwindReturnedOrder used to look only at invoices.order_id, and missed a
+  // bill raised from the SALE, which is what happens whenever the wholesaler
+  // takes the balance in cash and records it on the khata: that invoice
+  // carries a sale_id and no order_id. The goods came back, the sale was
+  // cancelled, and a tax invoice was left standing with nothing reversing it.
+  //
+  // It also missed a bill that had not landed yet, because both billing paths
+  // run in the background. That one only showed itself when the suites were
+  // run back to back and the database was busy, which is the worst way for a
+  // fault to announce itself.
+  const orphan = await deliveredOrder("9820077889");
+  // Re-shape the bill into what the sale side produces: a sale_id and no
+  // order_id. That is what a cash settled order-backed sale really writes.
+  await q(
+    `UPDATE invoices
+        SET order_id = NULL,
+            sale_id = (SELECT id FROM sales WHERE order_id = $1)
+      WHERE order_id = $1`,
+    [orphan.orderId],
+  );
+  const reshaped = await q(
+    `SELECT i.id FROM invoices i JOIN sales s ON s.id = i.sale_id
+      WHERE s.order_id = $1 AND i.order_id IS NULL`,
+    [orphan.orderId],
+  );
+  check(reshaped.rows.length === 1, "a bill carrying only a sale_id", {
+    why: "which is what a cash settled order-backed sale produces",
+  });
+
+  await call(orders.requestReturn, {
+    user: { id: orphan.buyer, role: "buyer" }, params: { orderId: orphan.orderId },
+    body: { reason: "shade" },
+  });
+  for (const st of ["return_approved", "return_completed"]) {
+    await call(orders.updateOrderStatus, {
+      user: seller, params: { orderId: orphan.orderId }, body: { status: st },
+    });
+  }
+  const foundAnyway = await q(
+    `SELECT cn.note_number FROM credit_notes cn
+       JOIN invoices i ON i.id = cn.invoice_id
+       JOIN sales s ON s.id = i.sale_id
+      WHERE s.order_id = $1`,
+    [orphan.orderId],
+  );
+  check(foundAnyway.rows.length === 1,
+    "is still found and still reversed", { note: foundAnyway.rows[0]?.note_number });
+
   // ---- refusing a return leaves the debt alone --------------------------
   const b = await deliveredOrder("9820044556");
   // He has the goods and has not paid, so he owes for them.

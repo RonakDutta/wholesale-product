@@ -10,7 +10,7 @@
  *
  * What has to hold:
  *   - the first instalment appears on the invoice, for the right amount
- *   - the bill says Partial, not Paid, while money is still owed
+ *   - the bill says Pending, not Paid, while money is still owed
  *   - the second instalment settles it, and the two entries sum to the bill
  *   - running the reconcile again changes nothing, because it is called on
  *     every payment event and on the backfill
@@ -26,14 +26,20 @@
  * This suite tests the 50/50 instalment plan and how an invoice mirrors a
  * part payment. Both need an invoice to EXIST while money is still
  * outstanding, which the delivery challan rule specified on 10 Sept forbids:
- * under that rule the bill waits until the sale is settled, so an invoice can
- * never be in the "Partial" state at all.
+ * under that rule the bill waits until the sale is settled.
  *
- * The two are genuinely in conflict, and this is the honest way to say so.
- * The flag is turned off here, so this suite goes on testing the behaviour
- * the flag exists to preserve. If the challan rule survives its legal review,
- * the instalment plan and the whole partial-payment path on an invoice need
- * revisiting rather than quietly leaving broken.
+ * Settled 11 Sept: the rule stands, and the "Partial" payment status is gone
+ * with it. A bill is Pending or Paid, nothing in between, because a document
+ * that only exists once it is settled can never honestly be half paid. What
+ * has come in is still recorded as payment rows against the bill, so the
+ * Invoices header shows received and outstanding separately and nothing is
+ * lost; only the status word stopped describing a state that is not supposed
+ * to exist.
+ *
+ * The flag is turned off here so this suite goes on exercising the path the
+ * flag exists to preserve: with the rule off, a bill is raised unpaid and
+ * payments arrive against it over time, and it must still read Pending until
+ * the last rupee.
  */
 process.env.CHALLAN_WHEN_UNPAID = "false";
 
@@ -164,8 +170,13 @@ const mkUser = async (role, phone) =>
   check(onBill.sum === money(afterFirstOrder.amount_paid),
     "for exactly what the order says was received",
     { bill: onBill.sum, order: money(afterFirstOrder.amount_paid) });
-  check(onBill.status.toLowerCase() === "partial",
-    "the bill reads Partial, not Paid", { status: onBill.status });
+  // Pending, not "Partial". Settled 11 Sept: a bill is paid or it is not, and
+  // since a bill only exists once the money is all in, a half paid one is a
+  // state the product should not be able to hold. What HAS come in is carried
+  // by the payment rows above, which is where the Invoices header reads it
+  // from, so nothing is lost by the status word being honest.
+  check(onBill.status.toLowerCase() === "pending",
+    "the bill reads Pending, not Paid", { status: onBill.status, was: "Partial" });
   check(onBill.logs.includes("Payment"),
     "and the timeline has an entry for it", { logs: onBill.logs });
   check(!onBill.logs.includes("Paid"),

@@ -619,7 +619,15 @@ class InvoiceRepository {
       whereClauses.push(`i.buyer_id IS DISTINCT FROM i.supplier_id`);
 
       if (paymentStatus) {
-        whereClauses.push(`i.payment_status = $${paramIndex++}`);
+        // "Partial" is no longer written, but rows carrying it exist from
+        // before the rule changed. Filtering for "Not paid" has to find them
+        // or a bill with money owing on it drops out of the list that is
+        // supposed to chase it.
+        if (paymentStatus === "Pending") {
+          whereClauses.push(`i.payment_status IN ($${paramIndex++}, 'Partial')`);
+        } else {
+          whereClauses.push(`i.payment_status = $${paramIndex++}`);
+        }
         params.push(paymentStatus);
       }
 

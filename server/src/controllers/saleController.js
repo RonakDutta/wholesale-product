@@ -6,6 +6,7 @@ const invoiceRepository = require("../repositories/invoiceRepository");
 const gstService = require("../services/gstService");
 const { checkHsn } = require("../services/hsnService");
 const challanService = require("../services/challanService");
+const { receivedExpression } = require("../services/saleSettlement");
 const { businessId } = require("../middlewares/businessContext");
 
 /**
@@ -354,26 +355,14 @@ exports.listSales = async (req, res) => {
     /**
      * What has actually come in against this sale.
      *
-     * party_payments alone is not the answer for a sale written from a shop
-     * order. The buyer pays at checkout, and that money lands on
-     * orders.amount_paid; nothing tags a row to the sale. So a fully paid
-     * order produced a sale in his book reading "the whole amount still due",
-     * while the order it came from read "all paid". A wholesaler reported
-     * exactly that.
-     *
-     * GREATEST rather than a sum, and the same rule challanService.settlementOf
-     * uses, because a payment he also entered by hand against the sale is the
-     * same money arriving twice on paper, not twice in the till.
+     * One rule, in services/saleSettlement.js. party_payments alone is not the
+     * answer for a sale written from a shop order, because the buyer paid at
+     * checkout and that money lands on orders.amount_paid; and the two cannot
+     * simply be added, because the khata also carries a MIRROR of that shop
+     * payment. See that file for why it is neither the sum nor the greater.
      */
     const listed = await invoiceRepository.schemaExtras();
-    const received = listed.has_sale_order_id
-      ? `GREATEST(
-           COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
-                      WHERE pp.sale_id = s.id), 0),
-           COALESCE((SELECT o.amount_paid FROM orders o WHERE o.id = s.order_id), 0)
-         )`
-      : `COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
-                    WHERE pp.sale_id = s.id), 0)`;
+    const received = receivedExpression({ hasOrderId: listed.has_sale_order_id });
 
     const result = await pool.query(
       `SELECT

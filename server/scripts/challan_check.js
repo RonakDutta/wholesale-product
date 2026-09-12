@@ -100,9 +100,23 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
 
   const madeOne = await call(challans.createForSale, { ...asOwner, params: { id: unpaid.id }, body: {} });
   check(madeOne.statusCode === 201, "a challan can be made instead", { s: madeOne.statusCode });
-  check(/^DC-\d{4}$/.test(madeOne.body?.challan_number || ""), "in its own number run, not the invoice run", {
-    number: madeOne.body?.challan_number,
-  });
+  // The three documents are numbered the same way now: prefix, serial,
+  // financial year, restarting each 1 April. They used to be INV-000001,
+  // S-0001 and DC-0001, three shapes with three padding widths and no year on
+  // any of them. Falls back to DC-0001 until the series migration is run, so
+  // both shapes are accepted here and the suite runs on either database.
+  check(
+    /^DC[-/]/.test(String(madeOne.body?.challan_number || "")),
+    "in its own number run, not the invoice run",
+    { number: madeOne.body?.challan_number },
+  );
+  if (String(madeOne.body?.challan_number || "").includes("/")) {
+    check(
+      /^DC\/\d+\/\d\d-\d\d$/.test(madeOne.body.challan_number),
+      "carrying the financial year, like the invoice and the sale",
+      { number: madeOne.body.challan_number },
+    );
+  }
   check(
     madeOne.body?.is_rule_55 === false,
     "flagged as not a Rule 55 challan, which it is not",

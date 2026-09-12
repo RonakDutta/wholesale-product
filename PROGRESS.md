@@ -29,7 +29,8 @@ cd server && npm run migrate
 | `wholesale3_delivery_challans.sql` | Goods-out note when a sale is not fully paid | run 10 Sept |
 | `wholesale3_invoice_number_format.sql` | Invoice number prefix, suffix and padding | run 10 Sept |
 | `wholesale3_invoice_rule46_fields.sql` | Place of supply, reverse charge, round off | run 10 Sept |
-| `wholesale3_platform_masters.sql` | Super admin flag, and the state, unit, tax rate and HSN masters | **NOT RUN** |
+| `wholesale3_platform_masters.sql` | Super admin flag, and the state, unit, tax rate and HSN masters | run 12 Sept |
+| `wholesale3_series_financial_year.sql` | Sale and challan numbers restart each financial year | **NOT RUN** |
 
 One outstanding, added 12 Sept. Until it is run the product behaves exactly as
 it did before: every master read falls back to the constant it replaced, and
@@ -80,6 +81,25 @@ node scripts/repair_invoice_names.js            # show what would change
 node scripts/repair_invoice_names.js --apply    # fill blanks, re-address
 ```
 
+Documents issued before 12 Sept keep their old numbers, INV-000001 and S-0001
+and DC-0001, because a document that has gone out is not renumbered on its own.
+To bring a wholesaler's history across, after running the series migration:
+
+```bash
+node scripts/renumber_series.js "$DATABASE_URL" seller@example.com                  # dry run
+node scripts/renumber_series.js "$DATABASE_URL" seller@example.com --write
+node scripts/renumber_series.js "$DATABASE_URL" seller@example.com --write --skip-invoices
+```
+
+Scoped to one wholesaler, one transaction, dry run by default, and it refuses
+to run at all until the series migration is in, because renumbering history
+into a shape the live code will not continue leaves a worse mess than it found.
+
+**Renumbering a tax invoice is not a neutral act.** Its number is what the
+customer's books reference and what his input tax credit is claimed against.
+For test data this is fine and it is what the script was written for; against
+real trading history use `--skip-invoices`.
+
 Part 3 of it only REPORTS orders holding two invoices. Do not merge those with
 a script: payments can be split across the two numbers, and which one stands is
 a judgement call.
@@ -95,6 +115,33 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 ## Done
 
 ### 12 Sept 2026
+
+**All three documents are numbered the same way now.** They were three shapes
+with three padding widths and no year on any of them:
+
+    invoice   INV-000001   restarted yearly
+    sale      S-0001       never restarted
+    challan   DC-0001      never restarted
+
+They read `INV/1/26-27`, `S/1/26-27` and `DC/1/26-27`, all restarting each
+1 April. `wholesale3_series_financial_year.sql` adds the financial year to the
+two counters that lacked it and makes it part of their key, carrying existing
+counters into the CURRENT year rather than resetting, so nobody's next sale
+collides with one he issued last week. Numbers already printed on a document
+are left exactly as they are.
+
+Only the invoice series is a legal requirement; a sale is the wholesaler's own
+record and a challan under this product's rule is explicitly not a tax
+document. The reason for the other two is legibility.
+
+**And a third copy of the sale numbering, found by breaking it.** There were
+two `nextSaleNumber` functions, one in saleController for a sale typed by hand
+and one in orderSaleService for a sale written when an order is accepted.
+Changing the shape in one and not the other is exactly what happened: sales
+from the sales book took the new number and sales from an accepted order
+crashed on an ON CONFLICT that no longer matched. Both, and the challan
+counter, now come from `services/seriesNumbers.js`.
+
 
 **The invoice number carries its financial year now.** A new wholesaler's
 default shape is `INV/1/26-27` rather than `INV-000001`: six leading zeros and

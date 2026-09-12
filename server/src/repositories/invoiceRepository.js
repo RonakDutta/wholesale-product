@@ -195,7 +195,16 @@ async function schemaExtras(db = pool) {
                    AND column_name = 'gst_percent') AS has_listing_billing,
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'invoice_sequences'
-                   AND column_name = 'wholesaler_id') AS has_invoice_sequence_owner
+                   AND column_name = 'wholesaler_id') AS has_invoice_sequence_owner,
+        -- Sale and challan numbers restart each financial year, which needs a
+        -- financial_year column on both counters. Until then both fall back to
+        -- their old shapes, S-0001 and DC-0001.
+        (EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_name = 'sale_sequences'
+                    AND column_name = 'financial_year')
+         AND EXISTS (SELECT 1 FROM information_schema.columns
+                      WHERE table_name = 'delivery_challan_sequences'
+                        AND column_name = 'financial_year')) AS has_series_fy
     `);
     extras = result.rows[0];
   } catch (err) {
@@ -211,6 +220,7 @@ async function schemaExtras(db = pool) {
       has_sale_tax: false,
       has_sale_order_id: false,
       has_number_format: false,
+      has_series_fy: false,
       has_rule46_fields: false,
       has_line_gst: false,
       has_item_gst: false,

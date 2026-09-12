@@ -7,6 +7,7 @@ const gstService = require("../services/gstService");
 const { checkHsn } = require("../services/hsnService");
 const challanService = require("../services/challanService");
 const { receivedExpression } = require("../services/saleSettlement");
+const { nextSaleNumber } = require("../services/seriesNumbers");
 const { businessId } = require("../middlewares/businessContext");
 
 /**
@@ -23,17 +24,6 @@ const { businessId } = require("../middlewares/businessContext");
  * Takes the next number in this wholesaler's own series. Must be called
  * inside a transaction: the upsert locks the sequence row until commit.
  */
-const nextSaleNumber = async (client, wholesalerId) => {
-  const result = await client.query(
-    `INSERT INTO sale_sequences (wholesaler_id, last_number)
-     VALUES ($1, 1)
-     ON CONFLICT (wholesaler_id)
-     DO UPDATE SET last_number = sale_sequences.last_number + 1
-     RETURNING last_number`,
-    [wholesalerId],
-  );
-  return `S-${String(result.rows[0].last_number).padStart(4, "0")}`;
-};
 
 /**
  * What a sale comes to, tax included.

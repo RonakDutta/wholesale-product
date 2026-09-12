@@ -81,6 +81,25 @@ node scripts/repair_invoice_names.js            # show what would change
 node scripts/repair_invoice_names.js --apply    # fill blanks, re-address
 ```
 
+Documents issued before 12 Sept keep their old numbers, INV-000001 and S-0001
+and DC-0001, because a document that has gone out is not renumbered on its own.
+To bring a wholesaler's history across, after running the series migration:
+
+```bash
+node scripts/renumber_series.js "$DATABASE_URL" seller@example.com                  # dry run
+node scripts/renumber_series.js "$DATABASE_URL" seller@example.com --write
+node scripts/renumber_series.js "$DATABASE_URL" seller@example.com --write --skip-invoices
+```
+
+Scoped to one wholesaler, one transaction, dry run by default, and it refuses
+to run at all until the series migration is in, because renumbering history
+into a shape the live code will not continue leaves a worse mess than it found.
+
+**Renumbering a tax invoice is not a neutral act.** Its number is what the
+customer's books reference and what his input tax credit is claimed against.
+For test data this is fine and it is what the script was written for; against
+real trading history use `--skip-invoices`.
+
 Part 3 of it only REPORTS orders holding two invoices. Do not merge those with
 a script: payments can be split across the two numbers, and which one stands is
 a judgement call.

@@ -70,4 +70,31 @@ const nextSaleNumber = (client, wholesalerId) =>
 const nextChallanNumber = (client, wholesalerId) =>
   take(client, wholesalerId, "delivery_challan_sequences", "DC-", "DC/");
 
-module.exports = { nextSaleNumber, nextChallanNumber };
+/**
+ * PUR/1/26-27.
+ *
+ * No legacy shape and no fallback, because purchase_sequences is created with
+ * financial_year already in its key: there is no older database that has the
+ * table without the column. It does not route through take() for the same
+ * reason, since take() branches on has_series_fy, which describes whether the
+ * SALE and CHALLAN counters were migrated and says nothing about this one. A
+ * wholesaler who has run the purchase migration but not the series one would
+ * otherwise get purchases numbered PUR-0001 off a table with no such key.
+ *
+ * Must be called inside a transaction, like the other two: the upsert locks
+ * the counter row until commit.
+ */
+const nextPurchaseNumber = async (client, wholesalerId) => {
+  const fy = financialYear();
+  const result = await client.query(
+    `INSERT INTO purchase_sequences (wholesaler_id, financial_year, last_number)
+     VALUES ($1, $2, 1)
+     ON CONFLICT (wholesaler_id, financial_year)
+     DO UPDATE SET last_number = purchase_sequences.last_number + 1
+     RETURNING last_number`,
+    [wholesalerId, fy],
+  );
+  return `PUR/${result.rows[0].last_number}/${fy}`;
+};
+
+module.exports = { nextSaleNumber, nextChallanNumber, nextPurchaseNumber };

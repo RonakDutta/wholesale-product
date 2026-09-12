@@ -204,7 +204,13 @@ async function schemaExtras(db = pool) {
                     AND column_name = 'financial_year')
          AND EXISTS (SELECT 1 FROM information_schema.columns
                       WHERE table_name = 'delivery_challan_sequences'
-                        AND column_name = 'financial_year')) AS has_series_fy
+                        AND column_name = 'financial_year')) AS has_series_fy,
+        -- The purchase side. Arrives with wholesale3_purchases.sql; until then
+        -- every purchase route answers "not set up yet" rather than throwing.
+        (to_regclass('public.purchases') IS NOT NULL
+         AND to_regclass('public.suppliers') IS NOT NULL
+         AND to_regclass('public.supplier_payments') IS NOT NULL
+         AND to_regclass('public.purchase_sequences') IS NOT NULL) AS has_purchases
     `);
     extras = result.rows[0];
   } catch (err) {
@@ -226,6 +232,7 @@ async function schemaExtras(db = pool) {
       has_item_gst: false,
       has_listing_billing: false,
       has_invoice_sequence_owner: false,
+      has_purchases: false,
     };
   }
   return extras;
@@ -828,7 +835,37 @@ class InvoiceRepository {
       // Counting a voided document towards revenue is what made the totals
       // look wrong after cleaning old rows up.
       const LIVE = `invoice_status <> 'Cancelled' AND buyer_id IS DISTINCT FROM supplier_id`;
-      const userClause = `${scopeClause} AND ${LIVE}`;
+
+      /**
+       * A bill reversed by a credit note is not money to collect.
+       *
+       * Cancelling an invoice and crediting one are two different instruments
+       * and only the first was excluded here. Under GST a bill that has been
+       * handed over is reversed with a credit note, not by rewriting it, so
+       * the invoice deliberately STAYS Generated and STAYS Pending. That is
+       * correct as a record and wrong as a total: a 30,000 bill reversed in
+       * full went on counting towards "still to come in" and towards revenue.
+       *
+       * The list beside these cards already knew better. StatusChip shows such
+       * a row as "Credited" precisely because it is reversed, so the card and
+       * the row underneath it disagreed, and the wholesaler was shown money to
+       * chase that he had already credited back.
+       *
+       * Takes the invoice reference because this clause is pasted into three
+       * queries and they do not all alias the table the same way. Unqualified
+       * `id` would bind to credit_notes.id inside the subquery and quietly
+       * match nothing, which is the worst of the available failures.
+       *
+       * credit_notes arrives with wholesale3_credit_notes.sql. Before that the
+       * clause is TRUE, which is exactly how this behaved until now.
+       */
+      const notCredited = (ref) =>
+        has.has_credit_notes
+          ? `NOT EXISTS (SELECT 1 FROM credit_notes cn WHERE cn.invoice_id = ${ref}.id)`
+          : "TRUE";
+
+      const userClause = (ref) =>
+        `${scopeClause} AND ${LIVE} AND ${notCredited(ref)}`;
 
       const params = normRole === "admin" ? [] : [userId];
 
@@ -865,7 +902,7 @@ class InvoiceRepository {
                  COALESCE((SELECT SUM(p.amount) FROM payments p
                             WHERE p.invoice_id = i.id), 0) AS received
             FROM invoices i
-           WHERE ${userClause}
+           WHERE ${userClause("i")}
         ), balances AS (
           SELECT *,
                  /*
@@ -919,7 +956,7 @@ class InvoiceRepository {
           COALESCE(SUM(grand_total), 0)::numeric(12,2) AS revenue,
           COALESCE(SUM(total_tax), 0)::numeric(12,2) AS gst
         FROM invoices
-        WHERE ${userClause} AND issue_date >= CURRENT_DATE - INTERVAL '6 months'
+        WHERE ${userClause("invoices")} AND issue_date >= CURRENT_DATE - INTERVAL '6 months'
         GROUP BY TO_CHAR(issue_date, 'Mon YYYY'), DATE_TRUNC('month', issue_date)
         ORDER BY month_date ASC
       `;
@@ -932,7 +969,7 @@ class InvoiceRepository {
           COUNT(*)::int AS count,
           COALESCE(SUM(grand_total), 0)::numeric(12,2) AS amount
         FROM invoices
-        WHERE ${userClause}
+        WHERE ${userClause("invoices")}
         GROUP BY invoice_status
       `;
       const statusResult = await pool.query(statusQuery, params);

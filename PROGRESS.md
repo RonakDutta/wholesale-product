@@ -29,8 +29,19 @@ cd server && npm run migrate
 | `wholesale3_delivery_challans.sql` | Goods-out note when a sale is not fully paid | run 10 Sept |
 | `wholesale3_invoice_number_format.sql` | Invoice number prefix, suffix and padding | run 10 Sept |
 | `wholesale3_invoice_rule46_fields.sql` | Place of supply, reverse charge, round off | run 10 Sept |
+| `wholesale3_platform_masters.sql` | Super admin flag, and the state, unit, tax rate and HSN masters | **NOT RUN** |
 
-Nothing outstanding. Every migration above has been run against Neon.
+One outstanding, added 12 Sept. Until it is run the product behaves exactly as
+it did before: every master read falls back to the constant it replaced, and
+the admin flag reads false for everybody, so the admin areas are unreachable
+rather than open.
+
+After running it, make the first admin by hand. There is no way to do it from
+inside the product, by design:
+
+```sql
+UPDATE users SET is_platform_admin = TRUE WHERE email = 'you@example.com';
+```
 
 Nothing added on 11 Sept needs one: the credit feature moves existing rows and
 adds no columns, and removing the "Partial" payment status is code only, since
@@ -84,6 +95,50 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 ## Done
 
 ### 12 Sept 2026
+
+**Platform masters, and the super admin who owns them.** Four lists that were
+constants in code, so correcting one meant a deploy: 37 states with their GST
+codes, 7 units, 7 tax slabs, 32 HSN codes. `wholesale3_platform_masters.sql`
+creates and seeds them, the seed generated from the running constants rather
+than typed, so the tables cannot start life disagreeing with the code still
+falling back to them.
+
+The admin is a FLAG, `users.is_platform_admin`, not a fourth role. `users.role`
+carries a CHECK allowing only buyer, seller and both, and an admin is not a
+fourth kind of trader. It is read from the database on every admin request
+rather than carried in the token, because a revoked admin has to lose his
+powers at once and not whenever his session happens to expire.
+
+That makes flash sales reachable for the first time. `promotionController` had
+three checks against role `'admin'`, a value the constraint can never hold, so
+the feature was unreachable rather than merely unbuilt. The dead checks are
+gone and the routes use `requirePlatformAdmin`.
+
+Every master read falls back to the constant it replaced, and an EMPTIED table
+falls back too, because an empty list is a mistake rather than an instruction
+and serving it would empty every dropdown in the product. `master_check.js`
+runs both ways, with the migration and without.
+
+**What still reads the constant, deliberately.** `placeOfSupply` resolves a
+state name to its GST code synchronously, at module load, on the path that
+decides CGST plus SGST against IGST. Making that asynchronous so it could read
+a table is a separate change with its own risk. So the state master feeds the
+dropdowns and the admin console; adding a state there does NOT yet change how
+tax is computed for it. Written down rather than discovered later.
+
+**A settled bill read as wholly unpaid on the Invoices header.** Reported with
+a screenshot: two invoices both marked PAID in the list, above a card reading
+"1,35,700 still to come in, 2 unpaid", which was their exact sum.
+
+Yesterday's fix made the three cards sums of each bill's balance, worked out
+from the invoice module's `payments` table. But a bill raised from the SALE
+side deliberately writes no row there: that money is already in party_payments
+against the sale, and writing it twice is what once made a bill read Paid while
+the customer still owed the lot. So every sale-side bill counted as fully
+outstanding. Since a bill is now Paid or Pending and nothing between, the stamp
+answers it outright, and the payment rows are consulted only for one that is
+not settled.
+
 
 **"Partial" is gone from invoices.** Decided today, closing the conflict this
 file had carried since the 10th. A bill exists only once the money is all in,

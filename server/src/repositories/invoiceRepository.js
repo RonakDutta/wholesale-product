@@ -858,8 +858,30 @@ class InvoiceRepository {
            WHERE ${userClause}
         ), balances AS (
           SELECT *,
-                 GREATEST(grand_total - received, 0) AS balance,
-                 LEAST(received, grand_total) AS counted
+                 /*
+                  * A bill stamped Paid is fully received, by definition.
+                  *
+                  * Not every settled invoice has rows in the payments table. A bill
+                  * raised from the SALE side deliberately writes none: that
+                  * money is already recorded in party_payments against the
+                  * sale, and writing it a second time into the invoice
+                  * module's own table is what once made a bill read Paid while
+                  * the customer still owed the whole amount.
+                  *
+                  * So counting those rows alone read every sale-side bill as
+                  * wholly unpaid. A wholesaler saw two invoices both marked
+                  * PAID in the list, above a card saying 1,35,700 still to
+                  * come in from 2 unpaid, which was their exact sum.
+                  *
+                  * Since 12 Sept a bill is Paid or Pending and there is
+                  * nothing in between, so the stamp answers this outright. The
+                  * payment rows are consulted only for a bill that is NOT
+                  * settled, where they say how much of it has arrived.
+                  */
+                 CASE WHEN payment_status = 'Paid' THEN 0
+                      ELSE GREATEST(grand_total - received, 0) END AS balance,
+                 CASE WHEN payment_status = 'Paid' THEN grand_total
+                      ELSE LEAST(received, grand_total) END AS counted
             FROM live
         )
         SELECT

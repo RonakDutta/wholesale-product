@@ -8,6 +8,7 @@ import {
   Percent,
   Ruler,
   ShieldCheck,
+  SlidersHorizontal,
 } from "lucide-react";
 import api from "../utils/axios";
 import Wordmark from "../components/Wordmark";
@@ -33,10 +34,14 @@ import Wordmark from "../components/Wordmark";
  * WHAT IS NOT HERE, deliberately: a wholesaler's invoice prefix, his due days,
  * his default tax rate, his terms. Those are his and they stay on his own
  * settings screen. Moving them here would mean one wholesaler changing his
- * prefix changed everybody's. What belongs here is the layer above them: the
- * Rule 46(b) constraints, the defaults a new wholesaler starts from, the
- * number formatting. Those come later, and deliberately after the money()
- * helpers are collapsed, or a setting lands that half the product ignores.
+ * prefix changed everybody's.
+ *
+ * What IS here is the layer above them, on the Settings screen: number and
+ * date formatting, the Rule 46(b) constraints shown read only because they are
+ * law, and the defaults a new wholesaler starts from. That screen deliberately
+ * waited until the scattered money() helpers were collapsed into
+ * utils/money.js, because a formatting setting that half the product ignores
+ * is worse than none.
  */
 
 const LINKS = [
@@ -45,6 +50,7 @@ const LINKS = [
   { to: "/master/units", label: "Units", icon: Ruler },
   { to: "/master/tax-rates", label: "Tax rates", icon: Percent },
   { to: "/master/hsn", label: "HSN codes", icon: Hash },
+  { to: "/master/settings", label: "Settings", icon: SlidersHorizontal },
 ];
 
 /**

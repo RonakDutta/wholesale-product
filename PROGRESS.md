@@ -32,8 +32,14 @@ cd server && npm run migrate
 | `wholesale3_platform_masters.sql` | Super admin flag, and the state, unit, tax rate and HSN masters | run 12 Sept |
 | `wholesale3_series_financial_year.sql` | Sale and challan numbers restart each financial year | run 12 Sept, confirmed by a sale coming out `S/10/26-27` |
 | `wholesale3_purchases.sql` | Suppliers, purchases, purchase lines, money paid out, purchase numbering | **NOT RUN** |
+| `wholesale3_master_settings.sql` | Platform formatting: decimals, digit grouping, currency, date format | **NOT RUN** |
 
-One outstanding, added 12 Sept. Until it is run every purchase and supplier
+Two outstanding. Until the settings one is run, every screen formats exactly
+as it always has: `masterService.SHIPPED_SETTINGS` is not a placeholder, it is
+the convention the product shipped with, and the master Settings screen says
+the table is missing rather than pretending to save.
+
+The purchase one, added 12 Sept. Until it is run every purchase and supplier
 route answers `503 PURCHASES_NOT_SET_UP` and the four screens say "the
 purchase book is not switched on yet". Nothing else in the product is
 affected, and no existing screen changes. Verified against a database without
@@ -119,6 +125,65 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 ---
 
 ## Done
+
+### 13 Sept 2026
+
+**Razorpay's own checkout window, in place of ours.** The local imitation built
+yesterday is deleted. Card numbers and UPI PINs belong inside an iframe served
+by the people certified to collect them; a copy of that screen in our markup
+gets the appearance right and the security exactly backwards, and its fields
+would have had to become real eventually.
+
+`createOrder` now makes the real Basic auth POST to `api.razorpay.com/v1/orders`
+once keys exist, because their window will not open without an order id from
+it. NOT exercised against the real host, which needs an account: it is written
+to the documented contract and `razorpay_live_check.js` stubs the transport and
+asserts the method, URL, auth header, paise amount, receipt and notes, plus
+what happens when Razorpay refuses. Treat the first live call as the real test.
+
+Without keys there is no button, only a line saying online payment is not
+configured and to use the QR code. Their script authenticates the key id
+against their servers, so a made up one cannot open anything, and a button that
+always fails is worse than one that explains itself. Test keys are free.
+
+**Razorpay is now the primary way to pay** and is drawn like it: a bordered
+card marked Recommended with a full width 56px button, against the UPI QR which
+is collapsed into a one line summary underneath with a secondary outline
+button. It was the other way round. The reason is in the known problems below
+and is deliberately NOT on the screen: a buyer cannot act on it, and telling
+him his QR payment is unverified would only make him doubt money he has sent.
+
+**The master area is finished.** `/master/settings` holds the platform's
+formatting conventions: screen and document decimals kept apart, Indian against
+western digit grouping, currency symbol and the words for the amount in words,
+tax rate decimals kept apart from money decimals because 0.25% is a real GST
+slab, the default minimum HSN digits a new wholesaler starts from, and the date
+format. Rule 46(b) is shown read only, because it is law rather than a setting.
+
+The sample at the top redraws as you type, using the product's own formatter
+rather than a copy: if those two could disagree, the preview would be the thing
+lying about what saving does. Verified by switching each control and watching
+₹12,50,000 become ₹1,250,000 and 9 Sept 2026 become 2026-09-09.
+
+**The eighteen money() copies are collapsed.** This is what the settings screen
+was waiting for, and the reason it was not built on 12 Sept: a formatting
+setting that half the product ignores is worse than none. They now import from
+`utils/money`, aliased so not one call site changed: a screen that wanted two
+decimals imports `amount as money`. `dateLabel` went the same way.
+
+The formatter reads the platform settings through a module level value pushed
+in by `useMasters`, not a hook, because `money()` is called from `useMemo`,
+from sort comparators and from plain helpers where a hook cannot go. First
+paint after a cold load uses the shipped defaults, which is harmless: those ARE
+the old convention, so the worst case is a figure briefly correct in the old
+way rather than briefly wrong.
+
+**Verified:** 917 checks across 29 suites. 21 new on the live order contract,
+27 on the settings, and 20 driven in a browser against a stand in for
+`window.Razorpay` covering success, a decline, a dismissed window, no keys, and
+a script that will not load. The decline and dismiss cases matter: a decline
+must never reach verify, and a dismissed window must not leave the button
+spinning.
 
 ### 12 Sept 2026
 
@@ -923,6 +988,31 @@ numbering; shop prices treated as tax inclusive.
 Taken off the master overview screen and put here, because the screen is for
 doing the work and this is the reasoning behind it.
 
+### Why our own checkout window and not Razorpay's?
+
+Asked 12 Sept. Left open deliberately, not answered.
+
+What exists today is `RazorpayCheckoutModal`, a local imitation of the checkout
+window: our markup, our method list, our fields. The real integration loads
+`checkout.razorpay.com/v1/checkout.js` and calls
+`new window.Razorpay(options).open()`, which renders Razorpay's own window in
+an iframe they control.
+
+The question to settle is whether the imitation should have been built at all,
+or whether the real script should have gone in from the start with test keys
+(`rzp_test_...`) driving Razorpay's own sandbox.
+
+Worth weighing tomorrow, without prejudging it:
+
+- What the imitation costs if it is thrown away, against what it taught.
+- Whether Razorpay's test mode needs an account and keys before anything can
+  be seen on screen, and whether we have them.
+- That card details must never reach our code, which is the reason their window
+  is an iframe. Any path where our fields become real is the wrong path.
+- Whether the sandbox works offline and in this repository's test setup.
+- What is genuinely shared either way: the two server calls around the window,
+  which is where the signature check lives and which do not change.
+
 ### The UPI QR code: how do we know he actually paid?
 
 Raised 12 Sept, and it is the sharpest open question in the product.
@@ -1203,6 +1293,37 @@ for many taxpayers. That is a commercial decision and it shapes the schema.
 ---
 
 ## Known problems, not yet fixed
+
+### A hand entered payment can be double counted on an order backed invoice
+
+Found 13 Sept while running the battery. Intermittent, roughly one run in
+three under load and none at all on an idle machine, which is why it has been
+passing. Confirmed NOT a regression: six runs each side of the day's changes,
+zero failures both, and the one failure came during a full battery.
+
+`updatePaymentStatus` fires `reconcileInvoiceForOrder` in the BACKGROUND,
+without awaiting it. Reconcile is idempotent against payments already on the
+bill, so if the wholesaler records the same money by hand first, reconcile
+sees it and adds nothing. If the background call lands FIRST, the hand entry
+lands afterwards and nothing looks at it again: the bill ends up with two rows
+for one payment.
+
+Reproduction, in `invoice_payment_check.js`:
+a 50/50 order of 1,020, the first instalment of 510 paid through the shop,
+then the wholesaler adds 510 by hand. The invoice then shows 1,020 received
+against a bill for 1,020 and reads fully paid while 510 is still owed.
+
+Reconcile's idempotence is one-directional. It refuses to add when enough is
+already recorded (`gap <= 0`) but never corrects a total that is too high, so
+whichever writer arrives second wins and nothing reconciles them.
+
+The fix is not "await the background call": that only narrows the window, and
+the two writers are genuinely concurrent in production. It is to make the
+order backed invoice have ONE writer for its payment rows, or to cap a hand
+entry on such an invoice at what the order says has actually been received.
+The second is smaller and is where to start.
+
+
 
 - **Git history contains a committed password and an invoice PDF.** The Neon
   credential has been rotated. The history rewrite is outstanding.

@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, QrCode, IndianRupee, CheckCircle, AlertCircle, Loader2, Ban } from "lucide-react";
+import { ArrowLeft, QrCode, IndianRupee, CheckCircle, AlertCircle, Loader2, Ban, ChevronDown } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react"; // Standardized named export to resolve Vite bundler error
 import { toast } from "sonner";
 import api from "../utils/axios";
 import RazorpayPanel from "../components/RazorpayPanel";
+import { amount as money } from "../utils/money";
 
 const Payment = () => {
   const { orderId } = useParams();
@@ -235,9 +236,7 @@ const Payment = () => {
   const upiUrl = generateUPIUrl();
   const onInstalments = paymentDetails.paymentPlan === "installment_50_50";
   const partPaid = Number(paymentDetails.amountPaid || 0) > 0;
-  const money = (value) =>
-    Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const dueAfterThisPayment = Math.max(
+    const dueAfterThisPayment = Math.max(
     Number(paymentDetails.remainingAmount || 0) - Number(paymentDetails.paymentAmount || 0),
     0,
   );
@@ -318,16 +317,20 @@ const Payment = () => {
           </div>
         )}
 
-        {/* Razorpay, scaffolded. Above the QR code because it is the way this
-            is meant to go eventually, and offered alongside rather than
-            instead: scanning and typing a reference is what actually works
-            today, and it is what every one of these buyers already does. */}
+        {/* Leads, and is the only way to pay that is actually confirmed.
+            Nothing verifies a QR payment: the buyer presses a button to say he
+            paid and the cap on what is owed is the entire check. So this is
+            the recommended path and the QR code is the fallback underneath. */}
         {payable && (
-          <div className="mb-8">
+          <div className="mb-6">
             <RazorpayPanel
               orderId={orderId}
               amount={paymentDetails.amount}
               merchant={paymentDetails.supplierName}
+              buyer={{
+                name: paymentDetails.deliveryAddress?.name,
+                phone: paymentDetails.deliveryAddress?.phone,
+              }}
               onPaid={() => {
                 resolvedRef.current = true;
                 navigate("/order-success", { replace: true });
@@ -336,57 +339,121 @@ const Payment = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* QR Code Section */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <QrCode className="w-5 h-5 text-clay" />
-              <h2 className="text-lg font-bold text-slate-900">Scan QR Code to Pay</h2>
-            </div>
+        {/* The fallback. Collapsed by default so the confirmed path leads,
+            but one tap away: it is what works when the gateway is not
+            configured, and plenty of buyers will prefer it regardless.
 
-            <div className="flex flex-col items-center">
-              <div className="bg-white p-6 rounded-xl border-2 border-slate-200 mb-6">
-                {upiUrl && paymentDetails.supplierUpiId ? (
-                  <QRCodeSVG
-                    value={upiUrl}
-                    size={200}
-                    includeMargin={true}
-                    className="rounded-lg"
-                  />
-                ) : (
-                  <div className="w-48 h-48 bg-slate-100 rounded-lg flex flex-col items-center justify-center p-4 text-center gap-2 border border-dashed">
-                    <AlertCircle className="w-8 h-8 text-rose-500" />
-                    <p className="text-xs text-rose-600 font-medium">Supplier has not configured a UPI ID yet.</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="text-center space-y-2 mb-6">
-                <div className="flex items-center justify-center gap-2">
-                  <IndianRupee className="w-5 h-5 text-clay" />
-                  <span className="text-3xl font-bold text-clay">
-                    {paymentDetails.amount.toLocaleString("en-IN")}
+            Nothing here confirms that money actually moved, which is why it is
+            second rather than first. That is deliberately NOT said on screen:
+            a buyer cannot act on it and it would only make him doubt a payment
+            he has made. It is written up in PROGRESS.md instead. */}
+        {payable && (
+          <details className="group mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">
+              <span className="flex min-w-0 items-center gap-3">
+                <QrCode className="h-5 w-5 shrink-0 text-slate-400" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold text-slate-900">
+                    Or pay by UPI QR code
                   </span>
+                  <span className="block text-xs text-slate-500">
+                    Scan and pay from any UPI app
+                  </span>
+                </span>
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+            </summary>
+
+            <div className="border-t border-slate-100 p-5 sm:p-6">
+              <div className="flex flex-col items-center">
+                <div className="bg-white p-6 rounded-xl border-2 border-slate-200 mb-6">
+                  {upiUrl && paymentDetails.supplierUpiId ? (
+                    <QRCodeSVG
+                      value={upiUrl}
+                      size={200}
+                      includeMargin={true}
+                      className="rounded-lg"
+                    />
+                  ) : (
+                    <div className="w-48 h-48 bg-slate-100 rounded-lg flex flex-col items-center justify-center p-4 text-center gap-2 border border-dashed">
+                      <AlertCircle className="w-8 h-8 text-rose-500" />
+                      <p className="text-xs text-rose-600 font-medium">Supplier has not configured a UPI ID yet.</p>
+                    </div>
+                  )}
                 </div>
-                <p className="text-sm text-slate-600">Pay To: {paymentDetails.supplierName}</p>
-                <p className="text-xs text-slate-500 font-mono">UPI ID: {paymentDetails.supplierUpiId || "Not Provided"}</p>
+
+                <div className="text-center space-y-2 mb-6">
+                  <div className="flex items-center justify-center gap-2">
+                    <IndianRupee className="w-5 h-5 text-clay" />
+                    <span className="text-3xl font-bold text-clay">
+                      {paymentDetails.amount.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-600">Pay To: {paymentDetails.supplierName}</p>
+                  <p className="text-xs text-slate-500 font-mono">UPI ID: {paymentDetails.supplierUpiId || "Not Provided"}</p>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 w-full">
+                  <p className="text-sm text-amber-800">
+                    <strong>Instructions:</strong>
+                  </p>
+                  <ol className="text-xs text-amber-700 mt-2 space-y-1 list-decimal list-inside">
+                    <li>Open any UPI app (Google Pay, PhonePe, Paytm)</li>
+                    <li>Scan the QR code above</li>
+                    <li>Confirm the payment amount</li>
+                    <li>Complete the payment</li>
+                    <li>Click "I have completed payment" below</li>
+                  </ol>
+                </div>
               </div>
 
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 w-full">
-                <p className="text-sm text-amber-800">
-                  <strong>Instructions:</strong>
-                </p>
-                <ol className="text-xs text-amber-700 mt-2 space-y-1 list-decimal list-inside">
-                  <li>Open any UPI app (Google Pay, PhonePe, Paytm)</li>
-                  <li>Scan the QR code above</li>
-                  <li>Confirm the payment amount</li>
-                  <li>Complete the payment</li>
-                  <li>Click "I have completed payment" below</li>
-                </ol>
+              <div className="mt-6 space-y-3 border-t border-slate-100 pt-5">
+                  <div>
+                    <label
+                      htmlFor="upi-ref"
+                      className="block text-xs font-semibold text-slate-600 mb-1.5"
+                    >
+                      UPI reference number{" "}
+                      <span className="font-normal text-slate-400">(optional)</span>
+                    </label>
+                    <input
+                      id="upi-ref"
+                      type="text"
+                      value={upiReference}
+                      onChange={(e) => setUpiReference(e.target.value)}
+                      placeholder="From your UPI app, e.g. 412345678901"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 outline-none transition-colors focus:border-clay"
+                    />
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      Helps the seller match your payment if there is a query.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={handlePaymentComplete}
+                    disabled={updating || !paymentDetails.supplierUpiId}
+                    className="w-full rounded-lg border border-emerald-600 bg-white px-4 py-2.5 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {updating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-5 h-5" />
+                        {onInstalments
+                          ? `I have paid ₹${money(paymentDetails.paymentAmount)}`
+                          : "I have completed payment"}
+                      </>
+                    )}
+                  </button>
               </div>
             </div>
-          </div>
+          </details>
+        )}
 
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Order Details */}
           <div className="space-y-6">
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
@@ -443,52 +510,10 @@ const Payment = () => {
               )}
             </div>
 
-            {/* Action Buttons */}
+            {/* Order level, not UPI specific: leaving without paying. Only
+                right while nothing has been paid. Once a deposit is in, the
+                way out is back to the order, not a cancellation. */}
             <div className="space-y-3">
-              <div>
-                <label
-                  htmlFor="upi-ref"
-                  className="block text-xs font-semibold text-slate-600 mb-1.5"
-                >
-                  UPI reference number{" "}
-                  <span className="font-normal text-slate-400">(optional)</span>
-                </label>
-                <input
-                  id="upi-ref"
-                  type="text"
-                  value={upiReference}
-                  onChange={(e) => setUpiReference(e.target.value)}
-                  placeholder="From your UPI app, e.g. 412345678901"
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 outline-none transition-colors focus:border-clay"
-                />
-                <p className="mt-1 text-[11px] text-slate-400">
-                  Helps the seller match your payment if there is a query.
-                </p>
-              </div>
-
-              <button
-                onClick={handlePaymentComplete}
-                disabled={updating || !paymentDetails.supplierUpiId}
-                className="w-full bg-emerald-600 text-white text-sm font-bold py-4 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
-              >
-                {updating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-5 h-5" />
-                    {onInstalments
-                      ? `I have paid ₹${money(paymentDetails.paymentAmount)}`
-                      : "I have completed payment"}
-                  </>
-                )}
-              </button>
-
-              {/* Cancelling kills the order and returns its stock, which is
-                  only right while nothing has been paid. Once a deposit is in,
-                  the way out is back to the order, not a cancellation. */}
               {partPaid ? (
                 <button
                   onClick={() => navigate(`/orders/${orderId}`, { replace: true })}

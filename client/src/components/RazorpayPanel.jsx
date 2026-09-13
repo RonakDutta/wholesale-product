@@ -1,146 +1,194 @@
 import { useState } from "react";
-import { CreditCard, FlaskConical } from "lucide-react";
+import { Loader2, Lock, ShieldCheck, TriangleAlert } from "lucide-react";
 import api from "../utils/axios";
 import { toast } from "sonner";
-import RazorpayCheckoutModal from "./RazorpayCheckoutModal";
+import { loadRazorpay } from "../utils/razorpay";
+import { trimmed as money } from "../utils/money";
 
 /**
- * Paying by card, netbanking or a UPI app, through Razorpay.
+ * Paying online, through Razorpay's own checkout window.
  *
- * SCAFFOLD. There is no gateway behind this. The server mints a fake order and
- * stands in for Razorpay, and the only real part is the signature check, which
- * runs the genuine algorithm in both modes. See services/razorpayService.js on
- * the server for why that was worth doing rather than returning true.
+ * THE PRIMARY WAY TO PAY, and drawn like it. Nothing confirms a UPI QR payment
+ * today: the buyer scans, pays in his bank app, comes back and presses a button
+ * to say he did, and the cap on what is owed is the entire check. This path is
+ * the only one where the money is actually confirmed before the order moves,
+ * so it leads and the QR code sits underneath as the fallback.
  *
- * WHAT SAYS IT IS A TEST is the server, not this file. The reply to the order
- * call carries `stub: true`, and the badge below and the banner in the modal
- * are drawn from it. A constant in the client could disagree with the server
- * it is talking to, and the disagreement worth avoiding is the one where a
- * buyer is shown a real looking checkout by a server that is pretending.
+ * IT IS RAZORPAY'S WINDOW, not ours. There was a local imitation here and it
+ * has been deleted. Card numbers and UPI PINs belong inside an iframe served
+ * by the people who are PCI certified to collect them; a copy of that screen
+ * in our markup gets the appearance right and the security exactly backwards,
+ * and the fields would have to become real eventually.
  *
- * The three calls around the window are the real sequence and do not change
- * when the gateway does:
+ * The sequence, and only the middle step is theirs:
  *
- *   POST razorpay/order      the server opens an order for an amount it chose
- *   ...the window...         today ours, tomorrow Razorpay's iframe
- *   POST razorpay/verify     the handler payload, checked before anything moves
+ *   POST razorpay/order    the server opens an order for an amount IT chose
+ *   checkout.open()        their iframe, their fields, their network
+ *   POST razorpay/verify   the handler payload, signature checked before
+ *                          anything moves
  *
- * Only the middle step is fake. When it becomes real, RazorpayCheckoutModal is
- * deleted and `new window.Razorpay(options).open()` goes in its place, with
- * the same two calls either side.
+ * WITHOUT KEYS THERE IS NO BUTTON. Razorpay's script authenticates the key id
+ * against their servers, so it cannot be opened with a made up one, and a
+ * button that always fails is worse than one that explains itself. Test keys
+ * are free: rzp_test_... from the dashboard, set as RAZORPAY_KEY_ID and
+ * RAZORPAY_KEY_SECRET on the server, and this lights up against their sandbox.
  */
-const RazorpayPanel = ({ orderId, amount, merchant, onPaid }) => {
+const RazorpayPanel = ({ orderId, amount, merchant, buyer, onPaid }) => {
   const [busy, setBusy] = useState(false);
-  const [session, setSession] = useState(null);
-  const [open, setOpen] = useState(false);
+  const [notConfigured, setNotConfigured] = useState(false);
 
-  const money = (value) =>
-    Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
-
-  /** Opens the gateway order, then the window. The amount is never sent from here. */
-  const start = async () => {
+  const pay = async () => {
     setBusy(true);
     try {
-      const { data } = await api.post(`/api/orders/${orderId}/razorpay/order`);
-      setSession(data);
-      setOpen(true);
-    } catch (err) {
-      const code = err.response?.data?.code;
-      toast.error(
-        code === "RAZORPAY_NOT_IMPLEMENTED"
-          ? "Card payment is not switched on for this server yet."
-          : err.response?.data?.message || "Could not start a card payment.",
-      );
-    }
-    setBusy(false);
-  };
-
-  /**
-   * What the window hands back.
-   *
-   * In the real thing this is Razorpay's `handler` callback and the payload is
-   * identical, which is the point: the verify call below is written against
-   * the real shape, not against the stub's.
-   */
-  const pay = async (outcome) => {
-    setBusy(true);
-    try {
-      const { data } = await api.post(`/api/orders/${orderId}/razorpay/simulate`, {
-        outcome,
-      });
-
-      if (data.outcome === "failure") {
-        toast.error(data.error?.description || "Payment failed.");
-        setOpen(false);
-        setSession(null);
+      // The script first. Opening an order and then failing to draw a window
+      // leaves a live gateway order behind for nothing.
+      const ready = await loadRazorpay();
+      if (!ready) {
+        toast.error(
+          "Could not reach the payment window. Check your connection, or any ad blocker, and try again.",
+        );
         setBusy(false);
         return;
       }
 
-      const verified = await api.post(`/api/orders/${orderId}/razorpay/verify`, {
-        razorpay_order_id: data.razorpay_order_id,
-        razorpay_payment_id: data.razorpay_payment_id,
-        razorpay_signature: data.razorpay_signature,
+      const { data } = await api.post(`/api/orders/${orderId}/razorpay/order`);
+
+      // No real keys: their script would refuse the key id anyway, so say so
+      // rather than opening a window that cannot work.
+      if (data.stub) {
+        setNotConfigured(true);
+        setBusy(false);
+        return;
+      }
+
+      const checkout = new window.Razorpay({
+        key: data.keyId,
+        order_id: data.orderId,
+        // Razorpay checks these against the order it holds, so they are
+        // display values here, not the amount being charged.
+        amount: data.amount,
+        currency: data.currency || "INR",
+        name: merchant || "KhazanaBMS",
+        description: `Order payment`,
+        prefill: {
+          name: buyer?.name || undefined,
+          email: buyer?.email || undefined,
+          contact: buyer?.phone || undefined,
+        },
+        theme: { color: "#c56b4a" },
+
+        /**
+         * Razorpay hands the payment back here. NOTHING IS TRUSTED YET: this
+         * is the browser reporting its own success, and the server checks the
+         * signature before a rupee moves.
+         */
+        handler: async (response) => {
+          try {
+            const verified = await api.post(
+              `/api/orders/${orderId}/razorpay/verify`,
+              {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              },
+            );
+            if (verified.data?.success) {
+              toast.success("Payment received.");
+              onPaid?.(verified.data);
+            } else {
+              toast.error(
+                verified.data?.message || "That payment could not be verified.",
+              );
+            }
+          } catch (err) {
+            // The money may well have left his account. Telling him it failed
+            // would be a lie, so this says what is actually true.
+            toast.error(
+              err.response?.data?.message ||
+                "The payment went through but we could not confirm it here. Do not pay again; it will be reconciled.",
+            );
+          }
+          setBusy(false);
+        },
+
+        modal: {
+          // He closed the window. Not a failure, and nothing to record.
+          ondismiss: () => setBusy(false),
+        },
       });
 
-      if (verified.data?.success) {
-        setOpen(false);
-        toast.success("Payment received.");
-        onPaid?.(verified.data);
-      } else {
-        toast.error(verified.data?.message || "That payment could not be verified.");
-      }
+      checkout.on("payment.failed", (event) => {
+        toast.error(
+          event?.error?.description || "That payment did not go through.",
+        );
+        setBusy(false);
+      });
+
+      checkout.open();
     } catch (err) {
-      toast.error(err.response?.data?.message || "That payment could not be verified.");
+      toast.error(
+        err.response?.data?.message || "Could not start the payment.",
+      );
+      setBusy(false);
     }
-    setBusy(false);
   };
 
-  return (
-    <>
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5 text-clay" />
-            <h3 className="text-sm font-bold text-espresso">
-              Card, netbanking or UPI app
-            </h3>
+  if (notConfigured) {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+        <div className="flex items-start gap-3">
+          <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-amber-900">
+              Online payment is not switched on for this server
+            </p>
+            <p className="mt-1 text-xs text-amber-800">
+              Razorpay keys have not been set, so the payment window cannot
+              open. Use the UPI QR code below in the meantime.
+            </p>
           </div>
-          {session?.stub && (
-            <span className="flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">
-              <FlaskConical className="h-3 w-3" />
-              Test mode
-            </span>
-          )}
         </div>
+      </div>
+    );
+  }
 
-        <p className="mt-2 text-xs text-slate-500">
-          Pay the whole amount in one go instead of scanning the QR code and
-          typing the reference yourself.
+  return (
+    <div className="overflow-hidden rounded-2xl border-2 border-clay bg-white shadow-sm">
+      <div className="border-b border-clay/15 bg-clay/5 px-5 py-2.5">
+        <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-clay">
+          <ShieldCheck className="h-3.5 w-3.5" />
+          Recommended
+        </p>
+      </div>
+
+      <div className="p-5">
+        <h3 className="text-base font-bold text-espresso">Pay online</h3>
+        <p className="mt-1 text-sm text-slate-500">
+          Card, netbanking, UPI or a wallet. Confirmed the moment it goes
+          through, so your order moves straight away.
         </p>
 
         <button
-          onClick={start}
+          onClick={pay}
           disabled={busy}
-          className="mt-4 w-full rounded-lg bg-espresso px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-clay disabled:opacity-60"
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-clay px-6 py-4 text-base font-black text-cream transition-colors hover:bg-espresso disabled:opacity-60"
         >
-          {busy && !open ? "Opening..." : `Pay ₹${money(amount)}`}
+          {busy ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Opening...
+            </>
+          ) : (
+            <>Pay ₹{money(amount)}</>
+          )}
         </button>
-      </div>
 
-      <RazorpayCheckoutModal
-        open={open && !!session}
-        onClose={() => {
-          setOpen(false);
-          setSession(null);
-        }}
-        merchant={merchant}
-        amountPaise={session?.amount}
-        gatewayOrderId={session?.orderId}
-        busy={busy}
-        onPay={pay}
-      />
-    </>
+        <p className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+          <Lock className="h-3 w-3" />
+          Card details are entered on Razorpay, never on this site
+        </p>
+      </div>
+    </div>
   );
 };
 

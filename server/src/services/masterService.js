@@ -162,6 +162,169 @@ exports.hsn = () =>
     () => require("./hsnService").TEXTILE_HSN,
   );
 
+/**
+ * The platform's formatting conventions.
+ *
+ * SHIPPED_SETTINGS is the floor, and it is not a placeholder: it is exactly
+ * what the product formatted with before this table existed, so a database
+ * without the migration behaves as it always has rather than losing its rupee
+ * symbol. Same reasoning as the four lists above.
+ *
+ * Read through the same cache, so a screen asking for settings and a screen
+ * asking for units cost one round trip each per five minutes, not one per
+ * render.
+ */
+const SHIPPED_SETTINGS = {
+  amountDecimals: 0,
+  documentDecimals: 2,
+  digitGrouping: "indian",
+  currencySymbol: "\u20B9",
+  currencyName: "Rupees",
+  currencySubunitName: "Paise",
+  taxRateDecimals: 2,
+  defaultHsnMinDigits: 4,
+  dateFormat: "dd-mmm-yyyy",
+};
+
+/**
+ * Probed separately from the four lists. The settings migration is its own
+ * file and can be run without the other, or the other way round, and a
+ * wholesaler in that state must still get working dropdowns and working
+ * formatting rather than an error from whichever half is missing.
+ */
+let settingsReady = null;
+const settingsExist = async (db = pool) => {
+  if (settingsReady !== null) return settingsReady;
+  try {
+    const probe = await db.query(
+      "SELECT to_regclass('public.master_settings') IS NOT NULL AS yes",
+    );
+    settingsReady = Boolean(probe.rows[0]?.yes);
+  } catch {
+    settingsReady = false;
+  }
+  return settingsReady;
+};
+
+exports.settings = async () => {
+  const at = cachedAt.get("settings");
+  if (at && Date.now() - at < TTL_MS) return cache.get("settings");
+
+  if (!(await settingsExist())) return { ...SHIPPED_SETTINGS, fromMasters: false };
+
+  try {
+    const { rows } = await pool.query("SELECT * FROM master_settings WHERE id = 1");
+    const row = rows[0];
+    // The table exists but the single row is gone, which only happens if
+    // somebody deleted it. The shipped values are a better answer than nulls
+    // reaching a toLocaleString call on every screen.
+    if (!row) return { ...SHIPPED_SETTINGS, fromMasters: false };
+
+    const value = {
+      amountDecimals: Number(row.amount_decimals),
+      documentDecimals: Number(row.document_decimals),
+      digitGrouping: row.digit_grouping,
+      currencySymbol: row.currency_symbol,
+      currencyName: row.currency_name,
+      currencySubunitName: row.currency_subunit_name,
+      taxRateDecimals: Number(row.tax_rate_decimals),
+      defaultHsnMinDigits: Number(row.default_hsn_min_digits),
+      dateFormat: row.date_format,
+      fromMasters: true,
+    };
+    cache.set("settings", value);
+    cachedAt.set("settings", Date.now());
+    return value;
+  } catch (err) {
+    console.warn("Could not read the master settings:", err.message);
+    return { ...SHIPPED_SETTINGS, fromMasters: false };
+  }
+};
+
+/**
+ * Writes the settings. Every field is optional, so a screen can send only what
+ * changed, and anything absent keeps its current value.
+ *
+ * Validation is here rather than only in the CHECK constraints so a bad value
+ * comes back as a sentence rather than as a database error string. The
+ * constraints stay as the backstop: this is not the only way in.
+ */
+const RANGES = {
+  amountDecimals: { column: "amount_decimals", min: 0, max: 4 },
+  documentDecimals: { column: "document_decimals", min: 0, max: 4 },
+  taxRateDecimals: { column: "tax_rate_decimals", min: 0, max: 4 },
+};
+const CHOICES = {
+  digitGrouping: { column: "digit_grouping", of: ["indian", "western"] },
+  dateFormat: { column: "date_format", of: ["dd-mmm-yyyy", "dd/mm/yyyy", "yyyy-mm-dd"] },
+  defaultHsnMinDigits: { column: "default_hsn_min_digits", of: [4, 6, 8], number: true },
+};
+const TEXT = {
+  currencySymbol: { column: "currency_symbol", max: 8 },
+  currencyName: { column: "currency_name", max: 40 },
+  currencySubunitName: { column: "currency_subunit_name", max: 40 },
+};
+
+exports.saveSettings = async (patch = {}, userId = null) => {
+  if (!(await settingsExist())) {
+    return { error: "The master settings table is not in this database yet." };
+  }
+
+  const sets = [];
+  const values = [];
+
+  for (const [key, spec] of Object.entries(RANGES)) {
+    if (patch[key] === undefined) continue;
+    const n = Number(patch[key]);
+    if (!Number.isInteger(n) || n < spec.min || n > spec.max) {
+      return { error: `${key} must be a whole number between ${spec.min} and ${spec.max}.` };
+    }
+    values.push(n);
+    sets.push(`${spec.column} = $${values.length}`);
+  }
+
+  for (const [key, spec] of Object.entries(CHOICES)) {
+    if (patch[key] === undefined) continue;
+    const given = spec.number ? Number(patch[key]) : String(patch[key]);
+    if (!spec.of.includes(given)) {
+      return { error: `${key} must be one of ${spec.of.join(", ")}.` };
+    }
+    values.push(given);
+    sets.push(`${spec.column} = $${values.length}`);
+  }
+
+  for (const [key, spec] of Object.entries(TEXT)) {
+    if (patch[key] === undefined) continue;
+    const text = String(patch[key]).trim();
+    // Blank is refused rather than stored. An empty currency symbol renders
+    // every amount on every screen as a bare number.
+    if (!text || text.length > spec.max) {
+      return { error: `${key} must be between 1 and ${spec.max} characters.` };
+    }
+    values.push(text);
+    sets.push(`${spec.column} = $${values.length}`);
+  }
+
+  if (sets.length === 0) return { error: "Nothing to change." };
+
+  values.push(userId);
+  sets.push(`updated_by = $${values.length}`);
+
+  await pool.query(
+    `UPDATE master_settings SET ${sets.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = 1`,
+    values,
+  );
+
+  // This process sees the change at once. Every other one waits out the TTL,
+  // which is the same bargain the four lists already make.
+  cache.delete("settings");
+  cachedAt.delete("settings");
+  return { settings: await exports.settings() };
+};
+
+exports.settingsExist = settingsExist;
+exports.resetSettingsSchema = () => { settingsReady = null; };
+exports.SHIPPED_SETTINGS = SHIPPED_SETTINGS;
 exports.mastersExist = mastersExist;
 exports.resetMasters = resetMasters;
 exports.resetMastersSchema = resetMastersSchema;

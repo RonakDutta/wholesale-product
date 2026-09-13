@@ -3,21 +3,7 @@ import { Link } from "react-router-dom";
 import { Receipt, Truck } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
-
-const money = (value) =>
-  Number(value || 0).toLocaleString("en-IN", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
-
-const dateLabel = (value) =>
-  value
-    ? new Date(value).toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    : "";
+import { money, dateLabel } from "../../utils/money";
 
 const STATUS_STYLES = {
   draft: "bg-slate-100 text-slate-600",

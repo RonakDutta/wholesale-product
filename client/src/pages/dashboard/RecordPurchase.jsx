@@ -500,13 +500,13 @@ const RecordPurchase = () => {
                     </label>
 
                     <p className="text-right text-sm font-black text-espresso sm:hidden">
-                      {amount > 0 ? `₹${money(amount, { paise: true })}` : ""}
+                      {amount > 0 ? `₹${money(amount, { document: true })}` : ""}
                     </p>
                   </div>
 
                   <div className="hidden w-24 shrink-0 pt-2 text-right sm:block">
                     <p className="text-sm font-black text-espresso">
-                      {amount > 0 ? `₹${money(amount, { paise: true })}` : "-"}
+                      {amount > 0 ? `₹${money(amount, { document: true })}` : "-"}
                     </p>
                   </div>
 
@@ -547,7 +547,7 @@ const RecordPurchase = () => {
           <div className="flex items-center justify-between text-sm">
             <span className="text-slate-500">Goods total</span>
             <span className="font-bold text-espresso">
-              ₹{money(totals.subtotal, { paise: true })}
+              ₹{money(totals.subtotal, { document: true })}
             </span>
           </div>
 
@@ -568,14 +568,14 @@ const RecordPurchase = () => {
           <div className="flex items-center justify-between text-sm">
             <span className="text-slate-500">GST</span>
             <span className="font-bold text-espresso">
-              ₹{money(totals.tax, { paise: true })}
+              ₹{money(totals.tax, { document: true })}
             </span>
           </div>
 
           <div className="flex items-center justify-between border-t border-slate-100 pt-4">
             <span className="text-sm font-bold text-espresso">Bill total</span>
             <span className="text-xl font-black text-espresso">
-              ₹{money(totals.total, { paise: true })}
+              ₹{money(totals.total, { document: true })}
             </span>
           </div>
           <p className="text-xs text-slate-500">
@@ -637,7 +637,7 @@ const RecordPurchase = () => {
                   dueAfter > 0 ? "text-amber-600" : "text-emerald-600"
                 }`}
               >
-                ₹{money(dueAfter, { paise: true })}
+                ₹{money(dueAfter, { document: true })}
               </span>
             </div>
           </div>
@@ -668,7 +668,7 @@ const RecordPurchase = () => {
               Bill total
             </p>
             <p className="text-lg font-black text-espresso">
-              ₹{money(totals.total, { paise: true })}
+              ₹{money(totals.total, { document: true })}
             </p>
           </div>
           <button

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { IndianRupee, X } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/axios";
+import { amount as money } from "../utils/money";
 
 /**
  * Recording money handed back at the end of a return.
@@ -30,12 +31,6 @@ const RefundModal = ({ order, onClose, onRefunded }) => {
   const asked = Number(amount);
   const valid = Number.isFinite(asked) && asked > 0 && asked <= paid;
   const holding = valid ? paid - asked : 0;
-
-  const money = (n) =>
-    `₹${Number(n || 0).toLocaleString("en-IN", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
 
   const submit = async (e) => {
     e.preventDefault();

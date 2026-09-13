@@ -57,6 +57,7 @@ const MasterStates = lazy(() => import("./pages/master/lists").then((m) => ({ de
 const MasterUnits = lazy(() => import("./pages/master/lists").then((m) => ({ default: m.MasterUnits })));
 const MasterTaxRates = lazy(() => import("./pages/master/lists").then((m) => ({ default: m.MasterTaxRates })));
 const MasterHsn = lazy(() => import("./pages/master/lists").then((m) => ({ default: m.MasterHsn })));
+const MasterSettings = lazy(() => import("./pages/master/MasterSettings"));
 const MyProducts = lazy(() => import("./pages/dashboard/MyProducts"));
 const AddProduct = lazy(() => import("./pages/dashboard/AddProduct"));
 const EditProduct = lazy(() => import("./pages/dashboard/EditProduct"));
@@ -206,6 +207,7 @@ const router = createBrowserRouter([
       { path: "units", element: <MasterUnits /> },
       { path: "tax-rates", element: <MasterTaxRates /> },
       { path: "hsn", element: <MasterHsn /> },
+      { path: "settings", element: <MasterSettings /> },
     ],
   },
   { path: "/dashboard", element: <Navigate to="/seller" replace /> },

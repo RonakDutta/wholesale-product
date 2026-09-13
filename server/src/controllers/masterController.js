@@ -50,6 +50,10 @@ exports.getMasters = async (req, res) => {
       units,
       taxRates,
       hsn,
+      // Read by every screen that shows an amount or a date, which is most of
+      // them, so it rides along with the lists rather than costing its own
+      // request on every page.
+      settings: await masterService.settings(),
       ...off,
       // So a screen can tell "the platform has no units" from "this database
       // has not had the migration run and you are seeing the built in list".
@@ -262,3 +266,22 @@ exports.setMasterRowActive = async (req, res) => {
 };
 
 exports.MASTER_LISTS = Object.keys(LISTS);
+
+/**
+ * The platform's formatting conventions, written.
+ *
+ * Admin only, guarded on the route. Sends the whole settings object back so
+ * the screen renders what was actually stored rather than what it hoped was.
+ */
+exports.saveSettings = async (req, res) => {
+  try {
+    const result = await masterService.saveSettings(req.body || {}, req.user?.id);
+    if (result.error) {
+      return res.status(400).json({ success: false, message: result.error });
+    }
+    res.status(200).json({ success: true, settings: result.settings });
+  } catch (err) {
+    console.error("Error saving the master settings:", err);
+    res.status(500).json({ success: false, message: "Could not save those settings." });
+  }
+};

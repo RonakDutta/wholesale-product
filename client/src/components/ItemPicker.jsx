@@ -1,10 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-
-const money = (value) =>
-  Number(value || 0).toLocaleString("en-IN", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  });
+import { trimmed as money } from "../utils/money";
 
 /**
  * Item name box on a sale, with suggestions from the wholesaler's rate list.

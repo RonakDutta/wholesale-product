@@ -2,6 +2,7 @@
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Minus, Plus, ShoppingBag, Store, Trash2, X } from "lucide-react";
 import { useCart } from "../context/CartContext";
+import { money } from "../utils/money";
 
 const CartDrawer = () => {
   const navigate = useNavigate();
@@ -161,11 +162,11 @@ const CartDrawer = () => {
 
                         <div className="flex flex-col items-end">
                           <span className="font-mono text-base font-black text-clay tracking-tight">
-                            ₹{(unitPrice * item.quantity).toLocaleString("en-IN")}
+                            ₹{money(unitPrice * item.quantity)}
                           </span>
                           {item.quantity > 1 && (
                             <span className="text-[10px] text-slate-400 font-medium mt-0.5">
-                              ₹{unitPrice.toLocaleString("en-IN")} each
+                              ₹{money(unitPrice)} each
                             </span>
                           )}
                         </div>
@@ -190,7 +191,7 @@ const CartDrawer = () => {
                 </span>
               </div>
               <span className="text-2xl font-black text-slate-900 font-mono tracking-tight">
-                ₹{subtotal.toLocaleString("en-IN")}
+                ₹{money(subtotal)}
               </span>
             </div>
 

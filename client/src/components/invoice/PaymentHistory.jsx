@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { CreditCard, Plus, X } from "lucide-react";
 import { toast } from "sonner";
+import { amount as money, dateLabel } from "../../utils/money";
 
 export default function PaymentHistory({
   payments = [],
@@ -60,11 +61,11 @@ export default function PaymentHistory({
           <p className="text-xs text-espresso/50 mt-0.5">
             Total Paid:{" "}
             <span className="font-bold text-emerald-600">
-              ₹{totalPaid.toLocaleString("en-IN")}
+              ₹{money(totalPaid)}
             </span>{" "}
             | Balance Due:{" "}
             <span className="font-bold text-rose-600">
-              ₹{balanceDue.toLocaleString("en-IN")}
+              ₹{money(balanceDue)}
             </span>
           </p>
         </div>
@@ -104,9 +105,7 @@ export default function PaymentHistory({
               {payments.map((payment) => (
                 <tr key={payment.id}>
                   <td className="py-2.5 px-3 whitespace-nowrap">
-                    {payment.paid_at
-                      ? new Date(payment.paid_at).toLocaleString("en-IN")
-                      : "N/A"}
+                    {payment.paid_at ? dateLabel(payment.paid_at) : "N/A"}
                   </td>
                   <td className="py-2.5 px-3 font-semibold text-espresso">
                     {payment.payment_method}
@@ -116,9 +115,7 @@ export default function PaymentHistory({
                   </td>
                   <td className="py-2.5 px-3 text-right font-bold text-emerald-600">
                     +₹
-                    {Number(payment.amount).toLocaleString("en-IN", {
-                      minimumFractionDigits: 2,
-                    })}
+                    {money(payment.amount)}
                   </td>
                   <td className="py-2.5 px-3 text-espresso/50">
                     {payment.remarks || "-"}
@@ -162,7 +159,7 @@ export default function PaymentHistory({
                   required
                 />
                 <div className="text-[11px] text-slate-400 mt-1">
-                  Balance Remaining: ₹{balanceDue.toLocaleString("en-IN")}
+                  Balance Remaining: ₹{money(balanceDue)}
                 </div>
               </div>
 

@@ -6,6 +6,7 @@ import {
   getSupplierPhone,
 } from "../utils/supplierUtils";
 import ContactVendorBtn from "./ContactVendorBtn";
+import { amount as money } from "../utils/money";
 
 const SupplierCard = ({
   supplier,
@@ -27,7 +28,7 @@ const SupplierCard = ({
       value: (
         <span className="inline-flex items-center gap-0.5">
           <IndianRupee className="w-3 h-3" />
-          {getEffectivePrice(supplier).toFixed(2)}
+          {money(getEffectivePrice(supplier))}
         </span>
       ),
       badge: badges.lowestPrice,

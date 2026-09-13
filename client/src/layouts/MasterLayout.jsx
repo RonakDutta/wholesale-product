@@ -112,7 +112,11 @@ const MasterLayout = () => {
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    // h-dvh with overflow hidden, exactly as the seller shell does it. It was
+    // min-h-screen, so the PAGE grew and the whole thing scrolled, taking the
+    // sidebar up off the top with the content. Only the content pane scrolls
+    // now, and the sidebar stays put.
+    <div className="flex h-dvh overflow-hidden bg-slate-50">
       <aside className="hidden w-64 shrink-0 flex-col bg-espresso text-cream lg:flex">
         {/* Drawn exactly as the seller sidebar draws it. Wordmark leaves size
             and weight to the caller, which is right where the callers are
@@ -160,10 +164,10 @@ const MasterLayout = () => {
         </div>
       </aside>
 
-      <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* The phone nav. The master screens are lists a person edits sitting
             down, so this is a way across rather than a full second nav. */}
-        <div className="hide-scrollbar flex gap-2 overflow-x-auto bg-espresso px-4 py-3 lg:hidden">
+        <div className="hide-scrollbar flex shrink-0 gap-2 overflow-x-auto bg-espresso px-4 py-3 lg:hidden">
           {LINKS.map((link) => (
             <NavLink
               key={link.to}
@@ -184,7 +188,7 @@ const MasterLayout = () => {
             below would otherwise show the built in list and look editable
             while nothing saved. */}
         {!state.fromMasters && (
-          <div className="border-b border-amber-200 bg-amber-50 px-6 py-3">
+          <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-6 py-3">
             <p className="text-sm font-bold text-amber-900">
               The master tables are not in this database yet
             </p>
@@ -195,7 +199,7 @@ const MasterLayout = () => {
           </div>
         )}
 
-        <main className="px-4 py-6 sm:px-8">
+        <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-8">
           <Outlet context={{ fromMasters: state.fromMasters }} />
         </main>
       </div>

@@ -8,12 +8,7 @@ import ItemPicker from "../../components/ItemPicker";
 // Short values on purpose here: this select sits beside the quantity box on a
 // phone, where "Kilogram (kg)" would not fit.
 import { useMasters } from "../../hooks/useMasters";
-
-const money = (value) =>
-  Number(value || 0).toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+import { amount as money } from "../../utils/money";
 
 // Same paise arithmetic as the server, so the total on screen and the total
 // that gets saved cannot drift apart on an odd rate.

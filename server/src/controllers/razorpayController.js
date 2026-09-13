@@ -91,8 +91,11 @@ const createRazorpayOrder = async (req, res) => {
       sessionId: row.id,
     });
   } catch (err) {
-    if (err.code === "RAZORPAY_NOT_IMPLEMENTED") {
-      return res.status(501).json({ success: false, code: err.code, message: err.message });
+    // Razorpay's own words, passed through. A wrong key or a disabled account
+    // says so here, and "could not open a payment" would hide the one sentence
+    // that says which.
+    if (err.code === "RAZORPAY_REFUSED" || err.code === "RAZORPAY_TIMEOUT") {
+      return res.status(502).json({ success: false, code: err.code, message: err.message });
     }
     console.error("createRazorpayOrder error:", err);
     return res.status(500).json({ success: false, message: "Could not open a payment." });

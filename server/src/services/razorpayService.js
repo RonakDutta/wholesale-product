@@ -31,11 +31,11 @@ const crypto = require("crypto");
  * ---------------------------------------------------------------------------
  * WHAT IS NOT BUILT, deliberately
  * ---------------------------------------------------------------------------
- * createOrder does not call api.razorpay.com. In live mode it throws and says
- * so, rather than returning something that looks like an order and is not. The
- * call is a Basic-auth POST to /v1/orders and is perhaps fifteen lines, but it
- * cannot be exercised from here, and untested network code that reports
- * success is worse than a clear refusal.
+ * createOrder DOES call api.razorpay.com once there are keys, because
+ * Razorpay's own checkout window will not open without an order id from that
+ * endpoint. It has never been exercised against the real host from here, which
+ * needs an account; it is written to the documented contract and covered by a
+ * test that stubs the transport. The first live call is the real test.
  *
  * Webhooks are not built either. The handler flow below is the browser telling
  * the server it succeeded, which Razorpay itself treats as a hint: the payment
@@ -52,6 +52,10 @@ const crypto = require("crypto");
 
 const KEY_ID = process.env.RAZORPAY_KEY_ID || "";
 const KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || "";
+
+// Overridable so a test can point the order call at a local server rather
+// than reaching the internet.
+const API_BASE = process.env.RAZORPAY_API_BASE || "https://api.razorpay.com";
 
 /**
  * Stub mode is the absence of a secret, not a flag somebody can leave set.
@@ -99,27 +103,78 @@ const createOrder = async ({ amountRupees, receipt, notes = {} }) => {
     throw new Error("A payment must be for more than zero.");
   }
 
-  if (!isStub()) {
-    // See the header. Refusing loudly beats returning a plausible fake to a
-    // deployment that believes it is taking real money.
-    const err = new Error(
-      "Razorpay keys are configured but order creation is not implemented. " +
-        "Add the POST to https://api.razorpay.com/v1/orders with Basic auth " +
-        "over RAZORPAY_KEY_ID:RAZORPAY_KEY_SECRET, then remove this guard.",
-    );
-    err.code = "RAZORPAY_NOT_IMPLEMENTED";
-    throw err;
+  if (isStub()) {
+    return {
+      id: `order_stub${crypto.randomBytes(9).toString("hex")}`,
+      amount,
+      currency: "INR",
+      receipt,
+      notes,
+      status: "created",
+      stub: true,
+    };
   }
 
-  return {
-    id: `order_stub${crypto.randomBytes(9).toString("hex")}`,
-    amount,
-    currency: "INR",
-    receipt,
-    notes,
-    status: "created",
-    stub: true,
-  };
+  /**
+   * The real call.
+   *
+   * Razorpay's own checkout window will not open without an order id minted by
+   * this endpoint, so once there are keys this has to be real. It is a plain
+   * Basic-auth POST and needs no SDK, which is why there is no dependency here.
+   *
+   * NOT EXERCISED AGAINST api.razorpay.com from this repository, because that
+   * needs a real account. Written to the documented contract and covered by a
+   * test that stubs fetch and asserts the method, the auth header, the URL and
+   * the body. Treat the first live call as the real test.
+   *
+   * The amount sent is the one computed above from the order row. Razorpay
+   * checks the amount its window displays against the order it holds, so a
+   * browser cannot alter what is charged even if it alters what it asks for.
+   */
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(`${API_BASE}/v1/orders`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Basic ${Buffer.from(`${KEY_ID}:${KEY_SECRET}`).toString("base64")}`,
+      },
+      body: JSON.stringify({ amount, currency: "INR", receipt, notes }),
+      signal: controller.signal,
+    });
+
+    const body = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      // Razorpay puts the readable part under error.description. Surfaced
+      // rather than swallowed: "could not start payment" tells a wholesaler
+      // nothing, and this is the message that says which key is wrong.
+      const err = new Error(
+        body?.error?.description || `Razorpay refused the order (${response.status}).`,
+      );
+      err.code = "RAZORPAY_REFUSED";
+      err.status = response.status;
+      throw err;
+    }
+
+    if (!body?.id) {
+      const err = new Error("Razorpay returned no order id.");
+      err.code = "RAZORPAY_REFUSED";
+      throw err;
+    }
+
+    return { ...body, stub: false };
+  } catch (err) {
+    if (err.name === "AbortError") {
+      const timeout = new Error("Razorpay did not answer in time. Try again.");
+      timeout.code = "RAZORPAY_TIMEOUT";
+      throw timeout;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 };
 
 /**

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, IndianRupee, Receipt, ShoppingBag, Wallet } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
+import { amount as money, dateLabel } from "../../utils/money";
 
 /**
  * Why is that number what it is?
@@ -26,24 +27,6 @@ import { toast } from "sonner";
 // The minus belongs in front of the whole amount, not between the rupee sign
 // and the digits. "Rs.-2,000.00" reads as a typo; "-Rs.2,000.00" reads as a
 // credit.
-const money = (value) => {
-  const n = Number(value || 0);
-  const digits = Math.abs(n).toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  return `${n < 0 ? "-" : ""}₹${digits}`;
-};
-
-const dateLabel = (value) =>
-  value
-    ? new Date(value).toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    : "";
-
 const METRICS = {
   outstanding: {
     title: "Still to collect",

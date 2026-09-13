@@ -412,7 +412,7 @@ const SupplierDetail = () => {
                   </p>
                 </div>
                 <p className="shrink-0 text-sm font-black text-espresso">
-                  ₹{money(entry.amount, { paise: true })}
+                  ₹{money(entry.amount, { document: true })}
                 </p>
               </li>
             ))}

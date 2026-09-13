@@ -274,7 +274,7 @@ const PurchaseDetail = () => {
                 </p>
                 <p className="truncate text-xs text-slate-500">
                   {Number(line.quantity)} {line.unit || ""} × ₹
-                  {money(line.rate, { paise: true })}
+                  {money(line.rate, { document: true })}
                   {line.hsn_code ? ` · HSN ${line.hsn_code}` : ""}
                   {Number(line.gst_percent) > 0
                     ? ` · GST ${Number(line.gst_percent)}%`
@@ -288,7 +288,7 @@ const PurchaseDetail = () => {
                 )}
               </div>
               <p className="shrink-0 text-sm font-black text-espresso">
-                ₹{money(line.amount, { paise: true })}
+                ₹{money(line.amount, { document: true })}
               </p>
             </li>
           ))}
@@ -304,33 +304,33 @@ const PurchaseDetail = () => {
           <div className="flex justify-between text-sm">
             <span className="text-slate-500">Goods</span>
             <span className="font-bold text-espresso">
-              ₹{money(purchase.subtotal, { paise: true })}
+              ₹{money(purchase.subtotal, { document: true })}
             </span>
           </div>
           {Number(purchase.discount) > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-slate-500">Less discount</span>
               <span className="font-bold text-espresso">
-                -₹{money(purchase.discount, { paise: true })}
+                -₹{money(purchase.discount, { document: true })}
               </span>
             </div>
           )}
           <div className="flex justify-between text-sm">
             <span className="text-slate-500">GST</span>
             <span className="font-bold text-espresso">
-              ₹{money(purchase.tax_amount, { paise: true })}
+              ₹{money(purchase.tax_amount, { document: true })}
             </span>
           </div>
           <div className="flex justify-between border-t border-slate-100 pt-3">
             <span className="text-sm font-bold text-espresso">Bill total</span>
             <span className="text-lg font-black text-espresso">
-              ₹{money(settlement.total, { paise: true })}
+              ₹{money(settlement.total, { document: true })}
             </span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-slate-500">Paid</span>
             <span className="font-bold text-espresso">
-              ₹{money(settlement.paid, { paise: true })}
+              ₹{money(settlement.paid, { document: true })}
             </span>
           </div>
           {!cancelled && (
@@ -341,7 +341,7 @@ const PurchaseDetail = () => {
                   settlement.settled ? "text-emerald-600" : "text-amber-600"
                 }`}
               >
-                ₹{money(settlement.outstanding, { paise: true })}
+                ₹{money(settlement.outstanding, { document: true })}
               </span>
             </div>
           )}
@@ -369,7 +369,7 @@ const PurchaseDetail = () => {
           <div className="flex justify-between">
             <span className="text-sm text-slate-500">Claimable on this bill</span>
             <span className="text-lg font-black text-espresso">
-              ₹{money(inputTaxCredit.claimable, { paise: true })}
+              ₹{money(inputTaxCredit.claimable, { document: true })}
             </span>
           </div>
           <p className="text-xs text-slate-500">
@@ -425,7 +425,7 @@ const PurchaseDetail = () => {
                   </p>
                 </div>
                 <p className="shrink-0 text-sm font-black text-espresso">
-                  ₹{money(payment.amount, { paise: true })}
+                  ₹{money(payment.amount, { document: true })}
                 </p>
               </li>
             ))}

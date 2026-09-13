@@ -16,12 +16,7 @@ import api from "../utils/axios";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { toast } from "sonner";
-
-const money = (value) =>
-  Number(value || 0).toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+import { amount as money } from "../utils/money";
 
 /**
  * The page a wholesaler's shared link opens. Reached only by someone holding

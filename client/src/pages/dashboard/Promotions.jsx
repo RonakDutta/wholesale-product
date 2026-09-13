@@ -12,12 +12,7 @@ import {
 import api from "../../utils/axios";
 import ProductThumb from "../../components/ProductThumb";
 import { toast } from "sonner";
-
-const money = (value) =>
-  Number(value || 0).toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+import { amount as money } from "../../utils/money";
 
 const StatCard = ({ icon: Icon, label, value, hint }) => (
   <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

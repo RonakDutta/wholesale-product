@@ -29,31 +29,7 @@ import {
   RETURN_ANSWERS,
 } from "../../utils/orderStatus";
 import RefundModal from "../../components/RefundModal";
-
-/**
- * One order, everything about it, in one place.
- *
- * The Orders list is the right screen for clearing twenty orders standing in
- * the godown: one row, one button, next. It is the wrong screen for the one
- * order that needs attention, and that was the only screen there was. Packing,
- * dispatching, answering a return and reading the delivery checkpoints were
- * all driven from a table row, and the checkpoints could not be seen from
- * there at all.
- *
- * So the list keeps its one tap step and this page exists beside it. Nothing
- * moved: both drive the same endpoints and the same rules, because two screens
- * with their own idea of what an order may do next is how they drift apart.
- *
- * Order of the page follows the order of the questions actually asked about a
- * live order: what state is it in and what do I do next, who is it for, what
- * is in it, has he paid, where has it got to, and what has happened so far.
- */
-
-const money = (value) =>
-  Number(value || 0).toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+import { amount as money, dateLabel } from "../../utils/money";
 
 // Quantities come back as numerics, so pg hands them over as "10.000". A
 // wholesaler counting pieces should read 10, and one selling by the metre
@@ -91,15 +67,6 @@ const worthShowing = (remark) =>
  */
 const DEAD = ["cancelled", "refunded", "payment_failed"];
 const isDead = (status) => DEAD.includes(String(status || "").toLowerCase());
-
-const dateLabel = (value) =>
-  value
-    ? new Date(value).toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    : "";
 
 const when = (value) =>
   value

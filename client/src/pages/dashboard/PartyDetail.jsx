@@ -15,21 +15,7 @@ import api from "../../utils/axios";
 import { toast } from "sonner";
 import RecordPaymentModal from "../../components/RecordPaymentModal";
 import PartyFormModal from "../../components/PartyFormModal";
-
-const money = (value) =>
-  Number(value || 0).toLocaleString("en-IN", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
-
-const dateLabel = (value) =>
-  value
-    ? new Date(value).toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    : "";
+import { money, dateLabel } from "../../utils/money";
 
 // A plain capitalize turns "upi" into "Upi", which looks like a typo.
 const METHOD_LABELS = {

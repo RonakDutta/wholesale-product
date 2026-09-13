@@ -10,6 +10,7 @@ const {
   bridgedGuard,
   balanceExpression,
   collectionTotals,
+  hasOpeningBalance,
   totalsExpression,
 } = require("../services/khataBalance");
 const pdfService = require("../services/pdfService");
@@ -30,8 +31,52 @@ const { businessId } = require("../middlewares/businessContext");
  * It used to live in this file, and overviewController answered the same
  * question its own way and got a different answer. Both now read one rule.
  */
-const balanceSelect = (hasOrderParty, hasBridge) =>
-  `${balanceExpression({ hasOrderParty, hasBridge })} AS outstanding`;
+/**
+ * The opening balance a form sent, checked.
+ *
+ * SIGNED: positive means he owed you when the book was opened, negative means
+ * you were holding his money. Both are ordinary, so neither is refused.
+ *
+ * A figure with no date is refused. "He owes 2 lakh" is not a fact until you
+ * say as at when: the statement draws its line at that date, and without one
+ * the opening figure and the transactions after it count the same goods twice.
+ * A date with no figure is fine and means zero as at that date.
+ *
+ * Returns undefined once it has answered the request, the same shape
+ * gstinToStore uses in this file.
+ */
+const parseOpening = (amount, on, res) => {
+  const hasAmount = amount !== undefined && amount !== null && String(amount).trim() !== "";
+  const value = hasAmount ? Number(amount) : 0;
+
+  if (hasAmount && !Number.isFinite(value)) {
+    res.status(400).json({ message: "Enter the opening balance as a number." });
+    return undefined;
+  }
+  // NUMERIC(12,2) tops out below a hundred crore. Refused with a sentence
+  // rather than by the database, which would say "numeric field overflow".
+  if (Math.abs(value) >= 10000000000) {
+    res.status(400).json({ message: "That opening balance is too large." });
+    return undefined;
+  }
+
+  const date = clean(on);
+  if (value !== 0 && !date) {
+    res.status(400).json({
+      message: "Say which date the opening balance is as at, or the statement cannot start from it.",
+    });
+    return undefined;
+  }
+  if (date && Number.isNaN(new Date(date).getTime())) {
+    res.status(400).json({ message: "That opening balance date is not a date." });
+    return undefined;
+  }
+
+  return { amount: Number(value.toFixed(2)), on: date };
+};
+
+const balanceSelect = (hasOrderParty, hasBridge, hasOpening) =>
+  `${balanceExpression({ hasOrderParty, hasBridge, hasOpening })} AS outstanding`;
 
 exports.listParties = async (req, res) => {
   const wholesalerId = businessId(req);
@@ -58,13 +103,14 @@ exports.listParties = async (req, res) => {
 
     const hasOrders = await hasPartyLink(pool);
     const hasBridge = await hasSaleLink(pool);
+    const hasOpening = await hasOpeningBalance(pool);
     const result = await pool.query(
       `SELECT
          pt.id, pt.name, pt.business_name, pt.phone, pt.city, pt.gstin,
          pt.status, pt.created_at,
          (SELECT MAX(s.sale_date) FROM sales s
            WHERE s.party_id = pt.id AND s.status <> 'cancelled') AS last_sale_date,
-         ${balanceSelect(hasOrders, hasBridge)}
+         ${balanceSelect(hasOrders, hasBridge, hasOpening)}
        FROM parties pt
        WHERE ${where}
        ORDER BY pt.name ASC`,
@@ -85,8 +131,9 @@ exports.getPartyById = async (req, res) => {
   try {
     const hasOrders = await hasPartyLink(pool);
     const hasBridge = await hasSaleLink(pool);
+    const hasOpening = await hasOpeningBalance(pool);
     const result = await pool.query(
-      `SELECT pt.*, ${balanceSelect(hasOrders, hasBridge)}
+      `SELECT pt.*, ${balanceSelect(hasOrders, hasBridge, hasOpening)}
          FROM parties pt
         WHERE pt.id = $1 AND pt.wholesaler_id = $2`,
       [id, wholesalerId],
@@ -154,7 +201,10 @@ const gstinToStore = (raw, res) => {
 
 exports.createParty = async (req, res) => {
   const wholesalerId = businessId(req);
-  const { name, businessName, phone, city, address, gstin, notes } = req.body;
+  const {
+    name, businessName, phone, city, address, gstin, notes,
+    openingBalance, openingBalanceOn,
+  } = req.body;
 
   if (!clean(name)) {
     return res.status(400).json({ message: "Name is required" });
@@ -163,11 +213,18 @@ exports.createParty = async (req, res) => {
   const gstinValue = gstin === undefined ? null : gstinToStore(gstin, res);
   if (gstinValue === undefined) return;
 
+  const hasOpening = await hasOpeningBalance(pool);
+  const opening = hasOpening
+    ? parseOpening(openingBalance, openingBalanceOn, res)
+    : { amount: 0, on: null };
+  if (opening === undefined) return;
+
   try {
     const result = await pool.query(
       `INSERT INTO parties
-         (wholesaler_id, name, business_name, phone, city, address, gstin, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (wholesaler_id, name, business_name, phone, city, address, gstin, notes
+          ${hasOpening ? ", opening_balance, opening_balance_on" : ""})
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8${hasOpening ? ", $9, $10::date" : ""})
        RETURNING *`,
       [
         wholesalerId,
@@ -178,6 +235,7 @@ exports.createParty = async (req, res) => {
         clean(address),
         gstinValue,
         clean(notes),
+        ...(hasOpening ? [opening.amount, opening.on] : []),
       ],
     );
 
@@ -198,8 +256,10 @@ exports.createParty = async (req, res) => {
 exports.updateParty = async (req, res) => {
   const wholesalerId = businessId(req);
   const { id } = req.params;
-  const { name, businessName, phone, city, address, gstin, notes, status } =
-    req.body;
+  const {
+    name, businessName, phone, city, address, gstin, notes, status,
+    openingBalance, openingBalanceOn,
+  } = req.body;
 
   if (name !== undefined && !clean(name)) {
     return res.status(400).json({ message: "Name is required" });
@@ -233,6 +293,26 @@ exports.updateParty = async (req, res) => {
   }
   if (notes !== undefined) put("notes", clean(notes));
   if (status !== undefined) put("status", status);
+
+  /**
+   * What he already owed when this book was opened.
+   *
+   * Guarded on the column existing, and not offered at all before the
+   * migration, rather than silently dropped: a wholesaler who types 2 lakh and
+   * is told it saved when it did not has a khata that is wrong by 2 lakh.
+   */
+  if (openingBalance !== undefined || openingBalanceOn !== undefined) {
+    if (!(await hasOpeningBalance(pool))) {
+      return res.status(503).json({
+        code: "OPENING_BALANCE_NOT_SET_UP",
+        message: "Opening balances are not set up on this database yet. Run wholesale3_opening_balance.sql.",
+      });
+    }
+    const parsed = parseOpening(openingBalance, openingBalanceOn, res);
+    if (parsed === undefined) return;
+    if (openingBalance !== undefined) put("opening_balance", parsed.amount);
+    if (openingBalanceOn !== undefined) put("opening_balance_on", parsed.on);
+  }
 
   if (sets.length === 0) {
     return res.status(400).json({ message: "Nothing to update" });
@@ -394,8 +474,9 @@ const buildStatement = async (id, wholesalerId, rawFrom, rawTo) => {
   {
     const hasOrders = await hasPartyLink(pool);
     const hasBridge = await hasSaleLink(pool);
+    const hasOpening = await hasOpeningBalance(pool);
     const party = await pool.query(
-      `SELECT pt.*, ${balanceSelect(hasOrders, hasBridge)}
+      `SELECT pt.*, ${balanceSelect(hasOrders, hasBridge, hasOpening)}
          FROM parties pt
         WHERE pt.id = $1 AND pt.wholesaler_id = $2`,
       [id, wholesalerId],
@@ -633,6 +714,7 @@ exports.getPartyStats = async (req, res) => {
     // customer in credit cannot cancel out another customer's debt.
     const hasOrderParty = await hasPartyLink(pool);
     const hasBridge = await hasSaleLink(pool);
+    const hasOpening = await hasOpeningBalance(pool);
 
     /**
      * Billed and received read the one rule as well, not just the balance.
@@ -655,7 +737,7 @@ exports.getPartyStats = async (req, res) => {
            ${totals.received} AS total_received`,
         [wholesalerId],
       ),
-      pool.query(collectionTotals({ hasOrderParty, hasBridge }), [wholesalerId]),
+      pool.query(collectionTotals({ hasOrderParty, hasBridge, hasOpening }), [wholesalerId]),
     ]);
 
     const row = result.rows[0];

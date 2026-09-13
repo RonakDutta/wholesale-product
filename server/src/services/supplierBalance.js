@@ -38,7 +38,18 @@ const OWED_PURCHASE_STATUSES = "('received')";
  * `supplierRef` is how the surrounding query names the supplier's id column,
  * so the same fragment works whether the caller wrote `sup` or `s`.
  */
-const balanceExpression = ({ supplierRef = "sup.id" } = {}) => `
+/**
+ * What you already owed him before this product, the mirror of the customer
+ * side. Positive means you owe him, which is the sign this whole file uses.
+ *
+ * Not guarded on a schema probe the way the party one is: suppliers and the
+ * opening balance column both arrive through migrations, and every supplier
+ * route already refuses outright until the purchase tables exist, so there is
+ * no state where this table is readable and the column is absent for long. The
+ * COALESCE still covers a database caught between the two.
+ */
+const balanceExpression = ({ supplierRef = "sup.id", hasOpening = true } = {}) => `
+  ${hasOpening ? `COALESCE((SELECT s2.opening_balance FROM suppliers s2 WHERE s2.id = ${supplierRef}), 0) +` : ""}
   COALESCE((
     SELECT SUM(pu.total) FROM purchases pu
      WHERE pu.supplier_id = ${supplierRef}
@@ -79,13 +90,13 @@ const receivedExpression = (purchaseRef = "pu.id") => `
  *
  * Takes $1 as the wholesaler.
  */
-const payableTotals = () => `
+const payableTotals = ({ hasOpening = true } = {}) => `
   SELECT
     COALESCE(SUM(GREATEST(dues.balance, 0)), 0) AS owed_by_you,
     COALESCE(SUM(GREATEST(-dues.balance, 0)), 0) AS on_account
   FROM suppliers sup
   JOIN LATERAL (
-    SELECT ${balanceExpression({ supplierRef: "sup.id" })} AS balance
+    SELECT ${balanceExpression({ supplierRef: "sup.id", hasOpening })} AS balance
   ) dues ON TRUE
   WHERE sup.wholesaler_id = $1
 `;

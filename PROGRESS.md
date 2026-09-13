@@ -33,6 +33,7 @@ cd server && npm run migrate
 | `wholesale3_series_financial_year.sql` | Sale and challan numbers restart each financial year | run 12 Sept, confirmed by a sale coming out `S/10/26-27` |
 | `wholesale3_purchases.sql` | Suppliers, purchases, purchase lines, money paid out, purchase numbering | **NOT RUN** |
 | `wholesale3_master_settings.sql` | Platform formatting: decimals, digit grouping, currency, date format | **NOT RUN** |
+| `wholesale3_opening_balance.sql` | What a customer or supplier already owed before this product | **NOT RUN** |
 
 Two outstanding. Until the settings one is run, every screen formats exactly
 as it always has: `masterService.SHIPPED_SETTINGS` is not a placeholder, it is
@@ -125,6 +126,74 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 ---
 
 ## Done
+
+### 13 Sept 2026, from the Busy screenshots
+
+Nine screenshots of Busy 21 sent over. Gone through line by line. What follows
+is the triage, and the one item that was built today.
+
+**BUILT: opening balances.** Busy's Account master carries `Op. Bal` with a
+Dr/Cr flag. We had nothing, and it is the single thing that stopped a real
+wholesaler moving onto this product: his customer book opened at zero on day
+one, so the only number he cares about was wrong. His choices were entering a
+fake sale for the old balance, which puts goods in his books he never sold and
+tax on a bill he never raised, or not using it.
+
+Stored SIGNED rather than with a Dr/Cr flag. Busy needs the flag because the
+same field serves both sides of a double entry ledger; here positive means he
+owed you and negative means you were holding his money, and one column cannot
+disagree with itself the way a number and a flag can. The DATE is required
+whenever the figure is not zero: "he owes 2 lakh" is not a fact until you say
+as at when, and without it the opening figure and everything after it count the
+same goods twice.
+
+It goes through `khataBalance` and `supplierBalance`, so it reaches the
+customer page, the customer list, the overview and the purchase totals from ONE
+rule. Every caller had to be threaded with the probe, because a balance that
+includes the opening figure on one screen and not another is exactly the
+disagreement that file exists to prevent.
+
+**The triage, for what is left.**
+
+Worth taking, roughly in order:
+
+| From Busy | Why it matters here |
+|---|---|
+| Unit Conversion | 1 bale = 20 than. Real the day somebody buys in bales and sells in metres |
+| Bill Sundry | Freight, packing, insurance as lines on a bill. Ordinary in wholesale and we cannot express it |
+| Type of Dealer (Regular / Composition) | A composition dealer may not charge GST and must print so on the bill. We assume everyone is Regular |
+| HSN summary on the invoice | Required on a GST invoice above the turnover threshold. We do not print one |
+| Original / Duplicate / Triplicate | Rule 46 wants the copy marked. Ours prints one unmarked copy |
+| Invoice logo | Busy has it under Configure Sales Invoice. Commonly asked for |
+| Discount Structure | Named discount schemes, real in wholesale |
+| Item Group / Account Group | We have a free text `category` on items and nothing on parties |
+| Std. Narration | Canned notes. Small and genuinely saves typing |
+| Country master | Trivial, and the State master already sits beside it |
+
+Deliberately NOT taking, and why:
+
+- **Account Group, Journal, Contra, Dr/Cr Note without items.** Busy is a full
+  double entry accounting package with a chart of accounts. This is a khata.
+  Building those means building an accounting system nobody asked for.
+- **Bill of Material, Production, Unassemble.** Manufacturing. Not this trade.
+- **Physical Stock, Stock Journal, Material Issued to Party.** Stock movement,
+  which cannot start before sales and purchases BOTH move stock, and today
+  neither does. See the purchase note above for why one side alone is worse
+  than neither.
+- **E-Way Bill and E-Invoice.** Both real obligations above a threshold, both
+  needing a government API integration and credentials. A phase of their own,
+  not a master screen.
+- **GSTIN online validation.** Busy's own note says it needs an active paid
+  subscription, because it is a paid GSP API. Same shape as the above.
+
+**One thing the screenshots answered that was already written up as a
+limitation.** Busy's Regional Settings has "Currency Font: Rupee Foradian"
+beside "Currency Character". That is exactly how it prints a rupee glyph in a
+PDF, and it is the answer to the note in `pdfService`: embed a font that has
+the character. It stays deliberately unfixed for now, because carrying a TTF in
+the repository and trusting it to be on whatever host this runs on is a real
+cost for a symbol that "Rs." already says perfectly well to these traders. The
+option is now written down rather than unknown.
 
 ### 13 Sept 2026, later
 

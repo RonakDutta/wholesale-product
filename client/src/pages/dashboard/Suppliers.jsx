@@ -22,6 +22,9 @@ const blankDraft = () => ({
   address: "",
   gstin: "",
   notes: "",
+  // The mirror of the customer side: positive is what YOU owe him.
+  openingBalance: "",
+  openingBalanceOn: "",
 });
 
 const Suppliers = () => {
@@ -112,6 +115,13 @@ const Suppliers = () => {
       address: supplier.address || "",
       gstin: supplier.gstin || "",
       notes: supplier.notes || "",
+      openingBalance:
+        supplier.opening_balance && Number(supplier.opening_balance) !== 0
+          ? String(Number(supplier.opening_balance))
+          : "",
+      openingBalanceOn: supplier.opening_balance_on
+        ? String(supplier.opening_balance_on).slice(0, 10)
+        : "",
     });
   };
 
@@ -226,6 +236,59 @@ const Suppliers = () => {
                 )}
               </div>
             ))}
+            {/* What you already owed him before this book existed. Same
+                reasoning as the customer side, opposite direction. */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
+              <p className="text-sm font-bold text-espresso">
+                Already owed, before you started using this
+              </p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Leave both empty for a new supplier.
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="supplier-opening"
+                    className="mb-1 block text-xs font-semibold text-slate-600"
+                  >
+                    Amount
+                  </label>
+                  <input
+                    id="supplier-opening"
+                    value={draft.openingBalance}
+                    onChange={(e) =>
+                      setDraft({ ...draft, openingBalance: e.target.value })
+                    }
+                    inputMode="decimal"
+                    placeholder="0"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-clay"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    {Number(draft.openingBalance) < 0
+                      ? "He is holding your money."
+                      : "What you owed him. Put a minus in front if he was holding your money."}
+                  </p>
+                </div>
+                <div>
+                  <label
+                    htmlFor="supplier-opening-on"
+                    className="mb-1 block text-xs font-semibold text-slate-600"
+                  >
+                    As at
+                  </label>
+                  <input
+                    id="supplier-opening-on"
+                    type="date"
+                    value={draft.openingBalanceOn}
+                    onChange={(e) =>
+                      setDraft({ ...draft, openingBalanceOn: e.target.value })
+                    }
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-clay"
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="sm:col-span-2">
               <label
                 htmlFor="supplier-notes"

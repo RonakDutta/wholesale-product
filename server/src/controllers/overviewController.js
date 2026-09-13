@@ -11,6 +11,7 @@ const {
   balanceExpression,
   totalsExpression,
   collectionTotals,
+  hasOpeningBalance,
 } = require("../services/khataBalance");
 
 /**
@@ -47,6 +48,7 @@ exports.getOverview = async (req, res) => {
     // only when the migrations that add them have actually been run.
     const hasOrderParty = await hasPartyLink(pool);
     const hasBridge = await hasSaleLink(pool);
+    const hasOpening = await hasOpeningBalance(pool);
     const allTime = totalsExpression({ hasOrderParty, hasBridge });
     const thisMonth = totalsExpression({
       hasOrderParty,
@@ -56,7 +58,7 @@ exports.getOverview = async (req, res) => {
 
     const [collect, money, counts, toDeliver, topDues, quiet, recentSales] =
       await Promise.all([
-        pool.query(collectionTotals({ hasOrderParty, hasBridge }), [wholesalerId]),
+        pool.query(collectionTotals({ hasOrderParty, hasBridge, hasOpening }), [wholesalerId]),
         pool.query(
           `SELECT
              ${allTime.billed} AS billed_all_time,
@@ -100,7 +102,7 @@ exports.getOverview = async (req, res) => {
           `SELECT p.id, p.name, p.business_name, p.phone, dues.outstanding
              FROM parties p
              JOIN LATERAL (
-               SELECT ${balanceExpression({ hasOrderParty, hasBridge, partyRef: "p.id" })}
+               SELECT ${balanceExpression({ hasOrderParty, hasBridge, hasOpening, partyRef: "p.id" })}
                  AS outstanding
              ) dues ON TRUE
             WHERE p.wholesaler_id = $1 AND dues.outstanding > 0
@@ -208,6 +210,7 @@ exports.getBreakdown = async (req, res) => {
   try {
     const hasOrderParty = await hasPartyLink(pool);
     const hasBridge = await hasSaleLink(pool);
+    const hasOpening = await hasOpeningBalance(pool);
 
     if (metric === "outstanding") {
       // Every customer, with the three numbers his balance is made of, so the

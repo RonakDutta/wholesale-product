@@ -161,6 +161,37 @@ exports.getSupplierById = async (req, res) => {
   }
 };
 
+/**
+ * What you already owed him when the book was opened. Mirrors parseOpening on
+ * the customer side, with the sign meaning what it means everywhere on this
+ * side: positive is money YOU owe him.
+ */
+const parseOpening = (amount, on, res) => {
+  const hasAmount = amount !== undefined && amount !== null && String(amount).trim() !== "";
+  const value = hasAmount ? Number(amount) : 0;
+
+  if (hasAmount && !Number.isFinite(value)) {
+    res.status(400).json({ message: "Enter the opening balance as a number." });
+    return undefined;
+  }
+  if (Math.abs(value) >= 10000000000) {
+    res.status(400).json({ message: "That opening balance is too large." });
+    return undefined;
+  }
+  const date = clean(on);
+  if (value !== 0 && !date) {
+    res.status(400).json({
+      message: "Say which date the opening balance is as at, or the statement cannot start from it.",
+    });
+    return undefined;
+  }
+  if (date && Number.isNaN(new Date(date).getTime())) {
+    res.status(400).json({ message: "That opening balance date is not a date." });
+    return undefined;
+  }
+  return { amount: Number(value.toFixed(2)), on: date };
+};
+
 const supplierFields = (body) => ({
   name: clean(body.name),
   businessName: clean(body.businessName ?? body.business_name),
@@ -199,13 +230,17 @@ exports.createSupplier = async (req, res) => {
   const gstinError = badGstin(fields.gstin);
   if (gstinError) return res.status(400).json({ message: gstinError });
 
+  const opening = parseOpening(req.body.openingBalance, req.body.openingBalanceOn, res);
+  if (opening === undefined) return;
+
   try {
     if (!(await purchasesReady(res))) return;
 
     const result = await pool.query(
       `INSERT INTO suppliers
-         (wholesaler_id, name, business_name, phone, city, address, gstin, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (wholesaler_id, name, business_name, phone, city, address, gstin, notes,
+          opening_balance, opening_balance_on)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::date)
        RETURNING *`,
       [
         wholesalerId,
@@ -216,6 +251,8 @@ exports.createSupplier = async (req, res) => {
         fields.address,
         fields.gstin,
         fields.notes,
+        opening.amount,
+        opening.on,
       ],
     );
 
@@ -250,6 +287,9 @@ exports.updateSupplier = async (req, res) => {
     return res.status(400).json({ message: "Unknown status" });
   }
 
+  const opening = parseOpening(req.body.openingBalance, req.body.openingBalanceOn, res);
+  if (opening === undefined) return;
+
   try {
     if (!(await purchasesReady(res))) return;
 
@@ -263,6 +303,8 @@ exports.updateSupplier = async (req, res) => {
          gstin         = $8,
          notes         = $9,
          status        = COALESCE($10, status),
+         opening_balance    = $11,
+         opening_balance_on = $12::date,
          updated_at    = CURRENT_TIMESTAMP
        WHERE id = $1 AND wholesaler_id = $2
        RETURNING *`,
@@ -277,6 +319,8 @@ exports.updateSupplier = async (req, res) => {
         fields.gstin,
         fields.notes,
         status,
+        opening.amount,
+        opening.on,
       ],
     );
 

@@ -140,6 +140,50 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 
 ## Done
 
+### 14 Sept 2026, signing in on a second phone
+
+Reported: signed in on one device, then on another phone it said "Signed in
+successfully" and nothing happened, and a reload was still signed out.
+
+Nothing was blocking the second device. Auth is a stateless JWT with no
+session table and no revocation, the middleware only verifies the signature,
+and sockets use a room per user which holds many connections. There is no
+code anywhere that could refuse a second sign in.
+
+**The token was being deleted a moment after it was granted.** `fetchUser` in
+AuthContext caught EVERY failure of `GET /api/auth/me` and called `logout()`,
+which does `localStorage.removeItem("token")`. It did not rethrow. So
+`login()` resolved as though it had worked, Login.jsx line 115 announced
+"Signed in successfully", navigation ran, and the token was already gone. The
+reload afterwards found nothing.
+
+Any failure did it: a 500, or a timeout, and axios gives up after 10 seconds.
+Which is why it showed up on the second phone and not the first. The phone
+was on mobile data; the laptop was not.
+
+There was a second fault making it likelier and intermittent. `login()`
+awaited `fetchUser()` AND set the token, which fired the `[token]` effect,
+which called `fetchUser()` again. Two concurrent lookups, and either one
+failing wiped the token the other had just validated.
+
+Fixed:
+- only a **401** logs anybody out. That is the one answer that means the
+  token is genuinely no good. A network failure or a 5xx keeps the token, so
+  a reload picks straight back up, and sets an `unreachable` flag so a screen
+  can say "could not reach the server" instead of pretending to be signed out
+- one lookup, not two, claimed through a ref
+- `login()` now throws when the account could not be loaded, so the sign in
+  screen cannot announce success for a session that did not start. Login.jsx
+  tells that apart from a wrong password, because sending somebody off to
+  reset a password that was never wrong is its own waste of an evening
+
+Verified in a browser against a mock that fails `/api/auth/me` on demand.
+With the fix: a 500 keeps the token, shows an honest error, no false success,
+and survives a reload; the happy path signs in and navigates; a real 401
+clears the token and stays on the sign in screen. The before-state was read
+off the code rather than demonstrated, because the throwaway mock would not
+rebind its port to switch modes.
+
 ### 14 Sept 2026, Razorpay Route and the KYC plumbing
 
 Asked whether we could KYC everyone who joins and then have Razorpay handle
@@ -1293,6 +1337,42 @@ numbering; shop prices treated as tax inclusive.
 
 Taken off the master overview screen and put here, because the screen is for
 doing the work and this is the reasoning behind it.
+
+### One device at a time, asked for 14 Sept. NOT BUILT.
+
+Wanted: an account signed in on one device, or one IP, at a time. A second
+sign in ends the first.
+
+Nothing today does this or can. Auth is a stateless JWT signed at login with
+a 30 day expiry: there is no session table, no record of who is signed in
+where, and no way to revoke a token once issued. The server cannot tell one
+device from another and cannot reach out to end anything. Sockets use a room
+per user, `user:<id>`, which deliberately holds many connections at once.
+
+What it would take, roughly, and the decisions inside it:
+
+- **A session table.** `user_id`, a session id, device label, IP, issued and
+  last seen. The JWT carries the session id, and the auth middleware checks
+  it is still live on every request. That turns every authenticated request
+  into a database read, which is the real cost: today it is pure signature
+  arithmetic and touches nothing.
+- **What "one device" means.** A new sign in either kicks the old session or
+  is itself refused. Kicking is friendlier and is what banking apps do;
+  refusing strands somebody whose phone is lost. Kicking needs a socket push
+  so the old device finds out rather than discovering it on its next tap.
+- **IP is the wrong key.** Two staff on one shop wifi share an IP, and a
+  phone on mobile data changes IP as it moves between towers. Locking to an
+  IP would sign a wholesaler out while he walked across his own warehouse.
+  Device, meaning a session row, is the thing to key on.
+- **Staff accounts complicate it.** An owner and three employees are separate
+  users, so this is per user and not per business. Worth confirming that is
+  what is wanted before building it.
+- **It interacts with the 14 Sept sign in fix.** That fix deliberately keeps
+  a token alive through a network failure rather than treating an
+  unreachable server as a dead session. A revocation check must not undo
+  that: "the server did not answer" and "this session was ended" have to
+  stay different answers, or flaky mobile data starts signing people out
+  again, which is the exact bug that was just removed.
 
 ### Why our own checkout window and not Razorpay's?
 

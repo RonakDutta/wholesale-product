@@ -29,7 +29,16 @@ io.use((socket, next) => {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     socket.userId = payload.id;
     next();
-  } catch {
+  } catch (err) {
+    // Logged with the reason, for the same reason authMiddleware does it: a
+    // signature failure here and an expiry here are different faults and
+    // both used to arrive as the bare word "Unauthorized" in a browser
+    // console, which says nothing about where to look.
+    if (err.name !== "TokenExpiredError") {
+      console.error(
+        `Socket token rejected (${err.name}): ${err.message}. On a freshly issued token this means JWT_SECRET does not match the one it was signed with.`,
+      );
+    }
     next(new Error("Unauthorized"));
   }
 });
@@ -71,6 +80,33 @@ io.on("connection", (socket) => {
 
 const PORT = Number(process.env.PORT) || 5000;
 
+/**
+ * Said once at boot, so a misconfigured deployment is visible in the logs
+ * before anybody tries to sign in and gets a 401 they cannot explain.
+ *
+ * JWT_EXPIRES_IN is checked because a bare number means SECONDS to
+ * jsonwebtoken. Somebody setting it to 1 meaning "one day" issues tokens that
+ * die a second after they are handed out, and every request after a
+ * successful sign in comes back 401. That looks exactly like a broken login
+ * and is nothing of the kind.
+ */
+const checkAuthConfig = () => {
+  if (!process.env.JWT_SECRET) {
+    console.error(
+      "JWT_SECRET is not set. Signing in will fail and no token can be verified.",
+    );
+    return;
+  }
+  const expiry = process.env.JWT_EXPIRES_IN;
+  if (expiry && /^\d+$/.test(String(expiry).trim())) {
+    const seconds = Number(expiry);
+    console.warn(
+      `JWT_EXPIRES_IN is "${expiry}", which jsonwebtoken reads as ${seconds} SECONDS, not days. Write "30d" if you meant days.`,
+    );
+  }
+};
+
 httpServer.listen(PORT, () => {
+  checkAuthConfig();
   console.log(`Server running on port ${PORT} with Enterprise Invoice System initialized`);
 });

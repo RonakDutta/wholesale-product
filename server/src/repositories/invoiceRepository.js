@@ -194,6 +194,12 @@ async function schemaExtras(db = pool) {
         -- exactly as it did before.
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'parties' AND column_name = 'state') AS has_party_state,
+        -- How to pay a supplier, from wholesale3_supplier_payment_details.sql.
+        -- Until it is run the supplier form offers no bank details and the
+        -- pay-by-UPI panel stays hidden, which is the state the product was
+        -- in before it existed.
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'suppliers' AND column_name = 'upi_id') AS has_supplier_pay_details,
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'items' AND column_name = 'gst_percent') AS has_item_gst,
         EXISTS (SELECT 1 FROM information_schema.columns

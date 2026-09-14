@@ -31,16 +31,16 @@ cd server && npm run migrate
 | `wholesale3_invoice_rule46_fields.sql` | Place of supply, reverse charge, round off | run 10 Sept |
 | `wholesale3_platform_masters.sql` | Super admin flag, and the state, unit, tax rate and HSN masters | run 12 Sept |
 | `wholesale3_series_financial_year.sql` | Sale and challan numbers restart each financial year | run 12 Sept, confirmed by a sale coming out `S/10/26-27` |
-| `wholesale3_purchases.sql` | Suppliers, purchases, purchase lines, money paid out, purchase numbering | **NOT RUN** |
-| `wholesale3_master_settings.sql` | Platform formatting: decimals, digit grouping, currency, date format | **NOT RUN** |
-| `wholesale3_opening_balance.sql` | What a customer or supplier already owed before this product | **NOT RUN** |
+| `wholesale3_purchases.sql` | Suppliers, purchases, purchase lines, money paid out, purchase numbering | run 14 Sept |
+| `wholesale3_master_settings.sql` | Platform formatting: decimals, digit grouping, currency, date format | run 14 Sept |
+| `wholesale3_opening_balance.sql` | What a customer or supplier already owed before this product | run 14 Sept |
 
-Two outstanding. Until the settings one is run, every screen formats exactly
-as it always has: `masterService.SHIPPED_SETTINGS` is not a placeholder, it is
-the convention the product shipped with, and the master Settings screen says
-the table is missing rather than pretending to save.
+**Nothing outstanding as of 14 Sept.** Every migration in this directory has
+been run against Neon.
 
-The purchase one, added 12 Sept. Until it is run every purchase and supplier
+Restart the server after running any of them. The schema probes are cached per
+process, so a running server goes on believing a table is absent, which is what
+caught the sale numbering out on 12 Sept. Until it is run every purchase and supplier
 route answers `503 PURCHASES_NOT_SET_UP` and the four screens say "the
 purchase book is not switched on yet". Nothing else in the product is
 affected, and no existing screen changes. Verified against a database without

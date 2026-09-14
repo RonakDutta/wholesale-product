@@ -453,9 +453,16 @@ const Payment = () => {
           </details>
         )}
 
+        {/* Two real columns on a laptop.
+            
+            This was a lg:grid-cols-2 holding a SINGLE child, so the order
+            details, the address and the buttons all stacked into column one
+            and column two sat empty: a narrow strip of content down the left
+            of a wide screen. It only looked right before the QR code was
+            moved out of the second column. */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Order Details */}
-          <div className="space-y-6">
+          <div>
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
               <h3 className="text-lg font-bold text-slate-900 mb-4">Order Details</h3>
               
@@ -486,6 +493,10 @@ const Payment = () => {
               </div>
             </div>
 
+          </div>
+
+          {/* Delivery Address */}
+          <div>
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
               <h3 className="text-lg font-bold text-slate-900 mb-4">Delivery Address</h3>
               
@@ -510,9 +521,17 @@ const Payment = () => {
               )}
             </div>
 
-            {/* Order level, not UPI specific: leaving without paying. Only
-                right while nothing has been paid. Once a deposit is in, the
-                way out is back to the order, not a cancellation. */}
+          </div>
+        </div>
+
+        {/* Order level, not UPI specific: leaving without paying. Only right
+            while nothing has been paid. Once a deposit is in, the way out is
+            back to the order, not a cancellation.
+            
+            Full width under both columns, and narrowed to itself, because a
+            destructive button stretched across a laptop reads as the main
+            action on the screen. */}
+        <div className="mx-auto mt-6 max-w-sm">
             <div className="space-y-3">
               {partPaid ? (
                 <button
@@ -538,7 +557,6 @@ const Payment = () => {
                 ? `₹${money(dueAfterThisPayment)} will remain due. Your seller can start preparing the order once this deposit is in.`
                 : "Your order will be confirmed after successful payment verification"}
             </p>
-          </div>
         </div>
       </div>
     </div>

@@ -33,6 +33,7 @@ cd server && npm run migrate
 | `wholesale3_series_financial_year.sql` | Sale and challan numbers restart each financial year | run 12 Sept, confirmed by a sale coming out `S/10/26-27` |
 | `wholesale3_purchases.sql` | Suppliers, purchases, purchase lines, money paid out, purchase numbering | **NOT RUN** |
 | `wholesale3_master_settings.sql` | Platform formatting: decimals, digit grouping, currency, date format | **NOT RUN** |
+| `wholesale3_opening_balance.sql` | What a customer or supplier already owed before this product | **NOT RUN** |
 
 Two outstanding. Until the settings one is run, every screen formats exactly
 as it always has: `masterService.SHIPPED_SETTINGS` is not a placeholder, it is
@@ -125,6 +126,130 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 ---
 
 ## Done
+
+### 13 Sept 2026, from the Busy screenshots
+
+Nine screenshots of Busy 21 sent over. Gone through line by line. What follows
+is the triage, and the one item that was built today.
+
+**BUILT: opening balances.** Busy's Account master carries `Op. Bal` with a
+Dr/Cr flag. We had nothing, and it is the single thing that stopped a real
+wholesaler moving onto this product: his customer book opened at zero on day
+one, so the only number he cares about was wrong. His choices were entering a
+fake sale for the old balance, which puts goods in his books he never sold and
+tax on a bill he never raised, or not using it.
+
+Stored SIGNED rather than with a Dr/Cr flag. Busy needs the flag because the
+same field serves both sides of a double entry ledger; here positive means he
+owed you and negative means you were holding his money, and one column cannot
+disagree with itself the way a number and a flag can. The DATE is required
+whenever the figure is not zero: "he owes 2 lakh" is not a fact until you say
+as at when, and without it the opening figure and everything after it count the
+same goods twice.
+
+It goes through `khataBalance` and `supplierBalance`, so it reaches the
+customer page, the customer list, the overview and the purchase totals from ONE
+rule. Every caller had to be threaded with the probe, because a balance that
+includes the opening figure on one screen and not another is exactly the
+disagreement that file exists to prevent.
+
+**The triage, for what is left.**
+
+Worth taking, roughly in order:
+
+| From Busy | Why it matters here |
+|---|---|
+| Unit Conversion | 1 bale = 20 than. Real the day somebody buys in bales and sells in metres |
+| Bill Sundry | Freight, packing, insurance as lines on a bill. Ordinary in wholesale and we cannot express it |
+| Type of Dealer (Regular / Composition) | A composition dealer may not charge GST and must print so on the bill. We assume everyone is Regular |
+| HSN summary on the invoice | Required on a GST invoice above the turnover threshold. We do not print one |
+| Original / Duplicate / Triplicate | Rule 46 wants the copy marked. Ours prints one unmarked copy |
+| Invoice logo | Busy has it under Configure Sales Invoice. Commonly asked for |
+| Discount Structure | Named discount schemes, real in wholesale |
+| Item Group / Account Group | We have a free text `category` on items and nothing on parties |
+| Std. Narration | Canned notes. Small and genuinely saves typing |
+| Country master | Trivial, and the State master already sits beside it |
+
+Deliberately NOT taking, and why:
+
+- **Account Group, Journal, Contra, Dr/Cr Note without items.** Busy is a full
+  double entry accounting package with a chart of accounts. This is a khata.
+  Building those means building an accounting system nobody asked for.
+- **Bill of Material, Production, Unassemble.** Manufacturing. Not this trade.
+- **Physical Stock, Stock Journal, Material Issued to Party.** Stock movement,
+  which cannot start before sales and purchases BOTH move stock, and today
+  neither does. See the purchase note above for why one side alone is worse
+  than neither.
+- **E-Way Bill and E-Invoice.** Both real obligations above a threshold, both
+  needing a government API integration and credentials. A phase of their own,
+  not a master screen.
+- **GSTIN online validation.** Busy's own note says it needs an active paid
+  subscription, because it is a paid GSP API. Same shape as the above.
+
+**One thing the screenshots answered that was already written up as a
+limitation.** Busy's Regional Settings has "Currency Font: Rupee Foradian"
+beside "Currency Character". That is exactly how it prints a rupee glyph in a
+PDF, and it is the answer to the note in `pdfService`: embed a font that has
+the character. It stays deliberately unfixed for now, because carrying a TTF in
+the repository and trusting it to be on whatever host this runs on is a real
+cost for a symbol that "Rs." already says perfectly well to these traders. The
+option is now written down rather than unknown.
+
+### 13 Sept 2026, later
+
+**The double counted payment race is fixed.** An order backed invoice has two
+writers: `reconcileInvoiceForOrder`, which mirrors what the order has received
+and runs in the BACKGROUND off every payment event, and a wholesaler recording
+the same money by hand. Reconcile was idempotent in one direction only. It
+refuses to add when enough is already on the bill, but when it got there FIRST
+the hand entry landed afterwards and nothing ever looked again. 510 on a 1,020
+order showed as 1,020 received and the bill read fully paid with half owed.
+
+The fix is a CEILING both writers obey, in `invoiceRepository.addPayment`,
+which is the only place a payment row is written. For an order backed invoice
+the ceiling is what the ORDER says has been received, because the order is the
+authority over money that came in through the shop. That is the same rule the
+sale side already states as FOLLOWS_ORDER. It is taken under the advisory lock
+reconcile was already using, so whichever writer arrives second sees the first.
+
+`recordPayment` now decides Paid or Pending from what the bill ACTUALLY holds,
+read back inside the transaction, rather than from a total fetched before the
+lock plus the figure asked for. A clamped payment could otherwise have stamped
+a bill settled that was not.
+
+A bill with no order behind it is untouched: there is no second writer, so a
+hand entry is the only truth there is.
+
+Driven deterministically rather than left to timing: the suite now forces the
+losing order, reconciling first and hand entering after, which is the sequence
+that used to fail about one run in three under load and never on an idle
+machine.
+
+**Money reads the same everywhere now, invoice included.** Collapsing the
+eighteen screen helpers was only most of the job. Three places were still
+formatting their own way:
+
+- The INVOICE PDF printed `Rs.1250000.00` with no separators at all, while
+  every screen showed 12,50,000. `pdfService` now reads the platform grouping
+  and document decimals, primed once per document because `rupees()` is called
+  from twenty one places inside synchronous drawing code where an await cannot
+  go. The rupee SYMBOL is still deliberately not read there: PDFKit's built in
+  Helvetica has no such glyph and silently draws a superscript one, so that
+  file prints "Rs." and is the one place that cannot honour the setting.
+- `InvoicePreview`, the invoice on screen, used raw `toFixed(2)` throughout, so
+  it showed `₹12000.00` ungrouped. That was the original complaint on 11 Sept
+  and it was still true on the invoice itself.
+- `PaymentHistory`, `CartDrawer`, `SupplierCard` and `RefuseOrderModal`.
+
+Checked end to end: the invoice screen and the PDF now print the same digits,
+`₹12,50,000.50` against `Rs.12,50,000.50`, while a list screen shows
+`₹12,50,001` because screen and document decimals are deliberately separate.
+
+**The master sidebar no longer scrolls away.** The layout was `min-h-screen`,
+so the whole page grew and took the sidebar with it. It is `h-dvh` with the
+overflow hidden now, exactly as the seller shell does it, and only the content
+pane scrolls. Verified: content scrolled 748px, sidebar stayed at the top,
+window scroll never moved.
 
 ### 13 Sept 2026
 
@@ -1293,97 +1418,6 @@ for many taxpayers. That is a commercial decision and it shapes the schema.
 ---
 
 ## Known problems, not yet fixed
-
-### A hand entered payment can be double counted on an order backed invoice
-
-Found 13 Sept while running the battery. Intermittent, roughly one run in
-three under load and none at all on an idle machine, which is why it has been
-passing. Confirmed NOT a regression: six runs each side of the day's changes,
-zero failures both, and the one failure came during a full battery.
-
-`updatePaymentStatus` fires `reconcileInvoiceForOrder` in the BACKGROUND,
-without awaiting it. Reconcile is idempotent against payments already on the
-bill, so if the wholesaler records the same money by hand first, reconcile
-sees it and adds nothing. If the background call lands FIRST, the hand entry
-lands afterwards and nothing looks at it again: the bill ends up with two rows
-for one payment.
-
-Reproduction, in `invoice_payment_check.js`:
-a 50/50 order of 1,020, the first instalment of 510 paid through the shop,
-then the wholesaler adds 510 by hand. The invoice then shows 1,020 received
-against a bill for 1,020 and reads fully paid while 510 is still owed.
-
-Reconcile's idempotence is one-directional. It refuses to add when enough is
-already recorded (`gap <= 0`) but never corrects a total that is too high, so
-whichever writer arrives second wins and nothing reconciles them.
-
-The fix is not "await the background call": that only narrows the window, and
-the two writers are genuinely concurrent in production. It is to make the
-order backed invoice have ONE writer for its payment rows, or to cap a hand
-entry on such an invoice at what the order says has actually been received.
-The second is smaller and is where to start.
-
-
-
-- **Git history contains a committed password and an invoice PDF.** The Neon
-  credential has been rotated. The history rewrite is outstanding.
-- **The abandoned payment path invents stock.** `updatePaymentStatus` credits
-  `stock + oi.quantity` unconditionally when a buyer walks away, but checkout
-  floors its subtraction at zero while stock tracking is off, so a listing
-  that gave nothing up gets stock back. `cancelOrder` was fixed; this path was
-  not.
-- **Credit notes do not move the khata.** Raising one by hand produces a
-  document and changes no balance. Returns work because they cancel the sale
-  instead. If credit notes are ever made to reduce a balance, they need a
-  guard so a note against an already cancelled sale counts for nothing, or
-  returns will be subtracted twice.
-- **Three list endpoints are unpaginated,** `listParties` among them. Measured
-  at 200,000 customers: a book of 5,000 takes 99ms and returns all 5,000 rows.
-  Fine today, worth fixing before it is not.
-- **A seller only account is half a buyer, which is nobody's intention.**
-  Deferred on purpose, noted so it is not rediscovered. Signing up as "I sell
-  wholesale" gives role `seller`, and that account sees the cart, the wishlist
-  and "Your Orders" in the navbar. Checkout has no role check, so he can
-  genuinely place an order; `contactSupplier` does have one, so he cannot then
-  message the wholesaler he just ordered from. Whichever way this is settled,
-  the two ends need to agree: either he buys and can talk to his seller, or he
-  does not buy and the navbar stops offering it. `upgradeToSeller` only ever
-  writes `both`, so there is no path from seller back to buying either.
-- **The home page falls back to invented demo products** when the catalogue
-  fails to load. Two made up wholesalers in Mumbai and Delhi, with prices. The
-  toast says "demo data", which is the only thing stopping it being a straight
-  lie, and it is now also out of step with the city filter: a buyer filtered to
-  Surat would be shown a Mumbai seller. Delete it and show the failure.
-- **Search invents a 4.5 star rating** for any wholesaler who has none, and
-  then sorts and filters on it. Same rule that removed `trust_score`.
-- **The client bundle is about 1.8MB** and there are 14 non identical copies of
-  a `money()` helper. Those copies are why the site shows 12,000 and the
-  invoice shows 12000.00: there is no one place to change it. Collapsing them
-  is the prerequisite for the number formatting the master dashboard is meant
-  to control, and should be done before that setting is added, not after.
-- ~~**The invoice number rolls over on 1 January, not 1 April.**~~ Fixed
-  10 Sept; the "Rule 46(b)" section of `challan_check.js` pins that January
-  does not reset the run and that 1 April starts a new one.
-- ~~**A long prefix makes an invoice number over 16 characters.**~~ Fixed
-  10 Sept; a number over 16 characters, or carrying a character Rule 46(b)
-  does not allow, is refused. Same section of `challan_check.js`.
-- **`promotionController` checks for role `'admin'`,** which the `chk_role`
-  constraint on `users` can never contain. That code is unreachable, not
-  merely unbuilt.
-- **`README.md` is substantially out of date.**
-- **`/api/dashboard/stats` is dead code.** Nothing in the client calls it. Its
-  "revenue" sums whole order totals for orders marked paid while the comment
-  claims the figure means received, and `awaiting_payment_value` uses the full
-  order total rather than what is outstanding. Same class as the header faults
-  fixed on 11 Sept, but not reachable, so either delete the endpoint or fix it.
-- **`scale_check.js` crashes on an empty database** with a TypeError instead
-  of saying it needs a seeded one. It is a performance script, not part of the
-  correctness battery.
-- **The browser sweep is unfinished.** Three seller screens flagged and not
-  chased down, the whole buyer side never rendered, and no phone-width pass.
-  See 11 Sept above.
-
----
 
 ## Testing
 

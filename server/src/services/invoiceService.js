@@ -709,11 +709,7 @@ class InvoiceService {
         throw new Error("Payment amount must be a positive number.");
       }
 
-      // Calculate total payments made so far
-      const currentPaid = (invoice.payments || []).reduce((sum, p) => sum + Number(p.amount), 0);
-      const newTotalPaid = currentPaid + amountPaid;
       const grandTotal = Number(invoice.grand_total);
-
       let newPaymentStatus = "Pending";
       let newInvoiceStatus = invoice.invoice_status;
 
@@ -721,12 +717,14 @@ class InvoiceService {
       // no "Partial": a bill that only exists once it is settled can never
       // honestly be in a half paid state, and the money that has come in is
       // carried by the payment rows rather than by the status word.
-      if (newTotalPaid >= grandTotal) {
-        newPaymentStatus = "Paid";
-        newInvoiceStatus = "Paid";
-      }
 
-      // Add payment entry
+      // Add payment entry.
+      //
+      // Comes back null when an ORDER backed invoice already shows everything
+      // the order has received. That is not a failure to hide: the money for a
+      // shop order is recorded against the ORDER, and reconcile mirrors it
+      // here, so typing it again on the bill is the wrong door and would count
+      // it twice. See invoiceRepository.addPayment for the race this closes.
       const payment = await invoiceRepository.addPayment(
         {
           invoiceId,
@@ -738,6 +736,40 @@ class InvoiceService {
         },
         client
       );
+
+      if (!payment) {
+        const err = new Error(
+          "This bill already shows everything its order has received. Record the payment against the order instead, and the bill will follow.",
+        );
+        err.code = "FOLLOWS_ORDER";
+        throw err;
+      }
+
+      /**
+       * Read back what the bill NOW holds, inside the same transaction, rather
+       * than adding the requested figure to a total read before the lock.
+       *
+       * Two reasons. The amount actually recorded can be less than the amount
+       * asked for, since addPayment clamps an order backed bill at what the
+       * order has received, and stamping Paid from the unclamped figure would
+       * mark a bill settled that is not. And the old sum came from a copy
+       * fetched outside any transaction, which is the same read-modify-write
+       * that let two payments each see the other as not yet there.
+       *
+       * Paid or not paid, nothing between. See reconcileInvoiceForOrder for
+       * why there is no "Partial".
+       */
+      const nowOnBill = Number(
+        (await client.query(
+          "SELECT COALESCE(SUM(amount), 0) AS paid FROM payments WHERE invoice_id = $1",
+          [invoiceId],
+        )).rows[0].paid,
+      );
+
+      if (Number((nowOnBill - grandTotal).toFixed(2)) >= 0) {
+        newPaymentStatus = "Paid";
+        newInvoiceStatus = "Paid";
+      }
 
       // Update invoice payment and invoice status
       const updatedInvoice = await invoiceRepository.updateInvoice(
@@ -775,7 +807,7 @@ class InvoiceService {
           invoiceId,
           action: "Paid",
           performedBy: userId,
-          details: `Recorded payment of ₹${amountPaid.toFixed(2)} via ${paymentPayload.paymentMethod || "UPI"}. Total paid: ₹${newTotalPaid.toFixed(2)} / ₹${grandTotal.toFixed(2)}`,
+          details: `Recorded payment of ₹${Number(payment.amount).toFixed(2)} via ${paymentPayload.paymentMethod || "UPI"}. Total paid: ₹${nowOnBill.toFixed(2)} / ₹${grandTotal.toFixed(2)}`,
         },
         client
       );
@@ -785,7 +817,7 @@ class InvoiceService {
       // Re-generate PDF on disk to reflect PAID watermark & status
       this.generateAndSendInvoiceEmailAsync(invoiceId, null);
 
-      return { invoice: updatedInvoice, payment, newPaymentStatus, newInvoiceStatus, totalPaid: newTotalPaid };
+      return { invoice: updatedInvoice, payment, newPaymentStatus, newInvoiceStatus, totalPaid: nowOnBill };
     } catch (err) {
       await client.query("ROLLBACK");
       throw err;

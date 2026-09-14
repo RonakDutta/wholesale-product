@@ -19,7 +19,61 @@ const { amountInWords } = require("../utils/amountInWords");
  * repository and trusting it to be present on whatever host this runs on, for
  * a character that "Rs." says perfectly well to the traders using this.
  */
-const rupees = (value) => `Rs.${Number(value || 0).toFixed(2)}`;
+/**
+ * The platform's own conventions, read once per process and refreshed by the
+ * TTL in masterService. Held in a module level value because `rupees()` is
+ * called from twenty one places inside synchronous drawing code, where an
+ * await cannot go.
+ *
+ * Primed by `loadFormat()` at the top of each document. Until that first call
+ * the shipped defaults apply, which is the same bargain the client makes and
+ * is safe for the same reason: the defaults ARE what the product always did.
+ */
+let format = {
+  documentDecimals: 2,
+  digitGrouping: "indian",
+};
+
+const loadFormat = async () => {
+  try {
+    const settings = await require("./masterService").settings();
+    format = {
+      documentDecimals: Number(settings.documentDecimals ?? 2),
+      digitGrouping: settings.digitGrouping || "indian",
+    };
+  } catch {
+    // A bill that prints with the old convention beats a bill that does not
+    // print, so this never throws.
+  }
+};
+
+/**
+ * Money, as it can actually be printed.
+ *
+ * Every amount on every bill this product has produced came out as "¹142.00".
+ * PDFKit's built-in Helvetica is a WinAnsi font and has no rupee glyph, so the
+ * ₹ was silently falling back to the superscript one. Nobody caught it because
+ * the code reads correctly.
+ *
+ * The fix is "Rs.", not a font. Embedding one would mean carrying a TTF in the
+ * repository and trusting it to be present on whatever host this runs on, for
+ * a character that "Rs." says perfectly well to the traders using this. The
+ * currency SYMBOL setting is therefore deliberately not read here: it is a
+ * screen setting, and this is the one place that cannot honour it.
+ *
+ * THE GROUPING IS READ, though, and that is the point. This printed
+ * Rs.1250000.00 with no separators at all while every screen showed
+ * 12,50,000, which is the same number written two ways on the same trade. Now
+ * both come from the platform's setting.
+ */
+const rupees = (value) =>
+  `Rs.${Number(value || 0).toLocaleString(
+    format.digitGrouping === "western" ? "en-US" : "en-IN",
+    {
+      minimumFractionDigits: format.documentDecimals,
+      maximumFractionDigits: format.documentDecimals,
+    },
+  )}`;
 
 /**
  * The PAN inside a GSTIN. Characters 3 to 12, by the number's own definition.
@@ -84,6 +138,9 @@ class PDFService {
    * Generates a professional A4 PDF Tax Invoice and streams it to an Express response or returns a Buffer.
    */
   async generateInvoicePDF(invoice, res = null, options = {}) {
+    // Prime the formatter before any amount is drawn.
+    await loadFormat();
+
     // Generate UPI QR code data URL asynchronously
     let qrDataUrl = null;
     try {
@@ -454,6 +511,9 @@ class PDFService {
    * terms both come off.
    */
   async generateCreditNotePDF(note, res = null) {
+    // Prime the formatter before any amount is drawn.
+    await loadFormat();
+
     return new Promise((resolve, reject) => {
       try {
         const doc = new PDFDocument({ size: "A4", margin: 36, bufferPages: true });
@@ -658,6 +718,9 @@ class PDFService {
    * it is expected to change.
    */
   async generateChallanPDF(challan, res = null) {
+    // Prime the formatter before any amount is drawn.
+    await loadFormat();
+
     return new Promise((resolve, reject) => {
       try {
         const doc = new PDFDocument({ size: "A4", margin: 36, bufferPages: true });
@@ -814,6 +877,9 @@ class PDFService {
   }
 
   async generateStatementPDF(statement, supplier = {}, res = null) {
+    // Prime the formatter before any amount is drawn.
+    await loadFormat();
+
     const { party, from, to, openingBalance, rows, totals, closingBalance } = statement;
 
     return new Promise((resolve, reject) => {

@@ -23,6 +23,15 @@ const PartyFormModal = ({ party, onClose, onSaved }) => {
     gstin: party?.gstin || "",
     address: party?.address || "",
     notes: party?.notes || "",
+    // Signed: positive is what HE owes, negative is his money you are holding.
+    // Kept as a string so the box can be empty, which is not the same as zero.
+    openingBalance:
+      party?.opening_balance && Number(party.opening_balance) !== 0
+        ? String(Number(party.opening_balance))
+        : "",
+    openingBalanceOn: party?.opening_balance_on
+      ? String(party.opening_balance_on).slice(0, 10)
+      : "",
   });
   const [status, setStatus] = useState(party?.status || "active");
   const [saving, setSaving] = useState(false);
@@ -185,6 +194,62 @@ const PartyFormModal = ({ party, onClose, onSaved }) => {
             name: "address",
             placeholder: "Shop number, street, area",
           })}
+
+          {/* What he already owed when this book was opened.
+              
+              Without it a wholesaler who has traded for twenty years opens his
+              customer book and is told nobody owes him anything. His only ways
+              round it were entering a fake sale, which puts goods in his books
+              he never sold, or not using the product. */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm font-bold text-espresso">
+              Already owed, before you started using this
+            </p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Leave both empty for a new customer.
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="party-opening"
+                  className="mb-1 block text-xs font-semibold text-slate-600"
+                >
+                  Amount
+                </label>
+                <input
+                  id="party-opening"
+                  value={form.openingBalance}
+                  onChange={set("openingBalance")}
+                  inputMode="decimal"
+                  placeholder="0"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+                />
+                <p className="mt-1 text-[11px] text-slate-400">
+                  {Number(form.openingBalance) < 0
+                    ? "You are holding his money."
+                    : "What he owed you. Put a minus in front if you were holding his money."}
+                </p>
+              </div>
+              <div>
+                <label
+                  htmlFor="party-opening-on"
+                  className="mb-1 block text-xs font-semibold text-slate-600"
+                >
+                  As at
+                </label>
+                <input
+                  id="party-opening-on"
+                  type="date"
+                  value={form.openingBalanceOn}
+                  onChange={set("openingBalanceOn")}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+                />
+                <p className="mt-1 text-[11px] text-slate-400">
+                  His statement starts from this date.
+                </p>
+              </div>
+            </div>
+          </div>
 
           <div>
             <label

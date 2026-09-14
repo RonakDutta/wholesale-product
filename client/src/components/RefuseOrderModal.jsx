@@ -2,6 +2,7 @@ import { useState } from "react";
 import { XCircle, X, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/axios";
+import { money as fmt } from "../utils/money";
 
 /**
  * Refusing an order, or calling one off.
@@ -27,7 +28,7 @@ const RefuseOrderModal = ({ order, asSeller = true, onClose, onCancelled }) => {
   const [working, setWorking] = useState(false);
 
   const paid = Number(order?.amount_paid ?? order?.paid ?? 0);
-  const money = paid > 0 ? `₹${paid.toLocaleString("en-IN")}` : null;
+  const money = paid > 0 ? `₹${fmt(paid)}` : null;
 
   const submit = async (e) => {
     e.preventDefault();

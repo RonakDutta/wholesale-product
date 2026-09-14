@@ -779,17 +779,93 @@ class InvoiceRepository {
   /**
    * Adds a payment record to an invoice.
    */
+  /**
+   * Records money against an invoice. THE ONLY WAY a payment row is written,
+   * which is why the ceiling below lives here rather than in one caller.
+   *
+   * ---------------------------------------------------------------------------
+   * THE RACE THIS CLOSES
+   * ---------------------------------------------------------------------------
+   * A bill raised from a shop order has TWO writers. `reconcileInvoiceForOrder`
+   * mirrors what the order has received, and it runs in the BACKGROUND off
+   * every payment event. A wholesaler recording the same money by hand is the
+   * other. Reconcile was idempotent only in one direction: it refuses to add
+   * when enough is already on the bill, but if it got there FIRST the hand
+   * entry landed afterwards and nothing ever looked again.
+   *
+   * One instalment of 510 on a 1,020 order then showed as 1,020 received, and
+   * the bill read fully paid with half still owed. It reproduced about one run
+   * in three under load, which is why it went unnoticed: on an idle machine
+   * the hand entry almost always won the race and reconcile then saw it.
+   *
+   * The fix is a CEILING both writers obey, taken under the same advisory lock
+   * reconcile already uses, so whichever arrives second sees the first. For an
+   * order backed invoice the ceiling is what the ORDER says has been received,
+   * because the order is the authority over money that came in through the
+   * shop. That is the same rule the sale side states as FOLLOWS_ORDER.
+   *
+   * Returns null when there is nothing left to record. Callers facing a person
+   * turn that into a sentence; reconcile never sees it, because it works out
+   * its own gap first and passes a figure that already fits.
+   */
   async addPayment(paymentData, client) {
     await ensureSchema(client);
     const dbClient = client || pool;
     const { invoiceId, amount, paymentMethod, transactionId, paymentReference, remarks } = paymentData;
+
+    /**
+     * The same lock reconcile takes, on the same key.
+     *
+     * Advisory transaction locks are re-entrant within one transaction, so
+     * reconcile taking it again here costs nothing. Without a client there is
+     * no transaction to attach it to, and the lock would be released the
+     * instant the statement finished, so the callers that matter pass one.
+     */
+    if (client) {
+      await dbClient.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
+        [invoiceId],
+      );
+    }
+
+    let toRecord = Number(amount);
+
+    const ceiling = await dbClient.query(
+      `SELECT i.order_id, i.grand_total,
+              o.amount_paid, o.payment_status AS order_payment_status,
+              COALESCE((SELECT SUM(p.amount) FROM payments p
+                         WHERE p.invoice_id = i.id), 0) AS already
+         FROM invoices i
+         LEFT JOIN orders o ON o.id = i.order_id
+        WHERE i.id = $1`,
+      [invoiceId],
+    );
+
+    const row = ceiling.rows[0];
+    if (row && row.order_id) {
+      const grandTotal = Number(row.grand_total || 0);
+      const settled = ["paid", "completed"].includes(
+        String(row.order_payment_status || "").toLowerCase(),
+      );
+      // Identical to the target reconcile computes. A settled order closes the
+      // bill on the BILL's total, because the two differ by a rupee or so once
+      // GST is worked out and settling on the order's figure would leave a few
+      // paise owing forever.
+      const target = settled
+        ? grandTotal
+        : Math.min(Number(row.amount_paid || 0), grandTotal);
+      const room = Number((target - Number(row.already || 0)).toFixed(2));
+
+      if (room <= 0) return null;
+      if (toRecord > room) toRecord = room;
+    }
 
     const result = await dbClient.query(
       `INSERT INTO payments (
         invoice_id, amount, payment_method, transaction_id, payment_reference, remarks
       ) VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *`,
-      [invoiceId, amount, paymentMethod, transactionId || null, paymentReference || null, remarks || null]
+      [invoiceId, toRecord, paymentMethod, transactionId || null, paymentReference || null, remarks || null]
     );
 
     return result.rows[0];

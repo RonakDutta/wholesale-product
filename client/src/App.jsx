@@ -64,6 +64,7 @@ const EditProduct = lazy(() => import("./pages/dashboard/EditProduct"));
 const Orders = lazy(() => import("./pages/dashboard/Orders"));
 const Promotions = lazy(() => import("./pages/dashboard/Promotions"));
 const Settings = lazy(() => import("./pages/dashboard/Settings"));
+const PaymentSetup = lazy(() => import("./pages/dashboard/PaymentSetup"));
 const Parties = lazy(() => import("./pages/dashboard/Parties"));
 const PartyDetail = lazy(() => import("./pages/dashboard/PartyDetail"));
 const PartyStatement = lazy(() => import("./pages/dashboard/PartyStatement"));
@@ -190,6 +191,10 @@ const router = createBrowserRouter([
       { path: "messages", element: <Messages /> },
       { path: "messages/:vendorId", element: <Messages /> },
       { path: "settings", element: <Settings /> },
+      // Getting set up to take card payments. Until this is done a buyer's
+      // card payment would land in the platform's account, so it is not
+      // offered and he pays by UPI instead.
+      { path: "settings/payments", element: <PaymentSetup /> },
       // Owner only, and the server refuses an employee outright.
       { path: "staff", element: <Staff /> },
     ],

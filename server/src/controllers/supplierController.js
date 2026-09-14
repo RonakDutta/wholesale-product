@@ -141,10 +141,7 @@ exports.getSupplierById = async (req, res) => {
         [id, wholesalerId],
       ),
       pool.query(
-        `SELECT id, amount, method, paid_on, note, purchase_id,
-                ${(await invoiceRepository.schemaExtras()).has_supplier_pay_details
-                  ? "reference"
-                  : "NULL"} AS reference
+        `SELECT id, amount, method, paid_on, note, purchase_id
            FROM supplier_payments
           WHERE supplier_id = $1 AND wholesaler_id = $2
           ORDER BY paid_on DESC, created_at DESC
@@ -203,90 +200,7 @@ const supplierFields = (body) => ({
   address: clean(body.address),
   gstin: clean(body.gstin) ? clean(body.gstin).toUpperCase() : null,
   notes: clean(body.notes),
-  upiId: clean(body.upiId ?? body.upi_id),
-  bankAccountName: clean(body.bankAccountName ?? body.bank_account_name),
-  bankAccountNumber: clean(body.bankAccountNumber ?? body.bank_account_number),
-  bankIfsc: clean(body.bankIfsc ?? body.bank_ifsc)
-    ? clean(body.bankIfsc ?? body.bank_ifsc).toUpperCase()
-    : null,
 });
-
-/** Whether the pay-details migration has been run. */
-const hasPayDetails = async () =>
-  Boolean((await invoiceRepository.schemaExtras()).has_supplier_pay_details);
-
-/**
- * A VPA is `something@handle`. Shape only, and deliberately loose.
- *
- * There is no way to check a VPA exists without attempting a payment, and
- * handles are added all the time, so a tight allow-list of banks would refuse
- * real addresses. What this does catch is the common slip: a phone number or
- * an account number typed into the UPI box with no @ in it at all, which
- * would otherwise build a payment intent that silently fails in his UPI app
- * with nothing to say why.
- */
-const badUpiId = (vpa) => {
-  if (!vpa) return null;
-  if (!/^[a-zA-Z0-9.\-_]{2,64}@[a-zA-Z][a-zA-Z0-9.\-_]{1,30}$/.test(vpa)) {
-    return "That does not look like a UPI ID. It has an @ in it, like ramesh@okhdfcbank.";
-  }
-  return null;
-};
-
-/**
- * An IFSC is four letters, a zero, then six more characters. That is the
- * published format and it can be checked offline, so a mistyped one is caught
- * here rather than by a failed transfer.
- */
-const badIfsc = (ifsc) => {
-  if (!ifsc) return null;
-  if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
-    return "That does not look like an IFSC code. It is 11 characters, like HDFC0001234.";
-  }
-  return null;
-};
-
-/**
- * Checks the three pay fields together, and refuses them outright before the
- * migration rather than dropping them.
- *
- * Same asymmetry as the customer's state: a wholesaler told his supplier's
- * bank details saved when they were not will pay the wrong person later. But
- * the supplier form sends every field including the empty ones, so only an
- * actual value is refused.
- */
-const payDetailsProblem = async (fields) => {
-  const supplied =
-    fields.upiId || fields.bankAccountName || fields.bankAccountNumber || fields.bankIfsc;
-  if (!(await hasPayDetails())) {
-    return supplied
-      ? {
-          status: 503,
-          body: {
-            code: "SUPPLIER_PAY_DETAILS_NOT_SET_UP",
-            message:
-              "Supplier payment details have not been set up on this database yet. Run wholesale3_supplier_payment_details.sql.",
-          },
-        }
-      : null;
-  }
-  const problem = badUpiId(fields.upiId) || badIfsc(fields.bankIfsc);
-  if (problem) return { status: 400, body: { message: problem } };
-
-  // An account number without the IFSC cannot be paid to, and an IFSC without
-  // an account number names a branch and nobody in it. Either alone is a
-  // half-entered detail that looks complete on the screen.
-  if (Boolean(fields.bankAccountNumber) !== Boolean(fields.bankIfsc)) {
-    return {
-      status: 400,
-      body: {
-        message:
-          "A bank account needs both the account number and the IFSC code, or neither.",
-      },
-    };
-  }
-  return null;
-};
 
 /**
  * A GSTIN is fifteen characters and its first two are a state code. Checked
@@ -322,17 +236,11 @@ exports.createSupplier = async (req, res) => {
   try {
     if (!(await purchasesReady(res))) return;
 
-    const payProblem = await payDetailsProblem(fields);
-    if (payProblem) return res.status(payProblem.status).json(payProblem.body);
-    const withPay = await hasPayDetails();
-
     const result = await pool.query(
       `INSERT INTO suppliers
          (wholesaler_id, name, business_name, phone, city, address, gstin, notes,
-          opening_balance, opening_balance_on
-          ${withPay ? ", upi_id, bank_account_name, bank_account_number, bank_ifsc" : ""})
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::date
-          ${withPay ? ", $11, $12, $13, $14" : ""})
+          opening_balance, opening_balance_on)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::date)
        RETURNING *`,
       [
         wholesalerId,
@@ -345,14 +253,6 @@ exports.createSupplier = async (req, res) => {
         fields.notes,
         opening.amount,
         opening.on,
-        ...(withPay
-          ? [
-              fields.upiId,
-              fields.bankAccountName,
-              fields.bankAccountNumber,
-              fields.bankIfsc,
-            ]
-          : []),
       ],
     );
 
@@ -393,10 +293,6 @@ exports.updateSupplier = async (req, res) => {
   try {
     if (!(await purchasesReady(res))) return;
 
-    const payProblem = await payDetailsProblem(fields);
-    if (payProblem) return res.status(payProblem.status).json(payProblem.body);
-    const withPay = await hasPayDetails();
-
     const result = await pool.query(
       `UPDATE suppliers SET
          name          = $3,
@@ -409,12 +305,6 @@ exports.updateSupplier = async (req, res) => {
          status        = COALESCE($10, status),
          opening_balance    = $11,
          opening_balance_on = $12::date,
-         ${withPay
-           ? `upi_id              = $13,
-              bank_account_name   = $14,
-              bank_account_number = $15,
-              bank_ifsc           = $16,`
-           : ""}
          updated_at    = CURRENT_TIMESTAMP
        WHERE id = $1 AND wholesaler_id = $2
        RETURNING *`,
@@ -431,14 +321,6 @@ exports.updateSupplier = async (req, res) => {
         status,
         opening.amount,
         opening.on,
-        ...(withPay
-          ? [
-              fields.upiId,
-              fields.bankAccountName,
-              fields.bankAccountNumber,
-              fields.bankIfsc,
-            ]
-          : []),
       ],
     );
 
@@ -474,7 +356,7 @@ exports.updateSupplier = async (req, res) => {
 exports.recordSupplierPayment = async (req, res) => {
   const wholesalerId = businessId(req);
   const { id } = req.params;
-  const { amount, method, paidOn, note, purchaseId, reference } = req.body;
+  const { amount, method, paidOn, note, purchaseId } = req.body;
 
   const amountPaise = toPaise(amount);
   if (!Number.isFinite(amountPaise) || amountPaise <= 0) {
@@ -543,18 +425,10 @@ exports.recordSupplierPayment = async (req, res) => {
       }
     }
 
-    // The bank's reference for the payment, when the column is there. Dropped
-    // silently before the migration rather than refused, unlike the supplier's
-    // bank details: losing a UTR costs a reconciliation, losing an account
-    // number means paying the wrong person next time.
-    const withReference = await hasPayDetails();
-
     const result = await client.query(
       `INSERT INTO supplier_payments
-         (wholesaler_id, supplier_id, purchase_id, amount, method, paid_on, note
-          ${withReference ? ", reference" : ""})
-       VALUES ($1, $2, $3, $4, $5, COALESCE($6::date, CURRENT_DATE), $7
-          ${withReference ? ", $8" : ""})
+         (wholesaler_id, supplier_id, purchase_id, amount, method, paid_on, note)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6::date, CURRENT_DATE), $7)
        RETURNING *`,
       [
         wholesalerId,
@@ -564,7 +438,6 @@ exports.recordSupplierPayment = async (req, res) => {
         method || "cash",
         clean(paidOn),
         clean(note),
-        ...(withReference ? [clean(reference)] : []),
       ],
     );
 

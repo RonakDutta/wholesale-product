@@ -35,7 +35,7 @@ cd server && npm run migrate
 | `wholesale3_master_settings.sql` | Platform formatting: decimals, digit grouping, currency, date format | run 14 Sept |
 | `wholesale3_opening_balance.sql` | What a customer or supplier already owed before this product | run 14 Sept |
 | `wholesale3_party_state.sql` | The customer's declared state, which decides CGST plus SGST against IGST | **NOT RUN** |
-| `wholesale3_supplier_payment_details.sql` | A supplier's UPI ID and bank details, and the reference on a payment | **NOT RUN** |
+| `wholesale3_razorpay_route.sql` | Linked accounts, transfers and webhook deliveries, so a buyer's money reaches the wholesaler | **NOT RUN** |
 
 **Two outstanding as of 14 Sept.**
 
@@ -45,13 +45,11 @@ everything else about a customer saves exactly as before. Bills go on being
 decided by the GST number and then the city, which is what they did
 yesterday.
 
-`wholesale3_supplier_payment_details.sql`. Until it is run, entering a UPI ID
-or bank details on a supplier answers `503
-SUPPLIER_PAY_DETAILS_NOT_SET_UP`, the Pay by UPI panel offers to add one and
-nothing else, and a payment records without its reference. Saving a supplier
-without pay details is untouched. Both guards are asymmetric on purpose: only
-an actual value is refused, because the forms send every field including the
-empty ones.
+`wholesale3_razorpay_route.sql` changes nothing on its own. Running it does
+NOT alter how any existing payment behaves: without an activated linked
+account no transfer is attached, and the payment is taken exactly as it was
+before. It only opens the Taking card payments screen so a wholesaler can
+start onboarding.
 
 Restart the server after running any of them. The schema probes are cached per
 process, so a running server goes on believing a table is absent, which is what
@@ -142,70 +140,129 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 
 ## Done
 
-### 14 Sept 2026, paying a supplier by UPI
+### 14 Sept 2026, signing in on a second phone
 
-Asked whether Razorpay sends money to the person being bought from. It does
-not: every rupee lands in the ONE account whose keys are in the server env.
-Worth writing down, because the trade is the reverse of what it looks like.
+Reported: signed in on one device, then on another phone it said "Signed in
+successfully" and nothing happened, and a reload was still signed out.
 
-| | Reaches the right person | Verified |
-|---|---|---|
-| UPI QR | Yes, buyer scans the wholesaler's own `upi_id`, bank to bank | No |
-| Razorpay | No, lands in the platform account | Yes |
+Nothing was blocking the second device. Auth is a stateless JWT with no
+session table and no revocation, the middleware only verifies the signature,
+and sockets use a room per user which holds many connections. There is no
+code anywhere that could refuse a second sign in.
 
-So making Razorpay primary fixed the verification and broke the recipient.
-Route is what gets both, and that is the next piece.
+**The token was being deleted a moment after it was granted.** `fetchUser` in
+AuthContext caught EVERY failure of `GET /api/auth/me` and called `logout()`,
+which does `localStorage.removeItem("token")`. It did not rethrow. So
+`login()` resolved as though it had worked, Login.jsx line 115 announced
+"Signed in successfully", navigation ran, and the token was already gone. The
+reload afterwards found nothing.
 
-**The purchase side is a different problem, and Razorpay Checkout cannot do
-it.** Checkout collects money INTO an account. Paying a supplier is money
-OUT, which is RazorpayX payouts: the wholesaler's own funded balance, the
-supplier's verified bank details, and a supplier who has consented. A
-supplier here is a private row in one wholesaler's book with no login, no
-account and no KYC. Pushing money at a name and a phone number somebody typed
-into a private ledger is exactly what that product demands more than this
-table has, and rightly.
+Any failure did it: a 500, or a timeout, and axios gives up after 10 seconds.
+Which is why it showed up on the second phone and not the first. The phone
+was on mobile data; the laptop was not.
 
-**BUILT: a UPI intent, which sends the money to the right person and holds
-none of it.** `wholesale3_supplier_payment_details.sql` adds `upi_id` and
-bank account, name and IFSC to `suppliers`, and `reference` to
-`supplier_payments`. His page builds a `upi://pay` intent with the payee and
-the amount filled in: a button that opens his UPI app on a phone, a QR to
-scan from a laptop. He pays directly, comes back, pastes the UTR, and it
-records through the same endpoint the manual form uses.
+There was a second fault making it likelier and intermittent. `login()`
+awaited `fetchUser()` AND set the token, which fired the `[token]` effect,
+which called `fetchUser()` again. Two concurrent lookups, and either one
+failing wiped the token the other had just validated.
 
-What it saves is the part that goes wrong: reading a VPA off an old bill,
-retyping the amount, then retyping it a second time into the book.
+Fixed:
+- only a **401** logs anybody out. That is the one answer that means the
+  token is genuinely no good. A network failure or a 5xx keeps the token, so
+  a reload picks straight back up, and sets an `unreachable` flag so a screen
+  can say "could not reach the server" instead of pretending to be signed out
+- one lookup, not two, claimed through a ref
+- `login()` now throws when the account could not be loaded, so the sign in
+  screen cannot announce success for a session that did not start. Login.jsx
+  tells that apart from a wrong password, because sending somebody off to
+  reset a password that was never wrong is its own waste of an evening
 
-The link is built in the browser here, which is the opposite of the rule
-everywhere a BUYER pays. That rule exists because a browser naming an amount
-for somebody else's money is a discount coupon. This is the wholesaler's own
-money going to his own supplier and part payment is ordinary trade, so the
-outstanding balance is a default rather than a rule and there is nothing for
-a server to enforce.
+Verified in a browser against a mock that fails `/api/auth/me` on demand.
+With the fix: a 500 keeps the token, shows an honest error, no false success,
+and survives a reload; the happy path signs in and navigates; a real 401
+clears the token and stays on the sign in screen. The before-state was read
+off the code rather than demonstrated, because the throwaway mock would not
+rebind its port to switch modes.
 
-Validation is shape only, and offline: a VPA needs an `@` (a phone number in
-that box builds an intent that fails silently inside his UPI app), an IFSC is
-four letters, a zero and six more, and an account number without an IFSC is
-refused rather than half saved. Nothing checks that any of it exists, because
-nothing can without attempting a payment.
+### 14 Sept 2026, Razorpay Route and the KYC plumbing
 
-`URLSearchParams` writes a space as `+`, which is only a space in form
-encoding. UPI apps that decode naively showed the payee as "Arvind+Mills", so
-the link rewrites those to `%20`. That is the name he checks before pressing
-pay. Caught by reading the generated link in a browser, not from the code.
+Asked whether we could KYC everyone who joins and then have Razorpay handle
+everything, ordering and the purchase page alike. Half of that is exactly
+right and is now built. The other half cannot work, for a reason worth
+writing down.
 
-**The payment stays self declared and says so.** Nothing can confirm a
-peer-to-peer UPI transfer from a web app: the two banks settle it and no
-third party is told. The panel says "nothing here checks with the bank" in as
-many words. That is a much smaller problem here than on the buyer side,
-because the man recording the payment is the man who made it and has nobody
-to fool but himself. The UTR gives a person a way to reconcile against a
-statement later.
+**KYC is not ours to build, and that is the point.** What is buildable is the
+plumbing: collect what Razorpay asks for, submit it, store the account id,
+reflect the status, gate on it. The verification itself, that a PAN is real
+and a bank account belongs to that business, is Razorpay's and their banking
+partner's. A marketplace that self-certified its own sellers is how buyers'
+money goes missing.
 
-`scripts/supplier_pay_check.js`, 24 checks, including the pre-migration half
-in a child process. Verified in a browser: the generated intent carries the
-right payee and amount, follows the amount as it is edited, the QR renders,
-and there is no overflow at 390px.
+**Why it does not reach the purchase page.** KYC of a wholesaler lets him
+RECEIVE money. The purchase page is him paying out, which is the opposite
+direction and a different Razorpay product. But the real blocker is not KYC,
+it is that there is nobody to KYC: a supplier is a private row in one
+wholesaler's book, with no login, no account and no consent. He never joins,
+so "KYC everyone who joins" never reaches him.
+
+And if he DID join, the right flow is not the purchase book at all: the
+wholesaler would place an order with him, which Route already covers. The
+purchase book exists precisely for the mills that will never sign up, and
+those keep the UPI intent built earlier today.
+
+**BUILT.** `wholesale3_razorpay_route.sql` adds `razorpay_account_id` and a
+`razorpay_kyc_status` to `wholesaler_profiles`, plus `razorpay_transfers` and
+`razorpay_webhook_events`. A Taking card payments screen at
+`/seller/settings/payments` collects the business details, PAN, registered
+address and settlement bank account, creates the linked account, adds the
+stakeholder, requests the route product and submits the bank account.
+
+The status is stored rather than inferred, because a linked account exists
+long before it can be paid into. `mapAccountStatus` reads any state it does
+not recognise as `under_review`, never `activated`: a new state name
+appearing in Razorpay's API must not be read as permission to move money.
+
+**The webhook, which Route makes mandatory rather than optional.** Settlement
+used to depend entirely on the buyer's browser posting back to `/verify`.
+That was survivable while every rupee sat in one account a person could
+reconcile; with Route the money has already moved to the wholesaler while the
+order still says unpaid. `POST /api/webhooks/razorpay` verifies
+`X-Razorpay-Signature` over the RAW body, which is why it is mounted in
+app.js ahead of `express.json`: re-serialising a parsed object changes key
+order and spacing, so parsing first would make every genuine webhook look
+forged. Deliveries are recorded before they are acted on and the unique index
+on `event_id` makes Razorpay's retries harmless.
+
+**A design I got wrong and corrected.** The first cut refused checkout
+outright for any wholesaler not activated, reasoning that money the platform
+cannot forward should not be taken. That broke thirteen checks in
+`razorpay_check`, and the failure was right: running a migration is not
+allowed to break every existing seller. It was also solving a problem it had
+invented. The danger is a transfer to an UNACTIVATED account, which Razorpay
+holds with nobody able to release it; simply not attaching one leaves the
+payment exactly as good as it was yesterday. So the rule is narrow: never
+attach a transfer to an account that cannot receive it.
+
+**Commission defaults to zero**, in `master_settings.platform_commission_percent`.
+A plausible five per cent defaulted in would be money taken from wholesalers
+that nobody agreed to. The stray paisa on a split is rounded DOWN, so the
+platform absorbs it and a transfer can never exceed what was captured.
+
+`scripts/route_check.js`, 27 checks. Razorpay is stubbed at the transport, so
+this proves we call it correctly and act on the answer correctly, not that
+their API behaves as documented. **The first live call is still the real
+test**, exactly as with `createOrder`.
+
+Caught by running it: `$2` used both as a column value and inside a `CASE`
+comparison left Postgres unable to infer the parameter type, and every status
+write failed with "text versus character varying". Cast explicitly.
+
+**Still not done, and needed before real money:** Route requires your Razorpay
+account to have it enabled, and creating linked accounts by API needs Partner
+access; without that they are created by hand in the dashboard and only the
+id is stored here. `RAZORPAY_WEBHOOK_SECRET` must be set or the webhook
+endpoint refuses everything, deliberately, since an unverifiable endpoint
+that moves money must not be an open one.
 
 ### 14 Sept 2026, invented data, the customer's state, and the invoice format
 
@@ -1280,6 +1337,42 @@ numbering; shop prices treated as tax inclusive.
 
 Taken off the master overview screen and put here, because the screen is for
 doing the work and this is the reasoning behind it.
+
+### One device at a time, asked for 14 Sept. NOT BUILT.
+
+Wanted: an account signed in on one device, or one IP, at a time. A second
+sign in ends the first.
+
+Nothing today does this or can. Auth is a stateless JWT signed at login with
+a 30 day expiry: there is no session table, no record of who is signed in
+where, and no way to revoke a token once issued. The server cannot tell one
+device from another and cannot reach out to end anything. Sockets use a room
+per user, `user:<id>`, which deliberately holds many connections at once.
+
+What it would take, roughly, and the decisions inside it:
+
+- **A session table.** `user_id`, a session id, device label, IP, issued and
+  last seen. The JWT carries the session id, and the auth middleware checks
+  it is still live on every request. That turns every authenticated request
+  into a database read, which is the real cost: today it is pure signature
+  arithmetic and touches nothing.
+- **What "one device" means.** A new sign in either kicks the old session or
+  is itself refused. Kicking is friendlier and is what banking apps do;
+  refusing strands somebody whose phone is lost. Kicking needs a socket push
+  so the old device finds out rather than discovering it on its next tap.
+- **IP is the wrong key.** Two staff on one shop wifi share an IP, and a
+  phone on mobile data changes IP as it moves between towers. Locking to an
+  IP would sign a wholesaler out while he walked across his own warehouse.
+  Device, meaning a session row, is the thing to key on.
+- **Staff accounts complicate it.** An owner and three employees are separate
+  users, so this is per user and not per business. Worth confirming that is
+  what is wanted before building it.
+- **It interacts with the 14 Sept sign in fix.** That fix deliberately keeps
+  a token alive through a network failure rather than treating an
+  unreachable server as a dead session. A revocation check must not undo
+  that: "the server did not answer" and "this session was ended" have to
+  stay different answers, or flaky mobile data starts signing people out
+  again, which is the exact bug that was just removed.
 
 ### Why our own checkout window and not Razorpay's?
 

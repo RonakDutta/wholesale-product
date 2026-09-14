@@ -4,6 +4,7 @@ import { ArrowLeft, Plus, TriangleAlert } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
 import { money, dateLabel } from "../../utils/money";
+import SupplierUpiPay from "../../components/SupplierUpiPay";
 
 /**
  * One supplier: what he has billed, what has been paid, and what is left.
@@ -101,6 +102,31 @@ const SupplierDetail = () => {
       });
       toast.success("Payment recorded.");
       setPayment((prev) => ({ ...prev, amount: "", note: "", purchaseId: "" }));
+      await load();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Could not record that payment.");
+    }
+    setPaying(false);
+  };
+
+  /**
+   * The same write as the form below, from the UPI panel.
+   *
+   * Goes through the one endpoint rather than a second path of its own: what
+   * a payment does to a balance is decided in one place, and a UPI payment is
+   * an ordinary payment that happens to know its own reference. Dated today,
+   * because he has just made it.
+   */
+  const recordUpiPayment = async ({ amount, reference, method }) => {
+    setPaying(true);
+    try {
+      await api.post(`/api/suppliers/${id}/payments`, {
+        amount,
+        method,
+        reference,
+        paidOn: new Date().toISOString().slice(0, 10),
+      });
+      toast.success("Payment recorded.");
       await load();
     } catch (error) {
       toast.error(error.response?.data?.message || "Could not record that payment.");
@@ -214,7 +240,17 @@ const SupplierDetail = () => {
         </p>
       </div>
 
-      {/* Record a payment */}
+      {/* Pay him, then record it. Above the manual form because it is the
+          commoner act: most payments to a mill are made now, not entered
+          afterwards from a diary. */}
+      <SupplierUpiPay
+        supplier={supplier}
+        owed={Math.max(Number(supplier.balance || 0), 0)}
+        onRecord={recordUpiPayment}
+        busy={paying}
+      />
+
+      {/* Record a payment made some other way, or on some other day. */}
       <form
         onSubmit={pay}
         className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
@@ -410,6 +446,13 @@ const SupplierDetail = () => {
                     {entry.purchase_id ? "" : " · on account"}
                     {entry.note ? ` · ${entry.note}` : ""}
                   </p>
+                  {/* The bank's own reference, so this row can be found in a
+                      statement. Not capitalised: a UTR is a UTR. */}
+                  {entry.reference && (
+                    <p className="truncate font-mono text-[11px] text-slate-400">
+                      {entry.reference}
+                    </p>
+                  )}
                 </div>
                 <p className="shrink-0 text-sm font-black text-espresso">
                   ₹{money(entry.amount, { document: true })}

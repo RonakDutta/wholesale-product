@@ -4,7 +4,7 @@ import { Download, Truck } from "lucide-react";
 import api from "../../utils/axios";
 import { downloadFile } from "../../utils/download";
 import { toast } from "sonner";
-import { money, dateLabel } from "../../utils/money";
+import { rupees, dateLabel } from "../../utils/money";
 
 const FILTERS = [
   { value: "", label: "All" },
@@ -129,39 +129,48 @@ const Challans = () => {
               return (
                 <li
                   key={c.id}
-                  className="flex items-center gap-4 px-4 py-4 sm:px-6"
+                  className="flex items-center gap-4 px-4 py-4 transition-colors hover:bg-slate-50 sm:px-6"
                 >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-espresso">
-                      {c.recipient_name || "Customer"}
-                    </p>
-                    <p className="truncate text-xs font-medium text-slate-500">
-                      {c.challan_number} · {dateLabel(c.issue_date)}
-                      {c.sale_number ? ` · ${c.sale_number}` : ""}
-                      {c.order_number ? ` · ${c.order_number}` : ""}
-                    </p>
-                  </div>
-
-                  <span
-                    className={`hidden shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider sm:inline ${
-                      c.invoice_id
-                        ? "bg-emerald-50 text-emerald-700"
-                        : "bg-amber-50 text-amber-700"
-                    }`}
+                  {/* The row opens the challan; the PDF button sits OUTSIDE
+                      the link rather than inside it, because a button nested
+                      in an anchor is both invalid and a coin toss as to which
+                      one a tap lands on. */}
+                  <Link
+                    to={`/seller/challans/${c.id}`}
+                    className="flex min-w-0 flex-1 items-center gap-4"
                   >
-                    {c.invoice_id ? "Billed" : "Not billed"}
-                  </span>
-
-                  <div className="w-28 shrink-0 text-right">
-                    <p className="text-sm font-black text-espresso">
-                      ₹{money(c.total_value)}
-                    </p>
-                    {due > 0 && (
-                      <p className="text-[11px] font-bold text-clay">
-                        ₹{money(due)} due
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-espresso">
+                        {c.recipient_name || "Customer"}
                       </p>
-                    )}
-                  </div>
+                      <p className="truncate text-xs font-medium text-slate-500">
+                        {c.challan_number} · {dateLabel(c.issue_date)}
+                        {c.sale_number ? ` · ${c.sale_number}` : ""}
+                        {c.order_number ? ` · ${c.order_number}` : ""}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`hidden shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider sm:inline ${
+                        c.invoice_id
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-amber-50 text-amber-700"
+                      }`}
+                    >
+                      {c.invoice_id ? "Billed" : "Not billed"}
+                    </span>
+
+                    <div className="w-28 shrink-0 text-right">
+                      <p className="text-sm font-black text-espresso">
+                        {rupees(c.total_value)}
+                      </p>
+                      {due > 0 && (
+                        <p className="text-[11px] font-bold text-clay">
+                          {rupees(due)} due
+                        </p>
+                      )}
+                    </div>
+                  </Link>
 
                   <button
                     onClick={() => download(c)}

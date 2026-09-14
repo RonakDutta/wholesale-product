@@ -57,6 +57,7 @@ const MasterStates = lazy(() => import("./pages/master/lists").then((m) => ({ de
 const MasterUnits = lazy(() => import("./pages/master/lists").then((m) => ({ default: m.MasterUnits })));
 const MasterTaxRates = lazy(() => import("./pages/master/lists").then((m) => ({ default: m.MasterTaxRates })));
 const MasterHsn = lazy(() => import("./pages/master/lists").then((m) => ({ default: m.MasterHsn })));
+const MasterSettings = lazy(() => import("./pages/master/MasterSettings"));
 const MyProducts = lazy(() => import("./pages/dashboard/MyProducts"));
 const AddProduct = lazy(() => import("./pages/dashboard/AddProduct"));
 const EditProduct = lazy(() => import("./pages/dashboard/EditProduct"));
@@ -74,6 +75,12 @@ const MoneyBreakdown = lazy(() => import("./pages/dashboard/MoneyBreakdown"));
 const SellerOrderDetail = lazy(() => import("./pages/dashboard/SellerOrderDetail"));
 const Staff = lazy(() => import("./pages/dashboard/Staff"));
 const Challans = lazy(() => import("./pages/dashboard/Challans"));
+// The purchase side: goods coming in, who they came from, what is owed.
+const Purchases = lazy(() => import("./pages/dashboard/Purchases"));
+const RecordPurchase = lazy(() => import("./pages/dashboard/RecordPurchase"));
+const PurchaseDetail = lazy(() => import("./pages/dashboard/PurchaseDetail"));
+const Suppliers = lazy(() => import("./pages/dashboard/Suppliers"));
+const SupplierDetail = lazy(() => import("./pages/dashboard/SupplierDetail"));
 
 const SellerFallback = () => (
   <div className="flex min-h-dvh items-center justify-center bg-slate-100">
@@ -143,6 +150,14 @@ const router = createBrowserRouter([
       { path: "sales/new", element: <RecordSale /> },
       { path: "sales/:id", element: <SaleDetail /> },
       { path: "sales/:id/edit", element: <RecordSale /> },
+      // Purchases. Same ordering rule as sales: "new" before ":id" so the
+      // word is not read as a purchase id.
+      { path: "purchases", element: <Purchases /> },
+      { path: "purchases/new", element: <RecordPurchase /> },
+      { path: "purchases/:id", element: <PurchaseDetail /> },
+      { path: "purchases/:id/edit", element: <RecordPurchase /> },
+      { path: "suppliers", element: <Suppliers /> },
+      { path: "suppliers/:id", element: <SupplierDetail /> },
       // The rate list is now one list with the shop listings. The old address
       // keeps working so a bookmark or an old link does not land on "not
       // found".
@@ -192,6 +207,7 @@ const router = createBrowserRouter([
       { path: "units", element: <MasterUnits /> },
       { path: "tax-rates", element: <MasterTaxRates /> },
       { path: "hsn", element: <MasterHsn /> },
+      { path: "settings", element: <MasterSettings /> },
     ],
   },
   { path: "/dashboard", element: <Navigate to="/seller" replace /> },

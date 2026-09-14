@@ -95,7 +95,32 @@ const refundedBack = (partyRef) => REFUNDED_BACK_SQL.replace("%REF%", partyRef);
  * `partyRef` is how the surrounding query names the party's id column, so the
  * same fragment works whether the caller wrote `pt` or `p`.
  */
-const balanceExpression = ({ hasOrderParty, hasBridge, partyRef = "pt.id" }) => `
+/**
+ * What was already owed before this product.
+ *
+ * A wholesaler who has traded for twenty years does not start with an empty
+ * khata, and until this column existed his only ways to say so were entering a
+ * fake sale, which puts goods in his books he never sold and tax on a bill he
+ * never raised, or not using the product. Taken from Busy's Account master,
+ * which carries Op. Bal on every party.
+ *
+ * Signed rather than a Dr/Cr flag: positive means he owed you. See the
+ * migration for why one column beats a number and a flag.
+ *
+ * Guarded, because the column arrives with wholesale3_opening_balance.sql and
+ * naming it before that has been run takes down the customer list, the
+ * overview and every statement at once. Zero is the honest answer meanwhile,
+ * and it is what every one of those screens showed before.
+ */
+// TRAILING plus, not leading. It is the first term in the expression, so a
+// leading one produced "+ X  Y" and every balance query died on a syntax error.
+const openingTerm = (hasOpening, ref) =>
+  hasOpening
+    ? `COALESCE((SELECT p2.opening_balance FROM parties p2 WHERE p2.id = ${ref}), 0) +`
+    : "";
+
+const balanceExpression = ({ hasOrderParty, hasBridge, hasOpening = false, partyRef = "pt.id" }) => `
+  ${openingTerm(hasOpening, partyRef)}
   COALESCE((
     SELECT SUM(s.total) FROM sales s
      WHERE s.party_id = ${partyRef} AND s.status IN ${BILLED_SALE_STATUSES}
@@ -174,18 +199,46 @@ const totalsExpression = ({ hasOrderParty, hasBridge, since = null }) => {
  *
  * Scoped by wholesaler_id. Takes $1 as the wholesaler.
  */
-const collectionTotals = ({ hasOrderParty, hasBridge }) => `
+const collectionTotals = ({ hasOrderParty, hasBridge, hasOpening = false }) => `
   SELECT
     COALESCE(SUM(GREATEST(dues.balance, 0)), 0) AS owed_to_you,
     COALESCE(SUM(GREATEST(-dues.balance, 0)), 0) AS owed_by_you
   FROM parties p
   JOIN LATERAL (
-    SELECT ${balanceExpression({ hasOrderParty, hasBridge, partyRef: "p.id" })} AS balance
+    SELECT ${balanceExpression({ hasOrderParty, hasBridge, hasOpening, partyRef: "p.id" })} AS balance
   ) dues ON TRUE
   WHERE p.wholesaler_id = $1
 `;
 
+/**
+ * Does this database carry the opening balance column yet?
+ *
+ * Probed once and cached, like every other schema check here. Every caller of
+ * balanceExpression has to pass the answer through, because a balance that
+ * includes the opening figure on one screen and not on another is exactly the
+ * disagreement this file exists to prevent.
+ */
+let openingReady = null;
+const hasOpeningBalance = async (db) => {
+  if (openingReady !== null) return openingReady;
+  try {
+    const { rows } = await db.query(
+      `SELECT EXISTS (SELECT 1 FROM information_schema.columns
+         WHERE table_name = 'parties' AND column_name = 'opening_balance') AS yes`,
+    );
+    openingReady = rows[0].yes === true;
+  } catch {
+    openingReady = false;
+  }
+  return openingReady;
+};
+
+// Tests build a fresh database per run, so they need to forget.
+const resetOpeningBalance = () => { openingReady = null; };
+
 module.exports = {
+  hasOpeningBalance,
+  resetOpeningBalance,
   ORDER_NOT_OWED,
   NOT_OWED_SQL,
   BILLED_SALE_STATUSES,

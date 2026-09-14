@@ -8,6 +8,7 @@ import {
   Percent,
   Ruler,
   ShieldCheck,
+  SlidersHorizontal,
 } from "lucide-react";
 import api from "../utils/axios";
 import Wordmark from "../components/Wordmark";
@@ -33,10 +34,14 @@ import Wordmark from "../components/Wordmark";
  * WHAT IS NOT HERE, deliberately: a wholesaler's invoice prefix, his due days,
  * his default tax rate, his terms. Those are his and they stay on his own
  * settings screen. Moving them here would mean one wholesaler changing his
- * prefix changed everybody's. What belongs here is the layer above them: the
- * Rule 46(b) constraints, the defaults a new wholesaler starts from, the
- * number formatting. Those come later, and deliberately after the money()
- * helpers are collapsed, or a setting lands that half the product ignores.
+ * prefix changed everybody's.
+ *
+ * What IS here is the layer above them, on the Settings screen: number and
+ * date formatting, the Rule 46(b) constraints shown read only because they are
+ * law, and the defaults a new wholesaler starts from. That screen deliberately
+ * waited until the scattered money() helpers were collapsed into
+ * utils/money.js, because a formatting setting that half the product ignores
+ * is worse than none.
  */
 
 const LINKS = [
@@ -45,6 +50,7 @@ const LINKS = [
   { to: "/master/units", label: "Units", icon: Ruler },
   { to: "/master/tax-rates", label: "Tax rates", icon: Percent },
   { to: "/master/hsn", label: "HSN codes", icon: Hash },
+  { to: "/master/settings", label: "Settings", icon: SlidersHorizontal },
 ];
 
 /**
@@ -106,16 +112,30 @@ const MasterLayout = () => {
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    // h-dvh with overflow hidden, exactly as the seller shell does it. It was
+    // min-h-screen, so the PAGE grew and the whole thing scrolled, taking the
+    // sidebar up off the top with the content. Only the content pane scrolls
+    // now, and the sidebar stays put.
+    <div className="flex h-dvh overflow-hidden bg-slate-50">
       <aside className="hidden w-64 shrink-0 flex-col bg-espresso text-cream lg:flex">
-        <div className="px-6 py-6">
-          <Wordmark />
-          <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-cream/50">
-            Platform master
-          </p>
+        {/* Drawn exactly as the seller sidebar draws it. Wordmark leaves size
+            and weight to the caller, which is right where the callers are
+            genuinely different, the navbar against the dark sign in panel. Two
+            sidebar headers are not different, and leaving this one bare gave
+            the master area the name in the ambient weight while the seller
+            area had it black and tight: the same product looking like two. */}
+        <div className="flex h-16 shrink-0 items-center px-5">
+          <div>
+            <p className="text-base font-black leading-none tracking-tight">
+              <Wordmark />
+            </p>
+            <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-cream/40">
+              Platform master
+            </p>
+          </div>
         </div>
 
-        <nav className="flex-1 space-y-1 px-3">
+        <nav className="nav-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {LINKS.map((link) => (
             <NavLink
               key={link.to}
@@ -144,10 +164,10 @@ const MasterLayout = () => {
         </div>
       </aside>
 
-      <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* The phone nav. The master screens are lists a person edits sitting
             down, so this is a way across rather than a full second nav. */}
-        <div className="flex gap-2 overflow-x-auto bg-espresso px-4 py-3 lg:hidden">
+        <div className="hide-scrollbar flex shrink-0 gap-2 overflow-x-auto bg-espresso px-4 py-3 lg:hidden">
           {LINKS.map((link) => (
             <NavLink
               key={link.to}
@@ -168,7 +188,7 @@ const MasterLayout = () => {
             below would otherwise show the built in list and look editable
             while nothing saved. */}
         {!state.fromMasters && (
-          <div className="border-b border-amber-200 bg-amber-50 px-6 py-3">
+          <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-6 py-3">
             <p className="text-sm font-bold text-amber-900">
               The master tables are not in this database yet
             </p>
@@ -179,7 +199,7 @@ const MasterLayout = () => {
           </div>
         )}
 
-        <main className="px-4 py-6 sm:px-8">
+        <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-8">
           <Outlet context={{ fromMasters: state.fromMasters }} />
         </main>
       </div>

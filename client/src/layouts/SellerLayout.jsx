@@ -3,6 +3,8 @@ import {
   LayoutDashboard,
   Package,
   ShoppingBag,
+  ShoppingCart,
+  Factory,
   MessageSquare,
   FileText,
   Truck,
@@ -13,10 +15,10 @@ import {
   Menu,
   X,
   Store,
+  Home,
   Users,
   BarChart3,
   Plus,
-  ChevronLeft,
   ShieldCheck,
 } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -46,6 +48,11 @@ const NAV = [
     flag: "MARKETPLACE",
     needs: "orders",
   },
+  // The other direction. Purchases sits next to Sales because they are the
+  // two halves of the same day, and Suppliers next to it because a purchase
+  // is always from somebody, the way a sale is always to somebody.
+  { path: "/seller/purchases", label: "Purchases", icon: ShoppingCart, needs: "purchases" },
+  { path: "/seller/suppliers", label: "Suppliers", icon: Factory, needs: "purchases" },
   { path: "/seller/invoices", label: "Invoices", icon: FileText, needs: "invoices" },
   // Sits under Invoices because it is the other half of the same job: what
   // went out before the bill could be raised.
@@ -187,14 +194,28 @@ const SellerLayout = () => {
         }`}
       >
         <div className="flex h-16 shrink-0 items-center justify-between px-5">
-          <div>
-            <p className="text-base font-black leading-none tracking-tight">
-              <Wordmark />
-            </p>
-            <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-cream/40">
-              Seller Workspace
-            </p>
-          </div>
+          {/* Clicking the name goes home, which is what clicking the name does
+              everywhere. A convenience that costs no room, not the only way
+              across: that is the Home button in the header. */}
+          {FEATURES.MARKETPLACE ? (
+            <Link to="/" className="group" title="Back to the home page">
+              <p className="text-base font-black leading-none tracking-tight transition-opacity group-hover:opacity-80">
+                <Wordmark />
+              </p>
+              <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-cream/40">
+                Seller Workspace
+              </p>
+            </Link>
+          ) : (
+            <div>
+              <p className="text-base font-black leading-none tracking-tight">
+                <Wordmark />
+              </p>
+              <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-cream/40">
+                Seller Workspace
+              </p>
+            </div>
+          )}
           <button
             onClick={() => setIsSidebarOpen(false)}
             className="rounded-lg p-1.5 text-cream/50 transition-colors hover:bg-white/10 hover:text-cream md:hidden"
@@ -204,7 +225,7 @@ const SellerLayout = () => {
           </button>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-4">
+        <nav className="nav-scrollbar flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-4">
           {nav.map((item) => {
             const active = isActive(item);
             const showBadge = item.badge === "unread" && unreadCount > 0;
@@ -266,15 +287,6 @@ const SellerLayout = () => {
               My shop page
             </Link>
           )}
-          {FEATURES.MARKETPLACE && (
-            <Link
-              to="/"
-              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-cream/60 transition-colors hover:bg-white/5 hover:text-cream"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Back to marketplace
-            </Link>
-          )}
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-rose-300 transition-colors hover:bg-rose-500/10 hover:text-rose-200"
@@ -316,15 +328,39 @@ const SellerLayout = () => {
             </div>
           </div>
 
-          {/* Recording a sale is the thing a wholesaler does every day, so it
-              is one tap away from every screen. */}
-          <Link
-            to="/seller/sales/new"
-            className="flex shrink-0 items-center gap-2 rounded-lg bg-espresso px-3 py-2 text-xs font-bold text-cream transition-colors hover:bg-clay"
-          >
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Record sale</span>
-          </Link>
+          <div className="flex shrink-0 items-center gap-2">
+            {/* Out of the workspace to the home page.
+
+                It used to be a full row in the sidebar footer reading "Back to
+                marketplace", which spent a line on naming a surface, sitting
+                next to "My shop page" which sounds like the same thing and is
+                the opposite: that one is his own page as buyers see it.
+
+                Labelled Home, because that is the page it goes to. It was
+                briefly "Buy stock", which was worse: this is the ordinary way
+                out of the dashboard, not an errand, and a button promising a
+                purchase that lands on a home page is a small lie. */}
+            {FEATURES.MARKETPLACE && (
+              <Link
+                to="/"
+                className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:border-clay hover:text-clay"
+                title="Back to the home page"
+              >
+                <Home className="h-4 w-4" />
+                <span className="hidden sm:inline">Home</span>
+              </Link>
+            )}
+
+            {/* Recording a sale is the thing a wholesaler does every day, so it
+                is one tap away from every screen. */}
+            <Link
+              to="/seller/sales/new"
+              className="flex shrink-0 items-center gap-2 rounded-lg bg-espresso px-3 py-2 text-xs font-bold text-cream transition-colors hover:bg-clay"
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Record sale</span>
+            </Link>
+          </div>
         </header>
 
         {/* The boundary belongs here, around the content, not around the whole

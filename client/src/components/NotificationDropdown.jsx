@@ -1,12 +1,27 @@
 import { Link } from "react-router-dom";
 import { useNotifications } from "../context/NotificationContext";
 
-const NotificationDropdown = ({ onClose }) => {
+/**
+ * `box` is where the bell measured this should sit: fixed, in viewport
+ * coordinates, already clamped inside the screen. It used to place itself with
+ * `absolute right-0`, which anchors to the bell rather than to the screen, and
+ * since the bell is not the last icon in the row the panel hung 14px off the
+ * left edge of a phone. See NotificationBell for the measurement.
+ */
+const NotificationDropdown = ({ box, onClose }) => {
   const { notifications, markRead, deleteNotification, markAllRead } =
     useNotifications();
 
   return (
-    <div className="absolute right-0 z-50 mt-2 w-[min(24rem,calc(100vw-2rem))] max-h-[520px] overflow-hidden rounded-2xl border border-sage/20 bg-white shadow-xl">
+    <div
+      style={{
+        position: "fixed",
+        top: box?.top ?? 0,
+        left: box?.left ?? 0,
+        width: box?.width ?? 384,
+      }}
+      className="z-50 max-h-[520px] overflow-hidden rounded-2xl border border-sage/20 bg-white shadow-xl"
+    >
       <div className="flex items-center justify-between gap-2 border-b border-sage/15 p-4">
         <h3 className="text-sm font-bold text-espresso">Notifications</h3>
         {notifications.length > 0 && (
@@ -19,7 +34,10 @@ const NotificationDropdown = ({ onClose }) => {
         )}
       </div>
 
-      <div className="max-h-[380px] overflow-y-auto">
+      {/* Same treatment as the seller sidebar's nav, on a light ground. The
+          browser default is a grey slab with its own track that reads as a
+          stripe glued to the inside of a rounded white card. */}
+      <div className="panel-scrollbar max-h-[380px] overflow-y-auto">
         {notifications.length === 0 ? (
           <div className="p-8 text-center text-sm text-espresso/50">
             Nothing new right now.

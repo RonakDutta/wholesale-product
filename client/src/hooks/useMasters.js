@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../utils/axios";
 import { UNITS, GST_RATES } from "../constants/products";
+import { applyMoneySettings, moneySettings } from "../utils/money";
 
 /**
  * The platform masters: units, tax slabs, states, HSN codes.
@@ -29,6 +30,9 @@ const FALLBACK = {
   })),
   states: [],
   hsn: [],
+  // The shipped conventions, so a screen rendering before this resolves
+  // formats the way the product always has rather than with nothing.
+  settings: moneySettings(),
   fromMasters: false,
   isPlatformAdmin: false,
 };
@@ -57,9 +61,14 @@ const fetchMasters = () => {
         taxRates: data?.taxRates?.length ? data.taxRates : FALLBACK.taxRates,
         states: data?.states?.length ? data.states : FALLBACK.states,
         hsn: data?.hsn?.length ? data.hsn : FALLBACK.hsn,
+        settings: data?.settings || FALLBACK.settings,
         fromMasters: Boolean(data?.fromMasters),
         isPlatformAdmin: Boolean(data?.isPlatformAdmin),
       };
+      // Pushed into the formatter so money() and dateLabel() can stay plain
+      // functions, callable from a sort comparator or a useMemo where a hook
+      // cannot go. See utils/money for the reasoning.
+      applyMoneySettings(loaded.settings);
       return loaded;
     })
     .catch(() => {

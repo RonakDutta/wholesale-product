@@ -30,12 +30,25 @@ cd server && npm run migrate
 | `wholesale3_invoice_number_format.sql` | Invoice number prefix, suffix and padding | run 10 Sept |
 | `wholesale3_invoice_rule46_fields.sql` | Place of supply, reverse charge, round off | run 10 Sept |
 | `wholesale3_platform_masters.sql` | Super admin flag, and the state, unit, tax rate and HSN masters | run 12 Sept |
-| `wholesale3_series_financial_year.sql` | Sale and challan numbers restart each financial year | **NOT RUN** |
+| `wholesale3_series_financial_year.sql` | Sale and challan numbers restart each financial year | run 12 Sept, confirmed by a sale coming out `S/10/26-27` |
+| `wholesale3_purchases.sql` | Suppliers, purchases, purchase lines, money paid out, purchase numbering | run 14 Sept |
+| `wholesale3_master_settings.sql` | Platform formatting: decimals, digit grouping, currency, date format | run 14 Sept |
+| `wholesale3_opening_balance.sql` | What a customer or supplier already owed before this product | run 14 Sept |
 
-One outstanding, added 12 Sept. Until it is run the product behaves exactly as
-it did before: every master read falls back to the constant it replaced, and
-the admin flag reads false for everybody, so the admin areas are unreachable
-rather than open.
+**Nothing outstanding as of 14 Sept.** Every migration in this directory has
+been run against Neon.
+
+Restart the server after running any of them. The schema probes are cached per
+process, so a running server goes on believing a table is absent, which is what
+caught the sale numbering out on 12 Sept. Until it is run every purchase and supplier
+route answers `503 PURCHASES_NOT_SET_UP` and the four screens say "the
+purchase book is not switched on yet". Nothing else in the product is
+affected, and no existing screen changes. Verified against a database without
+the tables: all eleven routes degrade, none returns a 500.
+
+Restart the server after running it. The schema probe is cached per process,
+so a running server goes on believing the tables are absent, which is what
+caught the sale numbering out on 12 Sept.
 
 After running it, make the first admin by hand. There is no way to do it from
 inside the product, by design:
@@ -114,7 +127,348 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 
 ## Done
 
+### 13 Sept 2026, from the Busy screenshots
+
+Nine screenshots of Busy 21 sent over. Gone through line by line. What follows
+is the triage, and the one item that was built today.
+
+**BUILT: opening balances.** Busy's Account master carries `Op. Bal` with a
+Dr/Cr flag. We had nothing, and it is the single thing that stopped a real
+wholesaler moving onto this product: his customer book opened at zero on day
+one, so the only number he cares about was wrong. His choices were entering a
+fake sale for the old balance, which puts goods in his books he never sold and
+tax on a bill he never raised, or not using it.
+
+Stored SIGNED rather than with a Dr/Cr flag. Busy needs the flag because the
+same field serves both sides of a double entry ledger; here positive means he
+owed you and negative means you were holding his money, and one column cannot
+disagree with itself the way a number and a flag can. The DATE is required
+whenever the figure is not zero: "he owes 2 lakh" is not a fact until you say
+as at when, and without it the opening figure and everything after it count the
+same goods twice.
+
+It goes through `khataBalance` and `supplierBalance`, so it reaches the
+customer page, the customer list, the overview and the purchase totals from ONE
+rule. Every caller had to be threaded with the probe, because a balance that
+includes the opening figure on one screen and not another is exactly the
+disagreement that file exists to prevent.
+
+**The triage, for what is left.**
+
+Worth taking, roughly in order:
+
+| From Busy | Why it matters here |
+|---|---|
+| Unit Conversion | 1 bale = 20 than. Real the day somebody buys in bales and sells in metres |
+| Bill Sundry | Freight, packing, insurance as lines on a bill. Ordinary in wholesale and we cannot express it |
+| Type of Dealer (Regular / Composition) | A composition dealer may not charge GST and must print so on the bill. We assume everyone is Regular |
+| HSN summary on the invoice | Required on a GST invoice above the turnover threshold. We do not print one |
+| Original / Duplicate / Triplicate | Rule 46 wants the copy marked. Ours prints one unmarked copy |
+| Invoice logo | Busy has it under Configure Sales Invoice. Commonly asked for |
+| Discount Structure | Named discount schemes, real in wholesale |
+| Item Group / Account Group | We have a free text `category` on items and nothing on parties |
+| Std. Narration | Canned notes. Small and genuinely saves typing |
+| Country master | Trivial, and the State master already sits beside it |
+
+Deliberately NOT taking, and why:
+
+- **Account Group, Journal, Contra, Dr/Cr Note without items.** Busy is a full
+  double entry accounting package with a chart of accounts. This is a khata.
+  Building those means building an accounting system nobody asked for.
+- **Bill of Material, Production, Unassemble.** Manufacturing. Not this trade.
+- **Physical Stock, Stock Journal, Material Issued to Party.** Stock movement,
+  which cannot start before sales and purchases BOTH move stock, and today
+  neither does. See the purchase note above for why one side alone is worse
+  than neither.
+- **E-Way Bill and E-Invoice.** Both real obligations above a threshold, both
+  needing a government API integration and credentials. A phase of their own,
+  not a master screen.
+- **GSTIN online validation.** Busy's own note says it needs an active paid
+  subscription, because it is a paid GSP API. Same shape as the above.
+
+**One thing the screenshots answered that was already written up as a
+limitation.** Busy's Regional Settings has "Currency Font: Rupee Foradian"
+beside "Currency Character". That is exactly how it prints a rupee glyph in a
+PDF, and it is the answer to the note in `pdfService`: embed a font that has
+the character. It stays deliberately unfixed for now, because carrying a TTF in
+the repository and trusting it to be on whatever host this runs on is a real
+cost for a symbol that "Rs." already says perfectly well to these traders. The
+option is now written down rather than unknown.
+
+### 13 Sept 2026, later
+
+**The double counted payment race is fixed.** An order backed invoice has two
+writers: `reconcileInvoiceForOrder`, which mirrors what the order has received
+and runs in the BACKGROUND off every payment event, and a wholesaler recording
+the same money by hand. Reconcile was idempotent in one direction only. It
+refuses to add when enough is already on the bill, but when it got there FIRST
+the hand entry landed afterwards and nothing ever looked again. 510 on a 1,020
+order showed as 1,020 received and the bill read fully paid with half owed.
+
+The fix is a CEILING both writers obey, in `invoiceRepository.addPayment`,
+which is the only place a payment row is written. For an order backed invoice
+the ceiling is what the ORDER says has been received, because the order is the
+authority over money that came in through the shop. That is the same rule the
+sale side already states as FOLLOWS_ORDER. It is taken under the advisory lock
+reconcile was already using, so whichever writer arrives second sees the first.
+
+`recordPayment` now decides Paid or Pending from what the bill ACTUALLY holds,
+read back inside the transaction, rather than from a total fetched before the
+lock plus the figure asked for. A clamped payment could otherwise have stamped
+a bill settled that was not.
+
+A bill with no order behind it is untouched: there is no second writer, so a
+hand entry is the only truth there is.
+
+Driven deterministically rather than left to timing: the suite now forces the
+losing order, reconciling first and hand entering after, which is the sequence
+that used to fail about one run in three under load and never on an idle
+machine.
+
+**Money reads the same everywhere now, invoice included.** Collapsing the
+eighteen screen helpers was only most of the job. Three places were still
+formatting their own way:
+
+- The INVOICE PDF printed `Rs.1250000.00` with no separators at all, while
+  every screen showed 12,50,000. `pdfService` now reads the platform grouping
+  and document decimals, primed once per document because `rupees()` is called
+  from twenty one places inside synchronous drawing code where an await cannot
+  go. The rupee SYMBOL is still deliberately not read there: PDFKit's built in
+  Helvetica has no such glyph and silently draws a superscript one, so that
+  file prints "Rs." and is the one place that cannot honour the setting.
+- `InvoicePreview`, the invoice on screen, used raw `toFixed(2)` throughout, so
+  it showed `₹12000.00` ungrouped. That was the original complaint on 11 Sept
+  and it was still true on the invoice itself.
+- `PaymentHistory`, `CartDrawer`, `SupplierCard` and `RefuseOrderModal`.
+
+Checked end to end: the invoice screen and the PDF now print the same digits,
+`₹12,50,000.50` against `Rs.12,50,000.50`, while a list screen shows
+`₹12,50,001` because screen and document decimals are deliberately separate.
+
+**The master sidebar no longer scrolls away.** The layout was `min-h-screen`,
+so the whole page grew and took the sidebar with it. It is `h-dvh` with the
+overflow hidden now, exactly as the seller shell does it, and only the content
+pane scrolls. Verified: content scrolled 748px, sidebar stayed at the top,
+window scroll never moved.
+
+### 13 Sept 2026
+
+**Razorpay's own checkout window, in place of ours.** The local imitation built
+yesterday is deleted. Card numbers and UPI PINs belong inside an iframe served
+by the people certified to collect them; a copy of that screen in our markup
+gets the appearance right and the security exactly backwards, and its fields
+would have had to become real eventually.
+
+`createOrder` now makes the real Basic auth POST to `api.razorpay.com/v1/orders`
+once keys exist, because their window will not open without an order id from
+it. NOT exercised against the real host, which needs an account: it is written
+to the documented contract and `razorpay_live_check.js` stubs the transport and
+asserts the method, URL, auth header, paise amount, receipt and notes, plus
+what happens when Razorpay refuses. Treat the first live call as the real test.
+
+Without keys there is no button, only a line saying online payment is not
+configured and to use the QR code. Their script authenticates the key id
+against their servers, so a made up one cannot open anything, and a button that
+always fails is worse than one that explains itself. Test keys are free.
+
+**Razorpay is now the primary way to pay** and is drawn like it: a bordered
+card marked Recommended with a full width 56px button, against the UPI QR which
+is collapsed into a one line summary underneath with a secondary outline
+button. It was the other way round. The reason is in the known problems below
+and is deliberately NOT on the screen: a buyer cannot act on it, and telling
+him his QR payment is unverified would only make him doubt money he has sent.
+
+**The master area is finished.** `/master/settings` holds the platform's
+formatting conventions: screen and document decimals kept apart, Indian against
+western digit grouping, currency symbol and the words for the amount in words,
+tax rate decimals kept apart from money decimals because 0.25% is a real GST
+slab, the default minimum HSN digits a new wholesaler starts from, and the date
+format. Rule 46(b) is shown read only, because it is law rather than a setting.
+
+The sample at the top redraws as you type, using the product's own formatter
+rather than a copy: if those two could disagree, the preview would be the thing
+lying about what saving does. Verified by switching each control and watching
+₹12,50,000 become ₹1,250,000 and 9 Sept 2026 become 2026-09-09.
+
+**The eighteen money() copies are collapsed.** This is what the settings screen
+was waiting for, and the reason it was not built on 12 Sept: a formatting
+setting that half the product ignores is worse than none. They now import from
+`utils/money`, aliased so not one call site changed: a screen that wanted two
+decimals imports `amount as money`. `dateLabel` went the same way.
+
+The formatter reads the platform settings through a module level value pushed
+in by `useMasters`, not a hook, because `money()` is called from `useMemo`,
+from sort comparators and from plain helpers where a hook cannot go. First
+paint after a cold load uses the shipped defaults, which is harmless: those ARE
+the old convention, so the worst case is a figure briefly correct in the old
+way rather than briefly wrong.
+
+**Verified:** 917 checks across 29 suites. 21 new on the live order contract,
+27 on the settings, and 20 driven in a browser against a stand in for
+`window.Razorpay` covering success, a decline, a dismissed window, no keys, and
+a script that will not load. The decline and dismiss cases matter: a decline
+must never reach verify, and a dismissed window must not leave the button
+spinning.
+
 ### 12 Sept 2026
+
+**Razorpay, scaffolded.** Asked for as "absolutely no need to make it working,
+just setup fake", then completed "with modal and all, in testing only". Three
+endpoints under `/api/orders/:orderId/razorpay/`, a full checkout window, and
+no gateway behind any of it.
+
+`RazorpayCheckoutModal` imitates the real window: merchant, amount, gateway
+order id, the four methods, a form per method, and a declined path because a
+checkout that can only succeed teaches nobody what the screen behind it does
+when it does not. Nothing typed into it is read, validated or posted, and the
+file is written to be DELETED rather than extended when the real gateway goes
+in, since Razorpay collects card details inside its own iframe precisely so
+they never touch our code. The test banner is not dismissible: a convincing
+fake payment screen is the one thing here that could mislead somebody into
+thinking money had moved.
+
+**The one decision worth knowing:** the stub signs its fake payments with REAL
+HMAC-SHA256, over the same string Razorpay signs, and `verifySignature` is the
+same function in both modes. Returning `true` in stub mode would have been less
+code and is how a fake gateway becomes a live hole: somebody sets a key one
+afternoon, the branch is the wrong way round, and the verify endpoint accepts a
+payment id posted by anyone holding the order number. Money is the one place
+where the untested path must not be the one that says yes. Going live changes
+the keys and the order-creation call, and changes nothing about what is trusted.
+
+Stub mode is the ABSENCE of a secret, not a flag: a flag and a credential can
+disagree, and the failure when they do is the expensive one. The `simulate`
+endpoint, which mints valid signatures, 404s the moment a real secret exists.
+
+Nothing in the Razorpay code settles money. Once a signature checks out it
+hands to `orderController.updatePaymentStatus`, which is the one place that
+knows what is owed, caps at it, mirrors into the khata, reconciles the invoice
+and moves the order. A second settlement path would be a second copy of those
+rules.
+
+**Found while building it:** order creation leaves its own pending
+`payment_transactions` row, for the whole subtotal, which `initiatePayment`
+later supersedes with the correct instalment. Opening a gateway order against
+that placeholder would have asked a buyer on the 50/50 plan for the full amount
+instead of his first half. The session is now matched on `buyer_id`, which only
+`initiatePayment` fills. Not on `payment_type`, which looks like the obvious
+choice and is not: a legacy BEFORE INSERT trigger on that table copies
+`payment_method` into `payment_type`, so the placeholder comes out with a type
+nobody set.
+
+**Still needed before it is real**, all listed in `razorpayService.js`: the
+Basic-auth POST to `api.razorpay.com/v1/orders`, which is refused loudly rather
+than faked; a webhook at `/api/webhooks/razorpay` verifying
+`X-Razorpay-Signature` over the raw body, because the browser handler never
+arrives if the buyer's browser dies after paying; and Razorpay Route with
+linked accounts, since every rupee here would land in ONE account and this is a
+marketplace where the money belongs to whichever wholesaler was bought from.
+That last one is the real work behind "the UPI needs to be of each wholesaler
+we are buying from".
+
+**Verified:** 29 checks in `razorpay_check.js`, weighted towards what it
+refuses: a forged signature, a signature that is genuinely valid for a pair the
+attacker chose (which catches trusting the order id in the request body), an
+empty payload, another buyer driving someone else's payment, an amount in the
+request body, and replaying a handler payload to pay twice. 890 checks across
+27 suites all green.
+
+**The purchase book,** the other half of the trader's day. Goods coming in,
+who they came from, what is owed for them, and what tax on them can be
+claimed back. Five screens under `/seller/purchases` and `/seller/suppliers`,
+and the deliberate mirror of the sales spine rather than a new idea:
+
+| Sales | Purchases |
+|---|---|
+| `parties` | `suppliers` |
+| `sales` | `purchases` |
+| `sale_lines` | `purchase_lines` |
+| `party_payments` | `supplier_payments` (money out) |
+| `sale_sequences` | `purchase_sequences` |
+| `khataBalance.js` | `supplierBalance.js` |
+
+**Suppliers are a separate table, not a `kind` column on parties.** That was
+the first idea and it is the wrong one. A party row means "he owes me", and
+that meaning is baked into seventeen queries across five files: the customer
+list, the overview totals, the statement, the credit service, `khataBalance`.
+Every one would need a new filter, and the first one missed puts a supplier in
+the customer list with his balance pointing the wrong way. The cost is that a
+firm a wholesaler both buys from and sells to is two rows, which is the same
+trade `parties` already made, and it fails in the safe direction.
+
+**Three things a purchase has that a sale does not:**
+
+- **The supplier's own bill number and its date**, because that is what GSTR-2B
+  matches on and it cannot be reconstructed later. Unique per supplier per
+  wholesaler, so the same bill cannot be entered twice. That is not tidiness:
+  entering a purchase bill twice claims its input tax credit twice, and both
+  rows look correct on their own afterwards.
+- **`itc_eligible` per line.** Section 17(5) blocks credit on a list of things
+  a trader genuinely buys, and one supplier bill can carry both kinds. The
+  purchase page reports claimable credit separately from the bill's own GST,
+  and says so when they differ.
+- **No invoice.** The bill is the supplier's document, not ours.
+
+**Nothing touches stock, on purpose.** The obvious next thought is that a
+purchase should raise stock. It must not yet, because a sale does not lower
+it: `sale_lines` stores an item name as text and touches no inventory row.
+Wiring one side only gives a figure that climbs forever and is wrong from the
+first purchase onward, which is worse than the honest nothing there is today.
+
+**Known limit, stated rather than hidden.** The bill total is computed through
+`gstService`, the same function the sale and the invoice use, so there is one
+arithmetic. But the authority on a purchase is the paper the supplier handed
+over, and his software may round a line differently, so a computed total can
+land a rupee from the printed one. That gap matters when it is claimed and
+matched against GSTR-2B. The form tells the wholesaler to check against the
+printed figure and that the printed one is the one that counts. Letting him
+state the tax off the bill is the correct next step.
+
+**The permission is new and fails closed.** `purchases` is its own key, kept
+apart from `sales` because a man trusted to write sales is not automatically
+trusted to see what stock costs, and apart from `payments` because that is the
+right to take money IN. An employee taken on before this existed has a stored
+list that does not contain it, so the owner has to tick it. That is the
+direction `staffAccess` already chose deliberately.
+
+**Two bugs fixed while sweeping, both found by running the code:**
+
+- **A bill reversed by a credit note still counted as money to collect.**
+  `getDashboardStats` excluded cancelled invoices and not credited ones.
+  Cancelling and crediting are different instruments, and a credit note
+  deliberately leaves the invoice `Generated` and `Pending`, because under GST
+  the document stands and is reversed by another document. So a fully credited
+  bill went on counting towards "still to come in", towards revenue, and
+  towards the unpaid count. The list beside the card already showed the row as
+  "Credited": the card and the row underneath it disagreed, and the wholesaler
+  was shown money to chase that he had already credited back. Reproduced with
+  four bills, fixed, and locked down by four new checks in
+  `invoice_payment_check.js`. This is the same shape as the complaint on
+  11 Sept about bills reading unpaid when they were paid.
+- **The two purchase detail screens said "not found" when the migration had
+  not been run.** The server answers `503 PURCHASES_NOT_SET_UP`; the list
+  screens read it, the detail screens read anything-but-404 as a generic
+  failure and fell through to "Purchase not found". Telling a wholesaler his
+  bill does not exist when the truth is the feature is not installed is the
+  wrong answer to give about his records. Found by rendering the screens
+  against a mock in that state.
+
+**`client/src/utils/money.js`,** the destination the eighteen local `money()`
+helpers collapse into. Not a nineteenth copy: the purchase screens use it from
+the day they are written so the new work does not add to the pile, and the
+existing screens move onto it one at a time. That ordering is what unblocks
+`/master/settings`, which cannot control decimals and grouping while eighteen
+components each format their own.
+
+**Verified:** 861 checks across 26 suites, every database carrying every
+migration. A new `purchase_check.js` drives 55 of them through the real
+controllers: scoping on every id, the duplicate supplier bill, paying more
+than a bill owes, editing a total below what has been paid, cancelling
+releasing payments onto the account rather than deleting them, the totals not
+netting across suppliers, blocked input credit, and eight concurrent
+purchases taking eight distinct numbers. The five screens rendered at 1280px
+and 400px, plus the not-set-up and empty states, with no sideways scroll and
+no `NaN` or `undefined` on any of them.
 
 **The platform master dashboard,** at `/master`, its own area with its own
 layout and its own guard. States, units, tax rates and HSN codes, all
@@ -759,6 +1113,91 @@ numbering; shop prices treated as tax inclusive.
 Taken off the master overview screen and put here, because the screen is for
 doing the work and this is the reasoning behind it.
 
+### Why our own checkout window and not Razorpay's?
+
+Asked 12 Sept. Left open deliberately, not answered.
+
+What exists today is `RazorpayCheckoutModal`, a local imitation of the checkout
+window: our markup, our method list, our fields. The real integration loads
+`checkout.razorpay.com/v1/checkout.js` and calls
+`new window.Razorpay(options).open()`, which renders Razorpay's own window in
+an iframe they control.
+
+The question to settle is whether the imitation should have been built at all,
+or whether the real script should have gone in from the start with test keys
+(`rzp_test_...`) driving Razorpay's own sandbox.
+
+Worth weighing tomorrow, without prejudging it:
+
+- What the imitation costs if it is thrown away, against what it taught.
+- Whether Razorpay's test mode needs an account and keys before anything can
+  be seen on screen, and whether we have them.
+- That card details must never reach our code, which is the reason their window
+  is an iframe. Any path where our fields become real is the wrong path.
+- Whether the sandbox works offline and in this repository's test setup.
+- What is genuinely shared either way: the two server calls around the window,
+  which is where the signature check lives and which do not change.
+
+### The UPI QR code: how do we know he actually paid?
+
+Raised 12 Sept, and it is the sharpest open question in the product.
+
+**Today there is no verification at all.** The buyer scans the wholesaler's UPI
+QR, pays in his own bank app, comes back, and presses a button to say he paid.
+`updatePaymentStatus` caps the claim at what is owed, and that is the entire
+check. Nothing confirms the money moved. A buyer can press the button having
+paid nothing, and the order will read paid, the khata will credit him, and the
+invoice will be raised.
+
+It has held so far because this is a closed network where the two parties know
+each other and the wholesaler sees his own bank alerts. It does not scale, and
+the reconcile button is the wholesaler's only recourse.
+
+**The options, roughly in order of cost:**
+
+| Approach | What it buys | What it costs |
+|---|---|---|
+| Wholesaler confirms receipt | A second pair of eyes before the khata moves | A step, and a delay, on every order |
+| UPI reference typed by the buyer | Something to match against a bank statement | Still self-declared, just harder to fake casually |
+| Bank statement import, matched on reference and amount | Real confirmation, no gateway needed | Parsing per bank, and a matching rule |
+| A payment gateway with a webhook (Razorpay) | Actual confirmation from the network | Fees, KYC, and Route for per-wholesaler settlement |
+
+The reference field already exists and is already stored, so option two is
+mostly wiring. Option four is scaffolded, see the Razorpay note above, and the
+real blocker there is not the integration but Razorpay Route: money must land
+with the wholesaler who was bought from, not in one platform account.
+
+**The question to settle before building any of it:** does the wholesaler want
+the money confirmed before the customer's khata moves, or after? Confirming
+first is correct and slows every order down. Confirming after is what happens
+now and means a khata that can be wrong until somebody notices. That is a
+trade for the wholesaler to make, not for us.
+
+### The purchase side, next steps
+
+Built on 12 Sept, and these are the pieces deliberately left out.
+
+- **Let the wholesaler state the tax off the supplier's bill** instead of only
+  computing it. See the known limit above: a computed total can land a rupee
+  from the printed one, and the printed one is what GSTR-2B matches.
+- **Stock movement, both directions at once.** A purchase raising stock while
+  a sale does not lower it is worse than neither. Doing it means giving
+  `sale_lines` and `purchase_lines` a real link to an inventory row, which is
+  a piece of work in its own right, not a column.
+- **A purchase return, or debit note.** The mirror of the credit note. Goods
+  going back to a supplier reverses part of a claim already made.
+- **An input credit total for a period**, across purchases, set against the
+  GST charged on sales. Each bill already reports its own claimable figure;
+  what is missing is the sum over a month and the comparison.
+- **A supplier statement and its PDF**, the mirror of the party statement.
+- **Purchases on the Overview.** The home screen answers "who owes me" and
+  says nothing yet about who he owes. `payableTotals()` already returns the
+  two figures it would need.
+- **Enter a purchase from a product.** The form takes typed item names only;
+  the sale form has `ItemPicker` reading his own listings, but a supplier's
+  description of the goods is usually not his own, so this needs thought
+  rather than copying the component across.
+
 ### What belongs in master, and what stays with the wholesaler
 
 The split is the thing most likely to be got wrong, and somebody looking for
@@ -979,66 +1418,6 @@ for many taxpayers. That is a commercial decision and it shapes the schema.
 ---
 
 ## Known problems, not yet fixed
-
-- **Git history contains a committed password and an invoice PDF.** The Neon
-  credential has been rotated. The history rewrite is outstanding.
-- **The abandoned payment path invents stock.** `updatePaymentStatus` credits
-  `stock + oi.quantity` unconditionally when a buyer walks away, but checkout
-  floors its subtraction at zero while stock tracking is off, so a listing
-  that gave nothing up gets stock back. `cancelOrder` was fixed; this path was
-  not.
-- **Credit notes do not move the khata.** Raising one by hand produces a
-  document and changes no balance. Returns work because they cancel the sale
-  instead. If credit notes are ever made to reduce a balance, they need a
-  guard so a note against an already cancelled sale counts for nothing, or
-  returns will be subtracted twice.
-- **Three list endpoints are unpaginated,** `listParties` among them. Measured
-  at 200,000 customers: a book of 5,000 takes 99ms and returns all 5,000 rows.
-  Fine today, worth fixing before it is not.
-- **A seller only account is half a buyer, which is nobody's intention.**
-  Deferred on purpose, noted so it is not rediscovered. Signing up as "I sell
-  wholesale" gives role `seller`, and that account sees the cart, the wishlist
-  and "Your Orders" in the navbar. Checkout has no role check, so he can
-  genuinely place an order; `contactSupplier` does have one, so he cannot then
-  message the wholesaler he just ordered from. Whichever way this is settled,
-  the two ends need to agree: either he buys and can talk to his seller, or he
-  does not buy and the navbar stops offering it. `upgradeToSeller` only ever
-  writes `both`, so there is no path from seller back to buying either.
-- **The home page falls back to invented demo products** when the catalogue
-  fails to load. Two made up wholesalers in Mumbai and Delhi, with prices. The
-  toast says "demo data", which is the only thing stopping it being a straight
-  lie, and it is now also out of step with the city filter: a buyer filtered to
-  Surat would be shown a Mumbai seller. Delete it and show the failure.
-- **Search invents a 4.5 star rating** for any wholesaler who has none, and
-  then sorts and filters on it. Same rule that removed `trust_score`.
-- **The client bundle is about 1.8MB** and there are 14 non identical copies of
-  a `money()` helper. Those copies are why the site shows 12,000 and the
-  invoice shows 12000.00: there is no one place to change it. Collapsing them
-  is the prerequisite for the number formatting the master dashboard is meant
-  to control, and should be done before that setting is added, not after.
-- ~~**The invoice number rolls over on 1 January, not 1 April.**~~ Fixed
-  10 Sept; the "Rule 46(b)" section of `challan_check.js` pins that January
-  does not reset the run and that 1 April starts a new one.
-- ~~**A long prefix makes an invoice number over 16 characters.**~~ Fixed
-  10 Sept; a number over 16 characters, or carrying a character Rule 46(b)
-  does not allow, is refused. Same section of `challan_check.js`.
-- **`promotionController` checks for role `'admin'`,** which the `chk_role`
-  constraint on `users` can never contain. That code is unreachable, not
-  merely unbuilt.
-- **`README.md` is substantially out of date.**
-- **`/api/dashboard/stats` is dead code.** Nothing in the client calls it. Its
-  "revenue" sums whole order totals for orders marked paid while the comment
-  claims the figure means received, and `awaiting_payment_value` uses the full
-  order total rather than what is outstanding. Same class as the header faults
-  fixed on 11 Sept, but not reachable, so either delete the endpoint or fix it.
-- **`scale_check.js` crashes on an empty database** with a TypeError instead
-  of saying it needs a seeded one. It is a performance script, not part of the
-  correctness battery.
-- **The browser sweep is unfinished.** Three seller screens flagged and not
-  chased down, the whole buyer side never rendered, and no phone-width pass.
-  See 11 Sept above.
-
----
 
 ## Testing
 

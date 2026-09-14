@@ -12,12 +12,7 @@ import {
 import api from "../../utils/axios";
 import { toast } from "sonner";
 import PartyFormModal from "../../components/PartyFormModal";
-
-const money = (value) =>
-  Number(value || 0).toLocaleString("en-IN", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
+import { money } from "../../utils/money";
 
 // "4 days ago" reads faster than a date when scanning a list of customers.
 const sinceLabel = (value) => {

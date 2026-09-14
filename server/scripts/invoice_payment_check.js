@@ -383,6 +383,161 @@ const mkUser = async (role, phone) =>
     "rather than under Still to come in",
     { still: card2.pending_amount, why: "which is where they all landed before" });
 
+  /**
+   * A bill reversed by a credit note is not money to collect.
+   *
+   * Found 12 Sept while sweeping the invoice screens. Cancelling a bill and
+   * crediting one are two different instruments and only the first was
+   * excluded from these cards. A credit note deliberately leaves the invoice
+   * Generated and Pending, because under GST the document stands and is
+   * reversed by another document, so a fully credited bill went on being
+   * counted as money still to come in and as revenue.
+   *
+   * The list beside the cards already showed such a row as "Credited". The
+   * card above it asked him to chase the money anyway.
+   */
+  /**
+   * The losing ordering, forced.
+   *
+   * The suite above hand-enters a payment and then reconciles, which is the
+   * order that always worked. The failure was the other way round: reconcile
+   * lands FIRST from its background call, the hand entry arrives after, and
+   * nothing looks again. It reproduced about one run in three under load and
+   * never on an idle machine, so it is driven explicitly here rather than
+   * left to timing.
+   */
+  console.log("\n-- the same money entered by hand AFTER reconcile --");
+
+  const buyerRace = await mkUser("buyer", "9820011226");
+  const placedRace = await call(orders.createOrder, {
+    user: { id: buyerRace },
+    body: {
+      products: [{ productId: p, inventoryId: inv, quantity: 4 }],
+      deliveryAddress: { name: "Third Shop", phone: "9820011226", city: "Surat" },
+      paymentPlan: "installment_50_50",
+    },
+  });
+  const orderIdRace = placedRace.body.orderId;
+  let billRace = null;
+  for (let i = 0; i < 40 && !billRace; i++) {
+    billRace = await invoiceRepository.findInvoiceByOrderId(orderIdRace);
+    if (!billRace) await new Promise((r) => setTimeout(r, 100));
+  }
+
+  await call(orders.initiatePayment, { user: { id: buyerRace }, params: { orderId: orderIdRace }, body: {} });
+  await call(orders.updatePaymentStatus, {
+    user: { id: buyerRace }, params: { orderId: orderIdRace }, body: { paymentStatus: "paid" },
+  });
+  const paidRace = money((await q("SELECT amount_paid FROM orders WHERE id=$1", [orderIdRace])).rows[0].amount_paid);
+
+  // Reconcile FIRST, deterministically, which is what the background call did
+  // when it won the race.
+  await invoiceService.reconcileInvoiceForOrder(orderIdRace);
+  const mirrored = await invoiceRepository.findInvoiceByOrderId(orderIdRace);
+  check((mirrored.payments || []).length === 1,
+    "reconcile mirrors the shop payment onto the bill",
+    { rows: (mirrored.payments || []).length });
+
+  // Now the wholesaler writes the same money by hand. This is the entry that
+  // used to be added blind.
+  const handEntry = await invoiceRepository.addPayment({
+    invoiceId: billRace.id, amount: paidRace, paymentMethod: "Cash",
+    remarks: "Entered by hand, after reconcile",
+  }, null);
+  check(handEntry === null, "the same money entered afterwards is refused", { got: handEntry });
+
+  const billRaceNow = await invoiceRepository.findInvoiceByOrderId(orderIdRace);
+  check((billRaceNow.payments || []).length === 1, "so the bill still holds one payment",
+    { rows: (billRaceNow.payments || []).length });
+  const sumRace = money((billRaceNow.payments || []).reduce((s, x) => s + Number(x.amount), 0));
+  check(sumRace === paidRace, "summing to what the order actually received",
+    { onBill: sumRace, order: paidRace });
+  check(String(billRaceNow.payment_status).toLowerCase() !== "paid",
+    "and it does not read fully paid while half is owed",
+    { status: billRaceNow.payment_status, total: billRaceNow.grand_total });
+
+  // The rest of the instalment, by hand, IS allowed once the order shows it.
+  await call(orders.initiatePayment, { user: { id: buyerRace }, params: { orderId: orderIdRace }, body: {} });
+  await call(orders.updatePaymentStatus, {
+    user: { id: buyerRace }, params: { orderId: orderIdRace }, body: { paymentStatus: "paid" },
+  });
+  await invoiceService.reconcileInvoiceForOrder(orderIdRace);
+  const billRaceAfter = await invoiceRepository.findInvoiceByOrderId(orderIdRace);
+  const sumRaceAfter = money((billRaceAfter.payments || []).reduce((s, x) => s + Number(x.amount), 0));
+  check(sumRaceAfter === money(billRaceAfter.grand_total),
+    "and the second instalment still settles it in full",
+    { onBill: sumRaceAfter, bill: money(billRaceAfter.grand_total) });
+
+  // A bill with no order behind it is untouched by any of this: there is no
+  // other writer, so a hand entry is the only truth there is.
+  const standaloneBill = (await q(
+    `INSERT INTO invoices (invoice_number, supplier_id, buyer_id, grand_total,
+       total_tax, invoice_status, payment_status, issue_date)
+     VALUES ($1,$2,$3,5000,0,'Generated','Pending',CURRENT_DATE) RETURNING id`,
+    [`SA-${stamp}`, wid, buyerRace])).rows[0].id;
+  const standaloneEntry = await invoiceRepository.addPayment({
+    invoiceId: standaloneBill, amount: 5000, paymentMethod: "Cash",
+  }, null);
+  check(standaloneEntry && money(standaloneEntry.amount) === 5000,
+    "a bill with no order behind it still takes a hand entry in full",
+    { got: standaloneEntry && money(standaloneEntry.amount) });
+
+  console.log("\n-- a credited bill is not money to collect --");
+
+  const headA = mk();
+  await invoiceController.getDashboardStats(
+    { user: { id: wid, role: "seller" }, business: { id: wid, owner: true, isOwner: true }, query: {} },
+    headA,
+  );
+  const cardA = headA.body?.stats?.summary || headA.body?.stats || {};
+
+  const creditMe = (await q(
+    `INSERT INTO invoices (invoice_number, supplier_id, buyer_id, grand_total,
+       total_tax, invoice_status, payment_status, issue_date, due_date)
+     VALUES ($1,$2,$3,40000,0,'Generated','Pending',CURRENT_DATE,CURRENT_DATE + 30)
+     RETURNING id`,
+    [`CRD-${stamp}`, wid, buyer])).rows[0].id;
+
+  const headB = mk();
+  await invoiceController.getDashboardStats(
+    { user: { id: wid, role: "seller" }, business: { id: wid, owner: true, isOwner: true }, query: {} },
+    headB,
+  );
+  const cardB = headB.body?.stats?.summary || headB.body?.stats || {};
+  check(
+    money(cardB.pending_amount) === money(cardA.pending_amount) + 40000,
+    "a live unpaid bill is counted as still to come in",
+    { before: cardA.pending_amount, after: cardB.pending_amount },
+  );
+
+  await q(
+    `INSERT INTO credit_notes (note_number, invoice_id, wholesaler_id, reason,
+       subtotal, taxable_amount, grand_total)
+     VALUES ($1,$2,$3,'sale_cancelled',40000,40000,40000)`,
+    [`CN-${stamp}`, creditMe, wid]);
+
+  const headC = mk();
+  await invoiceController.getDashboardStats(
+    { user: { id: wid, role: "seller" }, business: { id: wid, owner: true, isOwner: true }, query: {} },
+    headC,
+  );
+  const cardC = headC.body?.stats?.summary || headC.body?.stats || {};
+  check(
+    money(cardC.pending_amount) === money(cardA.pending_amount),
+    "and once a credit note reverses it, it stops being counted",
+    { still: cardC.pending_amount, expected: cardA.pending_amount },
+  );
+  check(
+    money(cardC.total_revenue) === money(cardA.total_revenue),
+    "and it stops counting towards revenue too",
+    { revenue: cardC.total_revenue, expected: cardA.total_revenue },
+  );
+  check(
+    Number(cardC.pending_count) === Number(cardA.pending_count),
+    "and the count beside the card agrees with the amount",
+    { count: cardC.pending_count, expected: cardA.pending_count },
+  );
+
   console.log(fails ? `\n${fails} FAILED\n` : "\nall good\n");
   await testPool.end();
   process.exit(fails ? 1 : 0);

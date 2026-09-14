@@ -14,21 +14,7 @@ import {
 import api from "../../utils/axios";
 import { downloadFile } from "../../utils/download";
 import { toast } from "sonner";
-
-const money = (value) =>
-  Number(value || 0).toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
-const dateLabel = (value) =>
-  value
-    ? new Date(value).toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    : "";
+import { amount as money, dateLabel } from "../../utils/money";
 
 const METHOD_LABELS = {
   cash: "Cash",

@@ -158,7 +158,29 @@ const Navbar = () => {
   const { city, setCity, cities, loadingCities, label } = useLocationFilter();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  /**
+   * Which flyout is open, as ONE value.
+   *
+   * The profile menu and the bell each owned their own boolean, so opening one
+   * did not close the other: tap the profile, then tap the bell, and both sat
+   * stacked on top of each other. One value makes them mutually exclusive by
+   * construction rather than by remembering to close the other one.
+   *
+   * The two bells get DIFFERENT keys on purpose. The navbar mounts one for
+   * phones and one for desktop and hides the wrong one with CSS, and a single
+   * shared flag between two such copies is exactly what once broke the city
+   * picker: the hidden copy's outside-click handler treated a click on the
+   * visible copy as a click outside itself. Distinct keys, and a listener that
+   * only exists while that copy is open, keep them apart.
+   */
+  const [openMenu, setOpenMenu] = useState(null);
+  const isProfileOpen = openMenu === "profile";
+  const closeMenus = () => setOpenMenu(null);
+  const bellProps = (key) => ({
+    open: openMenu === key,
+    onToggle: () => setOpenMenu((current) => (current === key ? null : key)),
+    onClose: () => setOpenMenu((current) => (current === key ? null : current)),
+  });
   const navRef = useRef(null);
   const navigate = useNavigate();
 
@@ -166,7 +188,7 @@ const Navbar = () => {
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (navRef.current && !navRef.current.contains(event.target)) {
-        setIsProfileOpen(false);
+        setOpenMenu(null);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -182,7 +204,7 @@ const Navbar = () => {
 
   const handleLogout = () => {
     logout();
-    setIsProfileOpen(false);
+    closeMenus();
     navigate("/");
   };
 
@@ -207,7 +229,7 @@ const Navbar = () => {
         {/* <-- Added Messages Link Here --> */}
         <Link
           to="/orders"
-          onClick={() => setIsProfileOpen(false)}
+          onClick={() => closeMenus()}
           className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-clay/5 hover:text-clay rounded-lg transition-colors cursor-pointer"
         >
           <Package className="w-4 h-4" />
@@ -216,17 +238,41 @@ const Navbar = () => {
 
         <Link
           to="/messages"
-          onClick={() => setIsProfileOpen(false)}
+          onClick={() => closeMenus()}
           className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-clay/5 hover:text-clay rounded-lg transition-colors cursor-pointer"
         >
           <MessageSquare className="w-4 h-4" />
           Messages
+          {/* The count follows the icon in here on a phone, where the icon
+              itself is not in the bar. Without this the number a person was
+              watching for simply stops existing on small screens. */}
+          {unreadCount > 0 && (
+            <span className="ml-auto rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </Link>
+
+        {/* Only on a phone. On desktop the heart is in the bar, and offering
+            it twice in one screen is clutter rather than convenience. */}
+        <Link
+          to="/wishlist"
+          onClick={() => closeMenus()}
+          className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-clay/5 hover:text-clay rounded-lg transition-colors cursor-pointer md:hidden"
+        >
+          <Heart className="w-4 h-4" />
+          Saved items
+          {wishlistCount > 0 && (
+            <span className="ml-auto rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              {wishlistCount > 9 ? "9+" : wishlistCount}
+            </span>
+          )}
         </Link>
 
         {(user?.role === "seller" || user?.role === "both") && (
           <Link
             to="/seller"
-            onClick={() => setIsProfileOpen(false)}
+            onClick={() => closeMenus()}
             className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-clay/5 hover:text-clay rounded-lg transition-colors cursor-pointer"
           >
             <LayoutDashboard className="w-4 h-4" />
@@ -245,7 +291,21 @@ const Navbar = () => {
     </div>
   );
 
-  const actionIcons = () => (
+  /**
+   * The icon row.
+   *
+   * `compact` is the phone. Six icons plus the wordmark measured 39px wider
+   * than a 320px screen, so the whole bar scrolled sideways, and at 360px the
+   * wordmark and the first icon were touching with nothing between them. That
+   * is what "looks weird on mobile" was.
+   *
+   * Compact keeps the two that are about THIS moment, where he is buying from
+   * and what is in his basket, and moves messages and the wishlist into the
+   * profile menu, which is where a phone puts the rest of a navigation. Both
+   * are still one tap away and neither count is lost: they are carried as a
+   * dot on the profile button, see below.
+   */
+  const actionIcons = ({ compact = false } = {}) => (
     <>
       <LocationSelector
         city={city}
@@ -255,7 +315,7 @@ const Navbar = () => {
         label={label}
       />
 
-      {user && (
+      {user && !compact && (
         <Link
           to="/messages"
           aria-label={
@@ -276,7 +336,7 @@ const Navbar = () => {
 
       <Link
         to="/wishlist"
-        className="relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-colors group cursor-pointer"
+        className={`relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-colors group cursor-pointer ${compact ? "hidden" : ""}`}
       >
         <Heart className="w-5 h-5 group-hover:scale-110 transition-transform" />
         {wishlistCount > 0 && (
@@ -317,15 +377,27 @@ const Navbar = () => {
 
             {/* Mobile Icons */}
             <div className="flex items-center gap-0.5 sm:gap-1 md:hidden -mr-2">
-              {actionIcons()}
-              <NotificationBell />
+              {actionIcons({ compact: true })}
+              <NotificationBell {...bellProps("bell-phone")} />
               {isAuthenticated ? (
                 <div className="relative">
                   <button
-                    onClick={() => setIsProfileOpen(!isProfileOpen)}
-                    className="p-2 text-clay hover:bg-slate-50 rounded-md transition-colors cursor-pointer"
+                    onClick={() => setOpenMenu((current) => (current === "profile" ? null : "profile"))}
+                    className="relative p-2 text-clay hover:bg-slate-50 rounded-md transition-colors cursor-pointer"
+                    aria-label={
+                      unreadCount + wishlistCount > 0
+                        ? "Your account, with unread messages or saved items"
+                        : "Your account"
+                    }
                   >
                     <User className="w-5 h-5" />
+                    {/* A dot, not a number. What is behind it is two different
+                        counts, and adding them together would be a figure that
+                        means nothing. It says "there is something in here",
+                        which is all a person needs to open it. */}
+                    {unreadCount + wishlistCount > 0 && (
+                      <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" />
+                    )}
                   </button>
                   {isProfileOpen && profileMenu()}
                 </div>
@@ -364,7 +436,7 @@ const Navbar = () => {
           <div className="hidden md:flex items-center gap-2 lg:gap-4 shrink-0">
             <div className="flex items-center gap-1">
               {actionIcons()}
-              <NotificationBell />
+              <NotificationBell {...bellProps("bell-desktop")} />
             </div>
 
             <div className="hidden lg:block w-px h-6 bg-slate-200 mx-1"></div>
@@ -373,7 +445,7 @@ const Navbar = () => {
               {isAuthenticated ? (
                 <div className="relative">
                   <button
-                    onClick={() => setIsProfileOpen(!isProfileOpen)}
+                    onClick={() => setOpenMenu((current) => (current === "profile" ? null : "profile"))}
                     className="flex items-center gap-2 hover:bg-slate-50 p-1.5 pr-2.5 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-slate-200"
                   >
                     <div className="w-8 h-8 rounded-full bg-clay/10 text-clay flex items-center justify-center font-bold text-sm uppercase">

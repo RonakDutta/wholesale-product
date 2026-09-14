@@ -3,6 +3,7 @@ import { X, Printer, Download, Send } from "lucide-react";
 import { toast } from "sonner";
 import { downloadFile } from "../../utils/download";
 import InvoiceStatusBadge from "./InvoiceStatusBadge";
+import { amount as money } from "../../utils/money";
 
 export default function InvoicePreview({ invoice, onClose, onSendEmail }) {
   const [downloading, setDownloading] = useState(false);
@@ -200,16 +201,16 @@ export default function InvoicePreview({ invoice, onClose, onSendEmail }) {
                     {Number(item.quantity)}
                   </td>
                   <td className="py-2.5 px-3 text-right">
-                    ₹{Number(item.unit_price).toFixed(2)}
+                    ₹{money(item.unit_price)}
                   </td>
                   <td className="py-2.5 px-3 text-center">
                     {item.gst_percent}%
                   </td>
                   <td className="py-2.5 px-3 text-right">
-                    ₹{Number(item.tax_amount).toFixed(2)}
+                    ₹{money(item.tax_amount)}
                   </td>
                   <td className="py-2.5 px-3 text-right font-bold">
-                    ₹{Number(item.total).toFixed(2)}
+                    ₹{money(item.total)}
                   </td>
                 </tr>
               ))}
@@ -230,39 +231,39 @@ export default function InvoicePreview({ invoice, onClose, onSendEmail }) {
             <div className="w-64 space-y-1.5 text-right font-medium">
               <div className="flex justify-between">
                 <span className="text-slate-500">Subtotal:</span>
-                <span>₹{Number(invoice.subtotal || 0).toFixed(2)}</span>
+                <span>₹{money(invoice.subtotal || 0)}</span>
               </div>
               {Number(invoice.discount) > 0 && (
                 <div className="flex justify-between text-emerald-600">
                   <span>Discount:</span>
-                  <span>-₹{Number(invoice.discount).toFixed(2)}</span>
+                  <span>-₹{money(invoice.discount)}</span>
                 </div>
               )}
               <div className="flex justify-between font-bold text-espresso pt-1 border-t border-slate-100">
                 <span>Taxable Amount:</span>
-                <span>₹{Number(invoice.taxable_amount || 0).toFixed(2)}</span>
+                <span>₹{money(invoice.taxable_amount || 0)}</span>
               </div>
               {Number(invoice.cgst) > 0 && (
                 <div className="flex justify-between text-slate-500">
                   <span>CGST:</span>
-                  <span>₹{Number(invoice.cgst).toFixed(2)}</span>
+                  <span>₹{money(invoice.cgst)}</span>
                 </div>
               )}
               {Number(invoice.sgst) > 0 && (
                 <div className="flex justify-between text-slate-500">
                   <span>SGST:</span>
-                  <span>₹{Number(invoice.sgst).toFixed(2)}</span>
+                  <span>₹{money(invoice.sgst)}</span>
                 </div>
               )}
               {Number(invoice.igst) > 0 && (
                 <div className="flex justify-between text-slate-500">
                   <span>IGST:</span>
-                  <span>₹{Number(invoice.igst).toFixed(2)}</span>
+                  <span>₹{money(invoice.igst)}</span>
                 </div>
               )}
               <div className="flex justify-between text-slate-500">
                 <span>Total Tax:</span>
-                <span>₹{Number(invoice.total_tax || 0).toFixed(2)}</span>
+                <span>₹{money(invoice.total_tax || 0)}</span>
               </div>
               {/* Ruled, not filled. A rounded dark pill is a web button
                   shape, and a bill is a document: the total is set apart the
@@ -273,7 +274,7 @@ export default function InvoicePreview({ invoice, onClose, onSendEmail }) {
                   Grand total
                 </span>
                 <span className="text-lg font-black tabular-nums text-espresso">
-                  ₹{Number(invoice.grand_total || 0).toFixed(2)}
+                  ₹{money(invoice.grand_total || 0)}
                 </span>
               </div>
             </div>

@@ -1,5 +1,10 @@
 const express = require("express");
-const { getMasters, saveMasterRow, setMasterRowActive } = require("../controllers/masterController");
+const {
+  getMasters,
+  saveMasterRow,
+  setMasterRowActive,
+  saveSettings,
+} = require("../controllers/masterController");
 const { requirePlatformAdmin } = require("../middlewares/platformAdmin");
 const authenticateToken = require("../middlewares/authMiddleware");
 
@@ -14,6 +19,8 @@ router.get("/", authenticateToken, getMasters);
 // Writing is the platform admin's. The guard reads the flag from the database
 // on every request rather than from the token, so a revoked admin loses these
 // at once rather than when his session expires.
+// Before "/:list", or the word "settings" is read as a list name.
+router.put("/settings", authenticateToken, requirePlatformAdmin, saveSettings);
 router.put("/:list/:key/active", authenticateToken, requirePlatformAdmin, setMasterRowActive);
 router.put("/:list", authenticateToken, requirePlatformAdmin, saveMasterRow);
 

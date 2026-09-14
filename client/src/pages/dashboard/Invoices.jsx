@@ -13,21 +13,7 @@ import { toast } from "sonner";
 import axios from "../../utils/axios";
 import { downloadFile } from "../../utils/download";
 import CreditNotesPanel from "../../components/CreditNotesPanel";
-
-const money = (value) =>
-  Number(value || 0).toLocaleString("en-IN", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
-
-const dateLabel = (value) =>
-  value
-    ? new Date(value).toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    : "";
+import { money, dateLabel } from "../../utils/money";
 
 // Two words a trader reads, not four words an accountant reads.
 const PAYMENT_LABELS = {

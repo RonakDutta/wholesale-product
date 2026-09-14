@@ -35,16 +35,9 @@ cd server && npm run migrate
 | `wholesale3_master_settings.sql` | Platform formatting: decimals, digit grouping, currency, date format | run 14 Sept |
 | `wholesale3_opening_balance.sql` | What a customer or supplier already owed before this product | run 14 Sept |
 | `wholesale3_party_state.sql` | The customer's declared state, which decides CGST plus SGST against IGST | **NOT RUN** |
-| `wholesale3_supplier_payment_details.sql` | A supplier's UPI ID and bank details, and the reference on a payment | **NOT RUN** |
 | `wholesale3_razorpay_route.sql` | Linked accounts, transfers and webhook deliveries, so a buyer's money reaches the wholesaler | **NOT RUN** |
 
-**Three outstanding as of 14 Sept.**
-
-`wholesale3_razorpay_route.sql` changes nothing on its own. Running it does
-NOT alter how any existing payment behaves: without an activated linked
-account no transfer is attached, and the payment is taken exactly as it was
-before. It only opens the Taking card payments screen so a wholesaler can
-start onboarding.
+**Two outstanding as of 14 Sept.**
 
 `wholesale3_party_state.sql`. Until it is run, the State box on the customer
 form answers `503 PARTY_STATE_NOT_SET_UP` when a state is actually typed, and
@@ -52,13 +45,11 @@ everything else about a customer saves exactly as before. Bills go on being
 decided by the GST number and then the city, which is what they did
 yesterday.
 
-`wholesale3_supplier_payment_details.sql`. Until it is run, entering a UPI ID
-or bank details on a supplier answers `503
-SUPPLIER_PAY_DETAILS_NOT_SET_UP`, the Pay by UPI panel offers to add one and
-nothing else, and a payment records without its reference. Saving a supplier
-without pay details is untouched. Both guards are asymmetric on purpose: only
-an actual value is refused, because the forms send every field including the
-empty ones.
+`wholesale3_razorpay_route.sql` changes nothing on its own. Running it does
+NOT alter how any existing payment behaves: without an activated linked
+account no transfer is attached, and the payment is taken exactly as it was
+before. It only opens the Taking card payments screen so a wholesaler can
+start onboarding.
 
 Restart the server after running any of them. The schema probes are cached per
 process, so a running server goes on believing a table is absent, which is what
@@ -228,71 +219,6 @@ access; without that they are created by hand in the dashboard and only the
 id is stored here. `RAZORPAY_WEBHOOK_SECRET` must be set or the webhook
 endpoint refuses everything, deliberately, since an unverifiable endpoint
 that moves money must not be an open one.
-
-### 14 Sept 2026, paying a supplier by UPI
-
-Asked whether Razorpay sends money to the person being bought from. It does
-not: every rupee lands in the ONE account whose keys are in the server env.
-Worth writing down, because the trade is the reverse of what it looks like.
-
-| | Reaches the right person | Verified |
-|---|---|---|
-| UPI QR | Yes, buyer scans the wholesaler's own `upi_id`, bank to bank | No |
-| Razorpay | No, lands in the platform account | Yes |
-
-So making Razorpay primary fixed the verification and broke the recipient.
-Route is what gets both, and that is the next piece.
-
-**The purchase side is a different problem, and Razorpay Checkout cannot do
-it.** Checkout collects money INTO an account. Paying a supplier is money
-OUT, which is RazorpayX payouts: the wholesaler's own funded balance, the
-supplier's verified bank details, and a supplier who has consented. A
-supplier here is a private row in one wholesaler's book with no login, no
-account and no KYC. Pushing money at a name and a phone number somebody typed
-into a private ledger is exactly what that product demands more than this
-table has, and rightly.
-
-**BUILT: a UPI intent, which sends the money to the right person and holds
-none of it.** `wholesale3_supplier_payment_details.sql` adds `upi_id` and
-bank account, name and IFSC to `suppliers`, and `reference` to
-`supplier_payments`. His page builds a `upi://pay` intent with the payee and
-the amount filled in: a button that opens his UPI app on a phone, a QR to
-scan from a laptop. He pays directly, comes back, pastes the UTR, and it
-records through the same endpoint the manual form uses.
-
-What it saves is the part that goes wrong: reading a VPA off an old bill,
-retyping the amount, then retyping it a second time into the book.
-
-The link is built in the browser here, which is the opposite of the rule
-everywhere a BUYER pays. That rule exists because a browser naming an amount
-for somebody else's money is a discount coupon. This is the wholesaler's own
-money going to his own supplier and part payment is ordinary trade, so the
-outstanding balance is a default rather than a rule and there is nothing for
-a server to enforce.
-
-Validation is shape only, and offline: a VPA needs an `@` (a phone number in
-that box builds an intent that fails silently inside his UPI app), an IFSC is
-four letters, a zero and six more, and an account number without an IFSC is
-refused rather than half saved. Nothing checks that any of it exists, because
-nothing can without attempting a payment.
-
-`URLSearchParams` writes a space as `+`, which is only a space in form
-encoding. UPI apps that decode naively showed the payee as "Arvind+Mills", so
-the link rewrites those to `%20`. That is the name he checks before pressing
-pay. Caught by reading the generated link in a browser, not from the code.
-
-**The payment stays self declared and says so.** Nothing can confirm a
-peer-to-peer UPI transfer from a web app: the two banks settle it and no
-third party is told. The panel says "nothing here checks with the bank" in as
-many words. That is a much smaller problem here than on the buyer side,
-because the man recording the payment is the man who made it and has nobody
-to fool but himself. The UTR gives a person a way to reconcile against a
-statement later.
-
-`scripts/supplier_pay_check.js`, 24 checks, including the pre-migration half
-in a child process. Verified in a browser: the generated intent carries the
-right payee and amount, follows the amount as it is edited, the QR renders,
-and there is no overflow at 390px.
 
 ### 14 Sept 2026, invented data, the customer's state, and the invoice format
 

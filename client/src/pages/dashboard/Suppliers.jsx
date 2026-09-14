@@ -22,13 +22,6 @@ const blankDraft = () => ({
   address: "",
   gstin: "",
   notes: "",
-  // How to pay him. Held so the product can hand the wholesaler a UPI intent
-  // with the payee already filled in, rather than him typing a VPA off an old
-  // bill. Nothing here lets the product move money; see the migration.
-  upiId: "",
-  bankAccountName: "",
-  bankAccountNumber: "",
-  bankIfsc: "",
   // The mirror of the customer side: positive is what YOU owe him.
   openingBalance: "",
   openingBalanceOn: "",
@@ -122,10 +115,6 @@ const Suppliers = () => {
       address: supplier.address || "",
       gstin: supplier.gstin || "",
       notes: supplier.notes || "",
-      upiId: supplier.upi_id || "",
-      bankAccountName: supplier.bank_account_name || "",
-      bankAccountNumber: supplier.bank_account_number || "",
-      bankIfsc: supplier.bank_ifsc || "",
       openingBalance:
         supplier.opening_balance && Number(supplier.opening_balance) !== 0
           ? String(Number(supplier.opening_balance))
@@ -247,92 +236,6 @@ const Suppliers = () => {
                 )}
               </div>
             ))}
-
-            {/* How to pay him.
-
-                His details, held here only so you can pay him without
-                copying a VPA off an old bill. Nothing here moves money on
-                its own: you pay from your own UPI app and come back. */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
-              <p className="text-sm font-bold text-espresso">How to pay him</p>
-              <p className="mt-0.5 text-xs text-slate-500">
-                Fill the UPI ID in and his page gets a Pay button that opens
-                your UPI app with the amount already in it. Only you can see
-                these.
-              </p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <label
-                    htmlFor="supplier-upiId"
-                    className="mb-1 block text-xs font-semibold text-slate-600"
-                  >
-                    UPI ID
-                  </label>
-                  <input
-                    id="supplier-upiId"
-                    value={draft.upiId}
-                    onChange={(e) =>
-                      setDraft({ ...draft, upiId: e.target.value })
-                    }
-                    placeholder="ramesh@okhdfcbank"
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-clay"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label
-                    htmlFor="supplier-bankAccountName"
-                    className="mb-1 block text-xs font-semibold text-slate-600"
-                  >
-                    Account holder name
-                  </label>
-                  <input
-                    id="supplier-bankAccountName"
-                    value={draft.bankAccountName}
-                    onChange={(e) =>
-                      setDraft({ ...draft, bankAccountName: e.target.value })
-                    }
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-clay"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="supplier-bankAccountNumber"
-                    className="mb-1 block text-xs font-semibold text-slate-600"
-                  >
-                    Account number
-                  </label>
-                  <input
-                    id="supplier-bankAccountNumber"
-                    value={draft.bankAccountNumber}
-                    onChange={(e) =>
-                      setDraft({ ...draft, bankAccountNumber: e.target.value })
-                    }
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-clay"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="supplier-bankIfsc"
-                    className="mb-1 block text-xs font-semibold text-slate-600"
-                  >
-                    IFSC code
-                  </label>
-                  <input
-                    id="supplier-bankIfsc"
-                    value={draft.bankIfsc}
-                    onChange={(e) =>
-                      setDraft({ ...draft, bankIfsc: e.target.value })
-                    }
-                    placeholder="HDFC0001234"
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm uppercase outline-none focus:border-clay"
-                  />
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    Both together, or neither.
-                  </p>
-                </div>
-              </div>
-            </div>
-
             {/* What you already owed him before this book existed. Same
                 reasoning as the customer side, opposite direction. */}
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2">

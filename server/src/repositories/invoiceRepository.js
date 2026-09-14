@@ -194,15 +194,9 @@ async function schemaExtras(db = pool) {
         -- exactly as it did before.
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'parties' AND column_name = 'state') AS has_party_state,
-        -- How to pay a supplier, from wholesale3_supplier_payment_details.sql.
-        -- Until it is run the supplier form offers no bank details and the
-        -- pay-by-UPI panel stays hidden, which is the state the product was
-        -- in before it existed.
-        EXISTS (SELECT 1 FROM information_schema.columns
-                 WHERE table_name = 'suppliers' AND column_name = 'upi_id') AS has_supplier_pay_details,
         -- Razorpay Route, from wholesale3_razorpay_route.sql. Until it is run
-        -- there are no linked accounts, so no wholesaler can be paid through
-        -- the gateway and every order falls back to the UPI QR.
+        -- there are no linked accounts, so no transfer is attached to a
+        -- payment and the money is taken exactly as it was before Route.
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'wholesaler_profiles'
                    AND column_name = 'razorpay_account_id') AS has_razorpay_route,

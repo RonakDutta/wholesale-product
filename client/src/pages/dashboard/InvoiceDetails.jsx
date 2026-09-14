@@ -17,6 +17,19 @@ import PaymentHistory from "../../components/invoice/PaymentHistory";
 import InvoiceTimeline from "../../components/invoice/InvoiceTimeline";
 import InvoicePreview from "../../components/invoice/InvoicePreview";
 import CreditNoteModal from "../../components/CreditNoteModal";
+import { rupees, dateLabel } from "../../utils/money";
+
+/**
+ * Every figure on this page went through Number(x).toFixed(2) with a hard
+ * coded symbol, so a bill read "Rs.1500.00" while the same amount read
+ * "Rs.1,500" on the customer page and the dashboard. Asked about on 14 Sept,
+ * after the eighteen other copies had already been collapsed and this one
+ * was missed.
+ *
+ * Document precision, because these have to foot: the lines must add up to
+ * the total printed underneath them.
+ */
+const inr = (value) => rupees(value, { document: true });
 
 // Plain English, not the stored code. A wholesaler reading his own bill
 // should not have to decode "rate_revised".
@@ -181,14 +194,8 @@ export default function InvoiceDetails() {
               <InvoiceStatusBadge status={invoice.payment_status} />
             </div>
             <p className="text-xs text-espresso/50 mt-0.5">
-              Issued:{" "}
-              {invoice.issue_date
-                ? new Date(invoice.issue_date).toLocaleDateString("en-IN")
-                : "N/A"}{" "}
-              | Due:{" "}
-              {invoice.due_date
-                ? new Date(invoice.due_date).toLocaleDateString("en-IN")
-                : "N/A"}
+              Issued: {invoice.issue_date ? dateLabel(invoice.issue_date) : "N/A"}{" "}
+              | Due: {invoice.due_date ? dateLabel(invoice.due_date) : "N/A"}
             </p>
           </div>
         </div>
@@ -252,14 +259,9 @@ export default function InvoiceDetails() {
             <p className="mt-1 text-xs text-sky-800">
               {CREDIT_REASONS[invoice.credit_reason] ||
                 "This bill has been reversed."}{" "}
-              ₹
-              {Number(invoice.credited_amount || 0).toLocaleString("en-IN", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}{" "}
-              was credited back on{" "}
+              {inr(invoice.credited_amount || 0)} was credited back on{" "}
               {invoice.credited_on
-                ? new Date(invoice.credited_on).toLocaleDateString("en-IN")
+                ? dateLabel(invoice.credited_on)
                 : "the same day"}
               . The bill itself stays exactly as it was issued, because a bill
               that has gone out cannot be rewritten.
@@ -366,16 +368,16 @@ export default function InvoiceDetails() {
                         {Number(item.quantity)}
                       </td>
                       <td className="py-3 px-3 text-right">
-                        ₹{Number(item.unit_price).toFixed(2)}
+                        {inr(item.unit_price)}
                       </td>
                       <td className="py-3 px-3 text-center">
                         {item.gst_percent}%
                       </td>
                       <td className="py-3 px-3 text-right">
-                        ₹{Number(item.tax_amount).toFixed(2)}
+                        {inr(item.tax_amount)}
                       </td>
                       <td className="py-3 px-3 text-right font-bold text-espresso">
-                        ₹{Number(item.total).toFixed(2)}
+                        {inr(item.total)}
                       </td>
                     </tr>
                   ))}
@@ -397,39 +399,39 @@ export default function InvoiceDetails() {
               <div className="w-full sm:w-64 space-y-2 text-right">
                 <div className="flex justify-between text-espresso/60">
                   <span>Subtotal:</span>
-                  <span>₹{Number(invoice.subtotal || 0).toFixed(2)}</span>
+                  <span>{inr(invoice.subtotal || 0)}</span>
                 </div>
                 {Number(invoice.discount) > 0 && (
                   <div className="flex justify-between text-emerald-600">
                     <span>Discount:</span>
-                    <span>-₹{Number(invoice.discount).toFixed(2)}</span>
+                    <span>-{inr(invoice.discount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold text-espresso pt-1 border-t border-slate-100">
                   <span>Taxable Amount:</span>
-                  <span>₹{Number(invoice.taxable_amount || 0).toFixed(2)}</span>
+                  <span>{inr(invoice.taxable_amount || 0)}</span>
                 </div>
                 {Number(invoice.cgst) > 0 && (
                   <div className="flex justify-between text-slate-500">
                     <span>CGST:</span>
-                    <span>₹{Number(invoice.cgst).toFixed(2)}</span>
+                    <span>{inr(invoice.cgst)}</span>
                   </div>
                 )}
                 {Number(invoice.sgst) > 0 && (
                   <div className="flex justify-between text-slate-500">
                     <span>SGST:</span>
-                    <span>₹{Number(invoice.sgst).toFixed(2)}</span>
+                    <span>{inr(invoice.sgst)}</span>
                   </div>
                 )}
                 {Number(invoice.igst) > 0 && (
                   <div className="flex justify-between text-slate-500">
                     <span>IGST:</span>
-                    <span>₹{Number(invoice.igst).toFixed(2)}</span>
+                    <span>{inr(invoice.igst)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-slate-500">
                   <span>Total Tax:</span>
-                  <span>₹{Number(invoice.total_tax || 0).toFixed(2)}</span>
+                  <span>{inr(invoice.total_tax || 0)}</span>
                 </div>
                 {/* Same treatment as the preview and the PDF: a rule, not a
                     dark rounded pill. The three should look like one bill. */}
@@ -438,7 +440,7 @@ export default function InvoiceDetails() {
                     Grand total
                   </span>
                   <span className="text-lg font-black tabular-nums text-espresso">
-                    ₹{Number(invoice.grand_total || 0).toFixed(2)}
+                    {inr(invoice.grand_total || 0)}
                   </span>
                 </div>
               </div>

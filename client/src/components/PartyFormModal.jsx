@@ -2,7 +2,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import api from "../utils/axios";
 import { toast } from "sonner";
-import { gstinFeedback } from "../utils/gstin";
+import { gstinFeedback, INDIAN_STATES } from "../utils/gstin";
 
 /**
  * Adds a customer or edits one. The same form does both, because the fields
@@ -20,6 +20,7 @@ const PartyFormModal = ({ party, onClose, onSaved }) => {
     businessName: party?.business_name || "",
     phone: party?.phone || "",
     city: party?.city || "",
+    state: party?.state || "",
     gstin: party?.gstin || "",
     address: party?.address || "",
     notes: party?.notes || "",
@@ -145,6 +146,36 @@ const PartyFormModal = ({ party, onClose, onSaved }) => {
               name: "city",
               placeholder: "Surat",
             })}
+          </div>
+
+          {/* The state decides the tax on his bill: same state as you is CGST
+              plus SGST, a different one is IGST. A GST number answers it on
+              its own, so this is for the customer who has none. Left empty it
+              is treated as your own state, which is what local trade is. */}
+          <div>
+            <label
+              htmlFor="party-state"
+              className="mb-1.5 block text-sm font-bold text-espresso"
+            >
+              State
+            </label>
+            <select
+              id="party-state"
+              value={form.state}
+              onChange={set("state")}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+            >
+              <option value="">Same state as you</option>
+              {INDIAN_STATES.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Only needed for a customer in another state who has no GST
+              number. Their bill will show IGST instead of CGST and SGST.
+            </p>
           </div>
 
           {field("party-business", "Shop name", {

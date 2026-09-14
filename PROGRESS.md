@@ -34,9 +34,13 @@ cd server && npm run migrate
 | `wholesale3_purchases.sql` | Suppliers, purchases, purchase lines, money paid out, purchase numbering | run 14 Sept |
 | `wholesale3_master_settings.sql` | Platform formatting: decimals, digit grouping, currency, date format | run 14 Sept |
 | `wholesale3_opening_balance.sql` | What a customer or supplier already owed before this product | run 14 Sept |
+| `wholesale3_party_state.sql` | The customer's declared state, which decides CGST plus SGST against IGST | **NOT RUN** |
 
-**Nothing outstanding as of 14 Sept.** Every migration in this directory has
-been run against Neon.
+**One outstanding as of 14 Sept**, `wholesale3_party_state.sql`. Until it is
+run, the State box on the customer form answers `503
+PARTY_STATE_NOT_SET_UP` when a state is actually typed, and everything else
+about a customer saves exactly as before. Bills go on being decided by the
+GST number and then the city, which is what they did yesterday.
 
 Restart the server after running any of them. The schema probes are cached per
 process, so a running server goes on believing a table is absent, which is what
@@ -126,6 +130,94 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 ---
 
 ## Done
+
+### 14 Sept 2026, invented data, the customer's state, and the invoice format
+
+Four things asked for together, plus two found on the way.
+
+**The last of the invented data is gone.** Two survivors of the `trust_score`
+and `response_rate` cull:
+
+*The demo catalogue.* When `/api/products` failed, the marketplace home page
+put two made up products on screen, ABC Textiles in Mumbai and XYZ Garments
+in Delhi, with prices, MOQs, verified ticks and phone numbers, behind a toast
+saying "Using demo data". They were clickable, so a buyer could try to order
+from a wholesaler who does not exist, and a wholesaler looking at his own
+marketplace saw competitors who were never there. Now it shows nothing and
+says the catalogue could not be loaded. That needed a new `loadFailed` state:
+the existing empty state says "No products match your filters", which is a
+lie when the fetch failed and the buyer has set no filters.
+
+*The 4.5 stars.* `SearchResults.jsx` read `Number(supplier.rating || 4.5)`.
+The catalogue endpoint it reads, `getPublicCatalog`, does not select a rating
+at all, so this was not a rare fallback: **every product and every wholesaler
+on the search page showed exactly 4.5**, the sort and the "min rating" filter
+ordered and hid results by a constant, and anything at 4.8 or over got a "Top
+Pick" badge, which nothing ever was. Ratings, the sort option, the filter and
+the badge are all removed.
+
+Real ratings were left alone. `seller_reviews` is genuine, `getProductById`
+and `getWholesalerById` average it and honestly return 0, and the product and
+wholesaler pages show it. If search is to rank on that, the average has to be
+joined into `getPublicCatalog` first, and that is a real change, not a
+fallback.
+
+**The customer's state now reaches the tax.** `placeOfSupply` asks three
+things in order: the declared state, the state the GST number carries, then
+the city. The buyer's side never answered the first one. `parties` had no
+state column at all, and every caller passed `{ gstin, city }`: the strongest
+source was missing from half of every bill.
+
+Wrong for one man in particular: a customer in another state with no GST
+registration, in a town outside the ninety in `STATE_BY_CITY`. He resolved to
+null, null reads as the same state, and his bill charged CGST plus SGST when
+it owed IGST. There was no way to correct it because nothing asked.
+
+- `wholesale3_party_state.sql` adds `parties.state`, nullable, no default
+- a State dropdown on the customer form, defaulting to "Same state as you"
+- a state nobody recognises is refused rather than stored as typed, because a
+  misspelling resolves to null later and quietly bills as local
+- guarded on the probe, and the guard is asymmetric on purpose: **typing** a
+  state before the migration is a loud 503, leaving it **empty** changes
+  nothing. The edit form sends every field including the empty ones, so
+  refusing those would have made every customer uneditable on an unmigrated
+  database, to protect a value that is not there
+
+The marketplace side had the same bug for free: `bwp.warehouse_state` was
+selected for the supplier and not for the buyer, out of the same table, on
+the same query. Three call sites fixed.
+
+`scripts/party_state_check.js` covers it, 19 checks, including the
+pre-migration half in a child process because the schema probe caches per
+process. Verified: Raipur customer, no GSTIN, Gujarat seller, now IGST 50.00
+where it was CGST 25 plus SGST 25.
+
+**The invoice formats money like the rest of the site.** Asked directly:
+"why does the new invoice still have 1500.00 instead of 1,500". Because
+`InvoiceDetails.jsx` was missed when the eighteen local `money()` copies were
+collapsed. Every figure on it went through `Number(x).toFixed(2)` with a hard
+coded symbol. So did the totals on `CreateInvoice.jsx`. Both now use the
+shared formatter at document precision. Dates on the invoice screens went the
+same way, `toLocaleDateString("en-IN")` to `dateLabel`.
+
+**Two found on the way, unrelated to the ask.**
+
+*The seller could not download his own bill.* Asked why an order paid in full
+offered no invoice anywhere. The buyer has had a Download Invoice button on
+his order page all along; the wholesaler who raised the bill had none, and
+had to go and find it in the invoice list. The endpoint already allowed
+either side of the order. It was a missing button.
+
+*The mobile filter drawer never existed.* The Filters button on the search
+page called `setIsFilterDrawerOpen`, which was never declared, so tapping it
+threw a ReferenceError, and the sidebar it was meant to open is hidden below
+`sm` anyway. Phones had no filters at all. The controls are now defined once
+and shown in both the sidebar and a real drawer.
+
+**The payment page layout on a laptop.** The two column grid held a single
+child, so Order Details, Delivery Address and the buttons stacked into column
+one and the right half sat empty. It only broke when the QR code moved out of
+column two.
 
 ### 13 Sept 2026, from the Busy screenshots
 

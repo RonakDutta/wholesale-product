@@ -5,6 +5,8 @@ const creditApplyService = require("../services/creditApplyService");
 const { hasPartyLink } = require("../services/partyService");
 const { hasSaleLink } = require("../services/orderSaleService");
 const { checkGstin } = require("../utils/gstin");
+const { asState } = require("../services/placeOfSupply");
+const invoiceRepository = require("../repositories/invoiceRepository");
 const {
   NOT_OWED_SQL,
   bridgedGuard,
@@ -199,10 +201,35 @@ const gstinToStore = (raw, res) => {
   return result.gstin;
 };
 
+/** Is the state column there yet? wholesale3_party_state.sql adds it. */
+const hasPartyState = async () =>
+  Boolean((await invoiceRepository.schemaExtras()).has_party_state);
+
+/**
+ * A state, canonicalised, or an answer already sent.
+ *
+ * Refused rather than stored as typed when it is not a state this system
+ * knows. The value decides CGST plus SGST against IGST on a legal document,
+ * and a misspelling kept verbatim would resolve to null later and quietly
+ * bill as a local sale. Empty clears it, which is the honest "not told".
+ */
+const stateToStore = (value, res) => {
+  if (!clean(value)) return null;
+  const canonical = asState(value);
+  if (!canonical) {
+    res.status(400).json({
+      message:
+        "That is not a state we recognise. Type the state name, for example Gujarat.",
+    });
+    return undefined;
+  }
+  return canonical;
+};
+
 exports.createParty = async (req, res) => {
   const wholesalerId = businessId(req);
   const {
-    name, businessName, phone, city, address, gstin, notes,
+    name, businessName, phone, city, state, address, gstin, notes,
     openingBalance, openingBalanceOn,
   } = req.body;
 
@@ -213,6 +240,17 @@ exports.createParty = async (req, res) => {
   const gstinValue = gstin === undefined ? null : gstinToStore(gstin, res);
   if (gstinValue === undefined) return;
 
+  const hasState = await hasPartyState();
+  if (!hasState && clean(state)) {
+    return res.status(503).json({
+      code: "PARTY_STATE_NOT_SET_UP",
+      message:
+        "Customer state has not been set up yet. Run wholesale3_party_state.sql.",
+    });
+  }
+  const stateValue = hasState ? stateToStore(state, res) : null;
+  if (stateValue === undefined) return;
+
   const hasOpening = await hasOpeningBalance(pool);
   const opening = hasOpening
     ? parseOpening(openingBalance, openingBalanceOn, res)
@@ -220,23 +258,46 @@ exports.createParty = async (req, res) => {
   if (opening === undefined) return;
 
   try {
+    // Built up rather than written out, because two columns here depend on a
+    // migration having been run and hand counted placeholders drift the moment
+    // a third one does.
+    const columns = [
+      "wholesaler_id", "name", "business_name", "phone", "city",
+      "address", "gstin", "notes",
+    ];
+    const values = [
+      wholesalerId,
+      clean(name),
+      clean(businessName),
+      clean(phone),
+      clean(city),
+      clean(address),
+      gstinValue,
+      clean(notes),
+    ];
+    const casts = [];
+
+    if (hasState) {
+      columns.push("state");
+      values.push(stateValue);
+      casts.push("");
+    }
+    if (hasOpening) {
+      columns.push("opening_balance", "opening_balance_on");
+      values.push(opening.amount, opening.on);
+      casts.push("", "::date");
+    }
+
+    const placeholders = values.map((_, i) => {
+      const cast = i >= 8 ? casts[i - 8] || "" : "";
+      return `$${i + 1}${cast}`;
+    });
+
     const result = await pool.query(
-      `INSERT INTO parties
-         (wholesaler_id, name, business_name, phone, city, address, gstin, notes
-          ${hasOpening ? ", opening_balance, opening_balance_on" : ""})
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8${hasOpening ? ", $9, $10::date" : ""})
+      `INSERT INTO parties (${columns.join(", ")})
+       VALUES (${placeholders.join(", ")})
        RETURNING *`,
-      [
-        wholesalerId,
-        clean(name),
-        clean(businessName),
-        clean(phone),
-        clean(city),
-        clean(address),
-        gstinValue,
-        clean(notes),
-        ...(hasOpening ? [opening.amount, opening.on] : []),
-      ],
+      values,
     );
 
     res.status(201).json(result.rows[0]);
@@ -257,7 +318,7 @@ exports.updateParty = async (req, res) => {
   const wholesalerId = businessId(req);
   const { id } = req.params;
   const {
-    name, businessName, phone, city, address, gstin, notes, status,
+    name, businessName, phone, city, state, address, gstin, notes, status,
     openingBalance, openingBalanceOn,
   } = req.body;
 
@@ -285,6 +346,29 @@ exports.updateParty = async (req, res) => {
   if (businessName !== undefined) put("business_name", clean(businessName));
   if (phone !== undefined) put("phone", clean(phone));
   if (city !== undefined) put("city", clean(city));
+  if (state !== undefined) {
+    // Refused before the migration rather than accepted and dropped: a
+    // wholesaler told his customer's state saved when it was not gets the
+    // wrong tax on the next bill and no sign of why.
+    //
+    // Only when he actually typed one, though. The edit form sends every
+    // field including the empty ones, so refusing an empty state would make
+    // every customer uneditable on a database that has not been migrated, to
+    // protect a value that is not there.
+    if (!(await hasPartyState())) {
+      if (clean(state)) {
+        return res.status(503).json({
+          code: "PARTY_STATE_NOT_SET_UP",
+          message:
+            "Customer state has not been set up yet. Run wholesale3_party_state.sql.",
+        });
+      }
+    } else {
+      const stateValue = stateToStore(state, res);
+      if (stateValue === undefined) return;
+      put("state", stateValue);
+    }
+  }
   if (address !== undefined) put("address", clean(address));
   if (gstin !== undefined) {
     const gstinValue = gstinToStore(gstin, res);

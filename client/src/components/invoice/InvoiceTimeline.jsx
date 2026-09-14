@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   IndianRupee,
 } from "lucide-react";
+import { dateLabel } from "../../utils/money";
 
 export default function InvoiceTimeline({ logs = [] }) {
   if (!logs || logs.length === 0) return null;
@@ -57,9 +58,7 @@ export default function InvoiceTimeline({ logs = [] }) {
                   {log.action}
                 </span>
                 <span className="text-[11px] text-slate-400 font-medium">
-                  {log.created_at
-                    ? new Date(log.created_at).toLocaleString("en-IN")
-                    : ""}
+                  {log.created_at ? dateLabel(log.created_at) : ""}
                 </span>
               </div>
 

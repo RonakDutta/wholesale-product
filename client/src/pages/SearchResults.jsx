@@ -3,7 +3,6 @@ import { useSearchParams, Link } from "react-router-dom";
 import {
   Search,
   SlidersHorizontal,
-  Star,
   Package,
   Store,
   Grid3X3,
@@ -11,11 +10,30 @@ import {
   ArrowUpDown,
   CheckCircle,
   Sparkles,
+  X,
 } from "lucide-react";
 import gsap from "gsap";
 import { ScrollToPlugin } from "gsap/all";
 import api from "../utils/axios"; // Your backend API
+import { money } from "../utils/money";
 import { useLocationFilter } from "../context/LocationContext";
+
+/**
+ * Star ratings used to live on this page and were removed.
+ *
+ * Every card showed 4.5. The catalogue endpoint this page reads,
+ * getPublicCatalog, does not select a rating at all, so `supplier.rating`
+ * was always undefined and `|| 4.5` turned that into a number for
+ * everything on screen. The sort and the "min rating" filter then ordered
+ * and hid results by a constant, and anything at 4.8 or over was badged a
+ * Top Pick, which nothing ever was.
+ *
+ * Real ratings do exist: seller_reviews, averaged by getProductById and
+ * getWholesalerById, and shown on the product and wholesaler pages where a
+ * seller with no reviews honestly reads zero. If search is to rank on that,
+ * the average has to be joined into getPublicCatalog first. Until then this
+ * page shows what it actually knows.
+ */
 
 gsap.registerPlugin(ScrollToPlugin);
 
@@ -30,8 +48,8 @@ const SearchResults = () => {
     category: "",
     minPrice: "",
     maxPrice: "",
-    minRating: "",
   });
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
 
   // Live Database State
   const [fullData, setFullData] = useState({
@@ -78,7 +96,6 @@ const SearchResults = () => {
             vendorName: sName,
             location: bestSupplier.city || "India",
             verified: bestSupplier.verified || false,
-            rating: Number(bestSupplier.rating || 4.5), // Fallback if missing in summary query
             price: Number(product.starting_price || bestSupplier.price || 0),
             bulkPrice: Number(bestSupplier.discountPrice || 0),
             moq: `${bestSupplier.moq || 1} units`,
@@ -107,7 +124,6 @@ const SearchResults = () => {
               location: supplier.city || "India",
               category: product.category,
               verified: supplier.verified || false,
-              rating: Number(supplier.rating || 4.5),
               logo: `https://ui-avatars.com/api/?name=${encodeURIComponent(vName)}&background=random`,
             };
           });
@@ -171,15 +187,8 @@ const SearchResults = () => {
           );
         }
       }
-      if (filters.minRating) {
-        data = data.filter(
-          (item) => item.rating >= parseFloat(filters.minRating),
-        );
-      }
-
       if (sortBy === "price-asc") data.sort((a, b) => a.price - b.price);
       else if (sortBy === "price-desc") data.sort((a, b) => b.price - a.price);
-      else if (sortBy === "rating") data.sort((a, b) => b.rating - a.rating);
 
       setResults(data);
       setLoading(false);
@@ -201,6 +210,70 @@ const SearchResults = () => {
   // nodes, and because React reuses those nodes as the list re-renders while
   // filtering, cards were left mid-fade (most visibly a few items down the
   // list). Results now render immediately.
+
+  // One copy of the controls, shown in the sidebar on a wide screen and in the
+  // drawer on a narrow one. The sidebar is hidden below the sm breakpoint, so
+  // without the drawer a phone has the Filters button and nothing behind it.
+  const isProductTab = activeTab === "product";
+  const clearFilters = () =>
+    setFilters({ category: "", minPrice: "", maxPrice: "" });
+
+  const filterControls = (
+    <>
+      <div>
+        <label className="block text-sm font-medium text-espresso/70 mb-1">
+          Category
+        </label>
+        <select
+          value={filters.category}
+          onChange={(e) => setFilters({ ...filters, category: e.target.value })}
+          className="w-full bg-white/80 border border-sage/30 rounded-xl py-2 px-3 text-sm text-espresso focus:ring-2 focus:ring-clay outline-none"
+        >
+          <option value="">All Categories</option>
+          {fullData.categories.map((cat) => (
+            <option key={cat} value={cat}>
+              {cat}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {isProductTab && (
+        <div>
+          <label className="block text-sm font-medium text-espresso/70 mb-1">
+            Price Range
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              placeholder="Min"
+              value={filters.minPrice}
+              onChange={(e) =>
+                setFilters({ ...filters, minPrice: e.target.value })
+              }
+              className="w-1/2 bg-white/80 border border-sage/30 rounded-xl py-2 px-3 text-sm text-espresso outline-none focus:border-clay"
+            />
+            <input
+              type="number"
+              placeholder="Max"
+              value={filters.maxPrice}
+              onChange={(e) =>
+                setFilters({ ...filters, maxPrice: e.target.value })
+              }
+              className="w-1/2 bg-white/80 border border-sage/30 rounded-xl py-2 px-3 text-sm text-espresso outline-none focus:border-clay"
+            />
+          </div>
+        </div>
+      )}
+
+      <button
+        onClick={clearFilters}
+        className="w-full py-2.5 bg-clay/10 text-clay text-sm font-medium rounded-xl hover:bg-clay/20 transition-colors cursor-pointer"
+      >
+        Clear All Filters
+      </button>
+    </>
+  );
 
   if (!query && initialFetchDone) {
     return (
@@ -229,8 +302,6 @@ const SearchResults = () => {
       </div>
     );
   }
-
-  const isProductTab = activeTab === "product";
 
   return (
     <>
@@ -295,7 +366,6 @@ const SearchResults = () => {
                   <option value="relevance">Relevance</option>
                   <option value="price-asc">Price: Low → High</option>
                   <option value="price-desc">Price: High → Low</option>
-                  <option value="rating">Rating</option>
                 </select>
                 <ArrowUpDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-espresso/40 pointer-events-none" />
               </div>
@@ -346,90 +416,7 @@ const SearchResults = () => {
                 </h3>
               </div>
 
-              {/* Category */}
-              <div>
-                <label className="block text-sm font-medium text-espresso/70 mb-1">
-                  Category
-                </label>
-                <select
-                  value={filters.category}
-                  onChange={(e) =>
-                    setFilters({ ...filters, category: e.target.value })
-                  }
-                  className="w-full bg-white/80 border border-sage/30 rounded-xl py-2 px-3 text-sm text-espresso focus:ring-2 focus:ring-clay outline-none"
-                >
-                  <option value="">All Categories</option>
-                  {fullData.categories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Price Range */}
-              {isProductTab && (
-                <div>
-                  <label className="block text-sm font-medium text-espresso/70 mb-1">
-                    Price Range
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      placeholder="Min"
-                      value={filters.minPrice}
-                      onChange={(e) =>
-                        setFilters({ ...filters, minPrice: e.target.value })
-                      }
-                      className="w-1/2 bg-white/80 border border-sage/30 rounded-xl py-2 px-3 text-sm text-espresso outline-none focus:border-clay"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Max"
-                      value={filters.maxPrice}
-                      onChange={(e) =>
-                        setFilters({ ...filters, maxPrice: e.target.value })
-                      }
-                      className="w-1/2 bg-white/80 border border-sage/30 rounded-xl py-2 px-3 text-sm text-espresso outline-none focus:border-clay"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Rating */}
-              <div>
-                <label className="block text-sm font-medium text-espresso/70 mb-1">
-                  Min Rating
-                </label>
-                <select
-                  value={filters.minRating}
-                  onChange={(e) =>
-                    setFilters({ ...filters, minRating: e.target.value })
-                  }
-                  className="w-full bg-white/80 border border-sage/30 rounded-xl py-2 px-3 text-sm text-espresso outline-none focus:border-clay"
-                >
-                  <option value="">Any</option>
-                  {[1, 2, 3, 4].map((r) => (
-                    <option key={r} value={r}>
-                      {r}+ Stars
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <button
-                onClick={() =>
-                  setFilters({
-                    category: "",
-                    minPrice: "",
-                    maxPrice: "",
-                    minRating: "",
-                  })
-                }
-                className="w-full py-2.5 bg-clay/10 text-clay text-sm font-medium rounded-xl hover:bg-clay/20 transition-colors cursor-pointer"
-              >
-                Clear All Filters
-              </button>
+              {filterControls}
             </aside>
 
             {/* Results area */}
@@ -467,7 +454,6 @@ const SearchResults = () => {
                           category: "",
                           minPrice: "",
                           maxPrice: "",
-                          minRating: "",
                         })
                       }
                       className={`px-6 py-2.5 rounded-xl transition-colors cursor-pointer ${
@@ -504,7 +490,40 @@ const SearchResults = () => {
         </div>
       </div>
 
-      {/* (Filter Drawer code remains unchanged) */}
+      {/* Filter drawer, phones only. The Filters button called a setter that
+          was never declared, so tapping it threw a ReferenceError and the
+          sidebar it was meant to open is hidden below sm anyway. */}
+      {isFilterDrawerOpen && (
+        <div className="fixed inset-0 z-50 sm:hidden">
+          <button
+            aria-label="Close filters"
+            onClick={() => setIsFilterDrawerOpen(false)}
+            className="absolute inset-0 bg-espresso/40 backdrop-blur-sm"
+          />
+          <div className="absolute inset-x-0 bottom-0 max-h-[80vh] overflow-y-auto rounded-t-2xl bg-cream p-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 font-semibold text-espresso">
+                <SlidersHorizontal className="h-4 w-4 text-clay" />
+                Filters
+              </h3>
+              <button
+                aria-label="Close filters"
+                onClick={() => setIsFilterDrawerOpen(false)}
+                className="rounded-lg p-1.5 text-espresso/60 hover:bg-sage/10 hover:text-espresso"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-5">{filterControls}</div>
+            <button
+              onClick={() => setIsFilterDrawerOpen(false)}
+              className="mt-5 w-full rounded-xl bg-clay py-2.5 text-sm font-bold text-cream"
+            >
+              Show results
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 };
@@ -513,8 +532,6 @@ const ResultCard = ({ item, viewMode }) => {
   const isProduct = item.type === "product";
   // Convert ID to string to ensure safe routing
   const linkTo = `/${isProduct ? "product" : "wholesaler"}/${item.id.toString()}`;
-
-  const isTopPick = item.rating >= 4.8;
 
   const SupplyBadge = ({ signal }) => {
     const colorMap = {
@@ -538,12 +555,6 @@ const ResultCard = ({ item, viewMode }) => {
         to={linkTo}
         className="result-card group relative bg-white/80 backdrop-blur-sm rounded-2xl overflow-hidden border border-sage/20 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1.5 hover:border-clay/30"
       >
-        {isTopPick && (
-          <div className="absolute top-3 left-3 z-10 flex items-center gap-1 bg-yellow-400/90 text-yellow-900 text-xs font-bold px-2.5 py-1 rounded-full shadow-md backdrop-blur-sm">
-            <Sparkles className="w-3 h-3" />
-            Top Pick
-          </div>
-        )}
         <div className="aspect-square bg-sage/10 flex items-center justify-center overflow-hidden">
           <img
             src={isProduct ? item.image : item.logo}
@@ -567,21 +578,15 @@ const ResultCard = ({ item, viewMode }) => {
                 {item.vendorName}
               </p>
               <div className="flex items-center gap-2 mt-2.5">
-                <div className="flex items-center gap-1">
-                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                  <span className="text-sm font-medium text-espresso/80">
-                    {item.rating.toFixed(1)}
-                  </span>
-                </div>
                 <SupplyBadge signal={item.supplySignal} />
               </div>
               <div className="flex items-center justify-between mt-2">
                 <p className="text-base font-bold text-espresso">
-                  ₹{item.price.toFixed(2)}
+                  {money(item.price)}
                 </p>
                 {item.bulkPrice > 0 && (
                   <p className="text-xs text-espresso/50 bg-sage/10 px-2 py-0.5 rounded-full">
-                    Bulk: ₹{item.bulkPrice.toFixed(2)}
+                    Bulk: {money(item.bulkPrice)}
                   </p>
                 )}
               </div>
@@ -590,14 +595,6 @@ const ResultCard = ({ item, viewMode }) => {
           ) : (
             <>
               <p className="text-sm text-espresso/60 mt-0.5">{item.location}</p>
-              <div className="flex items-center gap-2 mt-1.5">
-                <div className="flex items-center gap-1">
-                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                  <span className="text-sm font-medium text-espresso/80">
-                    {item.rating.toFixed(1)}
-                  </span>
-                </div>
-              </div>
             </>
           )}
         </div>
@@ -624,12 +621,6 @@ const ResultCard = ({ item, viewMode }) => {
             {item.name}
           </h4>
           <div className="flex items-center gap-1.5">
-            {isTopPick && (
-              <span className="flex items-center gap-0.5 bg-yellow-400/80 text-yellow-900 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                <Sparkles className="w-3 h-3" />
-                Top
-              </span>
-            )}
             {item.verified && (
               <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
             )}
@@ -640,19 +631,13 @@ const ResultCard = ({ item, viewMode }) => {
           <>
             <p className="text-sm text-espresso/60">{item.vendorName}</p>
             <div className="flex flex-wrap items-center gap-4 mt-2.5">
-              <div className="flex items-center gap-0.5">
-                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                <span className="text-sm font-medium text-espresso/80">
-                  {item.rating.toFixed(1)}
-                </span>
-              </div>
               <SupplyBadge signal={item.supplySignal} />
               <span className="text-sm font-semibold text-espresso">
-                ₹{item.price.toFixed(2)}
+                {money(item.price)}
               </span>
               {item.bulkPrice > 0 && (
                 <span className="text-xs text-espresso/50 bg-sage/10 px-2 py-0.5 rounded-full">
-                  Bulk: ₹{item.bulkPrice.toFixed(2)}
+                  Bulk: {money(item.bulkPrice)}
                 </span>
               )}
             </div>
@@ -664,14 +649,6 @@ const ResultCard = ({ item, viewMode }) => {
         ) : (
           <>
             <p className="text-sm text-espresso/60">{item.location}</p>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="flex items-center gap-0.5">
-                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                <span className="text-sm font-medium text-espresso/80">
-                  {item.rating.toFixed(1)}
-                </span>
-              </div>
-            </div>
           </>
         )}
       </div>

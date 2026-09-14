@@ -197,6 +197,28 @@ const SellerOrderDetail = () => {
     setDownloading("");
   };
 
+  /**
+   * The bill for this order.
+   *
+   * The buyer has had this button on his own order page all along; the
+   * wholesaler who raised the bill had no way to reach it from the order at
+   * all, and had to go and find it in the invoice list. Same endpoint, which
+   * already allows either side of the order, so this fetches the one existing
+   * document rather than producing a second differently numbered one.
+   */
+  const downloadInvoice = async () => {
+    setDownloading("invoice");
+    try {
+      await downloadFile(
+        `/api/invoices/by-order/${orderId}/pdf`,
+        `invoice-${order?.order_number || orderId}.pdf`,
+      );
+    } catch (err) {
+      toast.error(err.message || "Could not download the invoice");
+    }
+    setDownloading("");
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -254,7 +276,17 @@ const SellerOrderDetail = () => {
             {formatOrderStatus(order.status)}
           </span>
         </div>
-        <p className="mt-1 text-sm text-slate-500">Placed {when(order.created_at)}</p>
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-slate-500">Placed {when(order.created_at)}</p>
+          <button
+            onClick={downloadInvoice}
+            disabled={downloading === "invoice"}
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-espresso transition-colors hover:border-clay hover:text-clay disabled:opacity-60"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {downloading === "invoice" ? "Preparing..." : "Invoice"}
+          </button>
+        </div>
       </div>
 
       {/* What to do next, at the top, because it is the reason the page was

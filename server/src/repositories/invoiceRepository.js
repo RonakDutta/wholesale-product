@@ -188,6 +188,12 @@ async function schemaExtras(db = pool) {
                    AND column_name = 'place_of_supply') AS has_rule46_fields,
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'sale_lines' AND column_name = 'gst_percent') AS has_line_gst,
+        -- The customer's declared state, from wholesale3_party_state.sql.
+        -- Until it is run the column is selected as NULL, which placeOfSupply
+        -- reads as "not told" and falls back to the GST number then the city,
+        -- exactly as it did before.
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'parties' AND column_name = 'state') AS has_party_state,
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'items' AND column_name = 'gst_percent') AS has_item_gst,
         EXISTS (SELECT 1 FROM information_schema.columns

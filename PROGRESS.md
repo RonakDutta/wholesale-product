@@ -35,9 +35,9 @@ cd server && npm run migrate
 | `wholesale3_master_settings.sql` | Platform formatting: decimals, digit grouping, currency, date format | run 14 Sept |
 | `wholesale3_opening_balance.sql` | What a customer or supplier already owed before this product | run 14 Sept |
 | `wholesale3_party_state.sql` | The customer's declared state, which decides CGST plus SGST against IGST | **NOT RUN** |
-| `wholesale3_razorpay_route.sql` | Linked accounts, transfers and webhook deliveries, so a buyer's money reaches the wholesaler | **NOT RUN** |
+| `wholesale3_razorpay_route.sql` | Linked accounts, transfers and webhook deliveries, so a buyer's money reaches the wholesaler | run 14 Sept |
 
-**Two outstanding as of 14 Sept.**
+**One outstanding as of 14 Sept.**
 
 `wholesale3_party_state.sql`. Until it is run, the State box on the customer
 form answers `503 PARTY_STATE_NOT_SET_UP` when a state is actually typed, and
@@ -45,11 +45,14 @@ everything else about a customer saves exactly as before. Bills go on being
 decided by the GST number and then the city, which is what they did
 yesterday.
 
-`wholesale3_razorpay_route.sql` changes nothing on its own. Running it does
-NOT alter how any existing payment behaves: without an activated linked
-account no transfer is attached, and the payment is taken exactly as it was
-before. It only opens the Taking card payments screen so a wholesaler can
-start onboarding.
+The Route migration changed nothing on its own, by design. Without an
+activated linked account no transfer is attached and a payment is taken
+exactly as it was before. What it opens is the Taking card payments screen at
+`/seller/settings/payments`, so a wholesaler can start onboarding. Before any
+money can actually reach one, three things outside the database are still
+needed: Route enabled on the Razorpay account, `RAZORPAY_WEBHOOK_SECRET` set
+or the webhook endpoint refuses every delivery, and Partner access if linked
+accounts are to be created by API rather than by hand in their dashboard.
 
 Restart the server after running any of them. The schema probes are cached per
 process, so a running server goes on believing a table is absent, which is what

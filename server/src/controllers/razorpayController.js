@@ -1,6 +1,62 @@
 const pool = require("../config/db");
 const razorpay = require("../services/razorpayService");
 const orderController = require("./orderController");
+const invoiceRepository = require("../repositories/invoiceRepository");
+const masterService = require("../services/masterService");
+
+/**
+ * Where this wholesaler's share of a payment should go, if anywhere.
+ *
+ * Returns an account id ONLY when Razorpay has activated him. Every other
+ * case returns none, and the payment is taken exactly as it was before Route
+ * existed: no transfer, money into the platform's account, reconciled by a
+ * person. That covers the migration not having been run, a wholesaler who
+ * never onboarded, and one Razorpay has not cleared yet.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY NOT REFUSE THE PAYMENT INSTEAD
+ * ---------------------------------------------------------------------------
+ * The first cut of this blocked checkout for anybody not activated, on the
+ * reasoning that money the platform cannot forward should not be taken. That
+ * was wrong twice over. It broke every existing seller the moment the
+ * migration was run, which is not what running a migration is allowed to do
+ * here. And it was solving a problem that only arises if a transfer is
+ * attached anyway: the danger is a transfer to an UNACTIVATED account, which
+ * Razorpay holds with nobody able to release it. Simply not attaching one
+ * leaves the payment exactly as good as it was yesterday.
+ *
+ * So the rule is narrow: never attach a transfer to an account that cannot
+ * receive it.
+ */
+const routeTarget = async (supplierId) => {
+  const none = { accountId: null, commissionPercent: 0 };
+
+  const has = await invoiceRepository.schemaExtras();
+  if (!has.has_razorpay_route) return none;
+
+  const found = await pool.query(
+    `SELECT razorpay_account_id, razorpay_kyc_status
+       FROM wholesaler_profiles WHERE user_id = $1`,
+    [supplierId],
+  );
+  const row = found.rows[0];
+  if (!row?.razorpay_account_id || row.razorpay_kyc_status !== "activated") {
+    return none;
+  }
+
+  let commissionPercent = 0;
+  try {
+    const settings = await masterService.settings();
+    commissionPercent = Number(settings?.platform_commission_percent) || 0;
+  } catch {
+    // No settings row, or the migration is not in. Nothing is the right
+    // default: a commission is a commercial decision, and inventing one takes
+    // money from a wholesaler nobody agreed to take.
+    commissionPercent = 0;
+  }
+
+  return { accountId: row.razorpay_account_id, commissionPercent };
+};
 
 /**
  * The three endpoints a Razorpay checkout needs.
@@ -34,7 +90,8 @@ const createRazorpayOrder = async (req, res) => {
 
   try {
     const session = await pool.query(
-      `SELECT pt.id, pt.amount, pt.installment_number, o.order_number, o.buyer_id
+      `SELECT pt.id, pt.amount, pt.installment_number, o.order_number,
+              o.buyer_id, o.supplier_id
          FROM payment_transactions pt
          JOIN orders o ON o.id = pt.order_id
         WHERE pt.order_id = $1 AND pt.payment_status = 'pending'
@@ -67,10 +124,29 @@ const createRazorpayOrder = async (req, res) => {
       return res.status(403).json({ success: false, message: "This order belongs to someone else." });
     }
 
+    // Who gets the money, if the gateway can send it to him at all. See
+    // routeTarget: no account means no transfer, and the payment is taken
+    // exactly as it was before Route.
+    const route = await routeTarget(row.supplier_id);
+    const amountPaise = razorpay.toPaise(row.amount);
     const gatewayOrder = await razorpay.createOrder({
       amountRupees: row.amount,
       receipt: `${row.order_number || orderId}-${row.installment_number || 1}`,
       notes: { orderId, sessionId: String(row.id) },
+      transfers: route.accountId
+        ? [
+            {
+              account: route.accountId,
+              amount: razorpay.transferAmount(amountPaise, route.commissionPercent),
+              currency: "INR",
+              notes: { orderId, orderNumber: row.order_number || "" },
+              // Settled to him on Razorpay's ordinary schedule. Holding it
+              // would need somebody to release it, and there is no screen
+              // that does and no rule saying when.
+              on_hold: false,
+            },
+          ]
+        : undefined,
     });
 
     await pool.query(

@@ -194,6 +194,12 @@ async function schemaExtras(db = pool) {
         -- exactly as it did before.
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'parties' AND column_name = 'state') AS has_party_state,
+        -- Razorpay Route, from wholesale3_razorpay_route.sql. Until it is run
+        -- there are no linked accounts, so no transfer is attached to a
+        -- payment and the money is taken exactly as it was before Route.
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'wholesaler_profiles'
+                   AND column_name = 'razorpay_account_id') AS has_razorpay_route,
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'items' AND column_name = 'gst_percent') AS has_item_gst,
         EXISTS (SELECT 1 FROM information_schema.columns

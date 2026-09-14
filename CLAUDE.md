@@ -40,6 +40,26 @@ Files are applied in rough date order, except `z_fix_order_payment_status_constr
 which is named to sort last because it re-applies a CHECK constraint that
 earlier files drop.
 
+**Never put a semicolon inside a comment in a migration.** Use a full stop.
+They are pasted into a hosted SQL editor, which splits a file on semicolons
+with no idea that one is inside a `--` comment. It cuts the sentence in half
+and hands the tail to the server as a statement, producing a syntax error
+that points at a line nowhere near the real problem. `psql` runs such a file
+perfectly, so `psql -f` passing proves nothing about this. It cost a debugging
+round on 14 Sept, where the reported error was `syntax error at or near "="`
+and the SQL was entirely valid.
+
+For the same reason prefer plain, separately terminated statements over
+`DO $$ ... $$` blocks: a splitter cuts straight through the middle of one.
+Most guards do not need a DO block at all. `ADD COLUMN IF NOT EXISTS`,
+`DROP CONSTRAINT IF EXISTS` followed by `ADD CONSTRAINT`, and
+`ALTER TABLE IF EXISTS` between them cover nearly everything, and
+`ALTER TABLE IF EXISTS` is how to touch a table another migration may not
+have created yet. `wholesale3_razorpay_route.sql` is the worked example.
+
+Test a new migration against a splitter, not just `psql`: split the file on
+semicolons and run the pieces one at a time.
+
 ## Verifying database work
 
 The pattern that has caught the most real bugs here: start a local Postgres,

@@ -122,9 +122,15 @@ const Login = () => {
         navigate("/");
       }
     } catch (error) {
+      // The password was right and the account still did not load, which is
+      // the connection rather than the credentials. Saying "invalid
+      // credentials" there sends somebody off to reset a password that was
+      // never wrong.
       const errorMessage =
-        error.response?.data?.message ||
-        "Invalid credentials. Please try again.";
+        error.code === "ACCOUNT_LOAD_FAILED"
+          ? error.message
+          : error.response?.data?.message ||
+            "Invalid credentials. Please try again.";
       showError("email", errorMessage);
       toast.error(errorMessage);
     } finally {

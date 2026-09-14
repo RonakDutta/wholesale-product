@@ -22,10 +22,24 @@ const challanRoutes = require("./routes/challanRoutes");
 const masterRoutes = require("./routes/masterRoutes");
 const supplierRoutes = require("./routes/supplierRoutes");
 const purchaseRoutes = require("./routes/purchaseRoutes");
+const routeRoutes = require("./routes/routeRoutes");
+const webhookRoutes = require("./routes/webhookRoutes");
 
 const app = express();
 
 app.use(cors());
+
+/**
+ * Webhooks are mounted BEFORE express.json, and the order is load bearing.
+ *
+ * Razorpay signs the raw bytes of the request. Once express.json has parsed
+ * the body there is no way back to those bytes: re-serialising the object
+ * changes key order, spacing and unicode escaping, so the HMAC would never
+ * match and every genuine webhook would look forged. The route supplies its
+ * own express.raw parser.
+ */
+app.use("/api/webhooks", webhookRoutes);
+
 app.use(express.json());
 
 // Serve uploaded files
@@ -63,5 +77,9 @@ app.use("/api/masters", masterRoutes);
 // for them. See services/supplierBalance.js for why this is not the party book.
 app.use("/api/suppliers", supplierRoutes);
 app.use("/api/purchases", purchaseRoutes);
+// Getting a wholesaler ready to be paid through the gateway, and what he has
+// been sent. See controllers/routeController.js for why only 'activated'
+// opens the gate.
+app.use("/api/seller/razorpay", routeRoutes);
 
 module.exports = app;

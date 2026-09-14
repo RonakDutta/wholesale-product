@@ -94,6 +94,7 @@ class InvoiceService {
           o.subtotal, o.status, o.payment_status, o.amount_paid, o.created_at, o.delivery_address,
           bu.first_name AS buyer_first_name, bu.last_name AS buyer_last_name, bu.email AS buyer_email,
           bwp.company_name AS buyer_company, bwp.gstin AS buyer_gstin, bwp.city AS buyer_city,
+          bwp.warehouse_state AS buyer_state,
           su.first_name AS supplier_first_name, su.last_name AS supplier_last_name, su.email AS supplier_email,
           swp.company_name AS supplier_company, swp.gstin AS supplier_gstin, swp.upi_id AS supplier_upi_id,
           swp.warehouse_state AS supplier_state,
@@ -154,7 +155,13 @@ class InvoiceService {
         gstin: order.supplier_gstin,
         city: order.supplier_city,
       };
+      // The declared state goes in on the buyer's side too. It was selected
+      // for the supplier and not for the buyer, out of the same table, so the
+      // first and strongest source placeOfSupply asks for was never given for
+      // half the bill: a buyer who had set his state and had no GST number
+      // was placed by the city map, or nowhere.
       const buyerLocation = {
+        state: order.buyer_state,
         gstin: order.buyer_gstin,
         city: order.buyer_city,
       };
@@ -543,7 +550,7 @@ class InvoiceService {
       }
 
       const buyerQuery = await client.query(
-        `SELECT u.id, u.email, wp.city, wp.gstin
+        `SELECT u.id, u.email, wp.city, wp.gstin, wp.warehouse_state AS state
            FROM users u
            LEFT JOIN wholesaler_profiles wp ON u.id = wp.user_id
           WHERE u.id = $1`,
@@ -574,10 +581,18 @@ class InvoiceService {
           gstin: supplierProfile.gstin,
           city: supplierProfile.city,
         },
-        buyerLocation: { gstin: buyerUser.gstin, city: buyerUser.city },
+        buyerLocation: {
+          state: buyerUser.state,
+          gstin: buyerUser.gstin,
+          city: buyerUser.city,
+        },
       });
 
-      const pos = placeOfSupply({ gstin: buyerUser.gstin, city: buyerUser.city });
+      const pos = placeOfSupply({
+        state: buyerUser.state,
+        gstin: buyerUser.gstin,
+        city: buyerUser.city,
+      });
 
       const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(
         client,

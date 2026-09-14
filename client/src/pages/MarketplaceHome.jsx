@@ -24,6 +24,9 @@ const MarketplaceHome = () => {
 
   const [products, setProducts] = useState([]);
   const [isFetching, setIsFetching] = useState(true);
+  // A catalogue that failed to load and a catalogue with nothing in it look
+  // identical once the array is empty, and they need different words.
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -51,55 +54,22 @@ const MarketplaceHome = () => {
         }));
 
         setProducts(mappedProducts);
+        setLoadFailed(false);
       } catch (err) {
+        // A failed catalogue shows nothing, not something.
+        //
+        // Two invented products used to stand in here: ABC Textiles in Mumbai
+        // and XYZ Garments in Delhi, with prices, MOQs, verified ticks and
+        // phone numbers. They were clickable, so a buyer could try to order
+        // from a wholesaler who does not exist, and a real wholesaler looking
+        // at his own marketplace saw competitors who were never there.
+        //
+        // Nothing is shown instead, and the empty state says the catalogue
+        // could not be loaded rather than blaming the buyer's filters.
         console.error("Failed to fetch catalog:", err);
-        toast.error("Failed to load live catalog. Using demo data.");
-
-        // Fallback to mock data when database is not connected
-        setProducts([
-          {
-            id: "1",
-            name: "Cotton T-Shirt",
-            category: "Clothing",
-            image:
-              "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500",
-            description: "Premium cotton t-shirt for bulk orders",
-            suppliers: [
-              {
-                id: "s1",
-                name: "ABC Textiles",
-                price: 150,
-                discountPrice: 120,
-                moq: 50,
-                verified: true,
-                city: "Mumbai",
-                country: "India",
-                phone: "919876543210",
-              },
-            ],
-          },
-          {
-            id: "2",
-            name: "Denim Jeans",
-            category: "Clothing",
-            image:
-              "https://images.unsplash.com/photo-1542272604-787c3835535d?w=500",
-            description: "High quality denim jeans in bulk",
-            suppliers: [
-              {
-                id: "s2",
-                name: "XYZ Garments",
-                price: 450,
-                discountPrice: 380,
-                moq: 30,
-                verified: true,
-                city: "Delhi",
-                country: "India",
-                phone: "919876543211",
-              },
-            ],
-          },
-        ]);
+        toast.error("Could not load the catalogue. Please try again.");
+        setProducts([]);
+        setLoadFailed(true);
       } finally {
         setIsFetching(false);
       }
@@ -322,7 +292,17 @@ const MarketplaceHome = () => {
           <div className="text-center py-12 text-sm text-slate-500">
             {/* Naming the city matters. Without it a buyer cannot tell
                 whether the shop is empty or he narrowed it himself. */}
-            {cityParam ? (
+            {loadFailed ? (
+              <>
+                <p>The catalogue could not be loaded.</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="mt-3 rounded-xl border border-sage/40 px-4 py-2 text-xs font-bold text-espresso transition-colors hover:border-clay hover:text-clay"
+                >
+                  Try again
+                </button>
+              </>
+            ) : cityParam ? (
               <>
                 <p>No products from sellers in {cityLabel}.</p>
                 <button

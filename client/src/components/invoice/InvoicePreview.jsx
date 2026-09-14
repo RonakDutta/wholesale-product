@@ -3,7 +3,7 @@ import { X, Printer, Download, Send } from "lucide-react";
 import { toast } from "sonner";
 import { downloadFile } from "../../utils/download";
 import InvoiceStatusBadge from "./InvoiceStatusBadge";
-import { amount as money } from "../../utils/money";
+import { amount as money, dateLabel } from "../../utils/money";
 
 export default function InvoicePreview({ invoice, onClose, onSendEmail }) {
   const [downloading, setDownloading] = useState(false);
@@ -118,14 +118,12 @@ export default function InvoicePreview({ invoice, onClose, onSendEmail }) {
               </div>
               <div className="text-xs text-slate-500 mt-1">
                 Date:{" "}
-                {invoice.issue_date
-                  ? new Date(invoice.issue_date).toLocaleDateString("en-IN")
-                  : "N/A"}
+                {invoice.issue_date ? dateLabel(invoice.issue_date) : "N/A"}
               </div>
               {invoice.due_date && (
                 <div className="text-xs text-slate-500">
                   Due Date:{" "}
-                  {new Date(invoice.due_date).toLocaleDateString("en-IN")}
+                  {dateLabel(invoice.due_date)}
                 </div>
               )}
             </div>

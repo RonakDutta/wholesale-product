@@ -3,6 +3,12 @@ import { useNavigate, Link } from "react-router-dom";
 import { Plus, Trash2, ArrowLeft, Save, Users, Calculator } from "lucide-react";
 import { toast } from "sonner";
 import axios from "../../utils/axios";
+import { rupees } from "../../utils/money";
+
+// Document precision, the same as the bill this form is about to produce.
+// These totals used to be hard coded to two decimals with no grouping, so a
+// wholesaler read 1500.00 here and 1,500 everywhere else.
+const inr = (value) => rupees(value, { document: true });
 
 export default function CreateInvoice() {
   const navigate = useNavigate();
@@ -426,7 +432,7 @@ export default function CreateInvoice() {
 
             <div className="flex justify-between text-espresso/60">
               <span>Subtotal:</span>
-              <span>₹{subtotal.toFixed(2)}</span>
+              <span>{inr(subtotal)}</span>
             </div>
 
             <div className="flex justify-between items-center gap-4">
@@ -451,17 +457,17 @@ export default function CreateInvoice() {
 
             <div className="flex justify-between font-bold text-espresso pt-2 border-t border-slate-100">
               <span>Taxable Amount:</span>
-              <span>₹{taxableAmount.toFixed(2)}</span>
+              <span>{inr(taxableAmount)}</span>
             </div>
 
             <div className="flex justify-between text-espresso/60">
               <span>Total Tax (GST):</span>
-              <span>₹{totalTax.toFixed(2)}</span>
+              <span>{inr(totalTax)}</span>
             </div>
 
             <div className="flex justify-between text-base font-black text-white bg-slate-900 p-3 rounded-xl mt-2">
               <span>Grand Total:</span>
-              <span>₹{grandTotal.toFixed(2)}</span>
+              <span>{inr(grandTotal)}</span>
             </div>
           </div>
         </div>

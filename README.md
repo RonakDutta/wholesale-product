@@ -214,15 +214,25 @@ wholesale-product/
    DATABASE_URL=postgresql://username:password@localhost:5432/database_name
    PORT=5000
    JWT_SECRET=your_jwt_secret_key
-   RAZORPAY_KEY_ID=your_razorpay_key_id
+   RAZORPAY_KEY_ID=rzp_test_your_key_id
    RAZORPAY_KEY_SECRET=your_razorpay_key_secret
    ```
+
+   Razorpay is optional. With `RAZORPAY_KEY_SECRET` unset the checkout runs in
+   stub mode: it signs its own fake payments and never reaches the internet.
+   Setting a real secret is what switches it live, and it also closes the
+   simulate endpoint. There is no separate on/off flag.
 
 2. **Configure client environment variables** (`client/.env`)
    ```env
    VITE_API_BASE_URL=http://localhost:5000
-   VITE_RAZORPAY_KEY_ID=your_razorpay_key_id
+   VITE_CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+   VITE_CLOUDINARY_UPLOAD_PRESET=your_unsigned_upload_preset
    ```
+
+   The Razorpay key id is deliberately not a client variable. The browser is
+   handed it by the server when a payment is opened, so there is one place to
+   change keys.
 
 ### Database Setup
 

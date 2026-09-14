@@ -43,6 +43,7 @@ class SaleInvoiceService {
               p.id AS party_id, p.name AS party_name,
               p.business_name AS party_business_name,
               p.gstin AS party_gstin, p.city AS party_city,
+              ${has.has_party_state ? "p.state" : "NULL"} AS party_state,
               p.address AS party_address, p.phone AS party_phone,
               p.user_id AS party_user_id
          FROM sales s
@@ -313,11 +314,19 @@ class SaleInvoiceService {
           gstin: seller.gstin,
           city: seller.warehouse_city || seller.city,
         },
-        buyerLocation: { gstin: sale.party_gstin, city: sale.party_city },
+        buyerLocation: {
+          state: sale.party_state,
+          gstin: sale.party_gstin,
+          city: sale.party_city,
+        },
         isTaxInclusive: fromShop || legacyInclusive ? true : TAX_INCLUSIVE,
       });
 
-      const pos = placeOfSupply({ gstin: sale.party_gstin, city: sale.party_city });
+      const pos = placeOfSupply({
+        state: sale.party_state,
+        gstin: sale.party_gstin,
+        city: sale.party_city,
+      });
 
       const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(
         client,

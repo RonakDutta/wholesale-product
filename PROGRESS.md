@@ -36,8 +36,15 @@ cd server && npm run migrate
 | `wholesale3_opening_balance.sql` | What a customer or supplier already owed before this product | run 14 Sept |
 | `wholesale3_party_state.sql` | The customer's declared state, which decides CGST plus SGST against IGST | **NOT RUN** |
 | `wholesale3_supplier_payment_details.sql` | A supplier's UPI ID and bank details, and the reference on a payment | **NOT RUN** |
+| `wholesale3_razorpay_route.sql` | Linked accounts, transfers and webhook deliveries, so a buyer's money reaches the wholesaler | **NOT RUN** |
 
-**Two outstanding as of 14 Sept.**
+**Three outstanding as of 14 Sept.**
+
+`wholesale3_razorpay_route.sql` changes nothing on its own. Running it does
+NOT alter how any existing payment behaves: without an activated linked
+account no transfer is attached, and the payment is taken exactly as it was
+before. It only opens the Taking card payments screen so a wholesaler can
+start onboarding.
 
 `wholesale3_party_state.sql`. Until it is run, the State box on the customer
 form answers `503 PARTY_STATE_NOT_SET_UP` when a state is actually typed, and
@@ -141,6 +148,86 @@ node scripts/backfill_order_sales.js      # accepted orders into the book  (done
 ---
 
 ## Done
+
+### 14 Sept 2026, Razorpay Route and the KYC plumbing
+
+Asked whether we could KYC everyone who joins and then have Razorpay handle
+everything, ordering and the purchase page alike. Half of that is exactly
+right and is now built. The other half cannot work, for a reason worth
+writing down.
+
+**KYC is not ours to build, and that is the point.** What is buildable is the
+plumbing: collect what Razorpay asks for, submit it, store the account id,
+reflect the status, gate on it. The verification itself, that a PAN is real
+and a bank account belongs to that business, is Razorpay's and their banking
+partner's. A marketplace that self-certified its own sellers is how buyers'
+money goes missing.
+
+**Why it does not reach the purchase page.** KYC of a wholesaler lets him
+RECEIVE money. The purchase page is him paying out, which is the opposite
+direction and a different Razorpay product. But the real blocker is not KYC,
+it is that there is nobody to KYC: a supplier is a private row in one
+wholesaler's book, with no login, no account and no consent. He never joins,
+so "KYC everyone who joins" never reaches him.
+
+And if he DID join, the right flow is not the purchase book at all: the
+wholesaler would place an order with him, which Route already covers. The
+purchase book exists precisely for the mills that will never sign up, and
+those keep the UPI intent built earlier today.
+
+**BUILT.** `wholesale3_razorpay_route.sql` adds `razorpay_account_id` and a
+`razorpay_kyc_status` to `wholesaler_profiles`, plus `razorpay_transfers` and
+`razorpay_webhook_events`. A Taking card payments screen at
+`/seller/settings/payments` collects the business details, PAN, registered
+address and settlement bank account, creates the linked account, adds the
+stakeholder, requests the route product and submits the bank account.
+
+The status is stored rather than inferred, because a linked account exists
+long before it can be paid into. `mapAccountStatus` reads any state it does
+not recognise as `under_review`, never `activated`: a new state name
+appearing in Razorpay's API must not be read as permission to move money.
+
+**The webhook, which Route makes mandatory rather than optional.** Settlement
+used to depend entirely on the buyer's browser posting back to `/verify`.
+That was survivable while every rupee sat in one account a person could
+reconcile; with Route the money has already moved to the wholesaler while the
+order still says unpaid. `POST /api/webhooks/razorpay` verifies
+`X-Razorpay-Signature` over the RAW body, which is why it is mounted in
+app.js ahead of `express.json`: re-serialising a parsed object changes key
+order and spacing, so parsing first would make every genuine webhook look
+forged. Deliveries are recorded before they are acted on and the unique index
+on `event_id` makes Razorpay's retries harmless.
+
+**A design I got wrong and corrected.** The first cut refused checkout
+outright for any wholesaler not activated, reasoning that money the platform
+cannot forward should not be taken. That broke thirteen checks in
+`razorpay_check`, and the failure was right: running a migration is not
+allowed to break every existing seller. It was also solving a problem it had
+invented. The danger is a transfer to an UNACTIVATED account, which Razorpay
+holds with nobody able to release it; simply not attaching one leaves the
+payment exactly as good as it was yesterday. So the rule is narrow: never
+attach a transfer to an account that cannot receive it.
+
+**Commission defaults to zero**, in `master_settings.platform_commission_percent`.
+A plausible five per cent defaulted in would be money taken from wholesalers
+that nobody agreed to. The stray paisa on a split is rounded DOWN, so the
+platform absorbs it and a transfer can never exceed what was captured.
+
+`scripts/route_check.js`, 27 checks. Razorpay is stubbed at the transport, so
+this proves we call it correctly and act on the answer correctly, not that
+their API behaves as documented. **The first live call is still the real
+test**, exactly as with `createOrder`.
+
+Caught by running it: `$2` used both as a column value and inside a `CASE`
+comparison left Postgres unable to infer the parameter type, and every status
+write failed with "text versus character varying". Cast explicitly.
+
+**Still not done, and needed before real money:** Route requires your Razorpay
+account to have it enabled, and creating linked accounts by API needs Partner
+access; without that they are created by hand in the dashboard and only the
+id is stored here. `RAZORPAY_WEBHOOK_SECRET` must be set or the webhook
+endpoint refuses everything, deliberately, since an unverifiable endpoint
+that moves money must not be an open one.
 
 ### 14 Sept 2026, paying a supplier by UPI
 

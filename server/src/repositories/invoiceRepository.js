@@ -200,6 +200,12 @@ async function schemaExtras(db = pool) {
         -- in before it existed.
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'suppliers' AND column_name = 'upi_id') AS has_supplier_pay_details,
+        -- Razorpay Route, from wholesale3_razorpay_route.sql. Until it is run
+        -- there are no linked accounts, so no wholesaler can be paid through
+        -- the gateway and every order falls back to the UPI QR.
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'wholesaler_profiles'
+                   AND column_name = 'razorpay_account_id') AS has_razorpay_route,
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'items' AND column_name = 'gst_percent') AS has_item_gst,
         EXISTS (SELECT 1 FROM information_schema.columns

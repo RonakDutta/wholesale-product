@@ -274,7 +274,7 @@ const SellerLayout = () => {
           >
             <Search className="h-4 w-4 shrink-0" />
             <span className="flex-1 text-left">Search</span>
-            <kbd className="hidden shrink-0 rounded border border-cream/20 px-1.5 py-0.5 font-mono text-[10px] font-bold md:block">
+            <kbd className="hidden shrink-0 rounded-md border border-cream/15 px-1.5 py-0.5 text-[11px] font-semibold tracking-tight text-cream/40 md:block">
               {prettyCombo("mod+k")}
             </kbd>
           </button>

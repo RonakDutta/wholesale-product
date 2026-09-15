@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
+import { useHotkey } from "../../hooks/useHotkey";
 import { useMasters } from "../../hooks/useMasters";
 import { money, toPaise, fromPaise } from "../../utils/money";
 import SupplierFormModal from "../../components/SupplierFormModal";
@@ -181,6 +182,35 @@ const RecordPurchase = () => {
     Math.max(0, toPaise(totals.total) - Math.max(0, toPaise(amountPaid))),
   );
 
+  /**
+   * The two keys somebody entering a stack of bills actually wants.
+   *
+   * Both carry a modifier, because he is inside a field when he wants them
+   * and a bare letter would land in the item name. Adding a line is the most
+   * repeated action in this form by a wide margin.
+   */
+  const addLine = () => setLines((prev) => [...prev, blankLine()]);
+
+  useHotkey("alt+n", addLine, {
+    label: "Add another line",
+    group: "Entering a purchase",
+    allowInInput: true,
+  });
+
+  useHotkey(
+    "mod+s",
+    () => {
+      // Submitted through the form so every check and every toast is the same
+      // as pressing the button. A second save path is how the two drift.
+      document.getElementById("record-purchase")?.requestSubmit();
+    },
+    {
+      label: "Save this purchase",
+      group: "Entering a purchase",
+      allowInInput: true,
+    },
+  );
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -281,7 +311,7 @@ const RecordPurchase = () => {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mx-auto max-w-4xl space-y-6 pb-28">
+    <form id="record-purchase" onSubmit={handleSubmit} className="mx-auto max-w-4xl space-y-6 pb-28">
       <button
         type="button"
         onClick={() => navigate(-1)}
@@ -545,7 +575,7 @@ const RecordPurchase = () => {
         <div className="border-t border-slate-100 p-4 sm:px-5">
           <button
             type="button"
-            onClick={() => setLines((prev) => [...prev, blankLine()])}
+            onClick={addLine}
             className="flex items-center gap-2 rounded-lg border border-dashed border-slate-300 px-4 py-2 text-sm font-bold text-slate-500 transition-colors hover:border-clay hover:text-clay"
           >
             <Plus className="h-4 w-4" />

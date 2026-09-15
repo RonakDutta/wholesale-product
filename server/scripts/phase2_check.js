@@ -74,7 +74,7 @@ const mkUser = async (role, phone) => (await q(
     ? (await q(`SELECT count(*)::int n FROM parties WHERE wholesaler_id = $1`, [wid])).rows[0].n
     : 0;
 
-  // 1. A stranger orders. He should appear in the book.
+  // 1. A stranger orders. They should appear in the book.
   const buyer = await mkUser("buyer", "9820011223");
   const o1 = await place(buyer, { name: "Kishan Cloth House", phone: "98200 11223", city: "Surat", street: "Ring Road" });
   check(o1.statusCode === 201, "stranger can order", { s: o1.statusCode, m: o1.body?.message });
@@ -82,13 +82,13 @@ const mkUser = async (role, phone) => (await q(
     const p1 = await partyOf(o1.body.orderId);
     check(!!p1, "order is linked to a customer", { name: p1?.name });
     check(p1?.name === "Kishan Cloth House", "named off the delivery address", { name: p1?.name });
-    check(String(p1?.user_id) === String(buyer), "linked to his account", {});
+    check(String(p1?.user_id) === String(buyer), "linked to their account", {});
     check(await bookSize() === 1, "book has one entry", { n: await bookSize() });
   } else {
     check(o1.body?.orderId, "order saved without a customer book", {});
   }
 
-  // 2. He orders again. Must not appear twice.
+  // 2. They orders again. Must not appear twice.
   const o2 = await place(buyer, { name: "Kishan Cloth House", phone: "9820011223", city: "Surat" });
   check(o2.statusCode === 201, "second order placed", { s: o2.statusCode });
   if (hasBook) {
@@ -99,10 +99,10 @@ const mkUser = async (role, phone) => (await q(
 
   if (!hasBook) { await testPool.end(); process.exit(fails ? 1 : 0); }
 
-  // 3. The wholesaler wrote someone into his diary months ago, by phone only.
+  // 3. The wholesaler wrote someone into their diary months ago, by phone only.
   // That man now signs up and orders. Same row, and the account gets linked.
   const diary = (await q(
-    `INSERT INTO parties (wholesaler_id, name, phone, notes) VALUES ($1,'Mahesh bhai','+91 98111 22334','Slow payer, chase him') RETURNING *`,
+    `INSERT INTO parties (wholesaler_id, name, phone, notes) VALUES ($1,'Mahesh bhai','+91 98111 22334','Slow payer, chase them') RETURNING *`,
     [wid],
   )).rows[0];
   const mahesh = await mkUser("buyer", "9811122334");
@@ -110,8 +110,8 @@ const mkUser = async (role, phone) => (await q(
   const p3 = await partyOf(o3.body.orderId);
   check(String(p3?.id) === String(diary.id), "diary entry matched by phone, however typed", { was: diary.phone, now: "098111-22334" });
   check(String(p3?.user_id) === String(mahesh), "account linked to the diary entry", {});
-  check(p3?.name === "Mahesh bhai", "wholesaler's own name for him is kept", { name: p3?.name });
-  check(p3?.notes === "Slow payer, chase him", "his private note survives the order", { notes: p3?.notes });
+  check(p3?.name === "Mahesh bhai", "wholesaler's own name for them is kept", { name: p3?.name });
+  check(p3?.notes === "Slow payer, chase them", "their private note survives the order", { notes: p3?.notes });
   check(await bookSize() === 2, "no duplicate created", { n: await bookSize() });
 
   // 4. Two different buyers must not collapse into one customer. users.phone

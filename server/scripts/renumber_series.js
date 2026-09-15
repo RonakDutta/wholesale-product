@@ -14,11 +14,11 @@
  * ---------------------------------------------------------------------------
  *
  * Sales and challans are the wholesaler's own records. Renumbering them
- * changes nothing outside his own book and is safe.
+ * changes nothing outside their own book and is safe.
  *
  * A TAX INVOICE IS NOT. Its number is what the customer's books reference and
- * what his input tax credit is claimed against. Renumbering one that has
- * already gone out means his records point at a number that no longer exists,
+ * what their input tax credit is claimed against. Renumbering one that has
+ * already gone out means their records point at a number that no longer exists,
  * and under Rule 46(b) the serial is supposed to be fixed for the financial
  * year. This script will do it because it was asked for against test data, and
  * it says so every time it runs. Use --skip-invoices to leave them alone.
@@ -43,7 +43,7 @@
  * straight from S-0002 to S/1/26-27 can collide with a row this run has not
  * reached yet. Pass one moves every row to a temporary number, pass two puts
  * the real one on. Both numbers are unique per wholesaler, so nothing outside
- * his book can be disturbed.
+ * their book can be disturbed.
  *
  * The counters are then set to the highest number in each year, so the next
  * document continues the run rather than colliding with it.
@@ -203,8 +203,8 @@ const resetCounter = async (client, table, ownerId, counters, hasFy) => {
   if (!skipInvoices) {
     console.log(
       "\n  A tax invoice number is what your customer's books reference and what\n" +
-      "  his input tax credit is claimed against. Renumbering one that has gone\n" +
-      "  out leaves his records pointing at a number that no longer exists. This\n" +
+      "  their input tax credit is claimed against. Renumbering one that has gone\n" +
+      "  out leaves their records pointing at a number that no longer exists. This\n" +
       "  is fine for test data and is not fine for real trading history.\n" +
       "  Use --skip-invoices to leave invoices alone.",
     );
@@ -235,7 +235,7 @@ const resetCounter = async (client, table, ownerId, counters, hasFy) => {
 
     let invoices = { changed: 0, counters: new Map() };
     if (!skipInvoices) {
-      // His own saved format, so a wholesaler who set OM/ and /{FY} keeps it.
+      // Their own saved format, so a wholesaler who set OM/ and /{FY} keeps it.
       const settings = (await client.query(
         `SELECT prefix, number_suffix, number_pad_to FROM invoice_settings WHERE user_id = $1`,
         [seller.id],
@@ -243,7 +243,7 @@ const resetCounter = async (client, table, ownerId, counters, hasFy) => {
       const prefix = settings.prefix || "INV/";
       const suffix = settings.number_suffix ?? "/{FY}";
       const padTo = Number(settings.number_pad_to ?? 0);
-      console.log(`\n  Using his own format: prefix "${prefix}", ends with "${suffix}", ${padTo} leading zeros`);
+      console.log(`\n  Using their own format: prefix "${prefix}", ends with "${suffix}", ${padTo} leading zeros`);
 
       invoices = await renumber(client, {
         table: "invoices", column: "invoice_number", dateColumn: "issue_date",

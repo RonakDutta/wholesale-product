@@ -8,7 +8,7 @@
  *
  * This is where they collapsed to, and it now reads the platform's own
  * settings rather than hard coding a convention, so an admin changing decimals
- * or grouping in the master area changes the whole product.
+ * or grouping in the administration area changes the whole product.
  *
  * ---------------------------------------------------------------------------
  * WHY A MODULE LEVEL VALUE AND NOT A HOOK
@@ -57,7 +57,7 @@ export const moneySettings = () => active;
 
 /**
  * Indian digit grouping means 12,00,000 rather than 1,200,000. A trader reads
- * lakhs and crores by where the commas fall, so western grouping makes him
+ * lakhs and crores by where the commas fall, so western grouping makes them
  * count digits. en-IN does the first, en-US the second.
  */
 const locale = () => (active.digitGrouping === "western" ? "en-US" : "en-IN");

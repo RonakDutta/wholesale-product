@@ -3,8 +3,8 @@
  *
  * The marketplace was switched off while the sales book was built, on the
  * understanding that it would come back. It is back on now: the two halves
- * are being merged, and a wholesaler gets both a shop his retailers can order
- * from and a book to manage what he sells.
+ * are being merged, and a wholesaler gets both a shop their retailers can order
+ * from and a book to manage what they sell.
  *
  * The flag stays rather than being deleted, because it is still the switch
  * for a wholesaler who does not want a public shop at all, and because
@@ -21,7 +21,7 @@ export const FEATURES = {
   SALES_MANAGEMENT: true,
 
   /**
-   * Whether a buyer can ask to send goods back from his own orders page.
+   * Whether a buyer can ask to send goods back from their own orders page.
    *
    * Off by deliberate choice, not because it is unfinished. The whole round
    * trip is built and tested: the buyer asks with a reason, the wholesaler
@@ -45,7 +45,7 @@ export const FEATURES = {
    *
    * It was never usable anyway: creating a flash sale is admin only and there
    * is no admin console, so the page could show a wholesaler what was running
-   * and offer him nothing to do about it.
+   * and offer them nothing to do about it.
    */
   PROMOTIONS: false,
 

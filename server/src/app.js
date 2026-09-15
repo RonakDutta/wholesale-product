@@ -71,13 +71,13 @@ app.use("/api/staff", staffRoutes);
 app.use("/api/hsn", hsnRoutes);
 // Goods sent out while payment is outstanding. See challanService.js.
 app.use("/api/challans", challanRoutes);
-// The platform masters: states, units, tax slabs, HSN codes.
+// The platform administrations: states, units, tax slabs, HSN codes.
 app.use("/api/masters", masterRoutes);
 // The other direction: goods coming in, who they came from, and what is owed
 // for them. See services/supplierBalance.js for why this is not the party book.
 app.use("/api/suppliers", supplierRoutes);
 app.use("/api/purchases", purchaseRoutes);
-// Getting a wholesaler ready to be paid through the gateway, and what he has
+// Getting a wholesaler ready to be paid through the gateway, and what they have
 // been sent. See controllers/routeController.js for why only 'activated'
 // opens the gate.
 app.use("/api/seller/razorpay", routeRoutes);

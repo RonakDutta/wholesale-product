@@ -8,15 +8,15 @@ import { hsnFeedback, tidyHsn } from "../utils/hsn";
  * Three things, and they are three different kinds of claim, so the screen
  * keeps them apart:
  *
- *   the shape       4, 6 or 8 digits, checked as he types. Certain.
- *   his own codes   what he has put on his own goods before. Certain, because
- *                   he decided it.
+ *   the shape       4, 6 or 8 digits, checked as they type. Certain.
+ *   their own codes   what they have put on their own goods before. Certain, because
+ *                   they decided it.
  *   common headings a short list for textiles, offered as a starting point.
- *                   NOT certain, and labelled so he checks it.
+ *                   NOT certain, and labelled so they check it.
  *
  * The last one is why the list says "check this matches your goods" rather
- * than presenting the label as a fact. A suggestion he accepts without reading
- * puts a description of somebody else's goods on his customer's bill.
+ * than presenting the label as a fact. A suggestion they accept without reading
+ * puts a description of somebody else's goods on their customer's bill.
  */
 const HsnField = ({
   id = "hsn-code",
@@ -32,7 +32,7 @@ const HsnField = ({
 
   const feedback = hsnFeedback(value);
 
-  // Fetched when the box is opened, and again as he types. Debounced, because
+  // Fetched when the box is opened, and again as they type. Debounced, because
   // this fires on a keystroke and the answer is a convenience, not the point
   // of the screen.
   useEffect(() => {
@@ -45,7 +45,7 @@ const HsnField = ({
         });
         if (alive) setSuggestions(Array.isArray(data) ? data : []);
       } catch {
-        // No suggestions is a fine outcome. He can type the code.
+        // No suggestions is a fine outcome. They can type the code.
         if (alive) setSuggestions([]);
       }
     }, 200);

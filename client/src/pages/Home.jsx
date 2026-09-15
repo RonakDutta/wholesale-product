@@ -8,7 +8,7 @@ import MarketplaceHome from "./MarketplaceHome";
  * What lives at "/" depends on whether the marketplace is switched on.
  *
  * With it on, this is the old browsing home page, unchanged. With it off,
- * a wholesaler goes straight to his workspace, and a retailer gets an honest
+ * a wholesaler goes straight to their workspace, and a retailer gets an honest
  * hold message rather than a redirect. RequireRole sends unauthorised users
  * back to "/", so this route must never redirect them onward or the two
  * bounce off each other forever.

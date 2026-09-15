@@ -274,7 +274,7 @@ class InvoiceRepository {
    *
    * Per wholesaler, not per platform. The counter used to be keyed on the year
    * alone, so Ram's bills came out 000001, 000003, 000009 with another firm's
-   * invoices filling the gaps, and the size of each gap told him how much
+   * invoices filling the gaps, and the size of each gap told them how much
    * business everybody else had done. Rule 46(b) wants a consecutive serial
    * number per supplier, and a gap is exactly what gets asked about.
    *
@@ -937,7 +937,7 @@ class InvoiceRepository {
        * The list beside these cards already knew better. StatusChip shows such
        * a row as "Credited" precisely because it is reversed, so the card and
        * the row underneath it disagreed, and the wholesaler was shown money to
-       * chase that he had already credited back.
+       * chase that they had already credited back.
        *
        * Takes the invoice reference because this clause is pasted into three
        * queries and they do not all alias the table the same way. Unqualified
@@ -1262,7 +1262,7 @@ class InvoiceRepository {
       defaultTerms:
         row.default_terms ??
         "1. Goods once sold will not be returned.\n2. Payment is due within the agreed credit period.",
-      // How his invoice number is shaped. See invoiceNumberService.
+      // How their invoice number is shaped. See invoiceNumberService.
       numberSuffix: row.number_suffix ?? (saved ? "" : "/{FY}"),
       numberPadTo: Number(row.number_pad_to ?? (saved ? 6 : 0)),
     };

@@ -15,7 +15,7 @@ const {
 } = require("../services/khataBalance");
 
 /**
- * The first screen a wholesaler sees. Everything here is computed from his own
+ * The first screen a wholesaler sees. Everything here is computed from their own
  * rows, so a new account shows zeroes and empty lists rather than a plausible
  * looking number. The marketplace dashboard this replaces reported a buyer
  * rating and a listing count, neither of which means anything now.
@@ -72,7 +72,7 @@ exports.getOverview = async (req, res) => {
           `SELECT
              (SELECT COUNT(*) FROM parties
                WHERE wholesaler_id = $1 AND status = 'active') AS parties,
-             -- His products, counted off his shop listings. This used to count
+             -- Their products, counted off their shop listings. This used to count
              -- the rate list, which is retired: the two lists were merged into
              -- one and the rate list screen is gone, so counting it would have
              -- frozen at whatever was in it on the day of the merge.
@@ -86,7 +86,7 @@ exports.getOverview = async (req, res) => {
           [wholesalerId],
         ),
 
-        // Confirmed but not yet marked delivered: goods he still owes someone.
+        // Confirmed but not yet marked delivered: goods they still owes someone.
         pool.query(
           `SELECT s.id, s.sale_number, s.sale_date, s.total, p.name AS party_name
              FROM sales s
@@ -112,7 +112,7 @@ exports.getOverview = async (req, res) => {
         ),
 
         // Customers who used to buy and have stopped. A party who has never
-        // bought is not quiet, he is new, so MAX(sale_date) must exist.
+        // bought is not quiet, they are new, so MAX(sale_date) must exist.
         pool.query(
           `SELECT p.id, p.name, p.business_name, p.phone, last.sale_date
              FROM parties p
@@ -146,7 +146,7 @@ exports.getOverview = async (req, res) => {
     const k = collect.rows[0];
 
     // An employee who packs orders does not necessarily get to see the books.
-    // The screen is not gated whole, because the lists on it are his work; the
+    // The screen is not gated whole, because the lists on it are their work; the
     // money block is simply not sent. Withheld rather than zeroed, so the
     // screen can say "not shown to you" instead of "you are owed nothing",
     // which would be a lie about the business.
@@ -190,7 +190,7 @@ exports.getOverview = async (req, res) => {
  * Why is that number what it is?
  *
  * The three figures on the Overview are sums, and a sum a wholesaler cannot
- * take apart is a number he has to trust rather than check. This returns the
+ * take apart is a number they have to trust rather than check. This returns the
  * rows behind one of them.
  *
  * The rule is not restated here. It is read from services/khataBalance, the
@@ -213,7 +213,7 @@ exports.getBreakdown = async (req, res) => {
     const hasOpening = await hasOpeningBalance(pool);
 
     if (metric === "outstanding") {
-      // Every customer, with the three numbers his balance is made of, so the
+      // Every customer, with the three numbers customer balance is made of, so the
       // arithmetic is on the screen rather than behind it. Customers who owe
       // nothing are left out; the ones in credit are kept, because a minus is
       // exactly the thing somebody opens this page to understand.

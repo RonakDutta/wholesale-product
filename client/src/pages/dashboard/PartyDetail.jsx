@@ -41,9 +41,9 @@ const PartyDetail = () => {
   const [showEdit, setShowEdit] = useState(false);
   // Bumped after a payment is recorded so the balance and both lists reload.
   const [refreshKey, setRefreshKey] = useState(0);
-  // Money of his the wholesaler is holding loose, and what it could be set
+  // Money of their the wholesaler is holding loose, and what it could be set
   // against. Asked for separately because the balance on this page nets the
-  // two together and so cannot answer it: the moment he orders again, his
+  // two together and so cannot answer it: the moment they orders again, their
   // credit is cancelled out by the new bill and the page reads zero.
   const [credit, setCredit] = useState(null);
   const [applying, setApplying] = useState("");
@@ -89,7 +89,7 @@ const PartyDetail = () => {
       });
       toast.success(
         `₹${money(done.applied)} set against ${done.saleNumber}.` +
-          (done.creditLeft > 0 ? ` ₹${money(done.creditLeft)} of his money left.` : ""),
+          (done.creditLeft > 0 ? ` ₹${money(done.creditLeft)} of their money left.` : ""),
       );
       setRefreshKey((k) => k + 1);
     } catch (error) {
@@ -200,22 +200,22 @@ const PartyDetail = () => {
           </div>
         </div>
 
-        {/* Money of his that nothing is standing against.
+        {/* Money of their that nothing is standing against.
             
             Shown apart from the balance above, because that balance is one
-            netted number and netting is what hid this: he returns a 2 lakh
-            order, orders 4 lakh, and his page reads zero while 2 lakh of his
-            money is plainly still in the till. Then he pays the bill in full
+            netted number and netting is what hid this: they return a 2 lakh
+            order, orders 4 lakh, and their page reads zero while 2 lakh of their
+            money is plainly still in the till. Then they pay the bill in full
             and the 2 lakh reappears as a debt the wholesaler owes. */}
         {credit && credit.credit > 0 && (
           <div className="mt-5 rounded-xl border border-sky-200 bg-sky-50 p-4">
             <p className="text-sm font-bold text-sky-900">
-              You are holding ₹{money(credit.credit)} of his money
+              You are holding ₹{money(credit.credit)} of their money
             </p>
             <p className="mt-1 text-xs text-sky-800">
               {credit.targets.length > 0
-                ? "He paid for something that was cancelled or came back. Set it against a bill of his, or pay it back."
-                : "He paid for something that was cancelled or came back. He has no unpaid bill to set it against, so pay it back."}
+                ? "They paid for something that was cancelled or came back. Set it against a bill of their, or pay it back."
+                : "They paid for something that was cancelled or came back. They have no unpaid bill to set it against, so pay it back."}
             </p>
             {credit.targets.length > 0 && (
               <ul className="mt-3 space-y-2">

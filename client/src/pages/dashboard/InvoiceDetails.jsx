@@ -31,7 +31,7 @@ import { rupees, dateLabel } from "../../utils/money";
  */
 const inr = (value) => rupees(value, { document: true });
 
-// Plain English, not the stored code. A wholesaler reading his own bill
+// Plain English, not the stored code. A wholesaler reading their own bill
 // should not have to decode "rate_revised".
 const CREDIT_REASONS = {
   sale_cancelled: "The sale was cancelled.",

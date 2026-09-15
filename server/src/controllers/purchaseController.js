@@ -43,7 +43,7 @@ const purchasesReady = async (res) => {
  * identical: a rate before tax, a discount off the top, tax on what is left.
  *
  * KNOWN LIMIT, worth stating because it is a real one. The authority on a
- * purchase is the paper the supplier handed over, and his software may round
+ * purchase is the paper the supplier handed over, and their software may round
  * a line differently from ours, so a computed total can land a rupee away from
  * the printed one. That gap matters when it is claimed as input credit and
  * matched against GSTR-2B. Letting the wholesaler state the tax figure off the
@@ -70,10 +70,10 @@ const pricePurchase = (lines, discountPaise) =>
  *
  * The GST rate is NOT resolved from the wholesaler's own product list here,
  * which is the one place this deliberately parts company with buildLines on
- * the sale side. On a sale the rate is his to decide, so falling back to his
+ * the sale side. On a sale the rate is their to decide, so falling back to their
  * default is right. On a purchase the rate is whatever the supplier charged,
- * and guessing it from his own selling list would invent a tax figure on a
- * document he did not write. A line with no rate stated is taxed at zero and
+ * and guessing it from their own selling list would invent a tax figure on a
+ * document they did not write. A line with no rate stated is taxed at zero and
  * says so on the screen.
  */
 const buildLines = (rawLines) => {
@@ -134,7 +134,7 @@ const buildLines = (rawLines) => {
  * The supplier bill unique index, turned into something a person can act on.
  *
  * Worth catching by name rather than reporting "server error", because hitting
- * it means the wholesaler is about to enter a bill he has already entered,
+ * it means the wholesaler is about to enter a bill they have already entered,
  * which is the thing the index exists to stop.
  */
 const duplicateBill = (err, res, supplierInvoiceNumber) => {
@@ -212,7 +212,7 @@ exports.createPurchase = async (req, res) => {
 
     // A draft is somebody part way through typing, so it is not yet a debt and
     // must not carry money. Refused rather than quietly dropped: silently
-    // losing a payment he typed is the worse failure of the two.
+    // losing a payment they typed is the worse failure of the two.
     if (paidPaise > 0 && purchaseStatus === "draft") {
       await client.query("ROLLBACK");
       return res.status(400).json({

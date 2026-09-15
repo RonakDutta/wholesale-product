@@ -7,7 +7,7 @@ const masterService = require("../services/masterService");
 /**
  * Where this wholesaler's share of a payment should go, if anywhere.
  *
- * Returns an account id ONLY when Razorpay has activated him. Every other
+ * Returns an account id ONLY when Razorpay has activated them. Every other
  * case returns none, and the payment is taken exactly as it was before Route
  * existed: no transfer, money into the platform's account, reconciled by a
  * person. That covers the migration not having been run, a wholesaler who
@@ -99,7 +99,7 @@ const createRazorpayOrder = async (req, res) => {
           -- writer that fills buyer_id. Order creation ALSO leaves a pending
           -- row behind, for the whole subtotal, and opening a gateway order
           -- against that one would ask a buyer on the 50/50 plan for the full
-          -- amount instead of his first half.
+          -- amount instead of their first half.
           --
           -- Not discriminated on payment_type, which looks like the obvious
           -- choice and is not: a legacy BEFORE INSERT trigger on this table
@@ -124,7 +124,7 @@ const createRazorpayOrder = async (req, res) => {
       return res.status(403).json({ success: false, message: "This order belongs to someone else." });
     }
 
-    // Who gets the money, if the gateway can send it to him at all. See
+    // Who gets the money, if the gateway can send it to them at all. See
     // routeTarget: no account means no transfer, and the payment is taken
     // exactly as it was before Route.
     const route = await routeTarget(row.supplier_id);
@@ -140,7 +140,7 @@ const createRazorpayOrder = async (req, res) => {
               amount: razorpay.transferAmount(amountPaise, route.commissionPercent),
               currency: "INR",
               notes: { orderId, orderNumber: row.order_number || "" },
-              // Settled to him on Razorpay's ordinary schedule. Holding it
+              // Settled to them on Razorpay's ordinary schedule. Holding it
               // would need somebody to release it, and there is no screen
               // that does and no rule saying when.
               on_hold: false,
@@ -206,7 +206,7 @@ const simulateRazorpayPayment = async (req, res) => {
           -- writer that fills buyer_id. Order creation ALSO leaves a pending
           -- row behind, for the whole subtotal, and opening a gateway order
           -- against that one would ask a buyer on the 50/50 plan for the full
-          -- amount instead of his first half.
+          -- amount instead of their first half.
           --
           -- Not discriminated on payment_type, which looks like the obvious
           -- choice and is not: a legacy BEFORE INSERT trigger on this table
@@ -275,7 +275,7 @@ const verifyRazorpayPayment = async (req, res) => {
           -- writer that fills buyer_id. Order creation ALSO leaves a pending
           -- row behind, for the whole subtotal, and opening a gateway order
           -- against that one would ask a buyer on the 50/50 plan for the full
-          -- amount instead of his first half.
+          -- amount instead of their first half.
           --
           -- Not discriminated on payment_type, which looks like the obvious
           -- choice and is not: a legacy BEFORE INSERT trigger on this table

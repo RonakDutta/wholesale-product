@@ -390,7 +390,7 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
     },
   );
 
-  // A delivery that failed. The goods came back to him, but the order is not
+  // A delivery that failed. The goods came back to them, but the order is not
   // dead and the customer still owes, so this is left as it is rather than
   // asserted into a rule nobody has asked for.
   const failedId = await walk(

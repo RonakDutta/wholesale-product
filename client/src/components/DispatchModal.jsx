@@ -9,12 +9,12 @@ import ModalShell from "./ModalShell";
  *
  * Two things happen at once here, and they are separate on purpose. The order
  * moves to "shipped", which is the record. And a link is made for the driver
- * to broadcast his location from, which is what lets the buyer follow the
- * delivery on his own order page.
+ * to broadcast their location from, which is what lets the buyer follow the
+ * delivery on their own order page.
  *
  * That link goes to the DRIVER and to nobody else. Opening it and pressing its
  * one button starts reporting that phone as the vehicle, so a buyer given the
- * link would be broadcasting his own position as the delivery.
+ * link would be broadcasting their own position as the delivery.
  *
  * The link is optional. Plenty of goods go out with a man on a scooter who has
  * no smartphone, and the order still has to be dispatchable. So the driver
@@ -87,7 +87,7 @@ const DispatchModal = ({ order, onClose, onDispatched }) => {
     }
   };
 
-  // Addressed to the driver, and opened on his number when we have it, so it
+  // Addressed to the driver, and opened on their number when we have it, so it
   // is harder to send to the wrong person by accident.
   const whatsapp = () => {
     const text =
@@ -125,15 +125,15 @@ const DispatchModal = ({ order, onClose, onDispatched }) => {
             {/* This link belongs to the driver, not the customer. Opening it
                 and pressing the button starts broadcasting that phone's
                 location as the vehicle, so sending it to the buyer would have
-                him reporting his own position as the delivery. The customer
-                follows the delivery from his own order page instead. */}
+                them reporting their own position as the delivery. The customer
+                follows the delivery from their own order page instead. */}
             <p className="text-sm text-slate-600">
               Send this to{" "}
               <strong className="text-espresso">
                 {driverName || "the driver"}
               </strong>
-              , not to your customer. He opens it and presses one button, and
-              then {order.buyer} can watch the delivery on his own order page.
+              , not to your customer. They open it and presses one button, and
+              then {order.buyer} can watch the delivery on their own order page.
             </p>
             <p className="text-xs text-slate-500">
               The link stops working on its own after the delivery.
@@ -193,7 +193,7 @@ const DispatchModal = ({ order, onClose, onDispatched }) => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1.5 block text-xs font-semibold text-slate-600">
-                  His phone
+                  Their phone
                 </label>
                 <input
                   value={driverPhone}

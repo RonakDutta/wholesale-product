@@ -17,7 +17,7 @@ import VisibilityPicker from "../../components/VisibilityPicker";
 import { useMasters } from "../../hooks/useMasters";
 
 const AddProduct = () => {
-  // Units and GST slabs from the platform masters, falling back to the
+  // Units and GST slabs from the platform administrations, falling back to the
   // built in lists so the dropdowns are never empty.
   const { units, taxRates } = useMasters();
 

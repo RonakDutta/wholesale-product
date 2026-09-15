@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Minus, Plus, ShoppingBag, Store, Trash2, X } from "lucide-react";
 import { useCart } from "../context/CartContext";
@@ -20,12 +20,22 @@ const CartDrawer = () => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    if (isCartOpen) {
-      const raf = window.requestAnimationFrame(() => setIsVisible(true));
-      return () => window.cancelAnimationFrame(raf);
-    }
-    setIsVisible(false);
-  }, [isCartOpen]);
+    if (!isCartOpen) return;
+
+    const raf = window.requestAnimationFrame(() => setIsVisible(true));
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setIsCartOpen(false);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+      document.removeEventListener("keydown", handleKeyDown);
+      setIsVisible(false);
+    };
+  }, [isCartOpen, setIsCartOpen]);
 
   if (!isCartOpen) return null;
 

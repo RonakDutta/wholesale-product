@@ -34,7 +34,7 @@ const initialsOf = (name) =>
     .toUpperCase();
 
 // Compact on a phone on purpose. Stacked full-size cards pushed the customer
-// list off the first screen, and the list is what he opened the app for.
+// list off the first screen, and the list is what they opened the app for.
 const StatCard = ({ icon: Icon, label, value, hint }) => (
   <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:rounded-2xl sm:p-5">
     <div className="hidden rounded-xl bg-clay/10 p-2 text-clay sm:inline-flex">
@@ -177,7 +177,7 @@ const Parties = () => {
             />
           </div>
           <div className="flex items-center gap-4">
-            {/* Only offered when he actually has some, so the control does
+            {/* Only offered when they actually has some, so the control does
                 not sit there meaning nothing. */}
             {(showInactive || retiredCount > 0) && (
               <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-500">

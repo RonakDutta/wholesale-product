@@ -20,7 +20,7 @@ const AuthLayout = () => {
   const isLogin = location.pathname === "/login";
   // The switcher belongs to the two screens it switches between. On the join
   // page it offered "Sign In" and "Create Account" to somebody who is doing
-  // neither, and pushed his form down the page for no reason.
+  // neither, and pushed their form down the page for no reason.
   const showSwitcher = isLogin || location.pathname === "/signup";
 
   const leftPanelRef = useRef(null);
@@ -66,7 +66,7 @@ const AuthLayout = () => {
           It carried an eyebrow, a three line headline, a paragraph, three
           feature bullets and an early access card, which is five things
           competing where one would do, plus twelve randomly floating dots.
-          A wholesaler opening this already knows what he came for.
+          A wholesaler opening this already knows what they came for.
 
           What is left is the thing itself: a page of the book, which says
           what the product is faster than a list of what it does. */}
@@ -105,7 +105,7 @@ const AuthLayout = () => {
 
           {/* A page of the book rather than a description of one. Real
               columns, real alignment, tabular figures: a wholesaler reads
-              this at a glance because it is shaped like what he already
+              this at a glance because it is shaped like what they already
               keeps. Marked as an example, because it is one. */}
           <div className="mt-8 max-w-sm rounded-xl border border-cream/10 bg-cream/5 p-4 backdrop-blur-sm">
             <div className="mb-3 flex items-baseline justify-between border-b border-cream/10 pb-2">

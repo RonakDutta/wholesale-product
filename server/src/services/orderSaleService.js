@@ -3,14 +3,14 @@
  *
  * An order is a fulfilment record and a sale is a commercial record, so they
  * stay separate tables. This is the join: when a wholesaler accepts an order,
- * the same goods appear in his book as a sale, and every flow that already
+ * the same goods appear in their book as a sale, and every flow that already
  * reads sales starts working on it, the invoice, the statement and the credit
  * note included.
  *
  * The one rule that matters more than any other here: the sale must owe
  * exactly what the order charged. A customer agreed a figure at checkout and
  * that figure is the debt. Recomputing it, adding tax to it, or rounding it
- * would change what he owes after he has already paid part of it.
+ * would change what they owe after they have already paid part of it.
  */
 const { clean, fromPaise, toPaise } = require("../utils/money");
 const { nextSaleNumber } = require("./seriesNumbers");
@@ -126,7 +126,7 @@ const createSaleFromOrder = async (client, orderId) => {
 
   for (const line of lines.rows) {
     // The line rate is derived from what was actually charged for the line,
-    // not from the listing's price today. A wholesaler who changed his rate
+    // not from the listing's price today. A wholesaler who changed their rate
     // after the order must still bill what the customer agreed.
     const amountPaise = toPaise(line.total_price);
     const quantity = Number(line.quantity) || 1;
@@ -161,8 +161,8 @@ const createSaleFromOrder = async (client, orderId) => {
  * orderController, which writes the status itself rather than going through
  * the service. It lived only in the service, and the screens call the route,
  * so in the running product marking an order delivered left its sale sitting
- * at "confirmed" for ever: the wholesaler's own book said he still owed the
- * man his goods. follows_order_check.js did not catch it because it drives
+ * at "confirmed" for ever: the wholesaler's own book said they still owed the
+ * man their goods. follows_order_check.js did not catch it because it drives
  * the service, which was the half that was right.
  *
  * Only from confirmed. A cancelled sale stays cancelled: an order that

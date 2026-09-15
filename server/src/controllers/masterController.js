@@ -2,7 +2,7 @@ const masterService = require("../services/masterService");
 const { isPlatformAdmin } = require("../middlewares/platformAdmin");
 
 /**
- * The platform masters, read.
+ * The platform administrations, read.
  *
  * Writing them is the admin console's job and is not built yet; this is the
  * read side, which every screen with a unit or a tax rate dropdown needs.
@@ -10,7 +10,7 @@ const { isPlatformAdmin } = require("../middlewares/platformAdmin");
  * Readable by any signed in user, deliberately. These are the state list, the
  * units, the GST slabs and a short list of HSN codes: public facts, printed on
  * documents that go to customers. Gating them would only mean a buyer's
- * checkout could not name the state he lives in.
+ * checkout could not name the state they live in.
  */
 exports.getMasters = async (req, res) => {
   try {
@@ -24,7 +24,7 @@ exports.getMasters = async (req, res) => {
      * Rows that have been switched off, when the console asks for them.
      *
      * The plain read returns only active rows, because that is what every
-     * dropdown in the product wants. The master screens need the rest too, or
+     * dropdown in the product wants. The administration screens need the rest too, or
      * a row the admin has just switched off simply vanishes and looks deleted.
      * Asked for explicitly so no ordinary screen pays for it.
      */
@@ -67,7 +67,7 @@ exports.getMasters = async (req, res) => {
 };
 
 /**
- * Writing a master.
+ * Writing an administration list.
  *
  * Everything here sits behind requirePlatformAdmin at the route. These lists
  * shape documents that go to customers and a tax rate on a bill is a number
@@ -165,7 +165,7 @@ const LISTS = {
         key: code,
         values: {
           description: String(body.description).trim(),
-          // Rows an admin adds are marked as his, so the curated list this
+          // Rows an admin adds are marked as their, so the curated list this
           // product shipped with stays tellable from what was added later.
           source: "admin",
           active: body.active === undefined ? true : Boolean(body.active),
@@ -182,11 +182,11 @@ const LISTS = {
  * keyed on the thing itself, a state code or a GST rate, so saving "24" twice
  * is an edit and not a duplicate. Saving a row that already exists keeps its
  * source, so an admin editing the description of a curated HSN code does not
- * silently reclassify it as his own.
+ * silently reclassify it as their own.
  */
 exports.saveMasterRow = async (req, res) => {
   const spec = LISTS[req.params.list];
-  if (!spec) return res.status(404).json({ message: "No such master list" });
+  if (!spec) return res.status(404).json({ message: "No such administration list" });
 
   const checked = spec.check(req.body || {});
   if (checked.error) return res.status(400).json({ message: checked.error });
@@ -208,7 +208,7 @@ exports.saveMasterRow = async (req, res) => {
       [checked.key, ...cols.map((c) => checked.values[c])],
     );
 
-    // So the admin sees his own change at once rather than in five minutes.
+    // So the admin sees their own change at once rather than in five minutes.
     masterService.resetMasters();
 
     res.status(200).json({ success: true, row: saved.rows[0] });
@@ -226,7 +226,7 @@ exports.saveMasterRow = async (req, res) => {
  */
 exports.setMasterRowActive = async (req, res) => {
   const spec = LISTS[req.params.list];
-  if (!spec) return res.status(404).json({ message: "No such master list" });
+  if (!spec) return res.status(404).json({ message: "No such administration list" });
 
   const active = Boolean(req.body?.active);
   try {
@@ -240,8 +240,8 @@ exports.setMasterRowActive = async (req, res) => {
 
     // Switching off the last one would empty the dropdown everywhere. The read
     // side falls back rather than serving nothing, so this is not a disaster,
-    // but it is worth refusing outright rather than leaving him wondering why
-    // his change had no effect.
+    // but it is worth refusing outright rather than leaving them wondering why
+    // their change had no effect.
     if (!active) {
       const left = await pool.query(
         `SELECT COUNT(*)::int AS n FROM ${spec.table} WHERE active`,
@@ -281,7 +281,7 @@ exports.saveSettings = async (req, res) => {
     }
     res.status(200).json({ success: true, settings: result.settings });
   } catch (err) {
-    console.error("Error saving the master settings:", err);
+    console.error("Error saving the administration settings:", err);
     res.status(500).json({ success: false, message: "Could not save those settings." });
   }
 };

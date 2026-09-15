@@ -36,10 +36,10 @@ const { businessId } = require("../middlewares/businessContext");
 /**
  * The opening balance a form sent, checked.
  *
- * SIGNED: positive means he owed you when the book was opened, negative means
- * you were holding his money. Both are ordinary, so neither is refused.
+ * SIGNED: positive means they owed you when the book was opened, negative means
+ * you were holding their money. Both are ordinary, so neither is refused.
  *
- * A figure with no date is refused. "He owes 2 lakh" is not a fact until you
+ * A figure with no date is refused. "They owe 2 lakh" is not a fact until you
  * say as at when: the statement draws its line at that date, and without one
  * the opening figure and the transactions after it count the same goods twice.
  * A date with no figure is fine and means zero as at that date.
@@ -348,10 +348,10 @@ exports.updateParty = async (req, res) => {
   if (city !== undefined) put("city", clean(city));
   if (state !== undefined) {
     // Refused before the migration rather than accepted and dropped: a
-    // wholesaler told his customer's state saved when it was not gets the
+    // wholesaler told their customer's state saved when it was not gets the
     // wrong tax on the next bill and no sign of why.
     //
-    // Only when he actually typed one, though. The edit form sends every
+    // Only when they actually typed one, though. The edit form sends every
     // field including the empty ones, so refusing an empty state would make
     // every customer uneditable on a database that has not been migrated, to
     // protect a value that is not there.
@@ -379,7 +379,7 @@ exports.updateParty = async (req, res) => {
   if (status !== undefined) put("status", status);
 
   /**
-   * What he already owed when this book was opened.
+   * What they already owed when this book was opened.
    *
    * Guarded on the column existing, and not offered at all before the
    * migration, rather than silently dropped: a wholesaler who types 2 lakh and
@@ -492,7 +492,7 @@ exports.recordPayment = async (req, res) => {
     // And if this payment settled the sale, the bill is raised here rather
     // than waiting for somebody to press a button. That button could be
     // forgotten, and a settled sale with no bill is a customer with nothing
-    // to put in his books. The order side has always worked this way.
+    // to put in their books. The order side has always worked this way.
     if (clean(saleId)) {
       try {
         await saleInvoiceService.billIfSettled(saleId, wholesalerId);
@@ -513,20 +513,20 @@ exports.recordPayment = async (req, res) => {
 
 // Rupees are summed in paise. A statement is a running total down a column,
 // so a paisa lost per row shows up as a closing balance that disagrees with
-// the customer's own page, and that is the one number he will check.
+// the customer's own page, and that is the one number they will check.
 
 /**
- * One customer's account over a date range: what he was carrying at the
- * start, every bill and every payment since, and what he owes now.
+ * One customer's account over a date range: what they were carrying at the
+ * start, every bill and every payment since, and what they owe now.
  *
- * This is the thing a wholesaler sends on WhatsApp when he wants paying, so
+ * This is the thing a wholesaler sends on WhatsApp when they want paying, so
  * it has to reconcile exactly with the balance on the customer page. It is
  * built from the same two facts that balance is: confirmed and delivered
  * sales on one side, party_payments on the other.
  *
  * Cancelled and draft sales are left out, for the same reason they are left
  * out of the balance. A draft is not yet a debt and a cancelled bill is not
- * owed, so listing either would show the customer a figure he does not owe.
+ * owed, so listing either would show the customer a figure they do not owe.
  * A payment that was made against a sale later cancelled still appears,
  * because the money really did change hands, and its line says so.
  *
@@ -571,7 +571,7 @@ const buildStatement = async (id, wholesalerId, rawFrom, rawTo) => {
 
     // Everything before the window, netted into one number. Marketplace
     // orders are on the billed side here for the same reason they are on the
-    // customer page: this statement is what the wholesaler sends when he
+    // customer page: this statement is what the wholesaler sends when they
     // wants paying, and it has to reconcile with the page exactly.
     const opening = from
       ? await pool.query(
@@ -625,7 +625,7 @@ const buildStatement = async (id, wholesalerId, rawFrom, rawTo) => {
       ),
       // Orders the customer placed through the shop. They read as a line on
       // the statement exactly like a sale does, because to the man being
-      // billed they are the same thing: goods he took and owes for.
+      // billed they are the same thing: goods they took and owes for.
       hasOrders
         ? pool.query(
             `SELECT o.id, o.order_number, o.created_at::date AS on_date,
@@ -658,8 +658,8 @@ const buildStatement = async (id, wholesalerId, rawFrom, rawTo) => {
       })),
       ...marketOrders.rows.map((row) => ({
         // Marked as an order rather than a sale so the screen can say where
-        // it came from. A customer looking at his own statement should be
-        // able to recognise the order he placed on his phone.
+        // it came from. A customer looking at their own statement should be
+        // able to recognise the order they placed on their phone.
         kind: "order",
         id: row.id,
         date: row.on_date,
@@ -804,7 +804,7 @@ exports.getPartyStats = async (req, res) => {
      * Billed and received read the one rule as well, not just the balance.
      *
      * These two were still counting sales alone, while "still to collect"
-     * beside them counted shop orders too. A wholesaler with an order he had
+     * beside them counted shop orders too. A wholesaler with an order they had
      * not accepted yet read "Total billed 0" next to "Still to collect 710" on
      * the same header: nothing billed, 710 to go and get. Both true under
      * their own sums, and together nonsense.

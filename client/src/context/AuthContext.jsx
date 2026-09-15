@@ -6,7 +6,7 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   /**
-   * Whether this person owns the shop or works in it, and what he may do.
+   * Whether this person owns the shop or works in it, and what they may do.
    *
    * Defaults to owner. Every account was an owner before staff existed, and a
    * default of "employee with no permissions" would blank the dashboard for
@@ -133,9 +133,9 @@ export const AuthProvider = ({ children }) => {
         /**
          * Whether this person may do one thing.
          *
-         * An owner always may, so the server does not have to send him the
+         * An owner always may, so the server does not have to send them the
          * whole catalogue and a new permission does not have to be added in
-         * two places to reach him.
+         * two places to reach them.
          *
          * This hides buttons, it does not guard anything. Every route that
          * matters checks again on the server, which is the boundary.

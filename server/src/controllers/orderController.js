@@ -94,11 +94,11 @@ const nextInstalment = (order) => {
 };
 
 const ensureOrderAccess = async (req, res, orderId, { requireBuyer = true, requireSupplier = true } = {}) => {
-  // The business, not the person. An employee working on his employer's book
-  // is the supplier on that book's orders; comparing his own id would refuse
-  // him every order his employer has, which is all of them.
+  // The business, not the person. An employee working on their employer's book
+  // is the supplier on that book's orders; comparing their own id would refuse
+  // them every order their employer has, which is all of them.
   //
-  // Buying is still personal: an order he placed himself is his, not his
+  // Buying is still personal: an order they placed themselves is their, not their
   // employer's, so both ids are considered.
   const userId = businessId(req);
   const personId = req.user?.id;
@@ -173,7 +173,7 @@ const getSupplierOrders = async (req, res) => {
         o.total_amount as amount,
         -- What has actually been received. The refuse screen warns about it,
         -- because refusing an order does not send money back and a
-        -- wholesaler needs to know he is now holding his customer's cash.
+        -- wholesaler needs to know they are now holding their customer's cash.
         o.amount_paid,
         o.status,
         o.payment_status,
@@ -358,18 +358,18 @@ const createOrder = async (req, res) => {
     const maxShippingDays = Math.max(...lines.map((l) => Number(l.shippingDays) || 7));
 
     // The buyer joins this wholesaler's customer book, so one man has one
-    // page and one balance whether he ordered through the shop or the
-    // wholesaler wrote him down by hand. Skipped, without failing checkout,
+    // page and one balance whether they ordered through the shop or the
+    // wholesaler wrote them down by hand. Skipped, without failing checkout,
     // on a database where the customer book migration has not been run.
     let partyId = null;
     const partyLinked = await hasPartyLink(client);
     if (partyLinked) {
       // The firm and the GST number come off the buyer's own account, and both
       // reach the bill. Without them the customer page showed the man's firm
-      // and his invoice showed his personal name, because the order screen
+      // and their invoice showed their personal name, because the order screen
       // reads wholesaler_profiles.company_name and the invoice reads the
       // party, and nothing ever copied one to the other. The GST number is
-      // worse than cosmetic: a bill without it is a bill his customer cannot
+      // worse than cosmetic: a bill without it is a bill their customer cannot
       // claim input credit against.
       const buyer = await client.query(
         `SELECT u.first_name, u.last_name, u.phone,
@@ -877,9 +877,9 @@ const updatePaymentStatus = async (req, res) => {
     }
 
     // The same money, in the wholesaler's khata. Without this the customer
-    // page answers "how much does he owe me" using hand written sales only,
+    // page answers "how much does they owe me" using hand written sales only,
     // so a retailer who paid half a large order through the shop still showed
-    // his full old balance.
+    // their full old balance.
     await recordOrderPayment(client, {
       orderId,
       partyId: order.party_id,
@@ -898,7 +898,7 @@ const updatePaymentStatus = async (req, res) => {
         statusMoved ? nextOrderStatus : previousStatus,
         previousStatus,
         userId,
-        // Only the buyer of this order reaches here, whatever his account
+        // Only the buyer of this order reaches here, whatever their account
         // role happens to be.
         "buyer",
         remarks ||
@@ -1063,7 +1063,7 @@ const RETURN_ANSWERS = {
  *
  * Money paid stays where it is, exactly as it does when an order is refused:
  * it is real money, and the customer sits in credit until somebody refunds
- * him. That is what the refunded state further along the lifecycle is for.
+ * them. That is what the refunded state further along the lifecycle is for.
  *
  * Best effort, on its own transaction. A credit note that cannot be written
  * is worth a line in the log; it is not worth refusing to accept goods that
@@ -1165,10 +1165,10 @@ const unwindReturnedOrder = async (orderId, userId) => {
  * nothing has ever called it, so every returned order stopped one step short.
  * The goods were back on the shelf, the sale was cancelled, the credit note
  * was raised, and the customer's money was still in the till with the Overview
- * correctly reporting it as owed back to him. Nothing could clear that line.
+ * correctly reporting it as owed back to them. Nothing could clear that line.
  *
  * There is no payment gateway here, so this records a refund the wholesaler
- * has made himself, exactly as payments are recorded: he says he has paid,
+ * has made themselves, exactly as payments are recorded: they say they have paid,
  * and the books follow. The amount is capped at what was actually received, so
  * no amount of typing can hand back more than came in.
  */
@@ -1193,7 +1193,7 @@ const refundOrder = async (req, res) => {
     }
     const order = found.rows[0];
 
-    // Only the wholesaler can pay money back, because he is the one paying it.
+    // Only the wholesaler can pay money back, because they are the one paying it.
     // Not role gated at the route, because a 403 clears the token.
     if (order.supplier_id !== businessId(req)) {
       await client.query("ROLLBACK");
@@ -1267,7 +1267,7 @@ const refundOrder = async (req, res) => {
       success: true,
       message: "Refund recorded.",
       refundAmount: refund,
-      // True whenever the wholesaler chose to hand back less than he received,
+      // True whenever the wholesaler chose to hand back less than they received,
       // so the screen can say so rather than implying the account is square.
       partial: refundPaise < received,
       stillHeld: fromPaise(received - refundPaise),
@@ -1319,7 +1319,7 @@ const updateOrderStatus = async (req, res) => {
      * money. Both live in their own handlers, POST /cancel and POST /refund,
      * and both were reachable through here as a plain status write: the order
      * went to `cancelled`, the sale stayed `confirmed`, and the customer went
-     * on being billed for goods he was never going to get. The screens use the
+     * on being billed for goods they were never going to get. The screens use the
      * proper endpoints, so nothing in the product did this; the route allowed
      * it, which is enough.
      */
@@ -1435,7 +1435,7 @@ const updateOrderStatus = async (req, res) => {
  * Refuse an order, or call one off.
  *
  * Both sides land here. A wholesaler who cannot fill an order refuses it; a
- * buyer who changes his mind before it goes out cancels it. The unwinding is
+ * buyer who changes their mind before it goes out cancels it. The unwinding is
  * identical, so there is one path rather than two that could drift apart.
  *
  * Who may do it, and from which states, is decided inside cancelOrder against
@@ -1458,7 +1458,7 @@ const cancelOrderHandler = async (req, res) => {
     // The service throws for the ordinary refusals as well as for faults:
     // wrong person, wrong state, order gone. Those are the caller's problem,
     // not the server's, and answering all of them with a 500 would tell a
-    // wholesaler his order failed to cancel when it simply cannot be.
+    // wholesaler their order failed to cancel when it simply cannot be.
     const isRefusal =
       /cannot cancel|already been sent|not found|not allowed|Invalid status/i.test(error.message || "");
     if (!isRefusal) console.error("Error cancelling order:", error);
@@ -1486,7 +1486,7 @@ const getOrderTimelineHandler = async (req, res) => {
  *
  * This used to set return_status and nothing else, so orders.status stayed at
  * "delivered" and the request existed only as a flag nobody read. The
- * wholesaler was never told, and there was no screen where he could have
+ * wholesaler was never told, and there was no screen where they could have
  * answered. A return was a note in a bottle.
  *
  * The order now moves to return_requested, which is a real state the
@@ -1539,7 +1539,7 @@ const requestReturn = async (req, res) => {
     // whether the goods arrived on Tuesday or last February, so the clock is
     // asked separately. Without this the door never shut: an order delivered a
     // year ago could still be sent back, and the wholesaler had nothing to
-    // point at when he said no.
+    // point at when they said no.
     const window = await returnWindowForOrder(orderId);
     if (!window.open) {
       return res.status(400).json({

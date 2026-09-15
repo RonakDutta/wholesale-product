@@ -10,8 +10,8 @@
  * "Mark delivered" button that knew nothing about any of it. Whichever the
  * wholesaler pressed, the other one stayed where it was:
  *
- *   pressed on the order   the sale sat at "confirmed" for ever, so his own
- *                          book said he still owed the man his goods
+ *   pressed on the order   the sale sat at "confirmed" for ever, so their own
+ *                          book said they still owed the man their goods
  *   pressed on the sale    the order sat at "shipped" with no delivery date,
  *                          so the seven day return window had nothing to
  *                          count from
@@ -283,7 +283,7 @@ const acceptedOrder = async (sellerId, buyerId, partyId) => {
   );
 
   // ---------------------------------------------------------------
-  console.log("\nA sale he typed himself still has its own switches");
+  console.log("\nA sale they typed themselves still has its own switches");
   // ---------------------------------------------------------------
   const own = await call(parties.createParty, {
     ...asOwner,
@@ -297,7 +297,7 @@ const acceptedOrder = async (sellerId, buyerId, partyId) => {
       lines: [{ itemName: "Dupatta", quantity: 12, unit: "pcs", rate: 90 }],
     },
   });
-  check(typed.statusCode === 201, "he records one by hand", { s: typed.statusCode });
+  check(typed.statusCode === 201, "they records one by hand", { s: typed.statusCode });
 
   const moved = await call(sales.updateSaleStatus, {
     ...asOwner,

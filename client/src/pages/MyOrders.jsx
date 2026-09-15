@@ -144,7 +144,7 @@ const OrderRow = ({ order, onCancel, onReturn }) => {
             </button>
           )}
           {/* Only while the seller has not started on it. After that it is a
-              conversation with him, not a button. */}
+              conversation with them, not a button. */}
           {canBuyerCancel(order.status) && (
             <button
               onClick={() => onCancel(order)}

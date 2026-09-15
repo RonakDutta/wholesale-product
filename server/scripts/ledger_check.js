@@ -1,10 +1,10 @@
 /**
  * One ledger: does the customer page tell the truth about marketplace money?
  *
- * The question a wholesaler asks his customer book is "how much does this man
+ * The question a wholesaler asks their customer book is "how much does this man
  * owe me". Before the ledger was joined up it could only answer for business
- * he typed in by hand, so a retailer who paid half a large order through the
- * shop still showed his full old balance.
+ * they typed in by hand, so a retailer who paid half a large order through the
+ * shop still showed their full old balance.
  *
  * The dangerous failure is not an error. It is a number that looks plausible
  * and is wrong, so every check here asserts an exact figure worked out by
@@ -98,7 +98,7 @@ const mkUser = async (role, phone) => (await q(
   // billed, nothing paid, so the customer owes 0.
   check(await balanceOf(partyId) === 0, "an unpaid order is not yet a debt", { bal: await balanceOf(partyId) });
 
-  // He pays the first half: 500 of 1000. Billed 1000, received 500, owes 500.
+  // They pay the first half: 500 of 1000. Billed 1000, received 500, owes 500.
   // initiatePayment first, because that is what opens the session naming the
   // instalment amount. The checkout placeholder is for the whole order, so
   // skipping this step would settle the lot.
@@ -118,7 +118,7 @@ const mkUser = async (role, phone) => (await q(
   check(Number(rows.rows[0].amount) === 500, "ledger row is the amount actually taken", { amt: rows.rows[0].amount });
   check(!!rows.rows[0].payment_transaction_id, "ledger row is tied to its payment", {});
 
-  // The same payment arriving twice must not halve his balance again.
+  // The same payment arriving twice must not halve customer balance again.
   const replay = await partyService.recordOrderPayment(await testPool.connect().then(c => { replayClient = c; return c; }), {
     orderId, partyId, wholesalerId: wid, amount: 500,
     transactionId: rows.rows[0].payment_transaction_id,
@@ -127,7 +127,7 @@ const mkUser = async (role, phone) => (await q(
   check(replay === false, "a replayed payment is refused", { wrote: replay });
   check(await balanceOf(partyId) === 500, "balance unchanged by the replay", { bal: await balanceOf(partyId) });
 
-  // He pays the rest. Billed 1000, received 1000, owes nothing.
+  // They pay the rest. Billed 1000, received 1000, owes nothing.
   const second = await pay("paid");
   check(second.statusCode === 200, "second instalment accepted", { s: second.statusCode, m: second.body?.message });
   check(await balanceOf(partyId) === 0, "fully paid shows nothing due", { bal: await balanceOf(partyId) });

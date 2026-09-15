@@ -2,11 +2,11 @@
  * HSN codes: the shape, and the suggestions.
  *
  * An HSN code says what the goods ARE on a tax bill, and it is what the
- * customer claims his input credit against. Three things are checked here,
+ * customer claims their input credit against. Three things are checked here,
  * and they are deliberately the only three the product does:
  *
  *   the shape       4, 6 or 8 digits, refused otherwise
- *   his own history the codes this wholesaler has already put on his goods
+ *   their own history the codes this wholesaler has already put on their goods
  *   a short list    common textile headings, offered and labelled as such
  *
  * The last group is a starting point, not an authority, and the checks below
@@ -87,7 +87,7 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   );
   check(
     hsn.TEXTILE_HSN.every((row) => row.code.length === 4),
-    "all four digits, because that is the level he can pick by reading it",
+    "all four digits, because that is the level they can pick by reading it",
   );
   check(
     new Set(hsn.TEXTILE_HSN.map((r) => r.code)).size === hsn.TEXTILE_HSN.length,
@@ -116,10 +116,10 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   const asOwner = { user: { id: sellerId }, business: { id: sellerId, owner: true } };
 
   const fresh = await hsn.suggest(testPool, sellerId, "");
-  check(fresh.length > 0, "he still gets something to start from", { got: fresh.length });
+  check(fresh.length > 0, "they still gets something to start from", { got: fresh.length });
   check(
     fresh.every((row) => row.from === "common"),
-    "and it is all marked common, none of it his",
+    "and it is all marked common, none of it their",
   );
 
   const byWord = await hsn.suggest(testPool, sellerId, "shawl");
@@ -136,7 +136,7 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   );
 
   // ---------------------------------------------------------------
-  console.log("\nOnce he has used some");
+  console.log("\nOnce they have used some");
   // ---------------------------------------------------------------
   const listed = await call(products.addProduct, {
     ...asOwner,
@@ -152,7 +152,7 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
       gstPercent: 5,
     },
   });
-  check(listed.statusCode === 201, "he lists a product with an HSN", {
+  check(listed.statusCode === 201, "they lists a product with an HSN", {
     s: listed.statusCode,
     m: listed.body?.message,
   });
@@ -213,18 +213,18 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   );
 
   const mine = await hsn.suggest(testPool, sellerId, "");
-  check(mine[0]?.from === "yours", "now his own codes come first", {
+  check(mine[0]?.from === "yours", "now their own codes come first", {
     top: mine.slice(0, 3).map((r) => `${r.code}:${r.from}`),
   });
   check(
     mine[0]?.code === "6214",
-    "commonest first, so the one he used twice leads",
+    "commonest first, so the one they used twice leads",
     { top: mine[0] },
   );
   check(mine[0]?.times === 2, "and it says how many times", { times: mine[0]?.times });
   check(
     mine.some((row) => row.code === "5208" && row.from === "yours"),
-    "his listing's code is in there as his, not as common",
+    "their listing's code is in there as their, not as common",
   );
   check(
     mine.some((row) => row.from === "common"),
@@ -232,7 +232,7 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   );
   check(
     new Set(mine.map((r) => r.code)).size === mine.length,
-    "and 6214 is not offered twice, once as his and once as common",
+    "and 6214 is not offered twice, once as their and once as common",
   );
 
   // ---------------------------------------------------------------
@@ -253,7 +253,7 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   const theirs = await hsn.suggest(testPool, otherId, "");
   check(
     theirs.every((row) => row.from === "common"),
-    "another wholesaler sees none of his codes",
+    "another wholesaler sees none of their codes",
     { leak: theirs.filter((r) => r.from === "yours").map((r) => r.code) },
   );
 

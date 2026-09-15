@@ -4,11 +4,11 @@
  * This is the one field on the whole product that a person could be fined
  * over. Same state as the customer means the bill charges CGST plus SGST;
  * a different state means IGST. Charge the wrong one and the customer cannot
- * claim his input credit and the wholesaler has filed a wrong return.
+ * claim their input credit and the wholesaler has filed a wrong return.
  *
  * It used to be decided by comparing two city names with a fallback of
  * "Delhi" on both sides, so a Surat wholesaler with a half filled profile was
- * billed as though he sat in Delhi, and nothing anywhere asked him for his
+ * billed as though they sat in Delhi, and nothing anywhere asked them for their
  * state. Every check below is about that.
  *
  *     node scripts/place_check.js <database>
@@ -80,7 +80,7 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   // ---------------------------------------------------------------
   check(
     place.resolveState({ state: "Gujarat" }).from === "declared",
-    "what he declared wins",
+    "what they declared wins",
   );
   check(
     place.resolveState({ gstin: GUJARAT_GSTIN }).state === "Gujarat",
@@ -93,7 +93,7 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   check(
     place.resolveState({ state: "Karnataka", gstin: GUJARAT_GSTIN }).state === "Karnataka",
     "a declared state beats the GST number",
-    { note: "he may despatch from another state" },
+    { note: "they may despatch from another state" },
   );
   check(
     place.resolveState({ gstin: GUJARAT_GSTIN, city: "Mumbai" }).state === "Gujarat",
@@ -131,7 +131,7 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   );
   check(
     place.isIntraState({ gstin: GUJARAT_GSTIN }, { city: "Rajkot" }),
-    "his number against her city",
+    "their number against their city",
   );
   check(
     place.isIntraState({}, { city: "Mumbai" }),
@@ -206,12 +206,12 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   const sellerId = made.rows[0]?.id;
   check(
     made.rows[0]?.warehouse_state === "Gujarat",
-    "his state is stored from the signup form",
+    "their state is stored from the signup form",
     { got: made.rows[0]?.warehouse_state },
   );
   check(
     made.rows[0]?.city === null,
-    "and his city is blank rather than Delhi",
+    "and their city is blank rather than Delhi",
     { got: made.rows[0]?.city, was: "Delhi, from a column default nobody chose" },
   );
 
@@ -265,7 +265,7 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   });
   check(
     cleared.statusCode === 200 && !cleared.body.profile.warehouse_state,
-    "and he can clear it again",
+    "and they can clear it again",
   );
 
   // ---------------------------------------------------------------

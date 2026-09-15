@@ -266,7 +266,7 @@ const Checkout = () => {
                       State <span className="text-rose-500">*</span>
                     </label>
                     {/* A list, not a box. A typed "Karnatka" goes onto the
-                        delivery address printed on his bill, and matches no
+                        delivery address printed on their bill, and matches no
                         state anything else in the product compares against. */}
                     <select
                       name="state"

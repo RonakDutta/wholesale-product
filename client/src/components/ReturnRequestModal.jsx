@@ -12,7 +12,7 @@ import ModalShell from "./ModalShell";
  * ask and a wholesaler had no way to hear.
  *
  * A reason is required and the box is the whole point of the screen. It is
- * the only thing the wholesaler has to go on when he decides, and the
+ * the only thing the wholesaler has to go on when they decide, and the
  * difference between "short by four metres, dyeing is off on the second
  * piece" and no explanation at all is the difference between a return settled
  * on WhatsApp in a minute and an argument.
@@ -89,7 +89,7 @@ const ReturnRequestModal = ({ order, onClose, onRequested }) => {
     >
       <form id="return-request-form" onSubmit={submit} className="space-y-4 px-5 py-5">
           <p className="text-sm text-slate-600">
-            The seller decides whether to take the goods back. He will see what
+            The seller decides whether to take the goods back. They will see what
             you write here, so say what is wrong with them.
           </p>
 
@@ -109,9 +109,9 @@ const ReturnRequestModal = ({ order, onClose, onRequested }) => {
 
           {/* Said plainly, because this is the part people assume. */}
           <p className="text-xs text-slate-500">
-            If he accepts, you stop owing for these goods. Money you have
+            If they accept, you stop owing for these goods. Money you have
             already paid comes back by whatever you two arrange, so speak to
-            him about it.
+            them about it.
           </p>
 
       </form>

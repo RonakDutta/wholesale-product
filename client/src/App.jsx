@@ -48,7 +48,7 @@ import NotFound from "./pages/NotFound";
 
 // Seller workspace is lazy-loaded: retailers never download this bundle.
 const SellerLayout = lazy(() => import("./layouts/SellerLayout"));
-// The platform master area. Its own layout and its own guard, because
+// The platform administration area. Its own layout and its own guard, because
 // /seller/* is guarded by role seller|both and a platform admin need not be a
 // wholesaler at all. See MasterLayout for the rest of the reasoning.
 const MasterLayout = lazy(() => import("./layouts/MasterLayout"));
@@ -193,7 +193,7 @@ const router = createBrowserRouter([
       { path: "settings", element: <Settings /> },
       // Getting set up to take card payments. Until this is done a buyer's
       // card payment would land in the platform's account, so it is not
-      // offered and he pays by UPI instead.
+      // offered and they pay by UPI instead.
       { path: "settings/payments", element: <PaymentSetup /> },
       // Owner only, and the server refuses an employee outright.
       { path: "staff", element: <Staff /> },
@@ -204,7 +204,7 @@ const router = createBrowserRouter([
     // Signed in and admin only. MasterLayout does the checking and draws the
     // refusal itself, so a wholesaler who follows a link here is told what the
     // area is rather than bounced somewhere confusing.
-    path: "/master",
+    path: "/administration",
     element: (
       <Suspense fallback={<SellerFallback />}>
         <MasterLayout />
@@ -254,8 +254,8 @@ const router = createBrowserRouter([
     children: [
       { path: "login", element: <Login /> },
       { path: "signup", element: <SignUp /> },
-      // An employee turning his owner's code into an account. Public, because
-      // he has no login yet; the code in the form is the credential.
+      // An employee turning their owner's code into an account. Public, because
+      // they have no login yet; the code in the form is the credential.
       { path: "join", element: <JoinShop /> },
     ],
   },

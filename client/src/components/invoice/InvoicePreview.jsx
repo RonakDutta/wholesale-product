@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Printer, Download, Send } from "lucide-react";
 import { toast } from "sonner";
 import { downloadFile } from "../../utils/download";
@@ -7,6 +7,20 @@ import { amount as money, dateLabel } from "../../utils/money";
 
 export default function InvoicePreview({ invoice, onClose, onSendEmail }) {
   const [downloading, setDownloading] = useState(false);
+
+  useEffect(() => {
+    if (!invoice) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        onClose?.();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [invoice, onClose]);
+
   if (!invoice) return null;
 
   const isPaid = (invoice.payment_status || "").toLowerCase() === "paid";

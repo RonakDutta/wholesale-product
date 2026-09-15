@@ -14,7 +14,7 @@ import api from "../utils/axios";
 import Wordmark from "../components/Wordmark";
 
 /**
- * The master dashboard: the platform's own lists, not any wholesaler's.
+ * The administration dashboard: the platform's own lists, not any wholesaler's.
  *
  * A separate area rather than a page inside the seller workspace, for three
  * reasons that all point the same way:
@@ -31,9 +31,9 @@ import Wordmark from "../components/Wordmark";
  *   They are different jobs. One is running a shop; this is CRUD over lists
  *   that shape documents across every shop.
  *
- * WHAT IS NOT HERE, deliberately: a wholesaler's invoice prefix, his due days,
- * his default tax rate, his terms. Those are his and they stay on his own
- * settings screen. Moving them here would mean one wholesaler changing his
+ * WHAT IS NOT HERE, deliberately: a wholesaler's invoice prefix, their due days,
+ * their default tax rate, their terms. Those are their and they stay on their own
+ * settings screen. Moving them here would mean one wholesaler changing their
  * prefix changed everybody's.
  *
  * What IS here is the layer above them, on the Settings screen: number and
@@ -45,12 +45,12 @@ import Wordmark from "../components/Wordmark";
  */
 
 const LINKS = [
-  { to: "/master", end: true, label: "Overview", icon: LayoutGrid },
-  { to: "/master/states", label: "States", icon: MapPin },
-  { to: "/master/units", label: "Units", icon: Ruler },
-  { to: "/master/tax-rates", label: "Tax rates", icon: Percent },
-  { to: "/master/hsn", label: "HSN codes", icon: Hash },
-  { to: "/master/settings", label: "Settings", icon: SlidersHorizontal },
+  { to: "/administration", end: true, label: "Overview", icon: LayoutGrid },
+  { to: "/administration/states", label: "States", icon: MapPin },
+  { to: "/administration/units", label: "Units", icon: Ruler },
+  { to: "/administration/tax-rates", label: "Tax rates", icon: Percent },
+  { to: "/administration/hsn", label: "HSN codes", icon: Hash },
+  { to: "/administration/settings", label: "Settings", icon: SlidersHorizontal },
 ];
 
 /**
@@ -122,7 +122,7 @@ const MasterLayout = () => {
             and weight to the caller, which is right where the callers are
             genuinely different, the navbar against the dark sign in panel. Two
             sidebar headers are not different, and leaving this one bare gave
-            the master area the name in the ambient weight while the seller
+            the administration area the name in the ambient weight while the seller
             area had it black and tight: the same product looking like two. */}
         <div className="flex h-16 shrink-0 items-center px-5">
           <div>
@@ -130,7 +130,7 @@ const MasterLayout = () => {
               <Wordmark />
             </p>
             <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-cream/40">
-              Platform master
+              Platform Administration
             </p>
           </div>
         </div>
@@ -165,7 +165,7 @@ const MasterLayout = () => {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* The phone nav. The master screens are lists a person edits sitting
+        {/* The phone nav. The administration screens are lists a person edits sitting
             down, so this is a way across rather than a full second nav. */}
         <div className="hide-scrollbar flex shrink-0 gap-2 overflow-x-auto bg-espresso px-4 py-3 lg:hidden">
           {LINKS.map((link) => (
@@ -190,7 +190,7 @@ const MasterLayout = () => {
         {!state.fromMasters && (
           <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-6 py-3">
             <p className="text-sm font-bold text-amber-900">
-              The master tables are not in this database yet
+              The administration tables are not in this database yet
             </p>
             <p className="mt-0.5 text-xs text-amber-800">
               What you see below is the built in list the product falls back to.

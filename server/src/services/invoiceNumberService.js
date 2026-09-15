@@ -1,13 +1,13 @@
 const invoiceRepository = require("../repositories/invoiceRepository");
 
 /**
- * The next invoice number for one wholesaler, in his own run.
+ * The next invoice number for one wholesaler, in their own run.
  *
  * Rule 46(b) of the CGST Rules sets three conditions, and the old version of
  * this file met one of them:
  *
- *   consecutive per supplier   met. The count is his own. It used to be
- *                              shared across the whole platform, so his book
+ *   consecutive per supplier   met. The count is their own. It used to be
+ *                              shared across the whole platform, so their book
  *                              read 000001, 000003, 000009 with other firms'
  *                              invoices filling the gaps.
  *   unique per FINANCIAL year  NOT met. It used `new Date().getFullYear()`,
@@ -74,7 +74,7 @@ const compose = ({
 } = {}) => {
   const year = financialYear(date);
   // The year is available to both parts, so a wholesaler can put it wherever
-  // his stationery already has it.
+  // their stationery already has it.
   const fill = (text) => String(text ?? "").replace(/\{FY\}/g, year);
 
   const head = fill(prefix);
@@ -121,7 +121,7 @@ class InvoiceNumberService {
    *
    * @param {object} client        a pg client, so the number is taken in the
    *                               same transaction that writes the invoice
-   * @param {string} prefix        his prefix from invoice_settings
+   * @param {string} prefix        their prefix from invoice_settings
    * @param {number} yearOverride  for backdating; otherwise this financial year
    * @param {string} wholesalerId  whose run to draw from
    * @param {object} [format]      { suffix, padTo } from invoice_settings

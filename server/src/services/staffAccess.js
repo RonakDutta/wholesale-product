@@ -1,8 +1,8 @@
 /**
  * Who is acting, and whose book they are acting on.
  *
- * A wholesaler does not sit at the counter all day. His nephew takes orders,
- * his munim writes the sales and his driver marks deliveries, and until now
+ * A wholesaler does not sit at the counter all day. Their nephew takes orders,
+ * their munim writes the sales and their driver marks deliveries, and until now
  * every one of them had to use the owner's own login. That is not a small
  * inconvenience: nothing in the history could say who did what, and the owner
  * could not take the login back from somebody who had left.
@@ -16,7 +16,7 @@
  * For an owner these are the same id, which is why the difference was never
  * visible and why `req.user.id` was used for both. For an employee they are
  * different, and every query that means "the business" and reads the person
- * instead will either show him an empty book or, worse, somebody else's.
+ * instead will either show them an empty book or, worse, somebody else's.
  */
 
 /**
@@ -24,7 +24,7 @@
  *
  * Named for the job rather than the screen, because permissions outlive
  * layouts. The labels are what the owner reads on the staff page, so they are
- * plain: a man deciding what his nephew may touch should not have to work out
+ * plain: a man deciding what their nephew may touch should not have to work out
  * what "manage inventory entities" means.
  */
 const PERMISSIONS = [
@@ -86,15 +86,15 @@ const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
  * Everything. The rule agreed was that staff may do everything except change
  * the business settings and the GST details, and those are not on the list at
  * all. Starting generous and taking away is also the safer default of the two:
- * an owner who forgets to grant something finds out when his man cannot work,
+ * an owner who forgets to grant something finds out when their man cannot work,
  * which is annoying. An owner who forgets to revoke something finds out
  * differently.
  *
  * This applies to a permission ADDED LATER too. An employee taken on before
- * "purchases" existed has a stored list that does not contain it, so he cannot
+ * "purchases" existed has a stored list that does not contain it, so they cannot
  * open the purchase book until the owner ticks it. Backfilling every existing
  * employee into a new permission would be the other kind of mistake, and this
- * one in particular shows a man what his stock costs.
+ * one in particular shows a man what their stock costs.
  */
 const DEFAULT_PERMISSIONS = [...PERMISSION_KEYS];
 
@@ -104,7 +104,7 @@ const DEFAULT_PERMISSIONS = [...PERMISSION_KEYS];
  * Not a permission, because it is not grantable. Business settings carry the
  * GSTIN that goes on every invoice and the UPI id that money is paid into, and
  * staff management is on the list for the obvious reason: an employee who
- * could edit permissions could give himself the rest of them.
+ * could edit permissions could give themselves the rest of them.
  */
 const OWNER_ONLY = ["settings", "staff", "gst", "upi"];
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { X } from "lucide-react";
 import api from "../utils/axios";
+import ModalShell from "./ModalShell";
 import { toast } from "sonner";
 
 /**
@@ -48,29 +48,41 @@ const RecordPaymentModal = ({ partyId, partyName, outstanding, sales = [], onClo
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 backdrop-blur-sm sm:items-center sm:p-4">
-      <div className="flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-w-md sm:rounded-2xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
-          <div className="min-w-0">
-            <h3 className="text-lg font-black text-espresso">Record payment</h3>
-            <p className="truncate text-xs font-semibold text-slate-500">
-              From {partyName}
-            </p>
-          </div>
+    <ModalShell
+      onClose={onClose}
+      maxWidth="sm:max-w-md"
+      labelledBy="record-payment-title"
+      closeOnOverlayClick={false}
+      title={
+        <>
+          <h3 className="text-lg font-black text-espresso">Record payment</h3>
+          <p className="truncate text-xs font-semibold text-slate-500">
+            From {partyName}
+          </p>
+        </>
+      }
+      footer={
+        <div className="flex gap-3">
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-            aria-label="Close"
+            className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
           >
-            <X className="h-5 w-5" />
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="record-payment-form"
+            disabled={saving}
+            className="flex-1 rounded-lg bg-clay py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-60"
+          >
+            {saving ? "Saving..." : "Record payment"}
           </button>
         </div>
-
-        <form
-          onSubmit={handleSubmit}
-          className="flex min-h-0 flex-1 flex-col"
-        >
-          <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
+      }
+    >
+      <form id="record-payment-form" onSubmit={handleSubmit}>
+        <div className="space-y-4 px-6 py-5">
           {Number(outstanding) > 0 && (
             <div className="rounded-xl bg-amber-50 px-4 py-3">
               <p className="text-xs font-semibold text-amber-800">
@@ -180,27 +192,9 @@ const RecordPaymentModal = ({ partyId, partyName, outstanding, sales = [], onClo
             />
           </div>
 
-          </div>
-
-          <div className="flex shrink-0 gap-3 border-t border-slate-100 bg-white px-6 py-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 rounded-lg bg-clay py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-60"
-            >
-              {saving ? "Saving..." : "Record payment"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </div>
+      </form>
+    </ModalShell>
   );
 };
 

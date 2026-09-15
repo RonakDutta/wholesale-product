@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { X } from "lucide-react";
 import api from "../utils/axios";
+import ModalShell from "./ModalShell";
 import { toast } from "sonner";
 
 /**
@@ -59,28 +59,43 @@ const CreditNoteModal = ({ invoice, onClose, onSaved }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 backdrop-blur-sm sm:items-center sm:p-4">
-      <div className="flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-w-md sm:rounded-2xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
-          <div className="min-w-0">
-            <h3 className="text-lg font-black text-espresso">
-              Reverse this bill
-            </h3>
-            <p className="truncate text-xs font-semibold text-slate-500">
-              {invoice.invoice_number} · {invoice.buyer_name}
-            </p>
-          </div>
+    <ModalShell
+      onClose={onClose}
+      maxWidth="sm:max-w-md"
+      labelledBy="credit-note-title"
+      closeOnOverlayClick={false}
+      title={
+        <>
+          <h3 className="text-lg font-black text-espresso">
+            Reverse this bill
+          </h3>
+          <p className="truncate text-xs font-semibold text-slate-500">
+            {invoice.invoice_number} · {invoice.buyer_name}
+          </p>
+        </>
+      }
+      footer={
+        <div className="flex gap-3">
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-            aria-label="Close"
+            className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
           >
-            <X className="h-5 w-5" />
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="credit-note-form"
+            disabled={saving || (reason === "other" && !note.trim())}
+            className="flex-1 rounded-lg bg-clay py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-60"
+          >
+            {saving ? "Raising..." : "Raise credit note"}
           </button>
         </div>
-
-        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-          <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
+      }
+    >
+      <form id="credit-note-form" onSubmit={handleSubmit}>
+        <div className="space-y-4 px-6 py-5">
             <div className="rounded-xl bg-sky-50 px-4 py-3">
               <p className="text-xs font-semibold text-sky-900">
                 A credit note of ₹
@@ -147,27 +162,9 @@ const CreditNoteModal = ({ invoice, onClose, onSaved }) => {
                 className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
               />
             </div>
-          </div>
-
-          <div className="flex shrink-0 gap-3 border-t border-slate-100 bg-white px-6 py-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving || (reason === "other" && !note.trim())}
-              className="flex-1 rounded-lg bg-clay py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-60"
-            >
-              {saving ? "Raising..." : "Raise credit note"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </div>
+      </form>
+    </ModalShell>
   );
 };
 

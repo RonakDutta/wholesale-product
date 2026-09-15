@@ -4,6 +4,7 @@ import { ArrowLeft, BadgeCheck, Clock, TriangleAlert } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
 import { rupees, dateLabel } from "../../utils/money";
+import { INDIAN_STATES } from "../../utils/gstin";
 
 /**
  * Getting set up to be paid through the gateway.
@@ -415,12 +416,23 @@ const PaymentSetup = () => {
               >
                 State <span className="text-clay">*</span>
               </label>
-              <input
+              {/* A list, not a box, for the same reason Settings uses one:
+                  Razorpay matches this against government records, and a
+                  typed "Gujrat" is a rejection two days later with a message
+                  nobody reads carefully. */}
+              <select
                 id="rz-state"
                 value={form.state}
                 onChange={set("state")}
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-clay"
-              />
+                className="w-full cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-clay"
+              >
+                <option value="">Choose a state</option>
+                {INDIAN_STATES.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label

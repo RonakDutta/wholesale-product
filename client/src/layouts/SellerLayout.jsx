@@ -1,4 +1,6 @@
 import { Suspense, useState, useEffect } from "react";
+import CommandPalette from "../components/CommandPalette";
+import { useHotkey, prettyCombo } from "../hooks/useHotkey";
 import {
   LayoutDashboard,
   Package,
@@ -20,6 +22,7 @@ import {
   BarChart3,
   Plus,
   ShieldCheck,
+  Search,
 } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import api from "../utils/axios";
@@ -51,8 +54,11 @@ const NAV = [
   // The other direction. Purchases sits next to Sales because they are the
   // two halves of the same day, and Suppliers next to it because a purchase
   // is always from somebody, the way a sale is always to somebody.
-  { path: "/seller/purchases", label: "Purchases", icon: ShoppingCart, needs: "purchases" },
+  // Suppliers before Purchases, mirroring Customers before Sales above. You
+  // have the man before you have the bill from him, and the order you add
+  // them in should read the same way on both sides of the book.
   { path: "/seller/suppliers", label: "Suppliers", icon: Factory, needs: "purchases" },
+  { path: "/seller/purchases", label: "Purchases", icon: ShoppingCart, needs: "purchases" },
   { path: "/seller/invoices", label: "Invoices", icon: FileText, needs: "invoices" },
   // Sits under Invoices because it is the other half of the same job: what
   // went out before the bill could be raised.
@@ -150,6 +156,7 @@ const SellerLayout = () => {
   const { user, logout, can, isOwner, staff } = useAuth();
   const { unreadCount } = useUnread();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   // What this person can actually reach. The sidebar must not offer a screen
   // the server will refuse: an employee clicking "Customers" and being told no
@@ -159,6 +166,39 @@ const SellerLayout = () => {
     (item) =>
       (!item.ownerOnly || isOwner) && (!item.needs || can(item.needs)),
   );
+
+  /**
+   * The words a wholesaler would actually type, beside the ones on the nav.
+   *
+   * He calls a supplier a mill and an invoice a bill, and searching a menu
+   * for the word printed on the menu is not much of a search.
+   */
+  const PALETTE_WORDS = {
+    "/seller/customers": "party parties buyer khata account",
+    "/seller/suppliers": "mill vendor party purchase from",
+    "/seller/purchases": "bill purchase inward buying",
+    "/seller/sales": "sale outward selling kaata",
+    "/seller/invoices": "bill tax gst invoice",
+    "/seller/challans": "delivery challan goods out",
+    "/seller/products": "item stock rate list",
+    "/seller/settings": "profile gst upi shop details",
+    "/seller/staff": "employee worker munim",
+    "/seller": "home dashboard summary",
+  };
+
+  const paletteItems = nav.map((item) => ({
+    path: item.path,
+    label: item.label,
+    icon: item.icon,
+    keywords: (PALETTE_WORDS[item.path] || "").split(" ").filter(Boolean),
+  }));
+
+  useHotkey("mod+k", () => setPaletteOpen(true), {
+    label: "Search and jump to a page",
+    group: "Getting around",
+    // A modifier, so it works from inside a half typed form too.
+    allowInInput: true,
+  });
 
   // Close the mobile drawer whenever the route changes
   useEffect(() => {
@@ -222,6 +262,21 @@ const SellerLayout = () => {
             aria-label="Close menu"
           >
             <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* The visible half of the palette. The shortcut is the fast way in
+            and this is how anybody finds out the shortcut exists. */}
+        <div className="px-3 pt-3">
+          <button
+            onClick={() => setPaletteOpen(true)}
+            className="flex w-full items-center gap-2.5 rounded-lg bg-white/5 px-3 py-2.5 text-sm text-cream/50 transition-colors hover:bg-white/10 hover:text-cream/80"
+          >
+            <Search className="h-4 w-4 shrink-0" />
+            <span className="flex-1 text-left">Search</span>
+            <kbd className="hidden shrink-0 rounded border border-cream/20 px-1.5 py-0.5 font-mono text-[10px] font-bold md:block">
+              {prettyCombo("mod+k")}
+            </kbd>
           </button>
         </div>
 
@@ -374,6 +429,12 @@ const SellerLayout = () => {
           </Suspense>
         </div>
       </main>
+    {paletteOpen && (
+        <CommandPalette
+          items={paletteItems}
+          onClose={() => setPaletteOpen(false)}
+        />
+      )}
     </div>
   );
 };

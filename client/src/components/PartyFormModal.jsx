@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { X } from "lucide-react";
 import api from "../utils/axios";
+import ModalShell from "./ModalShell";
 import { toast } from "sonner";
 import { gstinFeedback, INDIAN_STATES } from "../utils/gstin";
 
@@ -96,26 +96,40 @@ const PartyFormModal = ({ party, onClose, onSaved }) => {
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 backdrop-blur-sm sm:items-center sm:p-4">
-      <div className="flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-w-lg sm:rounded-2xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
-          <h3 className="text-lg font-black text-espresso">
-            {editing ? "Edit customer" : "Add customer"}
-          </h3>
+    <ModalShell
+      onClose={onClose}
+      maxWidth="sm:max-w-lg"
+      labelledBy="party-form-title"
+      title={editing ? "Edit customer" : "Add customer"}
+      /* A half typed customer is not worth losing to a stray click on the
+         dark area. Escape still closes it, which is deliberate rather than
+         an oversight: that one takes a decision, a misplaced click does not. */
+      closeOnOverlayClick={false}
+      footer={
+        <div className="flex gap-3">
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-            aria-label="Close"
+            className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
           >
-            <X className="h-5 w-5" />
+            Cancel
+          </button>
+          {/* Outside the form element, so `form` ties it back to the form it
+              submits. That is what lets the button stay pinned below the
+              scroll area instead of scrolling off the bottom of a phone. */}
+          <button
+            type="submit"
+            form="party-form"
+            disabled={saving}
+            className="flex-1 rounded-lg bg-clay py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-60"
+          >
+            {saving ? "Saving..." : editing ? "Save changes" : "Add customer"}
           </button>
         </div>
-
-        <form
-          onSubmit={handleSubmit}
-          className="flex min-h-0 flex-1 flex-col"
-        >
-          <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
+      }
+    >
+      <form id="party-form" onSubmit={handleSubmit}>
+        <div className="space-y-4 px-6 py-5">
           <div>
             <label
               htmlFor="party-name"
@@ -327,31 +341,9 @@ const PartyFormModal = ({ party, onClose, onSaved }) => {
             </div>
           )}
 
-          </div>
-
-          <div className="flex shrink-0 gap-3 border-t border-slate-100 bg-white px-6 py-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 rounded-lg bg-clay py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-60"
-            >
-              {saving
-                ? "Saving..."
-                : editing
-                  ? "Save changes"
-                  : "Add customer"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </div>
+      </form>
+    </ModalShell>
   );
 };
 

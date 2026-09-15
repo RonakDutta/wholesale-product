@@ -4,6 +4,7 @@ import { Plus, ShoppingCart, TriangleAlert } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
 import { money, dateLabel } from "../../utils/money";
+import SupplierFormModal from "../../components/SupplierFormModal";
 
 /**
  * The purchase book: bills from suppliers, newest first.
@@ -35,6 +36,10 @@ const Purchases = () => {
   // The migration is applied by hand, so "not set up yet" is a normal state
   // and gets its own screen rather than an error toast.
   const [notSetUp, setNotSetUp] = useState(false);
+  // Adding a supplier from here, as well as from inside the bill form.
+  // A wholesaler back from the market with a stack of bills adds the new
+  // mills first and then enters them, rather than one at a time.
+  const [addingSupplier, setAddingSupplier] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -87,14 +92,30 @@ const Purchases = () => {
             Bills from your suppliers, and what you still owe on each.
           </p>
         </div>
-        <Link
-          to="/seller/purchases/new"
-          className="flex items-center gap-2 rounded-lg bg-clay px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso"
-        >
-          <Plus className="h-4 w-4" />
-          Enter a bill
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setAddingSupplier(true)}
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-espresso transition-colors hover:border-clay hover:text-clay"
+          >
+            <Plus className="h-4 w-4" />
+            Add supplier
+          </button>
+          <Link
+            to="/seller/purchases/new"
+            className="flex items-center gap-2 rounded-lg bg-clay px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso"
+          >
+            <Plus className="h-4 w-4" />
+            Enter a bill
+          </Link>
+        </div>
       </div>
+
+      {addingSupplier && (
+        <SupplierFormModal
+          onClose={() => setAddingSupplier(false)}
+          onSaved={() => setAddingSupplier(false)}
+        />
+      )}
 
       <div className="flex flex-wrap gap-2">
         {FILTERS.map((filter) => (

@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Undo2, X } from "lucide-react";
+import { Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/axios";
+import ModalShell from "./ModalShell";
 
 /**
  * Asking to send goods back.
@@ -49,28 +50,44 @@ const ReturnRequestModal = ({ order, onClose, onRequested }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-espresso/40 p-0 sm:items-center sm:p-4">
-      <div className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
-        <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
-          <div>
-            <h3 className="flex items-center gap-2 text-lg font-black text-espresso">
-              <Undo2 className="h-5 w-5 text-clay" />
-              Send this back
-            </h3>
-            <p className="mt-0.5 text-xs font-semibold text-slate-400">
-              {order.order_number} &middot; {order.supplier_name}
-            </p>
-          </div>
+    <ModalShell
+      onClose={onClose}
+      maxWidth="sm:max-w-md"
+      labelledBy="return-request-title"
+      closeOnOverlayClick={false}
+      title={
+        <>
+          <h3 className="flex items-center gap-2 text-lg font-black text-espresso">
+            <Undo2 className="h-5 w-5 text-clay" />
+            Send this back
+          </h3>
+          <p className="mt-0.5 truncate text-xs font-semibold text-slate-400">
+            {order.order_number} &middot; {order.supplier_name}
+          </p>
+        </>
+      }
+      footer={
+        <div className="flex gap-2">
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-            aria-label="Close"
+            className="flex-1 rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-200"
           >
-            <X className="h-5 w-5" />
+            Keep them
+          </button>
+          <button
+            type="submit"
+            form="return-request-form"
+            disabled={working}
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-clay px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-60"
+          >
+            <Undo2 className="h-4 w-4" />
+            {working ? "Please wait..." : "Ask to return"}
           </button>
         </div>
-
-        <form onSubmit={submit} className="space-y-4 px-5 py-5">
+      }
+    >
+      <form id="return-request-form" onSubmit={submit} className="space-y-4 px-5 py-5">
           <p className="text-sm text-slate-600">
             The seller decides whether to take the goods back. He will see what
             you write here, so say what is wrong with them.
@@ -97,26 +114,8 @@ const ReturnRequestModal = ({ order, onClose, onRequested }) => {
             him about it.
           </p>
 
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-200"
-            >
-              Keep them
-            </button>
-            <button
-              type="submit"
-              disabled={working}
-              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-clay px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso disabled:opacity-60"
-            >
-              <Undo2 className="h-4 w-4" />
-              {working ? "Please wait..." : "Ask to return"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </ModalShell>
   );
 };
 

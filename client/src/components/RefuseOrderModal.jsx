@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { XCircle, X, AlertTriangle } from "lucide-react";
+import { XCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/axios";
+import ModalShell from "./ModalShell";
 import { money as fmt } from "../utils/money";
 
 /**
@@ -65,28 +66,47 @@ const RefuseOrderModal = ({ order, asSeller = true, onClose, onCancelled }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-espresso/40 p-0 sm:items-center sm:p-4">
-      <div className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
-        <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
-          <div>
-            <h3 className="flex items-center gap-2 text-lg font-black text-espresso">
-              <XCircle className="h-5 w-5 text-rose-500" />
-              {asSeller ? "Refuse this order" : "Cancel this order"}
-            </h3>
-            <p className="mt-0.5 text-xs font-semibold text-slate-400">
-              {order.order_number} &middot; {order.buyer || order.supplier_name}
-            </p>
-          </div>
+    <ModalShell
+      onClose={onClose}
+      maxWidth="sm:max-w-md"
+      labelledBy="refuse-order-title"
+      closeOnOverlayClick={false}
+      title={
+        <>
+          <h3 className="flex items-center gap-2 text-lg font-black text-espresso">
+            <XCircle className="h-5 w-5 text-rose-500" />
+            {asSeller ? "Refuse this order" : "Cancel this order"}
+          </h3>
+          <p className="mt-0.5 truncate text-xs font-semibold text-slate-400">
+            {order.order_number} &middot; {order.buyer || order.supplier_name}
+          </p>
+        </>
+      }
+      footer={
+        <div className="flex gap-2">
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-            aria-label="Close"
+            className="flex-1 rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-200"
           >
-            <X className="h-5 w-5" />
+            Keep it
+          </button>
+          {/* Closing an order cannot be undone, so the cursor does not land
+              here on open and a stray Enter cannot do it. */}
+          <button
+            type="submit"
+            form="refuse-order-form"
+            data-autofocus="off"
+            disabled={working}
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-rose-700 disabled:opacity-60"
+          >
+            <XCircle className="h-4 w-4" />
+            {working ? "Please wait..." : asSeller ? "Refuse it" : "Cancel it"}
           </button>
         </div>
-
-        <form onSubmit={submit} className="space-y-4 px-5 py-5">
+      }
+    >
+      <form id="refuse-order-form" onSubmit={submit} className="space-y-4 px-5 py-5">
           <p className="text-sm text-slate-600">
             {asSeller
               ? "This order will be closed and your customer will be told. It cannot be reopened, so he will have to place a fresh order."
@@ -133,30 +153,8 @@ const RefuseOrderModal = ({ order, asSeller = true, onClose, onCancelled }) => {
             />
           </div>
 
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-200"
-            >
-              Keep it
-            </button>
-            <button
-              type="submit"
-              disabled={working}
-              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-rose-700 disabled:opacity-60"
-            >
-              <XCircle className="h-4 w-4" />
-              {working
-                ? "Please wait..."
-                : asSeller
-                  ? "Refuse it"
-                  : "Cancel it"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </ModalShell>
   );
 };
 

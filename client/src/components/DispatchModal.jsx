@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Truck, X, Copy, Check, MessageCircle } from "lucide-react";
+import { Truck, Copy, Check, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/axios";
+import ModalShell from "./ModalShell";
 
 /**
  * Sending an order out.
@@ -102,27 +103,23 @@ const DispatchModal = ({ order, onClose, onDispatched }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-espresso/40 p-0 sm:items-center sm:p-4">
-      <div className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
-        <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
-          <div>
-            <h3 className="flex items-center gap-2 text-lg font-black text-espresso">
-              <Truck className="h-5 w-5 text-clay" />
-              {trackUrl ? "On its way" : "Send this order out"}
-            </h3>
-            <p className="mt-0.5 text-xs font-semibold text-slate-400">
-              {order.order_number} &middot; {order.buyer}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
+    <ModalShell
+      onClose={onClose}
+      maxWidth="sm:max-w-md"
+      labelledBy="dispatch-title"
+      closeOnOverlayClick={false}
+      title={
+        <>
+          <h3 className="flex items-center gap-2 text-lg font-black text-espresso">
+            <Truck className="h-5 w-5 text-clay" />
+            {trackUrl ? "On its way" : "Send this order out"}
+          </h3>
+          <p className="mt-0.5 truncate text-xs font-semibold text-slate-400">
+            {order.order_number} &middot; {order.buyer}
+          </p>
+        </>
+      }
+    >
         {trackUrl ? (
           <div className="space-y-4 px-5 py-5">
             {/* This link belongs to the driver, not the customer. Opening it
@@ -238,8 +235,7 @@ const DispatchModal = ({ order, onClose, onDispatched }) => {
             </div>
           </form>
         )}
-      </div>
-    </div>
+    </ModalShell>
   );
 };
 

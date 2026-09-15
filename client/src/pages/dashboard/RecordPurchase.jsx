@@ -3,8 +3,10 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
+import { useHotkey } from "../../hooks/useHotkey";
 import { useMasters } from "../../hooks/useMasters";
 import { money, toPaise, fromPaise } from "../../utils/money";
+import SupplierFormModal from "../../components/SupplierFormModal";
 
 /**
  * Entering a supplier's bill, and correcting one. The same form does both,
@@ -48,6 +50,7 @@ const RecordPurchase = () => {
   const [notSetUp, setNotSetUp] = useState(false);
 
   const [supplierId, setSupplierId] = useState(searchParams.get("supplier") || "");
+  const [addingSupplier, setAddingSupplier] = useState(false);
   const [purchaseDate, setPurchaseDate] = useState(
     () => new Date().toISOString().slice(0, 10),
   );
@@ -179,6 +182,35 @@ const RecordPurchase = () => {
     Math.max(0, toPaise(totals.total) - Math.max(0, toPaise(amountPaid))),
   );
 
+  /**
+   * The two keys somebody entering a stack of bills actually wants.
+   *
+   * Both carry a modifier, because he is inside a field when he wants them
+   * and a bare letter would land in the item name. Adding a line is the most
+   * repeated action in this form by a wide margin.
+   */
+  const addLine = () => setLines((prev) => [...prev, blankLine()]);
+
+  useHotkey("alt+n", addLine, {
+    label: "Add another line",
+    group: "Entering a purchase",
+    allowInInput: true,
+  });
+
+  useHotkey(
+    "mod+s",
+    () => {
+      // Submitted through the form so every check and every toast is the same
+      // as pressing the button. A second save path is how the two drift.
+      document.getElementById("record-purchase")?.requestSubmit();
+    },
+    {
+      label: "Save this purchase",
+      group: "Entering a purchase",
+      allowInInput: true,
+    },
+  );
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -279,7 +311,7 @@ const RecordPurchase = () => {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mx-auto max-w-4xl space-y-6 pb-28">
+    <form id="record-purchase" onSubmit={handleSubmit} className="mx-auto max-w-4xl space-y-6 pb-28">
       <button
         type="button"
         onClick={() => navigate(-1)}
@@ -322,20 +354,35 @@ const RecordPurchase = () => {
               </p>
             </>
           ) : (
-            <select
-              id="purchase-supplier"
-              value={supplierId}
-              onChange={(e) => setSupplierId(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
-            >
-              <option value="">Choose a supplier</option>
-              {suppliers.map((supplier) => (
-                <option key={supplier.id} value={supplier.id}>
-                  {supplier.name}
-                  {supplier.business_name ? ` (${supplier.business_name})` : ""}
-                </option>
-              ))}
-            </select>
+            /* The list, and a way out of it.
+
+               A bill from a mill not yet in the book used to mean abandoning
+               a half typed purchase, going to Suppliers, adding him, and
+               starting again. The modal adds him here and selects him. */
+            <div className="flex gap-2">
+              <select
+                id="purchase-supplier"
+                value={supplierId}
+                onChange={(e) => setSupplierId(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+              >
+                <option value="">Choose a supplier</option>
+                {suppliers.map((supplier) => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.name}
+                    {supplier.business_name ? ` (${supplier.business_name})` : ""}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setAddingSupplier(true)}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2.5 text-xs font-bold text-espresso transition-colors hover:border-clay hover:text-clay"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New
+              </button>
+            </div>
           )}
         </div>
 
@@ -528,7 +575,7 @@ const RecordPurchase = () => {
         <div className="border-t border-slate-100 p-4 sm:px-5">
           <button
             type="button"
-            onClick={() => setLines((prev) => [...prev, blankLine()])}
+            onClick={addLine}
             className="flex items-center gap-2 rounded-lg border border-dashed border-slate-300 px-4 py-2 text-sm font-bold text-slate-500 transition-colors hover:border-clay hover:text-clay"
           >
             <Plus className="h-4 w-4" />
@@ -680,6 +727,27 @@ const RecordPurchase = () => {
           </button>
         </div>
       </div>
+
+      {/* Adds him and selects him, so the purchase being typed carries on
+          rather than being abandoned. The list is reloaded from the server
+          instead of being patched locally, so the new row is exactly what
+          every other row is. */}
+      {addingSupplier && (
+        <SupplierFormModal
+          onClose={() => setAddingSupplier(false)}
+          onSaved={async (created) => {
+            setAddingSupplier(false);
+            try {
+              const { data } = await api.get("/api/suppliers");
+              setSuppliers(Array.isArray(data) ? data : []);
+            } catch {
+              // The supplier was created either way. Leaving the list stale
+              // is better than losing the purchase being typed.
+            }
+            if (created?.id) setSupplierId(created.id);
+          }}
+        />
+      )}
     </form>
   );
 };

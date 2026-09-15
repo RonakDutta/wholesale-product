@@ -207,6 +207,12 @@ need running by hand. Read it before starting, and add to it in the same
 commit as the work it describes. It is kept out of this file on purpose, so
 the instructions every session loads do not grow a changelog inside them.
 
+`ROADMAP.md` beside it is what has been AGREED and not yet started, with an
+assessment of what each piece actually needs. Kept separate from PROGRESS so
+a decision is never mistaken for a thing that exists. Two items on it,
+e-invoice and e-way bill, cannot be finished by writing code alone: they need
+credentials and a GSP, and the roadmap says which half is ours.
+
 ## Known gaps, as of this writing
 
 - No screen advances an order past `payment_completed`. The API exists and is

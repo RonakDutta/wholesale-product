@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, MapPin, Phone, User, ShoppingBag, IndianRupee, CreditCard } from "lucide-react";
+import { INDIAN_STATES } from "../utils/gstin";
 import { useCart } from "../context/CartContext";
 import { toast } from "sonner";
 import api from "../utils/axios";
@@ -264,16 +265,24 @@ const Checkout = () => {
                     <label className="block text-sm font-semibold text-slate-700 mb-2">
                       State <span className="text-rose-500">*</span>
                     </label>
-                    <input
-                      type="text"
+                    {/* A list, not a box. A typed "Karnatka" goes onto the
+                        delivery address printed on his bill, and matches no
+                        state anything else in the product compares against. */}
+                    <select
                       name="state"
                       value={addressForm.state}
                       onChange={handleInputChange}
-                      placeholder="e.g., Karnataka"
-                      className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay/20 ${
+                      className={`w-full cursor-pointer px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay/20 ${
                         errors.state ? "border-rose-300" : "border-slate-200"
                       }`}
-                    />
+                    >
+                      <option value="">Choose a state</option>
+                      {INDIAN_STATES.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
                     {errors.state && <p className="text-xs text-rose-500 mt-1">{errors.state}</p>}
                   </div>
 
@@ -281,16 +290,23 @@ const Checkout = () => {
                     <label className="block text-sm font-semibold text-slate-700 mb-2">
                       Country <span className="text-rose-500">*</span>
                     </label>
-                    <input
-                      type="text"
+                    {/* One option on purpose, rather than a list of two
+                        hundred. Every bill this product raises is a GST
+                        invoice with an HSN code and a place of supply, and an
+                        export is a different document with a different tax
+                        treatment that none of this handles. Offering Nepal in
+                        the list would be offering something that does not
+                        work. */}
+                    <select
                       name="country"
                       value={addressForm.country}
                       onChange={handleInputChange}
-                      placeholder="India"
-                      className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay/20 ${
+                      className={`w-full cursor-pointer px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay/20 ${
                         errors.country ? "border-rose-300" : "border-slate-200"
                       }`}
-                    />
+                    >
+                      <option value="India">India</option>
+                    </select>
                     {errors.country && <p className="text-xs text-rose-500 mt-1">{errors.country}</p>}
                   </div>
 

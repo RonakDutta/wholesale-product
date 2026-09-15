@@ -35,10 +35,46 @@ const { financialYear } = require("./invoiceNumberService");
  * commit, which is what stops two sales taking the same number.
  */
 
+class ValidationError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "ValidationError";
+  }
+}
+
+/** Rule 46(b) CGST Rules, 2017: alphanumerics, hyphens, and slashes only, max 16 chars */
+const GST_SEQUENCE_REGEX = /^[a-zA-Z0-9\/-]+$/;
+
+function validateSequenceNumber(number) {
+  if (!number || typeof number !== "string") {
+    throw new ValidationError("Invoice number must be a non-empty string.");
+  }
+  if (number.length > 16) {
+    throw new ValidationError(
+      `Invoice number "${number}" exceeds statutory GST limit of 16 characters`
+    );
+  }
+  if (!GST_SEQUENCE_REGEX.test(number)) {
+    throw new ValidationError(
+      `Invoice number "${number}" contains invalid characters. Only alphanumerics, hyphens, and forward slashes are allowed`
+    );
+  }
+  return true;
+}
+
 const take = async (client, wholesalerId, table, legacyPrefix, prefix) => {
   const has = await invoiceRepository.schemaExtras();
 
   if (!has.has_series_fy) {
+    // Fail-fast pre-write validation before sequence reservation commit
+    const current = await client.query(
+      `SELECT last_number FROM ${table} WHERE wholesaler_id = $1`,
+      [wholesalerId]
+    );
+    const nextSeq = (current.rows[0]?.last_number || 0) + 1;
+    const projected = `${legacyPrefix}${String(nextSeq).padStart(4, "0")}`;
+    validateSequenceNumber(projected);
+
     const legacy = await client.query(
       `INSERT INTO ${table} (wholesaler_id, last_number)
        VALUES ($1, 1)
@@ -47,10 +83,21 @@ const take = async (client, wholesalerId, table, legacyPrefix, prefix) => {
        RETURNING last_number`,
       [wholesalerId],
     );
-    return `${legacyPrefix}${String(legacy.rows[0].last_number).padStart(4, "0")}`;
+    const generated = `${legacyPrefix}${String(legacy.rows[0].last_number).padStart(4, "0")}`;
+    validateSequenceNumber(generated);
+    return generated;
   }
 
   const fy = financialYear();
+  // Fail-fast pre-write validation before sequence reservation commit
+  const current = await client.query(
+    `SELECT last_number FROM ${table} WHERE wholesaler_id = $1 AND financial_year = $2`,
+    [wholesalerId, fy]
+  );
+  const nextSeq = (current.rows[0]?.last_number || 0) + 1;
+  const projected = `${prefix}${nextSeq}/${fy}`;
+  validateSequenceNumber(projected);
+
   const result = await client.query(
     `INSERT INTO ${table} (wholesaler_id, financial_year, last_number)
      VALUES ($1, $2, 1)
@@ -59,7 +106,9 @@ const take = async (client, wholesalerId, table, legacyPrefix, prefix) => {
      RETURNING last_number`,
     [wholesalerId, fy],
   );
-  return `${prefix}${result.rows[0].last_number}/${fy}`;
+  const generated = `${prefix}${result.rows[0].last_number}/${fy}`;
+  validateSequenceNumber(generated);
+  return generated;
 };
 
 /** S/1/26-27, or S-0001 before the migration. */
@@ -86,6 +135,15 @@ const nextChallanNumber = (client, wholesalerId) =>
  */
 const nextPurchaseNumber = async (client, wholesalerId) => {
   const fy = financialYear();
+  // Fail-fast pre-write validation before sequence reservation commit
+  const current = await client.query(
+    `SELECT last_number FROM purchase_sequences WHERE wholesaler_id = $1 AND financial_year = $2`,
+    [wholesalerId, fy]
+  );
+  const nextSeq = (current.rows[0]?.last_number || 0) + 1;
+  const projected = `PUR/${nextSeq}/${fy}`;
+  validateSequenceNumber(projected);
+
   const result = await client.query(
     `INSERT INTO purchase_sequences (wholesaler_id, financial_year, last_number)
      VALUES ($1, $2, 1)
@@ -94,7 +152,15 @@ const nextPurchaseNumber = async (client, wholesalerId) => {
      RETURNING last_number`,
     [wholesalerId, fy],
   );
-  return `PUR/${result.rows[0].last_number}/${fy}`;
+  const generated = `PUR/${result.rows[0].last_number}/${fy}`;
+  validateSequenceNumber(generated);
+  return generated;
 };
 
-module.exports = { nextSaleNumber, nextChallanNumber, nextPurchaseNumber };
+module.exports = {
+  nextSaleNumber,
+  nextChallanNumber,
+  nextPurchaseNumber,
+  validateSequenceNumber,
+  ValidationError,
+};

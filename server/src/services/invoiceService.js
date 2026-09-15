@@ -934,6 +934,13 @@ class InvoiceService {
 
     return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
   }
+
+  /**
+   * Returns the GSTR-1 Table 12 compliant HSN summary for an invoice.
+   */
+  async getHsnSummary(invoiceId) {
+    return invoiceRepository.getHsnSummary(invoiceId);
+  }
 }
 
 module.exports = new InvoiceService();

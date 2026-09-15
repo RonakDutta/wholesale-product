@@ -553,6 +553,29 @@ class InvoiceRepository {
   }
 
   /**
+   * Aggregates line items for an invoice grouped by HSN code and GST rate.
+   * Direct SQL aggregation with ROUND(..., 2) to maintain GSTR-1 Table 12
+   * compliance without JS floating-point rounding errors.
+   */
+  async getHsnSummary(invoiceId) {
+    await ensureSchema();
+    const query = `
+      SELECT
+        COALESCE(NULLIF(TRIM(hsn_code), ''), 'N/A') AS hsn_code,
+        ROUND(COALESCE(gst_percent, 0)::numeric, 2)::numeric AS gst_percent,
+        ROUND(SUM(quantity * unit_price)::numeric, 2)::numeric AS taxable_amount,
+        ROUND(SUM(tax_amount)::numeric, 2)::numeric AS gst_amount,
+        ROUND(SUM((quantity * unit_price) + tax_amount)::numeric, 2)::numeric AS total_amount
+      FROM invoice_items
+      WHERE invoice_id = $1
+      GROUP BY COALESCE(NULLIF(TRIM(hsn_code), ''), 'N/A'), gst_percent
+      ORDER BY hsn_code, gst_percent
+    `;
+    const result = await pool.query(query, [invoiceId]);
+    return result.rows;
+  }
+
+  /**
    * Finds an invoice associated with an order ID.
    */
   async findInvoiceByOrderId(orderId) {

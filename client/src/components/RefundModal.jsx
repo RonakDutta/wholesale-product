@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { IndianRupee, X } from "lucide-react";
+import { IndianRupee } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/axios";
+import ModalShell from "./ModalShell";
 import { amount as money } from "../utils/money";
 
 /**
@@ -68,34 +69,51 @@ const RefundModal = ({ order, onClose, onRefunded }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6">
-        <div className="mb-4 flex items-start justify-between gap-3 border-b border-slate-100 pb-4">
-          <div>
-            <h3 className="flex items-center gap-2 text-base font-bold text-espresso">
-              <IndianRupee className="h-5 w-5 text-clay" />
-              Pay back {order?.buyer || "your customer"}
-            </h3>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Order {order?.order_number || order?.id}
-            </p>
-          </div>
+    <ModalShell
+      onClose={onClose}
+      maxWidth="sm:max-w-md"
+      labelledBy="refund-title"
+      closeOnOverlayClick={false}
+      title={
+        <>
+          <h3 className="flex items-center gap-2 text-base font-bold text-espresso">
+            <IndianRupee className="h-5 w-5 text-clay" />
+            Pay back {order?.buyer || "your customer"}
+          </h3>
+          <p className="mt-0.5 truncate text-xs text-slate-500">
+            Order {order?.order_number || order?.id}
+          </p>
+        </>
+      }
+      footer={
+        <div className="flex items-center justify-end gap-3">
           <button
+            type="button"
             onClick={onClose}
-            aria-label="Close"
-            className="cursor-pointer text-slate-400 transition-colors hover:text-espresso"
+            className="cursor-pointer rounded-xl px-4 py-2 text-xs font-semibold text-espresso/60 transition-colors hover:bg-slate-100"
           >
-            <X className="h-5 w-5" />
+            Not yet
+          </button>
+          <button
+            type="submit"
+            form="refund-form"
+            data-autofocus="off"
+            disabled={working || !valid}
+            className="cursor-pointer rounded-xl bg-clay px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-espresso disabled:opacity-50"
+          >
+            {working ? "Recording..." : "I have paid this back"}
           </button>
         </div>
-
+      }
+    >
+      <div className="px-5 py-5 sm:px-6">
         <p className="rounded-xl bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
           The goods are back with you and you are holding{" "}
           <span className="font-bold text-espresso">{money(paid)}</span> of his
           money. Pay it back the way you normally would, then record it here.
         </p>
 
-        <form onSubmit={submit} className="mt-4 space-y-4">
+        <form id="refund-form" onSubmit={submit} className="mt-4 space-y-4">
           <div>
             <label
               htmlFor="refund-amount"
@@ -164,25 +182,9 @@ const RefundModal = ({ order, onClose, onRefunded }) => {
             />
           </div>
 
-          <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="cursor-pointer rounded-xl px-4 py-2 text-xs font-semibold text-espresso/60 transition-colors hover:bg-slate-100"
-            >
-              Not yet
-            </button>
-            <button
-              type="submit"
-              disabled={working || !valid}
-              className="cursor-pointer rounded-xl bg-clay px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-espresso disabled:opacity-50"
-            >
-              {working ? "Recording..." : "I have paid this back"}
-            </button>
-          </div>
         </form>
       </div>
-    </div>
+    </ModalShell>
   );
 };
 

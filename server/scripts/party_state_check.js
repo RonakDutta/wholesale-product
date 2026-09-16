@@ -2,16 +2,16 @@
  * The customer's own state, and the tax that follows from it.
  *
  * placeOfSupply asks three things in order: the state somebody declared, the
- * state his GST number carries, then his city. For a khata customer the first
+ * state their GST number carries, then their city. For a khata customer the first
  * of those could not be answered at all, because parties had no state column
  * and every caller passed { gstin, city }. So the strongest source was
  * missing for half of every bill.
  *
  * Who that was wrong for: a customer in another state with no GST
- * registration, in a town that is not one of the ninety in STATE_BY_CITY. He
- * resolved to null, null is read as the same state, and his bill charged CGST
+ * registration, in a town that is not one of the ninety in STATE_BY_CITY. They
+ * resolved to null, null is read as the same state, and their bill charged CGST
  * plus SGST when it owed IGST. There was no way to correct it, because
- * nothing anywhere asked which state he was in.
+ * nothing anywhere asked which state they were in.
  *
  * What has to hold:
  *   - a declared state reaches the bill and puts IGST on it
@@ -136,8 +136,8 @@ const seedSeller = async (pool) => {
   };
 
   // THE CASE THIS WAS BUILT FOR. Raipur is not in STATE_BY_CITY and this
-  // customer has no GSTIN, so before the state column he resolved to null and
-  // was billed CGST plus SGST by a Gujarat seller. He owes IGST.
+  // customer has no GSTIN, so before the state column they resolved to null and
+  // was billed CGST plus SGST by a Gujarat seller. They owe IGST.
   const awayBill = await saleFor(good.body.id);
   check(Number(awayBill.igst) > 0 && Number(awayBill.cgst) === 0,
     "an out of state customer with no GST number is billed IGST",
@@ -164,7 +164,7 @@ const seedSeller = async (pool) => {
     { cgst: sameBill.cgst, igst: sameBill.igst });
 
   // The declared state beats the city map. Ludhiana maps to Punjab, so
-  // without the column this would be IGST; he says he is in Gujarat.
+  // without the column this would be IGST; they say they are in Gujarat.
   const contradicts = await call(parties.createParty, {
     ...asSeller,
     body: { name: "Moved Shop", city: "Ludhiana", state: "Gujarat",

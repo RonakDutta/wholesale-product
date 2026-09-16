@@ -9,7 +9,7 @@ const pool = require("../config/db");
  * and it is wrong here for two reasons. Tokens already issued would not carry
  * it, so nobody could be made an admin without signing out and in again. Worse,
  * taking the flag AWAY would not take effect until the token expired, which
- * means a revoked admin keeps every power he had for as long as his session
+ * means a revoked admin keeps every power they had for as long as their session
  * lasts. For a permission that edits the tax slabs and the state list, that is
  * not a trade worth making for one small query.
  *

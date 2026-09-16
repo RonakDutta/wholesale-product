@@ -104,9 +104,9 @@ let accountStatus = "created";
   check(razorpay.transferAmount(100000, 0) === 100000,
     "with no commission the wholesaler gets all of it", { got: razorpay.transferAmount(100000, 0) });
   check(razorpay.transferAmount(100000, 2) === 98000,
-    "two per cent leaves him 98,000 paise of a lakh", { got: razorpay.transferAmount(100000, 2) });
+    "two per cent leaves them 98,000 paise of a lakh", { got: razorpay.transferAmount(100000, 2) });
   check(razorpay.transferAmount(333, 1) === 329,
-    "a stray paisa is kept by the platform, never invented for him",
+    "a stray paisa is kept by the platform, never invented for them",
     { got: razorpay.transferAmount(333, 1) });
   let threw = null;
   try { razorpay.transferAmount(1000, 100); } catch (e) { threw = e.message; }
@@ -185,7 +185,7 @@ let accountStatus = "created";
     "onboarding creates a linked account", { got: onboarded.body?.accountId, code: onboarded.statusCode,
       msg: onboarded.body?.message });
   check(onboarded.body?.canBePaid === false,
-    "and he STILL cannot be paid, because Razorpay has not activated him",
+    "and they STILL cannot be paid, because Razorpay has not activated them",
     { status: onboarded.body?.status });
 
   const created = seen.find((s) => s.url === "/v2/accounts");
@@ -198,7 +198,7 @@ let accountStatus = "created";
     "sent with basic auth, not the key in the body", { got: String(created?.auth).slice(0, 6) });
   const settle = seen.find((s) => s.method === "PATCH");
   check(settle?.body?.settlements?.account_number === "50100123456789",
-    "and his own bank account is what Razorpay settles to",
+    "and their own bank account is what Razorpay settles to",
     { got: settle?.body?.settlements?.account_number });
 
   // ---------------------------------------------------------------
@@ -236,18 +236,18 @@ let accountStatus = "created";
     params: { orderId }, user: { id: buyerId }, body: {},
   });
   check(beforeActivation.statusCode === 200,
-    "a payment still works while he is only created, as it did before Route",
+    "a payment still works while they are only created, as it did before Route",
     { got: beforeActivation.statusCode });
   const noTransferYet = seen.filter((s) => s.url === "/v1/orders").pop();
   check(noTransferYet?.body?.transfers === undefined,
     "but NO transfer is attached, so nothing is held by Razorpay",
     { transfers: noTransferYet?.body?.transfers });
 
-  // Razorpay activates him.
+  // Razorpay activates them.
   accountStatus = "activated";
   const after = await call(route.getRouteStatus, { ...asSeller, body: {} });
   check(after.body?.status === "activated" && after.body?.canBePaid === true,
-    "once Razorpay activates him the status follows", { got: after.body?.status });
+    "once Razorpay activates them the status follows", { got: after.body?.status });
 
   const allowed = await call(rzpOrders.createRazorpayOrder, {
     params: { orderId }, user: { id: buyerId }, body: {},
@@ -260,7 +260,7 @@ let accountStatus = "created";
     "the gateway order carries exactly one transfer", {
       transfers: sentOrder?.body?.transfers?.length });
   check(sentOrder?.body?.transfers?.[0]?.account === onboarded.body.accountId,
-    "addressed to HIS linked account", { got: sentOrder?.body?.transfers?.[0]?.account });
+    "addressed to THEIR linked account", { got: sentOrder?.body?.transfers?.[0]?.account });
   check(sentOrder?.body?.transfers?.[0]?.amount === 500000,
     "for the whole 5,000 rupees, since no commission is set",
     { got: sentOrder?.body?.transfers?.[0]?.amount });
@@ -310,7 +310,7 @@ let accountStatus = "created";
   await post(transferEvent);
   const transfers = await call(route.listTransfers, { ...asSeller, body: {} });
   check(transfers.body?.length === 1 && Number(transfers.body[0].amount_paise) === 500000,
-    "a transfer Razorpay reports reaches his own list",
+    "a transfer Razorpay reports reaches their own list",
     { got: transfers.body?.length, amount: transfers.body?.[0]?.amount_paise });
   check(transfers.body?.[0]?.order_number,
     "tied back to the order it came from", { got: transfers.body?.[0]?.order_number });

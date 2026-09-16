@@ -19,7 +19,7 @@ import { useEffect, useRef } from "react";
  *
  * Anything that has to work WHILE typing therefore needs a modifier, which is
  * why saving is mod+s and adding a line is alt+n rather than bare letters.
- * Those are allowed through, because he is mid-form when he wants them and
+ * Those are allowed through, because they are mid-form when they want them and
  * that is the whole point.
  */
 

@@ -227,7 +227,7 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   console.log("\nThe bill raises itself once the sale is settled");
   // ---------------------------------------------------------------
   // The last step used to be a button nobody had to press, so a wholesaler
-  // could settle a sale and his customer would never get a bill. The order
+  // could settle a sale and their customer would never get a bill. The order
   // side has always done this; the sales book did not.
   const auto = await makeSale(0);
   const noneYet = await testPool.query(
@@ -562,7 +562,7 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   const asOther = { user: { id: other, role: "seller" }, business: { id: other, owner: true } };
 
   const peek = await call(challans.getChallan, { ...asOther, params: { id: madeOne.body.id } });
-  check(peek.statusCode === 404, "his challan is not readable by anyone else", { s: peek.statusCode });
+  check(peek.statusCode === 404, "their challan is not readable by anyone else", { s: peek.statusCode });
   const theirList = await call(challans.listChallans, asOther);
   check((theirList.body || []).length === 0, "and does not show in another book", {
     n: (theirList.body || []).length,

@@ -116,7 +116,7 @@ const Sales = () => {
                         {sale.sale_number} · {dateLabel(sale.sale_date)} ·{" "}
                         {sale.line_count}{" "}
                         {Number(sale.line_count) === 1 ? "item" : "items"}
-                        {/* Goods already out on a challan, so he can see at a
+                        {/* Goods already out on a challan, so they can see at a
                             glance which sales have stock away from the godown
                             without opening each one. */}
                         {Number(sale.challan_count) > 0 && (

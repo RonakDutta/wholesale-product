@@ -13,16 +13,16 @@ const {
  * A wholesaler's employees.
  *
  * Every route here is owner only, enforced at the router. An employee who
- * could edit permissions could give himself the rest of them, so this is the
+ * could edit permissions could give themselves the rest of them, so this is the
  * one part of the dashboard that cannot be delegated.
  *
- * Turning somebody off is the usual move and keeps him on the list, which is
- * what you want for a man who might come back. Removing him is for the ones who
+ * Turning somebody off is the usual move and keeps them on the list, which is
+ * what you want for a man who might come back. Removing them is for the ones who
  * will not, and for an invite sent to the wrong number.
  *
- * Either way his history is safe: the rows that record who did what point at
- * users.id, not at this table, so his name stays on the dispatches he made and
- * the payments he recorded whatever happens here.
+ * Either way their history is safe: the rows that record who did what point at
+ * users.id, not at this table, so their name stays on the dispatches they made and
+ * the payments they recorded whatever happens here.
  */
 
 const INVITE_DAYS = 14;
@@ -42,7 +42,7 @@ const shape = (row) => ({
   joinedAt: row.joined_at,
   lastSeenAt: row.last_seen_at,
   // Only ever sent to the owner, and only while the invite is unused. It is
-  // what he reads out to his nephew over the phone.
+  // what they read out to their nephew over the phone.
   inviteCode: row.status === "invited" ? row.invite_code : null,
   inviteExpiresAt: row.status === "invited" ? row.invite_expires_at : null,
   hasAccount: Boolean(row.user_id),
@@ -89,13 +89,13 @@ exports.inviteStaff = async (req, res) => {
   }
   if (!phone && !email) {
     return res.status(400).json({
-      message: "Add a phone number or an email so you can send him the code.",
+      message: "Add a phone number or an email so you can send them the code.",
     });
   }
 
   // Absent means the agreed default, which is everything on the list. An
   // explicitly empty array is a real choice and is kept: an owner may want a
-  // man who can sign in and see nothing until he decides.
+  // man who can sign in and see nothing until they decide.
   const permissions =
     req.body?.permissions === undefined
       ? DEFAULT_PERMISSIONS
@@ -120,7 +120,7 @@ exports.inviteStaff = async (req, res) => {
   }
 };
 
-// @desc    Change what somebody may do, or his name and number
+// @desc    Change what somebody may do, or their name and number
 // @route   PATCH /api/staff/:id
 exports.updateStaff = async (req, res) => {
   const { id } = req.params;
@@ -176,7 +176,7 @@ exports.setStaffStatus = async (req, res) => {
   const wanted = String(req.body?.status || "").toLowerCase();
 
   if (!["active", "disabled"].includes(wanted)) {
-    return res.status(400).json({ message: "Say whether to turn him on or off." });
+    return res.status(400).json({ message: "Say whether to turn them on or off." });
   }
 
   try {
@@ -190,17 +190,17 @@ exports.setStaffStatus = async (req, res) => {
     const staff = found.rows[0];
 
     /**
-     * Turning somebody back on means putting him back where he was, and where
-     * he was depends on whether he ever joined.
+     * Turning somebody back on means putting them back where they were, and where
+     * they were depends on whether they ever joined.
      *
      * This used to refuse outright for anybody without an account, which
-     * quietly created a trap: turn off a man who had not yet used his code and
-     * there was no way to reach him again. The row sat disabled for ever, the
+     * quietly created a trap: turn off a man who had not yet used their code and
+     * there was no way to reach them again. The row sat disabled for ever, the
      * button was refused every time, and the only way out was another invite
      * under a second row.
      *
      * So somebody who never joined goes back to invited, with a fresh code:
-     * his old one may well have expired while he sat turned off, and handing
+     * their old one may well have expired while they sat turned off, and handing
      * back a dead code would be the same trap one step further along.
      */
     const neverJoined = !staff.user_id;
@@ -227,10 +227,10 @@ exports.setStaffStatus = async (req, res) => {
 
     const messages = {
       disabled: neverJoined
-        ? "His invite is cancelled. The code you gave him no longer works."
-        : "He can no longer open your book. Everything he did is still on the record.",
-      invited: "His invite is back, with a new code. Send it to him again.",
-      active: "He can open your book again.",
+        ? "Their invite is cancelled. The code you gave them no longer works."
+        : "They can no longer open your book. Everything they did is still on the record.",
+      invited: "Their invite is back, with a new code. Send it to them again.",
+      active: "They can open your book again.",
     };
 
     res.status(200).json({ staff: shape(rows[0]), message: messages[restoreTo] });
@@ -260,7 +260,7 @@ exports.resendInvite = async (req, res) => {
 
     if (rows.length === 0) {
       return res.status(400).json({
-        message: "That person has already joined, so he does not need a new code.",
+        message: "That person has already joined, so they do not need a new code.",
       });
     }
 
@@ -347,8 +347,8 @@ exports.acceptInvite = async (req, res) => {
     }
 
     const [first, ...rest] = String(staff.name).split(" ");
-    // role 'seller' so the existing dashboard guards let him in. What he can
-    // actually see is decided by his permissions, not by this word.
+    // role 'seller' so the existing dashboard guards let them in. What they can
+    // actually see is decided by their permissions, not by this word.
     const created = await client.query(
       `INSERT INTO users (first_name, last_name, email, role, phone, password_hash)
        VALUES ($1, $2, $3, 'seller', $4, $5)
@@ -375,7 +375,7 @@ exports.acceptInvite = async (req, res) => {
 
     await client.query("COMMIT");
 
-    // No token. He signs in on the ordinary login screen with the password he
+    // No token. They sign in on the ordinary login screen with the password they
     // has just chosen, so there is one way in rather than two.
     res.status(201).json({
       message: "Your account is ready. Sign in with your email and password.",
@@ -394,13 +394,13 @@ exports.acceptInvite = async (req, res) => {
  * Take somebody off the staff for good.
  *
  * Safe to delete, and this is worth knowing before anybody worries about it:
- * history rows point at users.id, not at this table. His name stays on the
- * dispatches he made, the payments he recorded and the statuses he moved, and
+ * history rows point at users.id, not at this table. Their name stays on the
+ * dispatches they made, the payments they recorded and the statuses they moved, and
  * deleting the employment does not touch any of it. What goes is the link
- * between his login and this shop.
+ * between their login and this shop.
  *
- * If he had joined, his login survives and stops reaching this book. Turning
- * him off does the same thing while leaving him on the list, which is the
+ * If they had joined, their login survives and stops reaching this book. Turning
+ * them off does the same thing while leaving them on the list, which is the
  * better move for somebody who might come back; deleting is for the ones who
  * will not, and for an invite sent to the wrong number.
  *
@@ -424,7 +424,7 @@ exports.removeStaff = async (req, res) => {
     res.status(200).json({
       removed: id,
       message: rows[0].user_id
-        ? `${rows[0].name} is off your staff. What he did is still on the record.`
+        ? `${rows[0].name} is off your staff. What they did is still on the record.`
         : `${rows[0].name}'s invite is cancelled.`,
     });
   } catch (err) {

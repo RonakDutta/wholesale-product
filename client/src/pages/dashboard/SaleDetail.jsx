@@ -202,7 +202,7 @@ const SaleDetail = () => {
       setData((prev) => ({ ...prev, sale: { ...prev.sale, ...sale } }));
 
       // Cancelling a billed sale reverses the bill with a credit note. Saying
-      // so here matters: he expects the invoice to disappear, and it does not.
+      // so here matters: they expect the invoice to disappear, and it does not.
       if (raised) {
         setCreditNote(raised);
         toast.success(`Sale cancelled. Credit note ${raised.note_number} raised.`);
@@ -278,7 +278,7 @@ const SaleDetail = () => {
   // two switches: the order's, which stamps a delivery date and opens the
   // return window, and this page's, which did neither. The server refuses the
   // change anyway; hiding the button is so nobody presses it and reads an
-  // error he did not deserve.
+  // error they did not deserve.
   const fromOrder = Boolean(sale.order_id);
   const actions = fromOrder ? [] : NEXT_ACTIONS[sale.status] || [];
   const canEdit = !fromOrder && sale.status !== "cancelled" && !invoice;
@@ -438,7 +438,7 @@ const SaleDetail = () => {
             </div>
 
             {/* The reversing document. Its own number, because the customer
-                needs it for his books as much as the wholesaler does. */}
+                needs it for their books as much as the wholesaler does. */}
             {creditNote && (
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-sky-50 p-4">
                 <div className="flex min-w-0 items-center gap-3">

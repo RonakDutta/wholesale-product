@@ -1,7 +1,7 @@
 import MasterList from "./MasterList";
 
 /**
- * The four master lists, as data.
+ * The four administration lists, as data.
  *
  * Same shape as the server's LISTS map and for the same reason: four screens
  * that each keep their own copy of "validate, save, refresh" is how three of
@@ -9,7 +9,7 @@ import MasterList from "./MasterList";
  *
  * The validation lives on the server. What is here is labels, hints and what
  * a blank row looks like, so a person filling one in knows what is wanted
- * before he is told no.
+ * before they are told no.
  */
 
 const SPECS = {
@@ -80,7 +80,7 @@ const SPECS = {
     title: "HSN codes",
     singular: "HSN code",
     blurb:
-      "What the goods ARE on a tax bill, and what the customer claims his input credit against. Codes and descriptions only: nothing here maps a code to a GST rate, because rates change and the same heading carries several by price slab.",
+      "What the goods ARE on a tax bill, and what the customer claims their input credit against. Codes and descriptions only: nothing here maps a code to a GST rate, because rates change and the same heading carries several by price slab.",
     columns: [{ field: "code" }, { field: "label" }],
     fields: [
       { name: "code", label: "Code", hint: "4, 6 or 8 digits. Six is required above 5 crore turnover.", fixedOnEdit: true },

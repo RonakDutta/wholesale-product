@@ -54,7 +54,7 @@ const MarketSnapshot = ({ products = [], region }) => {
       </div>
 
       {/* This used to read "Delivering to Delhi NCR" on every screen in the
-          country, with nothing behind it: no seller had said he delivers
+          country, with nothing behind it: no seller had said they delivers
           there and no code worked it out. It now says where the sellers
           counted above actually are, which is a fact the page already holds. */}
       <p className="flex items-center gap-1.5 text-xs font-semibold text-espresso/50">

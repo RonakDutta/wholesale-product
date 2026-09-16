@@ -11,7 +11,7 @@
 -- 1. A party does not need a user account, so invoices.buyer_id, which
 --    references users(id), cannot identify the recipient of a sale invoice.
 --    party_id does that instead.
---
+--N
 -- 2. The recipient's details are SNAPSHOT onto the invoice rather than read
 --    back through a join. A tax document should say who it was issued to at
 --    the time it was issued. Editing a customer's GSTIN today must not

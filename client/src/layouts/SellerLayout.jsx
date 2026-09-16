@@ -37,10 +37,10 @@ import Wordmark from "../components/Wordmark";
 const NAV = [
   { path: "/seller", label: "Overview", icon: LayoutDashboard, exact: true },
   { path: "/seller/customers", label: "Customers", icon: Users, needs: "customers" },
-  // One list. It used to be two, his own rate list and his shop listings,
-  // which meant the same thing to him and differed only in which half of the
+  // One list. It used to be two, their own rate list and their shop listings,
+  // which meant the same thing to them and differed only in which half of the
   // row each screen could show. Where a product is shown is now a control on
-  // the product itself, which is where he looks for it.
+  // the product itself, which is where they look for it.
   { path: "/seller/products", label: "Products", icon: Package, needs: "products" },
   { path: "/seller/sales", label: "Sales", icon: ShoppingBag, needs: "sales" },
   // Marketplace orders, which are a different thing from a recorded sale.
@@ -55,7 +55,7 @@ const NAV = [
   // two halves of the same day, and Suppliers next to it because a purchase
   // is always from somebody, the way a sale is always to somebody.
   // Suppliers before Purchases, mirroring Customers before Sales above. You
-  // have the man before you have the bill from him, and the order you add
+  // have the man before you have the bill from them, and the order you add
   // them in should read the same way on both sides of the book.
   { path: "/seller/suppliers", label: "Suppliers", icon: Factory, needs: "purchases" },
   { path: "/seller/purchases", label: "Purchases", icon: ShoppingCart, needs: "purchases" },
@@ -132,7 +132,7 @@ const PaneFallback = () => (
 
 const SellerLayout = () => {
   /**
-   * Whether this person may reach the platform master area.
+   * Whether this person may reach the platform administration area.
    *
    * Read from the masters endpoint, which already answers it, rather than
    * from the token: the flag is deliberately not in the token so that taking
@@ -170,7 +170,7 @@ const SellerLayout = () => {
   /**
    * The words a wholesaler would actually type, beside the ones on the nav.
    *
-   * He calls a supplier a mill and an invoice a bill, and searching a menu
+   * They call a supplier a mill and an invoice a bill, and searching a menu
    * for the word printed on the menu is not much of a search.
    */
   const PALETTE_WORDS = {
@@ -316,7 +316,7 @@ const SellerLayout = () => {
               with the other ways out rather than in the nav list above.
               Both of these belong to the marketplace, which is switched off
               in 3.0, so they follow the same flag. */}
-          {/* The platform master area, for an admin who is also a wholesaler.
+          {/* The platform administration area, for an admin who is also a wholesaler.
               A separate area rather than a nav entry above, because it is a
               different job and because /seller/* is guarded by role, which a
               platform admin need not have. Shown only when the flag is really
@@ -324,12 +324,12 @@ const SellerLayout = () => {
               regardless of what this draws. */}
           {isPlatformAdmin && (
             <Link
-              to="/master"
+              to="/administration"
               className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-cream/60 transition-colors hover:bg-white/5 hover:text-cream"
               title="The platform's own lists: states, units, tax rates, HSN codes"
             >
               <ShieldCheck className="h-4 w-4" />
-              Platform master
+              Platform Administration
             </Link>
           )}
           {FEATURES.MARKETPLACE && user?.id && (
@@ -365,13 +365,13 @@ const SellerLayout = () => {
             </button>
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-slate-900">
-                {/* An employee is looking at his employer's shop, so the
+                {/* An employee is looking at their employer's shop, so the
                     header says whose it is. Two brothers with two firms and
                     one phone between them is not an unusual arrangement. */}
                 {isOwner ? companyName || "Your business" : staff.worksFor}
               </p>
               <p className="truncate text-[11px] font-semibold text-slate-400">
-                {/* An admin is not a fourth kind of trader, so his role stays
+                {/* An admin is not a fourth kind of trader, so their role stays
                     what it is and only the label changes. The permission is a
                     separate flag; this is presentation. */}
                 {!isOwner
@@ -389,7 +389,7 @@ const SellerLayout = () => {
                 It used to be a full row in the sidebar footer reading "Back to
                 marketplace", which spent a line on naming a surface, sitting
                 next to "My shop page" which sounds like the same thing and is
-                the opposite: that one is his own page as buyers see it.
+                the opposite: that one is their own page as buyers see it.
 
                 Labelled Home, because that is the page it goes to. It was
                 briefly "Buy stock", which was worse: this is the ordinary way

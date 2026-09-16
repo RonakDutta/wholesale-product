@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { CreditCard, Plus, X } from "lucide-react";
+import { CreditCard, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { amount as money, dateLabel } from "../../utils/money";
+import ModalShell from "../ModalShell";
 
 export default function PaymentHistory({
   payments = [],
@@ -129,21 +130,17 @@ export default function PaymentHistory({
 
       {/* Record Payment Modal */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
-              <h3 className="text-base font-bold text-espresso flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-clay" /> Record Invoice
-                Payment
-              </h3>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="text-slate-400 hover:text-espresso"
-              >
-                <X className="w-5 h-5" />
-              </button>
+        <ModalShell
+          onClose={() => setIsOpen(false)}
+          maxWidth="max-w-md"
+          title={
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-clay" />
+              <span className="text-base font-bold text-espresso">Record Invoice Payment</span>
             </div>
-
+          }
+        >
+          <div className="p-6">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-espresso/70 mb-1">
@@ -226,7 +223,7 @@ export default function PaymentHistory({
               </div>
             </form>
           </div>
-        </div>
+        </ModalShell>
       )}
     </div>
   );

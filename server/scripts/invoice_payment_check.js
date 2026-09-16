@@ -3,9 +3,9 @@
  *
  * It did not. An order can be paid half now and half later, but the invoice
  * only ever heard about a payment once the whole amount was in, so a buyer who
- * had paid his first instalment looked, on his own bill, exactly like a buyer
+ * had paid their first instalment looked, on their own bill, exactly like a buyer
  * who had paid nothing: no entry, no date, no amount, and UNPAID stamped over
- * the PDF. The order screen showed him a receipt for money the bill said had
+ * the PDF. The order screen showed them a receipt for money the bill said had
  * never arrived.
  *
  * What has to hold:
@@ -243,7 +243,7 @@ const mkUser = async (role, phone) =>
   });
   const paidByOrder = money((await q("SELECT amount_paid FROM orders WHERE id=$1", [orderId2])).rows[0].amount_paid);
 
-  // The wholesaler writes the same money onto the bill himself first.
+  // The wholesaler writes the same money onto the bill themselves first.
   await invoiceRepository.addPayment({
     invoiceId: bill2.id, amount: paidByOrder, paymentMethod: "Cash",
     remarks: "Entered by hand",
@@ -301,7 +301,7 @@ const mkUser = async (role, phone) =>
 
   const bill3 = await invoiceRepository.findInvoiceByOrderId(orderId3);
   const onBill3 = money((bill3?.payments || []).reduce((s, x) => s + Number(x.amount), 0));
-  check(onBill3 > 0, "the first instalment reaches the bill even when he pays at once", {
+  check(onBill3 > 0, "the first instalment reaches the bill even when they pay at once", {
     on: onBill3,
     why: "checkout raises the bill in the background, so the two race",
   });
@@ -394,7 +394,7 @@ const mkUser = async (role, phone) =>
    * counted as money still to come in and as revenue.
    *
    * The list beside the cards already showed such a row as "Credited". The
-   * card above it asked him to chase the money anyway.
+   * card above it asked them to chase the money anyway.
    */
   /**
    * The losing ordering, forced.

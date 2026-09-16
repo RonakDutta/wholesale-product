@@ -434,7 +434,7 @@ const SearchResults = () => {
                   <p className="text-espresso/60 mt-2 max-w-md mx-auto">
                     We couldn't find anything matching "{query}".
                     {/* The city is a filter the buyer set in the navbar, far
-                        from here. Say so, or he blames the search. */}
+                        from here. Say so, or they blame the search. */}
                     {cityParam
                       ? ` You are only being shown sellers in ${cityLabel}.`
                       : " Try adjusting your filters or search for something else."}

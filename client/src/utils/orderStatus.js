@@ -131,15 +131,15 @@ export const matchesOrderTab = (status, tabLabel) => {
  *
  * The lifecycle has 22 states and orderStatusService is the authority on what
  * may follow what. Showing a wholesaler 22 buttons would be useless, so this
- * names the single next step of the ordinary path: he took the money, he
- * accepts, he packs, he sends it, it arrives.
+ * names the single next step of the ordinary path: they took the money, they
+ * accepts, they pack, they send it, it arrives.
  *
  * Every `to` here has to be a move orderStatusService already allows. The
  * server validates it again and refuses anything else, so this list can only
  * ever offer less than the lifecycle, never more.
  *
  * Labels are what a trader would say out loud. "Ready for pickup" is what the
- * database calls it; "Ready to send" is what he calls it.
+ * database calls it; "Ready to send" is what they call it.
  */
 const NEXT_STEP = {
   payment_completed: { to: "supplier_accepted", label: "Accept order" },
@@ -165,7 +165,7 @@ const NEXT_STEP = {
  *
  * Kept apart from NEXT_STEP because this is the one point in the lifecycle
  * with a genuine choice rather than a next step. Everywhere else the
- * wholesaler is moving an order along; here he is deciding.
+ * wholesaler is moving an order along; here they are deciding.
  *
  * Rejecting is not a dead end for the money: partyController leaves a
  * rejected return owed on purpose, because the customer still has the goods.
@@ -212,7 +212,7 @@ export const returnDaysLeft = (deliveredOn) => {
 /**
  * What to offer on this order, or null when there is nothing to do.
  *
- * Null covers both ends: an order still waiting for the buyer to pay is his
+ * Null covers both ends: an order still waiting for the buyer to pay is their
  * move, not the wholesaler's, and a cancelled or refunded one is finished.
  */
 export const getNextStep = (status) => NEXT_STEP[normalize(status)] || null;
@@ -220,8 +220,8 @@ export const getNextStep = (status) => NEXT_STEP[normalize(status)] || null;
 /**
  * Orders that need the wholesaler to do something, newest first.
  *
- * This is the count worth putting in front of him: not how many orders exist,
- * but how many are waiting on him.
+ * This is the count worth putting in front of them: not how many orders exist,
+ * but how many are waiting on them.
  */
 export const needsAction = (status) =>
   Boolean(getNextStep(status)) || isReturnRequested(status);
@@ -236,7 +236,7 @@ export const needsAction = (status) =>
  * goods move.
  *
  * The server enforces this and refuses anything else. This copy exists so the
- * screen can explain rather than let him press a button and be told no.
+ * screen can explain rather than let them press a button and be told no.
  */
 const DISPATCHABLE = [
   "packed",
@@ -259,7 +259,7 @@ export const canSendOut = (status) => DISPATCHABLE.includes(normalize(status));
  * cancellation.
  *
  * payment_pending is on the list deliberately. That is where a brand new
- * order sits, and refusing one he has only just received is the commonest
+ * order sits, and refusing one they have only just received is the commonest
  * case there is: the colour is finished, the lot is sold, the buyer is too
  * far to deliver to.
  */
@@ -277,11 +277,11 @@ const REFUSABLE = [
 export const canRefuse = (status) => REFUSABLE.includes(normalize(status));
 
 /**
- * Whether the wholesaler still owes this customer his money back.
+ * Whether the wholesaler still owes this customer their money back.
  *
  * The last step of a return, and the one nothing ever called. Until it is
  * done the goods are back on the shelf and the customer's money is still in
- * the till, which the Overview correctly reports as owed back to him.
+ * the till, which the Overview correctly reports as owed back to them.
  */
 export const canRefund = (status) => normalize(status) === "return_completed";
 
@@ -295,9 +295,9 @@ export const canRefund = (status) => normalize(status) === "return_completed";
 export const RETURN_WINDOW_DAYS = 7;
 
 /**
- * Whether the buyer can still call his own order off.
+ * Whether the buyer can still call their own order off.
  *
- * Shorter than the wholesaler's list on purpose: once he has accepted it and
+ * Shorter than the wholesaler's list on purpose: once they have accepted it and
  * started packing, the buyer walking away is the seller's loss, so from there
  * it is a conversation rather than a button.
  */

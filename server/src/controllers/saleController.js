@@ -11,9 +11,9 @@ const { nextSaleNumber } = require("../services/seriesNumbers");
 const { businessId } = require("../middlewares/businessContext");
 
 /**
- * Recording a sale is the wholesaler's core action. He is usually writing
+ * Recording a sale is the wholesaler's core action. They are usually writing
  * down something that already happened, so a new sale is 'confirmed' rather
- * than 'draft' unless he says otherwise.
+ * than 'draft' unless they say otherwise.
  *
  * Every query is scoped by the wholesaler id from the token. A party id in
  * the request body is checked against that scope before anything is written,
@@ -30,7 +30,7 @@ const { businessId } = require("../middlewares/businessContext");
  *
  * The rate a wholesaler quotes is BEFORE GST: "142 a metre" means the shop
  * pays 142 plus tax. So the tax belongs on the sale, not only on the bill.
- * The customer's khata is what he owes, and he owes the tax too.
+ * The customer's khata is what they owe, and they owe the tax too.
  *
  * Run through gstService, the same function the invoice uses, rather than
  * worked out separately here. Two implementations of the same sum drift, and
@@ -62,7 +62,7 @@ const resolveRates = async (client, wholesalerId, lines) => {
   const settings = await invoiceRepository.getSettings(wholesalerId);
   const fallback = Number(settings.defaultTaxRate ?? 18);
 
-  // Read off his shop listings, which is where a product's tax rate now
+  // Read off their shop listings, which is where a product's tax rate now
   // lives. It used to read the rate list, a second product table that has
   // since been merged into the listings and whose screen is gone: a rate
   // edited on the product page would have been ignored here, and a sale of
@@ -135,7 +135,7 @@ const buildLines = (rawLines) => {
 
     // The HSN says what the goods ARE on a tax document. Blank is allowed and
     // common; a code of the wrong length is a slipped keystroke, and letting
-    // it through prints a false description on a bill the customer claims his
+    // it through prints a false description on a bill the customer claims their
     // input credit against.
     const hsn = checkHsn(raw.hsnCode ?? raw.hsn_code);
     if (!hsn.ok) return { error: `${hsn.reason} Check the HSN for ${itemName}.` };
@@ -383,7 +383,7 @@ exports.getSaleById = async (req, res) => {
     const has = await invoiceRepository.schemaExtras();
 
     // The order this sale came from, when it came from one. The page needs it
-    // to send the wholesaler to the order rather than offering him a second
+    // to send the wholesaler to the order rather than offering them a second
     // set of buttons for the same goods, see updateSaleStatus below.
     const fromOrder = has.has_sale_order_id;
 
@@ -445,7 +445,7 @@ exports.getSaleById = async (req, res) => {
 };
 
 // The four states are a deliberate spine, not a lifecycle. Once a wholesaler
-// describes how he actually works, this is where the real stages go.
+// describes how they actually works, this is where the real stages go.
 const ALLOWED_NEXT = {
   draft: ["confirmed", "cancelled"],
   confirmed: ["delivered", "cancelled"],
@@ -512,7 +512,7 @@ exports.updateSaleStatus = async (req, res) => {
     // customer. Voiding the invoice was the old answer and it was the wrong
     // instrument: once a bill has been handed over, the way to reverse it is
     // a credit note, which is a document of its own that the customer can put
-    // in his books too. The invoice stands. See creditNoteService.
+    // in their books too. The invoice stands. See creditNoteService.
     let creditNote = null;
     if (status === "cancelled") {
       try {
@@ -530,7 +530,7 @@ exports.updateSaleStatus = async (req, res) => {
         }
       } catch (creditError) {
         // The sale is already cancelled and committed. Failing the whole
-        // request now would tell him it did not work when it did, so this is
+        // request now would tell them it did not work when it did, so this is
         // logged and the note is left to be raised by hand from the bill.
         console.error("Could not raise a credit note for this sale:", creditError);
       }
@@ -567,7 +567,7 @@ exports.createInvoiceForSale = async (req, res) => {
     if (result.error) {
       const [status, message] = REASONS[result.error] || [400, "Cannot bill this sale"];
       // The unpaid case carries the numbers with it, so the screen can say
-      // how much is left rather than making him go and look.
+      // how much is left rather than making them go and look.
       if (result.error === "unpaid") {
         return res.status(status).json({
           message,
@@ -652,7 +652,7 @@ exports.updateSale = async (req, res) => {
     // The same rule as the status buttons, for the same reason. A sale
     // written from a shop order owes exactly what the customer agreed at
     // checkout, and part of it may already be paid. Retyping the lines here
-    // would move the debt away from the figure he pressed pay on.
+    // would move the debt away from the figure they pressed pay on.
     if (sale.order_id) {
       await client.query("ROLLBACK");
       return res.status(409).json({

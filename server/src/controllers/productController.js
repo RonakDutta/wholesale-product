@@ -22,21 +22,21 @@ const IN_STOCK = FEATURES.STOCK_TRACKING ? "AND si.stock > 0" : "";
  * How a listing reaches the seller behind it.
  *
  * LEFT, and this matters more than it looks. These joins used to be inner, so
- * a wholesaler who had signed up but not filled in his business details had
- * every one of his listings vanish from search, from the product page and
- * from the shop page. No error, no empty state, no way for him to tell: the
+ * a wholesaler who had signed up but not filled in their business details had
+ * every one of their listings vanish from search, from the product page and
+ * from the shop page. No error, no empty state, no way for them to tell: the
  * products simply were not there. A new seller's first hour is exactly when
- * his profile is least likely to be complete.
+ * their profile is least likely to be complete.
  *
  * users is joined too so there is always a name to show. A person who has not
- * named his firm yet still has his own name, and "Ramesh Kumar" is a better
- * answer than hiding his stock.
+ * named their firm yet still has their own name, and "Ramesh Kumar" is a better
+ * answer than hiding their stock.
  */
 const SELLER_JOIN = `
       JOIN users su ON su.id = si.supplier_id
       LEFT JOIN wholesaler_profiles wp ON wp.user_id = si.supplier_id`;
 
-// The firm's name if he has given one, otherwise his own.
+// The firm's name if they have given one, otherwise their own.
 const SELLER_NAME = `
       COALESCE(NULLIF(btrim(wp.company_name), ''),
                NULLIF(btrim(su.first_name || ' ' || COALESCE(su.last_name, '')), ''),
@@ -201,8 +201,8 @@ exports.getPublicCatalog = async (req, res) => {
 //
 // Built from the listings themselves rather than from a list of big Indian
 // cities. A hardcoded list offers Bangalore to a buyer when no wholesaler
-// there has ever listed anything, and he gets an empty page with no way of
-// telling whether he filtered wrongly or the shop is broken. Every city here
+// there has ever listed anything, and they get an empty page with no way of
+// telling whether they filtered wrongly or the shop is broken. Every city here
 // has stock behind it, and the count says how much.
 exports.getCatalogCities = async (req, res) => {
   try {
@@ -256,7 +256,7 @@ exports.getProductById = async (req, res) => {
             'shippingDays', si.shipping_days,
             -- Where the goods actually sit, same rule the catalogue filters
             -- on. It used to read wp.city alone, so a seller whose warehouse
-            -- was in Surat while he signed up from Mumbai was shown in the
+            -- was in Surat while they signed up from Mumbai was shown in the
             -- filter under Surat and on this page under Mumbai.
             'city', ${CITY_SQL},
             'country', wp.country,

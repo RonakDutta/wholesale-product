@@ -112,7 +112,7 @@ const particularsOf = (row) => {
     return `Bill ${row.ref || ""}`.trim();
   }
   // Owed exactly like a bill, but named as what the customer actually did, so
-  // he can match the line against the order on his phone.
+  // they can match the line against the order on their phone.
   if (row.kind === "order") {
     return `Shop order ${row.ref || ""}`.trim();
   }
@@ -406,7 +406,7 @@ class PDFService {
         addTotalRow("GRAND TOTAL:", invoice.grand_total || 0, true, true);
 
         // Total quantity, beside the money. A wholesaler checks the bale count
-        // before he checks the rupees.
+        // before they check the rupees.
         const totalQty = items.reduce((sum, i) => sum + Number(i.quantity || 0), 0);
         doc.fontSize(8).font("Helvetica").fillColor("#475569");
         doc.text(`Total quantity: ${Number(totalQty.toFixed(3))}`, boxX + 10, boxY);

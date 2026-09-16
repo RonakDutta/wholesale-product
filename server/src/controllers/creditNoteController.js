@@ -4,7 +4,7 @@ const { businessId } = require("../middlewares/businessContext");
 
 /**
  * Credit notes are the wholesaler's own documents, so every route is scoped
- * to the id on his token. Nothing here takes a wholesaler id from the body.
+ * to the id on their token. Nothing here takes a wholesaler id from the body.
  */
 
 const FAILURES = {
@@ -31,8 +31,8 @@ exports.createCreditNote = async (req, res) => {
     });
 
     if (result.error === "exists") {
-      // Not an error the wholesaler caused. He asked for a credit note and
-      // there is one, so hand it back rather than making him hunt for it.
+      // Not an error the wholesaler caused. They asked for a credit note and
+      // there is one, so hand it back rather than making them hunt for it.
       const existing = await creditNoteService.findByInvoiceId(invoiceId, wholesalerId);
       return res.status(200).json(existing);
     }

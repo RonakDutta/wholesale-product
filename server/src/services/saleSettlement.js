@@ -14,7 +14,7 @@
  *   a mirror of the shop payment, written by partyService with order_id and
  *   payment_transaction_id set, so the customer's balance is right
  *
- *   money the wholesaler took himself and typed in, written by recordPayment
+ *   money the wholesaler took themselves and typed in, written by recordPayment
  *   with a sale_id and neither of those
  *
  * Adding the khata rows to orders.amount_paid counts the shop payment twice,
@@ -25,8 +25,8 @@
  * the second instalment in cash and records it in the khata adds a row that
  * never exceeds orders.amount_paid on its own, so the greater of the two is
  * still the order's figure and the cash is swallowed whole. The sale never
- * settles, the bill is never raised, and the customer's page says he is square
- * while the sale page says he still owes. That is the same complaint a
+ * settles, the bill is never raised, and the customer's page says they are square
+ * while the sale page says they still owes. That is the same complaint a
  * wholesaler made on 11 Sept about the other direction, arriving by the other
  * road.
  *
@@ -51,7 +51,7 @@ const { toPaise } = require("../utils/money");
  *
  * order_id is what tells them apart. Every mirror is written with it set, by
  * partyService on a live payment and by backfill_order_payments.js on the old
- * ones; a row the wholesaler typed in himself has a sale_id and no order_id.
+ * ones; a row the wholesaler typed in themselves has a sale_id and no order_id.
  *
  * payment_transaction_id is deliberately NOT part of this test. Setting a
  * customer's credit against a bill re-addresses a mirror row to a different

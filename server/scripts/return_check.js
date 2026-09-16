@@ -135,7 +135,7 @@ const mkUser = async (role, phone) =>
   );
   const row = (await q("SELECT return_status, return_reason FROM orders WHERE id=$1", [a.orderId])).rows[0];
   check(row.return_status === "requested", "the old column is kept current too", row.return_status);
-  check(row.return_reason === "Short by four metres", "his reason is written down", row.return_reason);
+  check(row.return_reason === "Short by four metres", "their reason is written down", row.return_reason);
 
   const stranger = await mkUser("buyer", "9700000009");
   const nosy = await call(orders.requestReturn, {
@@ -157,8 +157,8 @@ const mkUser = async (role, phone) =>
 
   const sale = (await q("SELECT status FROM sales WHERE order_id=$1", [a.orderId])).rows[0];
   check(sale?.status === "cancelled", "the sale is cancelled, so billing stops", sale?.status);
-  // Billed nothing now, and he paid 2100, so he is owed it back.
-  check((await balance(a.partyId)) === -2100, "the customer is owed his money back", { bal: await balance(a.partyId) });
+  // Billed nothing now, and they paid 2100, so they are owed it back.
+  check((await balance(a.partyId)) === -2100, "the customer is owed their money back", { bal: await balance(a.partyId) });
 
   const paid = Number(
     (await q("SELECT COALESCE(SUM(amount),0) AS n FROM party_payments WHERE party_id=$1", [a.partyId]))
@@ -227,7 +227,7 @@ const mkUser = async (role, phone) =>
 
   // ---- refusing a return leaves the debt alone --------------------------
   const b = await deliveredOrder("9820044556");
-  // He has the goods and has not paid, so he owes for them.
+  // They have the goods and has not paid, so they owe for them.
   await q("UPDATE orders SET amount_paid = 0, remaining_amount = total_amount WHERE id = $1", [b.orderId]);
   await q("DELETE FROM party_payments WHERE party_id = $1", [b.partyId]);
   check((await balance(b.partyId)) === 2100, "an unpaid delivered order is owed", { bal: await balance(b.partyId) });
@@ -239,7 +239,7 @@ const mkUser = async (role, phone) =>
     user: seller, params: { orderId: b.orderId }, body: { status: "return_rejected" },
   });
   check(refused.statusCode === 200, "the wholesaler can refuse a return", { s: refused.statusCode });
-  check((await balance(b.partyId)) === 2100, "a refused return stays owed, he has the goods", { bal: await balance(b.partyId) });
+  check((await balance(b.partyId)) === 2100, "a refused return stays owed, they have the goods", { bal: await balance(b.partyId) });
   const bSale = (await q("SELECT status FROM sales WHERE order_id=$1", [b.orderId])).rows[0];
   check(bSale?.status !== "cancelled", "and its sale stands", bSale?.status);
 

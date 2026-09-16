@@ -8,15 +8,15 @@
  *   1  parties     fill a blank firm name or GST number from the account the
  *                  party is already linked to. Blanks only, never an
  *                  overwrite, so nothing the wholesaler typed is touched.
- *                  Low risk: this is his own customer's own details.
+ *                  Low risk: this is their own customer's own details.
  *
  *   2  invoices    re-address an invoice that was made out to the person when
- *                  his firm is now known, and fill a blank GST number. Only
+ *                  their firm is now known, and fill a blank GST number. Only
  *                  where the stored name is exactly the party's contact name,
  *                  so an invoice a wholesaler addressed by hand is left alone.
  *                  HIGHER RISK: these are issued tax documents. If one has
  *                  already been handed to a customer, its replacement should
- *                  match what he holds. Read the dry run before applying.
+ *                  match what they hold. Read the dry run before applying.
  *
  *   3  duplicates  REPORT ONLY. Orders holding more than one invoice, from
  *                  before the two billing paths were made to agree. Nothing is
@@ -96,7 +96,7 @@ const heading = (text) => console.log(`\n${text}\n${"-".repeat(text.length)}`);
   heading("2. Invoices made out to the person rather than the firm");
   // ---------------------------------------------------------------
   // Only where the stored name is still exactly the party's contact name.
-  // Anything a wholesaler edited himself reads differently and is skipped.
+  // Anything a wholesaler edited themselves reads differently and is skipped.
   // The firm and the GST number as they will stand once part 1 has run, so a
   // dry run reports what applying would really do rather than what the rows
   // happen to say this second.
@@ -128,8 +128,8 @@ const heading = (text) => console.log(`\n${text}\n${"-".repeat(text.length)}`);
     for (const row of wrong.rows) {
       const bits = [];
       // Only the rows the UPDATE will really rename. An invoice the
-      // wholesaler addressed himself reads differently from the party's
-      // contact name, so it is left exactly as he wrote it.
+      // wholesaler addressed themselves reads differently from the party's
+      // contact name, so it is left exactly as they wrote it.
       if (row.business_name && row.recipient_name === row.party_name) {
         bits.push(`"${row.recipient_name}" -> "${row.business_name}"`);
       }

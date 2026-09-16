@@ -79,14 +79,14 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
     body: { name: "Ordinary", city: "Rajkot", state: "", phone: plain.body.phone },
   });
   check(editedEmpty.statusCode === 200 && editedEmpty.body?.city === "Rajkot",
-    "and editing him with an empty state still works",
+    "and editing them with an empty state still works",
     { got: editedEmpty.statusCode, city: editedEmpty.body?.city });
 
   const editedTyped = await call(parties.updateParty, {
     ...asSeller, params: { id: plain.body.id }, body: { state: "Kerala" },
   });
   check(editedTyped.statusCode === 503,
-    "while editing him WITH one is refused", { got: editedTyped.statusCode });
+    "while editing them WITH one is refused", { got: editedTyped.statusCode });
 
   await testPool.end();
   process.exit(fails ? 1 : 0);

@@ -62,7 +62,7 @@ const MarketplaceHome = () => {
         // and XYZ Garments in Delhi, with prices, MOQs, verified ticks and
         // phone numbers. They were clickable, so a buyer could try to order
         // from a wholesaler who does not exist, and a real wholesaler looking
-        // at his own marketplace saw competitors who were never there.
+        // at their own marketplace saw competitors who were never there.
         //
         // Nothing is shown instead, and the empty state says the catalogue
         // could not be loaded rather than blaming the buyer's filters.
@@ -262,8 +262,8 @@ const MarketplaceHome = () => {
           totalCount={filteredSorted.length}
         />
         {/* The navbar carries the city too, but a buyer who scrolled past it
-            is owed a reminder of why he is seeing fewer sellers than he
-            expects, and a way out that does not need him to find the pin. */}
+            is owed a reminder of why they are seeing fewer sellers than they
+            expects, and a way out that does not need them to find the pin. */}
         {cityParam && (
           <div className="flex flex-wrap items-center gap-2 rounded-xl border border-sage/30 bg-sage/5 px-3 py-2 text-xs">
             <span className="font-semibold text-espresso">
@@ -291,7 +291,7 @@ const MarketplaceHome = () => {
         {filteredSorted.length === 0 && (
           <div className="text-center py-12 text-sm text-slate-500">
             {/* Naming the city matters. Without it a buyer cannot tell
-                whether the shop is empty or he narrowed it himself. */}
+                whether the shop is empty or they narrowed it themselves. */}
             {loadFailed ? (
               <>
                 <p>The catalogue could not be loaded.</p>

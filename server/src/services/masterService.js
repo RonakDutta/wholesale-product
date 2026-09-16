@@ -34,7 +34,7 @@ const TTL_MS = 5 * 60 * 1000;
 /**
  * A TTL as well as an explicit reset, not one or the other.
  *
- * The reset is for this process: an admin saving a unit clears it and sees his
+ * The reset is for this process: an admin saving a unit clears it and sees their
  * change. The TTL is for every OTHER process, which has no way of being told.
  * Without it, a platform running two instances would serve a stale list from
  * one of them until it restarted.
@@ -236,7 +236,7 @@ exports.settings = async () => {
     cachedAt.set("settings", Date.now());
     return value;
   } catch (err) {
-    console.warn("Could not read the master settings:", err.message);
+    console.warn("Could not read the administration settings:", err.message);
     return { ...SHIPPED_SETTINGS, fromMasters: false };
   }
 };
@@ -267,7 +267,7 @@ const TEXT = {
 
 exports.saveSettings = async (patch = {}, userId = null) => {
   if (!(await settingsExist())) {
-    return { error: "The master settings table is not in this database yet." };
+    return { error: "The administration settings table is not in this database yet." };
   }
 
   const sets = [];

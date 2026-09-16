@@ -11,13 +11,13 @@
  *   billed   purchases in a received state
  *   less     every payment in supplier_payments
  *
- * Positive means he owes the supplier, which is the opposite sign to a party
- * balance, where positive means the customer owes him. That flip is the whole
+ * Positive means they owe the supplier, which is the opposite sign to a party
+ * balance, where positive means the customer owes them. That flip is the whole
  * reason suppliers are not parties: the same number on the same screen would
  * mean opposite things depending on a column.
  *
  * There is no marketplace side here. A purchase is always something the
- * wholesaler typed in off a bill he was handed, so there is no equivalent of
+ * wholesaler typed in off a bill they were handed, so there is no equivalent of
  * the orders term that khataBalance has to carry, and no equivalent of the
  * "an accepted order has already written itself a sale" exclusion.
  */
@@ -39,8 +39,8 @@ const OWED_PURCHASE_STATUSES = "('received')";
  * so the same fragment works whether the caller wrote `sup` or `s`.
  */
 /**
- * What you already owed him before this product, the mirror of the customer
- * side. Positive means you owe him, which is the sign this whole file uses.
+ * What you already owed them before this product, the mirror of the customer
+ * side. Positive means you owe them, which is the sign this whole file uses.
  *
  * Not guarded on a schema probe the way the party one is: suppliers and the
  * opening balance column both arrive through migrations, and every supplier
@@ -82,11 +82,11 @@ const receivedExpression = (purchaseRef = "pu.id") => `
 /**
  * Totals across every supplier, for the overview.
  *
- * Each supplier is settled on his own and only then added up, exactly as
+ * Each supplier is settled on their own and only then added up, exactly as
  * collectionTotals does on the customer side, and for the same reason: netting
  * them lets an advance sitting with one mill hide a bill overdue at another,
  * so a wholesaler who owes 80,000 to one and has 30,000 on account with a
- * second is told he owes 50,000 and pays the wrong man.
+ * second is told they owe 50,000 and pays the wrong man.
  *
  * Takes $1 as the wholesaler.
  */

@@ -29,7 +29,7 @@ const mk = () => {
 };
 
 // Three runs, best reported. A cold first run measures the disk cache, not
-// the query, and a trader reloading his book will be hitting a warm one.
+// the query, and a trader reloading their book will be hitting a warm one.
 const time = async (label, fn) => {
   let best = Infinity;
   let out = null;

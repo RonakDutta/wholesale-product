@@ -19,7 +19,7 @@ const { fromPaise } = require("../utils/money");
  *   Section 31(1) ties the tax invoice to REMOVAL of the goods, not to
  *   payment. On a credit sale the invoice is due before or at the time the
  *   goods leave. A challan in its place understates outward supply in GSTR-1
- *   and leaves the customer unable to claim his input credit.
+ *   and leaves the customer unable to claim their input credit.
  *
  *   Rule 55 challans cover movement that is NOT a supply: job work, goods on
  *   approval, quantity unknown at removal. Nothing here is a Rule 55 challan,

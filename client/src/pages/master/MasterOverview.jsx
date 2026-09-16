@@ -4,7 +4,7 @@ import { ArrowRight, Hash, MapPin, Percent, Ruler } from "lucide-react";
 import api from "../../utils/axios";
 
 /**
- * What the master dashboard holds.
+ * What the administration dashboard holds.
  *
  * Four lists that were constants in the code, so correcting one meant a
  * deploy. What belongs here and what stays with each wholesaler is written up
@@ -13,28 +13,28 @@ import api from "../../utils/axios";
 
 const CARDS = [
   {
-    to: "/master/states",
+    to: "/administration/states",
     field: "states",
     icon: MapPin,
     title: "States",
     note: "The two digit code that decides CGST plus SGST against IGST.",
   },
   {
-    to: "/master/units",
+    to: "/administration/units",
     field: "units",
     icon: Ruler,
     title: "Units",
     note: "Metre, kilogram, bale. How goods are counted on a bill.",
   },
   {
-    to: "/master/tax-rates",
+    to: "/administration/tax-rates",
     field: "taxRates",
     icon: Percent,
     title: "Tax rates",
     note: "The GST slabs a wholesaler may pick from.",
   },
   {
-    to: "/master/hsn",
+    to: "/administration/hsn",
     field: "hsn",
     icon: Hash,
     title: "HSN codes",
@@ -67,7 +67,7 @@ const MasterOverview = () => {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
-        <h2 className="text-2xl font-black text-espresso">Platform master</h2>
+        <h2 className="text-2xl font-black text-espresso">Platform Administration</h2>
         <p className="mt-1 max-w-2xl text-sm text-slate-500">
           The lists every wholesaler on the platform picks from. They were
           constants in the code until now, so correcting one meant a deploy.

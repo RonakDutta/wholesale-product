@@ -4,7 +4,7 @@ const pdfService = require("../services/pdfService");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const invoiceNumberService = require("../services/invoiceNumberService");
 // Whose invoices these are. The person doing the work is still req.user.id:
-// he is the name on a log entry, not the business the bill belongs to.
+// they are the name on a log entry, not the business the bill belongs to.
 const { businessId } = require("../middlewares/businessContext");
 
 class InvoiceController {
@@ -312,12 +312,12 @@ class InvoiceController {
        * invoice_settings has carried number_suffix and number_pad_to since
        * 10 Sept and the repository has always written them, but this handler
        * never passed them through, so the columns were unreachable and every
-       * wholesaler was stuck on INV-000001 whatever he set.
+       * wholesaler was stuck on INV-000001 whatever they set.
        *
        * Checked by composing a real number rather than by validating the parts
        * separately. Rule 46(b) constrains the WHOLE string, sixteen characters
        * and a short alphabet, so a prefix and a suffix that are each fine can
-       * still be illegal together. Refusing it here means he finds out while he
+       * still be illegal together. Refusing it here means they find out while they
        * is looking at the setting, not at invoice 1000.
        */
       const numberSuffix = String(req.body.numberSuffix ?? "").trim().slice(0, 16);
@@ -385,7 +385,7 @@ class InvoiceController {
 
       const first = invoiceNumberService.compose({ prefix, suffix, padTo, sequence: 1 });
       // Number 1 can fit while number 1000 does not, and the one that matters
-      // is the one he will hit in a year.
+      // is the one they will hit in a year.
       const later = invoiceNumberService.compose({
         prefix, suffix, padTo,
         sequence: 10 ** Math.max(padTo, 1) - 1,

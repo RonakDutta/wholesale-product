@@ -28,7 +28,7 @@
  * is a list to work from.
  *
  * It is scoped to ONE wholesaler, by email, so a shared database is not
- * emptied by a wholesaler clearing his own books.
+ * emptied by a wholesaler clearing their own books.
  *
  *     node scripts/reset_books.js <DATABASE_URL> <email>            # dry run
  *     node scripts/reset_books.js <DATABASE_URL> <email> --write    # do it

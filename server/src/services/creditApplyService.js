@@ -5,7 +5,7 @@ const { NOT_OWED_SQL } = require("./khataBalance");
 const { receivedOn } = require("./saleSettlement");
 
 /**
- * Setting a customer's credit against something he has ordered.
+ * Setting a customer's credit against something they have ordered.
  *
  * A customer ends up in credit whenever money stays with the wholesaler after
  * the goods stop being owed: an order cancelled after payment, a return
@@ -19,22 +19,22 @@ const { receivedOn } = require("./saleSettlement");
  * because the khata is one running balance per customer it was netted against
  * whatever was billed next, which made it look spent when it was not:
  *
- *     he returns a 2 lakh order, unrefunded   you owe him 2,00,000
- *     he orders 4 lakh and pays half          he owes 0        <- looks square
- *     he pays the other half                  you owe him 2,00,000
+ *     they return a 2 lakh order, unrefunded   you owe them 2,00,000
+ *     they orders 4 lakh and pays half          they owe 0        <- looks square
+ *     they pay the other half                  you owe them 2,00,000
  *
  * Every one of those figures is arithmetically right. The trouble is the
- * middle one: he was asked to pay the whole 4 lakh while 2 lakh of his money
+ * middle one: they were asked to pay the whole 4 lakh while 2 lakh of their money
  * was already in the till, so the credit was never spent, only hidden, and it
  * came back the moment the bill was settled. A wholesaler reading that says
- * "he owed me nothing, then he paid me, and now I owe him 2 lakh".
+ * "they owed me nothing, then they paid me, and now I owe them 2 lakh".
  *
  * WHAT THIS DOES, AND WHAT IT REFUSES TO DO
  *
  * It does not invent a payment. Writing a fresh party_payments row for the
  * credited amount would count the same rupees twice: they are already in
- * `received` for this customer, which is the whole reason he is in credit. The
- * balance would swing further into his favour and the problem would double
+ * `received` for this customer, which is the whole reason they are in credit. The
+ * balance would swing further into their favour and the problem would double
  * rather than close.
  *
  * What it does is re-address money that is already there. The rows behind the
@@ -87,15 +87,15 @@ const looseRows = async (client, partyId, wholesalerId) => {
 /**
  * How much of this customer's money is the wholesaler holding loose?
  *
- * NOT the balance on his page. That balance is one netted number, billed less
+ * NOT the balance on their page. That balance is one netted number, billed less
  * received, and netting is what hid the problem in the first place: the moment
- * he ordered again, his 2 lakh of credit was cancelled out by the 2 lakh he
- * now owed and his page read zero. Asking the balance "how much credit does he
- * have" answers "none", while 2 lakh of his money is plainly still in the till.
+ * they ordered again, their 2 lakh of credit was cancelled out by the 2 lakh they
+ * now owed and their page read zero. Asking the balance "how much credit does they
+ * have" answers "none", while 2 lakh of their money is plainly still in the till.
  *
  * So the credit is measured as what it actually is: the payments no live goods
  * are standing against. Those are real rows with real dates, they add up to
- * real money, and billing him for something else does not make them go away.
+ * real money, and billing them for something else does not make them go away.
  *
  * This can understate and never overstates. Money overpaid against a sale that
  * is still live is credit too, in principle, and is not counted here: it is
@@ -170,7 +170,7 @@ class CreditApplyService {
    *
    * Returns { applied, saleNumber, creditLeft } or { error } with one of:
    *   notFound   the sale is not this wholesaler's, or not this customer's
-   *   noCredit   he is not in credit
+   *   noCredit   they are not in credit
    *   settled    that sale owes nothing
    *   dead       that sale is cancelled or still a draft
    *   nothing    the two overlap by nothing worth writing down
@@ -229,7 +229,7 @@ class CreditApplyService {
        * A row is re-addressed whole where it fits and split where it does not,
        * because a 2 lakh payment set against a 50,000 bill has to leave 1.5
        * lakh still loose. Splitting writes a second row rather than editing the
-       * amount away, so the customer's statement still shows what he actually
+       * amount away, so the customer's statement still shows what they actually
        * handed over and when.
        */
       const loose = await looseRows(client, partyId, wholesalerId);

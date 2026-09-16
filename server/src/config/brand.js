@@ -7,7 +7,7 @@
  *
  * Used for what goes out under the platform's own name: email headers, the
  * welcome notification, and the fallback on a document when a wholesaler has
- * not filled in his own company name.
+ * not filled in their own company name.
  *
  * "Marketplace" as an ordinary noun, meaning the browsing and ordering half of
  * the product, is not the brand and is left alone.

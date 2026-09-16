@@ -9,7 +9,7 @@ import NotificationDropdown from "./NotificationDropdown";
  *
  * CONTROLLED, because the navbar has to be able to shut it. It used to own its
  * open state, and the profile menu owned its own separately, so opening one did
- * not close the other: a person tapped his profile, then tapped the bell, and
+ * not close the other: a person tapped their profile, then tapped the bell, and
  * got both flyouts stacked on top of each other. The navbar now holds one
  * "which menu is open" value and this is told.
  *

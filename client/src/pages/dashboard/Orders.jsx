@@ -28,7 +28,7 @@ import {
 /**
  * Goods already out on a delivery challan against this order.
  *
- * Sits next to the product line so he can see at a glance which orders have
+ * Sits next to the product line so they can see at a glance which orders have
  * stock away from the godown while money is still owed, without opening each
  * one. Nothing shows when there are none, which is the ordinary case.
  */
@@ -111,7 +111,7 @@ const Orders = () => {
    * because accepting a return is the point where the money unwinds: the
    * server cancels the sale so the customer stops owing for goods that are
    * coming back. Worth saying out loud in the toast, because a wholesaler
-   * who does not realise his khata just changed will go looking for the
+   * who does not realise customer khata just changed will go looking for the
    * difference later.
    */
   const answerReturn = async (order, answer) => {
@@ -167,7 +167,7 @@ const Orders = () => {
         <div>
           <h2 className="text-2xl font-black text-espresso">Orders</h2>
           {/* The count that matters is not how many orders exist, it is how
-              many are waiting on him. */}
+              many are waiting on them. */}
           <p className="text-sm text-slate-500 mt-1">
             {waitingCount > 0 ? (
               <>
@@ -224,7 +224,7 @@ const Orders = () => {
 
       {/* Phone gets cards. Five columns on a 390px screen put the action
           button off the right edge behind a sideways scroll, and this is the
-          screen a wholesaler uses standing in his godown with one hand. */}
+          screen a wholesaler uses standing in their godown with one hand. */}
       <div className="space-y-3 sm:hidden">
         {displayedOrders.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500 shadow-sm">
@@ -428,7 +428,7 @@ const Orders = () => {
                       <div className="flex items-center justify-end gap-2">
                         {/* One button, the next real step. Nothing shows when
                             the order is waiting on the buyer to pay or is
-                            already finished, because there is nothing he can
+                            already finished, because there is nothing they can
                             do to it. */}
                         {isReturnRequested(order.status) &&
                           RETURN_ANSWERS.map((answer) => (

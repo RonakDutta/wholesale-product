@@ -23,7 +23,7 @@ const { businessId } = require("../middlewares/businessContext");
  * wholesaler who is merely `created` means a buyer's money sits in the
  * platform's account with no way out and a wholesaler who has shipped goods.
  *
- * Every other state falls back to the UPI QR, which pays him directly and has
+ * Every other state falls back to the UPI QR, which pays them directly and has
  * worked all along.
  */
 
@@ -63,13 +63,13 @@ const BUSINESS_TYPES = [
 ];
 
 /**
- * Where his onboarding stands.
+ * Where their onboarding stands.
  *
  * Re-reads Razorpay when there is an account id and the local copy is stale,
  * because activation happens on their side and nothing tells us unless a
  * webhook is configured. Failure to reach them is NOT an error here: the
  * stored status is still the last thing we were told, and a wholesaler
- * checking his status should not see a 500 because Razorpay is slow.
+ * checking their status should not see a 500 because Razorpay is slow.
  */
 exports.getRouteStatus = async (req, res) => {
   const wholesalerId = businessId(req);
@@ -120,8 +120,8 @@ exports.getRouteStatus = async (req, res) => {
       note: note || null,
       canBePaid: status === "activated",
       onboardedAt: row.razorpay_onboarded_at || null,
-      // So the form can be filled in from what he has already told us rather
-      // than asking him to type his own address a second time.
+      // So the form can be filled in from what they have already told us rather
+      // than asking them to type their own address a second time.
       prefill: {
         companyName: row.company_name || "",
         gstin: row.gstin || "",
@@ -293,7 +293,7 @@ exports.startOnboarding = async (req, res) => {
   }
 };
 
-/** What he has actually been sent, as Razorpay reported it. */
+/** What they have actually been sent, as Razorpay reported it. */
 exports.listTransfers = async (req, res) => {
   const wholesalerId = businessId(req);
   try {

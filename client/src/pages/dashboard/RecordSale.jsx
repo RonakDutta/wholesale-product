@@ -51,7 +51,7 @@ const blankLine = () => ({
  * be edited at all, which the server enforces.
  */
 const RecordSale = () => {
-  const { units } = useMasters();
+  const { units , salesChannels } = useMasters();
   // Just the codes, for checking whether an item's stored unit is one the
   // platform still offers.
   const unitCodes = units.map((u) => u.code);
@@ -75,6 +75,19 @@ const RecordSale = () => {
   const [amountPaid, setAmountPaid] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [notes, setNotes] = useState("");
+
+  /**
+   * Which book this sale belongs to.
+   *
+   * It decides which run of invoice numbers a bill from this sale draws on,
+   * so a Flipkart sale gets an FK number consecutive with the other Flipkart
+   * ones and Flipkart's own report can be matched against it.
+   *
+   * Picking Flipkart here does NOT fetch anything from Flipkart. It records
+   * where the sale came from, and the hint under the field says so rather
+   * than letting somebody expect an integration that does not exist.
+   */
+  const [channel, setChannel] = useState("counter");
 
   /**
    * The lorry, if there is one.
@@ -146,6 +159,7 @@ const RecordSale = () => {
             setPartyId(data.sale.party_id);
             setSaleDate(String(data.sale.sale_date).slice(0, 10));
             setNotes(data.sale.notes || "");
+            setChannel(data.sale.channel || "counter");
             const saved = transportFromRow(data.sale);
             setTransport(saved);
             // Opened only when there is something to see. A sale that went
@@ -315,6 +329,7 @@ const RecordSale = () => {
       saleDate,
       discount: discount || 0,
       notes,
+      channel,
       ...transport,
       lines: filled.map((line) => ({
         itemName: line.itemName,
@@ -449,6 +464,31 @@ const RecordSale = () => {
             onChange={(e) => setSaleDate(e.target.value)}
             className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
           />
+        </div>
+
+        <div>
+          <label
+            htmlFor="sale-channel"
+            className="mb-1.5 block text-sm font-bold text-espresso"
+          >
+            Where the sale came from
+          </label>
+          <select
+            id="sale-channel"
+            value={channel}
+            onChange={(e) => setChannel(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+          >
+            {salesChannels.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-slate-500">
+            {salesChannels.find((c) => c.code === channel)?.hint
+              || "Each one keeps its own run of bill numbers."}
+          </p>
         </div>
       </div>
 

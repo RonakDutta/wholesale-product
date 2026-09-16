@@ -4,6 +4,7 @@ const invoiceRepository = require("../repositories/invoiceRepository");
 const challanService = require("./challanService");
 const { placeOfSupply, stateOf, stateCode } = require("./placeOfSupply");
 const { toInvoiceFields } = require("./transportDetails");
+const { DEFAULT_CHANNEL } = require("./salesChannels");
 const invoiceNumberService = require("./invoiceNumberService");
 const gstService = require("./gstService");
 
@@ -362,7 +363,14 @@ class SaleInvoiceService {
         settings.prefix,
         null,
         wholesalerId,
-        { suffix: settings.numberSuffix, padTo: settings.numberPadTo },
+        // The bill draws on the run its SALE belongs to. A Flipkart sale
+        // billed here gets an FK number, so Flipkart's settlement report can
+        // be matched against a consecutive run of our numbers.
+        {
+          suffix: settings.numberSuffix,
+          padTo: settings.numberPadTo,
+          channel: sale.channel || DEFAULT_CHANNEL,
+        },
       );
 
       const issueDate = new Date(sale.sale_date || Date.now());
@@ -389,6 +397,7 @@ class SaleInvoiceService {
         totalTax: gst.totalTax,
         grandTotal: gst.grandTotal,
         totalCess: gst.totalCess,
+        channel: sale.channel || DEFAULT_CHANNEL,
         // Rule 46 particulars, frozen at issue. The place of supply is the
         // state the goods went TO, which is what decides IGST against CGST
         // plus SGST, and it has been computed all along without being stored.

@@ -13,6 +13,7 @@ const {
   TRANSPORT_COLUMNS,
   parseTransport,
 } = require("../services/transportDetails");
+const { parseChannel } = require("../services/salesChannels");
 
 /**
  * Recording a sale is the wholesaler's core action. They are usually writing
@@ -200,6 +201,12 @@ exports.createSale = async (req, res) => {
   const { values: transport, error: transportError } = parseTransport(req.body);
   if (transportError) return res.status(400).json({ message: transportError });
 
+  // Which book this sale belongs to, and so which run of invoice numbers a
+  // bill from it will draw on. Refused rather than defaulted, because a sale
+  // filed in the wrong book is a run of numbers nobody can reconcile.
+  const { channel, error: channelError } = parseChannel(req.body.channel);
+  if (channelError) return res.status(400).json({ message: channelError });
+
   const saleStatus = status || "confirmed";
   if (!["draft", "confirmed", "delivered"].includes(saleStatus)) {
     return res.status(400).json({ message: "Unknown status" });
@@ -268,6 +275,7 @@ exports.createSale = async (req, res) => {
     ];
     if (has.has_sale_tax) columns.push(["tax_amount", fromPaise(taxPaise)]);
     if (has.has_cess) columns.push(["total_cess", gst ? gst.totalCess : 0]);
+    if (has.has_sale_channel) columns.push(["channel", channel]);
     if (has.has_sale_transport) {
       for (const col of TRANSPORT_COLUMNS) columns.push([col, transport[col]]);
     }
@@ -676,6 +684,9 @@ exports.updateSale = async (req, res) => {
   const { values: transport, error: transportError } = parseTransport(req.body);
   if (transportError) return res.status(400).json({ message: transportError });
 
+  const { channel, error: channelError } = parseChannel(req.body.channel);
+  if (channelError) return res.status(400).json({ message: channelError });
+
   const subtotalPaise = lines.reduce((sum, line) => sum + line.amountPaise, 0);
   const discountPaise = Math.max(0, toPaise(discount));
   if (discountPaise > subtotalPaise) {
@@ -764,6 +775,7 @@ exports.updateSale = async (req, res) => {
     ];
     if (has.has_sale_tax) sets.push(["tax_amount", fromPaise(taxPaise)]);
     if (has.has_cess) sets.push(["total_cess", gst ? gst.totalCess : 0]);
+    if (has.has_sale_channel) sets.push(["channel", channel]);
     if (has.has_sale_transport) {
       for (const col of TRANSPORT_COLUMNS) sets.push([col, transport[col]]);
     }

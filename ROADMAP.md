@@ -4,7 +4,7 @@ Agreed 15 Sept 2026. Nine items. Work started 16 Sept.
 
 `PROGRESS.md` is the record of what HAS been built. This is the record of what
 has been decided, and how much of it is done, so the two do not get mixed up.
-Phases 0 to 6 are finished. Phase 7, a number series per channel, is next.
+Phases 0 to 7 are finished. Phase 8, the ZIP export, is next.
 
 Read the assessment at the bottom before promising a date on any of this. Two
 of these nine cannot be finished by writing code alone.
@@ -590,19 +590,38 @@ commodity specific, and a blanket rate on a live bill is a wrong number on a
 legal document. Take that term out, or set its cess to zero, before this goes
 near a real customer.
 
-## Phase 7. A number series per channel. NEXT
+## Phase 7. A number series per channel. DONE
 
-- [ ] Migration: `series` key on `invoice_sequences`, unique on (wholesaler,
-      series, financial year) (3)
-- [ ] `seriesNumbers` allocates per series (6). The 16 character refusal is
-      already built and tested, so this phase inherits the guard.
-- [ ] A series picker on the sale form (15 in part)
+- [x] Migration: a `series` key on `invoice_sequences`, unique on (wholesaler,
+      series, year), plus a channel on sales and on invoices. File:
+      `wholesale3_sales_channels.sql`
+- [x] `invoiceNumberService` draws on the run its channel owns
+- [x] A channel dropdown on the sale form and on the manual invoice form, and
+      the channel shown on the sale
+- [x] A bill raised from a sale inherits that sale's channel. An order placed
+      on this marketplace is the shop channel by definition, not by choosing.
 
-Prefixes `SM`, `SA`, `FK`, `AZ`, fourteen characters each. Verified by:
-allocating concurrently and proving no gap and no duplicate within a series and
-a financial year.
+Four books: counter, this shop, Flipkart, Amazon. Each keeps a run that is
+consecutive in ITSELF, which is what Rule 46(b) asks and what lets a
+marketplace settlement report be matched against our numbers. One shared
+counter gave Flipkart a run reading 4, 9, 11 with the gaps filled by counter
+sales.
 
-## Phase 8. Export
+**Nothing renumbered, and the counter channel kept the wholesaler's own
+prefix.** A firm numbering `OM/1/26-27` carries straight on. The three new
+channels start their own run at 1, which is what a new series is allowed to do.
+Renumbering a bill already handed over would break the customer's GSTR-2B
+against ours, and the instrument for correcting an issued invoice is a credit
+note.
+
+**This is not an import.** Choosing Flipkart records where a sale came from. It
+does not fetch anything from Flipkart, and the hint under the field says so.
+Pulling orders out of those marketplaces is a CSV parser per marketplace, or
+their APIs, which need a developer account and a seller authorisation that
+cannot be arranged from inside this codebase. Worth its own phase once you know
+which report you actually get.
+
+## Phase 8. Export. NEXT
 
 - [ ] ZIP: a CSV per table plus the invoice PDFs (12)
 

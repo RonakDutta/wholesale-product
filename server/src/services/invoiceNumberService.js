@@ -1,4 +1,5 @@
 const invoiceRepository = require("../repositories/invoiceRepository");
+const { prefixFor, seriesKeyFor, DEFAULT_CHANNEL } = require("./salesChannels");
 
 /**
  * The next invoice number for one wholesaler, in their own run.
@@ -124,7 +125,9 @@ class InvoiceNumberService {
    * @param {string} prefix        their prefix from invoice_settings
    * @param {number} yearOverride  for backdating; otherwise this financial year
    * @param {string} wholesalerId  whose run to draw from
-   * @param {object} [format]      { suffix, padTo } from invoice_settings
+   * @param {object} [format]      { suffix, padTo, channel } from
+   *                               invoice_settings, plus which sales channel
+   *                               this bill belongs to
    */
   async generateInvoiceNumber(
     client = null,
@@ -133,6 +136,17 @@ class InvoiceNumberService {
     wholesalerId = null,
     format = {},
   ) {
+    /**
+     * Which run to draw on, and what to stamp on the front of it.
+     *
+     * The counter channel keeps the wholesaler's OWN configured prefix, so a
+     * firm that has been numbering OM/1/26-27 for a year carries straight on.
+     * The marketplaces get their own prefix and their own counter, because the
+     * point of a separate series is that it is tellable apart at a glance and
+     * reconcilable against that marketplace's own report.
+     */
+    const channel = seriesKeyFor(format.channel || DEFAULT_CHANNEL);
+    const seriesPrefix = prefixFor(channel, prefix);
     // The counter is keyed on the financial year, not the calendar year, so
     // it resets on 1 April and an invoice raised in January carries on the
     // run that started the previous April.
@@ -141,6 +155,7 @@ class InvoiceNumberService {
       client,
       yearKey,
       wholesalerId,
+      channel,
     );
 
     const asOf = yearOverride ? new Date(yearOverride, 4, 1) : new Date();
@@ -149,7 +164,7 @@ class InvoiceNumberService {
     // who has not configured anything: INV-26-27-000001 would be 17
     // characters, so the default pads to 6 with no suffix and reads
     // INV-000001 at 10.
-    const head = String(prefix || "INV").trim() || "INV";
+    const head = String(seriesPrefix || "INV").trim() || "INV";
     const built = compose({
       prefix: head.endsWith("-") || head.endsWith("/") ? head : `${head}-`,
       suffix: format.suffix ?? "",

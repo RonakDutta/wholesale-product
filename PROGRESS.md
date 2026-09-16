@@ -1910,6 +1910,44 @@ in all, and the three ways of raising an invoice still agree on every field.
 
 ---
 
+## 16 Sept: a run of invoice numbers per sales channel
+
+Phase 7. Four books: counter, this shop, Flipkart, Amazon. Each keeps a run of
+invoice numbers that is consecutive in ITSELF, which is what Rule 46(b) asks
+for and what lets a marketplace settlement report be matched against ours. One
+shared counter gave Flipkart a run reading 4, 9, 11, with the gaps filled by
+counter sales.
+
+A dropdown on the sale form says which book a sale belongs to, and the bill
+raised from it draws on that run. An order placed on this marketplace is the
+shop channel by definition rather than by choosing.
+
+**Nothing was renumbered.** The counter channel keeps the wholesaler's own
+configured prefix, so a firm numbering OM/1/26-27 carries straight on, and the
+three new channels start their own run at 1. Renumbering a bill already handed
+over would break the customer's GSTR-2B against ours, and the instrument for
+correcting an issued invoice is a credit note.
+
+**It is not an import.** Choosing Flipkart records where a sale came from. It
+fetches nothing from Flipkart, and the hint under the field says so rather than
+letting anybody expect an integration that does not exist. Pulling orders out
+of those marketplaces needs a developer account and a seller authorisation, and
+is its own piece of work.
+
+An unknown channel is refused rather than quietly filed under the default,
+because a sale in the wrong book is a run of numbers nobody can reconcile.
+
+**Verified.** 16 checks against a local Postgres, including that four channels
+billed in turn each produce their own consecutive run, that the counter keeps
+the wholesaler's prefix, that Flipkart starts at 1, that every number is inside
+Rule 46(b)'s sixteen characters, and that the counters really are separate
+rows. Every earlier suite re-run, 123 checks, and the three ways of raising an
+invoice still agree.
+
+**Migration to run:** `wholesale3_sales_channels.sql`
+
+---
+
 ## Left to do
 
 Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.

@@ -29,7 +29,10 @@ export default function CreateInvoice() {
   const [notes, setNotes] = useState("");
   const [termsConditions, setTermsConditions] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { units, states } = useMasters();
+  // Which run of numbers this bill draws on. A typed bill is usually a counter
+  // sale, which keeps the prefix from your invoice settings.
+  const [channel, setChannel] = useState("counter");
+  const { units, states, salesChannels } = useMasters();
 
   /**
    * Dispatch, delivery and transport.
@@ -201,6 +204,7 @@ export default function CreateInvoice() {
         dueDate: dueDate || null,
         notes,
         termsConditions,
+        channel,
         ...despatch,
       });
 
@@ -306,6 +310,30 @@ export default function CreateInvoice() {
               onChange={(e) => setDueDate(e.target.value)}
               className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-espresso focus:ring-2 focus:ring-clay/20 focus:outline-none"
             />
+          </div>
+
+          <div>
+            <label
+              htmlFor="invoice-channel"
+              className="block text-xs font-semibold text-espresso/70 mb-1"
+            >
+              Where it came from
+            </label>
+            <select
+              id="invoice-channel"
+              value={channel}
+              onChange={(e) => setChannel(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-bold text-espresso focus:outline-none focus:ring-2 focus:ring-clay/20"
+            >
+              {salesChannels.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-[11px] text-slate-400">
+              Each one keeps its own run of bill numbers
+            </span>
           </div>
 
           <div>

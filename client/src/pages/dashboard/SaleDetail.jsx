@@ -16,6 +16,15 @@ import { downloadFile } from "../../utils/download";
 import { toast } from "sonner";
 import { amount as money, dateLabel } from "../../utils/money";
 
+// Which book a sale belongs to. Shown so a wholesaler can see why its bill
+// carries the number it does.
+const CHANNEL_TEXT = {
+  counter: "Counter or phone",
+  shop: "This shop",
+  flipkart: "Flipkart",
+  amazon: "Amazon",
+};
+
 // Stored as a word for the screen. The e-way bill API numbers these 1 to 4,
 // which is an encoding detail of that API and means nothing to a wholesaler.
 const TRANSPORT_MODE_TEXT = {
@@ -341,6 +350,9 @@ const SaleDetail = () => {
             </div>
             <p className="mt-1 text-sm text-slate-500">
               {dateLabel(sale.sale_date)}
+              {sale.channel && sale.channel !== "counter"
+                ? `  |  ${CHANNEL_TEXT[sale.channel] || sale.channel}`
+                : ""}
             </p>
             <Link
               to={`/seller/customers/${sale.party_id}`}

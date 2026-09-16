@@ -5,7 +5,7 @@ const { businessId } = require("../middlewares/businessContext");
 /**
  * Codes to offer under an HSN box.
  *
- * His own first, then a short list of common textile headings. Both are
+ * Their own first, then a short list of common textile headings. Both are
  * labelled with where they came from, because the screen has to be able to
  * say "you used this before" against one and "check this against your goods"
  * against the other. They are not the same kind of claim.

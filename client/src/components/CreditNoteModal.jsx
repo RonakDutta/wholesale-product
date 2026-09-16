@@ -11,7 +11,7 @@ import { toast } from "sonner";
  * a sale was cancelled when it was not.
  *
  * Every note reverses the whole bill, which the wording says plainly rather
- * than leaving him to find out after pressing the button. Part returns need a
+ * than leaving them to find out after pressing the button. Part returns need a
  * quantity per line and are not built.
  */
 const REASONS = [

@@ -58,18 +58,18 @@ const ORDER_STATUS_FLOW = {
   return_rejected: []
 };
 
-// When a buyer may still call his own order off.
+// When a buyer may still call their own order off.
 const BUYER_CANCELLABLE_STATUSES = ['pending', 'payment_pending', 'payment_completed', 'supplier_accepted'];
 
 // When a wholesaler may still refuse an order.
 //
 // payment_pending belongs here, and its absence made the whole idea useless:
 // a new order sits at payment_pending from the moment it is placed, so
-// without it a wholesaler could not refuse an order he had only just
-// received, which is precisely when he wants to.
+// without it a wholesaler could not refuse an order they had only just
+// received, which is precisely when they want to.
 //
 // The line is drawn at packed. Once goods are boxed and a driver may be on
-// his way, the way out is a return, not a cancellation.
+// their way, the way out is a return, not a cancellation.
 const SUPPLIER_CANCELLABLE_STATUSES = [
   'pending',
   'payment_pending',
@@ -77,7 +77,7 @@ const SUPPLIER_CANCELLABLE_STATUSES = [
   'supplier_accepted',
   'processing',
   // Not a late cancellation, an admission that the delivery never happened.
-  // The goods are back with him, so there is nothing to return.
+  // The goods are back with them, so there is nothing to return.
   'failed_delivery',
 ];
 
@@ -215,7 +215,7 @@ const updateOrderStatus = async (orderId, newStatus, userId, userRole, remarks =
  *                      quietly undone
  *   the sales book     an order that was accepted has already written itself
  *                      a sale. Leaving that standing bills a customer for
- *                      goods he is never going to get
+ *                      goods they are never going to get
  *   the stock          goes back on the shelf, from order_items, which is the
  *                      real content of an order. The old version of this read
  *                      orders.inventory_item_id, a single item leftover, so a
@@ -223,8 +223,8 @@ const updateOrderStatus = async (orderId, newStatus, userId, userRole, remarks =
  *   the history        one row saying who cancelled it and why
  *
  * Money is deliberately left alone. A payment that was made is real money the
- * customer handed over, so it stays in the khata and he sits in credit until
- * somebody refunds him or sets it against his next order. Deleting it here
+ * customer handed over, so it stays in the khata and they sits in credit until
+ * somebody refunds them or sets it against their next order. Deleting it here
  * would make the money disappear from the books without anyone deciding to
  * give it back.
  *
@@ -234,9 +234,9 @@ const updateOrderStatus = async (orderId, newStatus, userId, userRole, remarks =
  * pressing cancel.
  */
 const cancelOrder = async (orderId, userId, reason = null, actingFor = null) => {
-  // Who the permission belongs to. An employee refusing an order on his
+  // Who the permission belongs to. An employee refusing an order on their
   // employer's behalf is the supplier here; the history row below still
-  // records him by name, because he is the one who did it.
+  // records them by name, because they are the one who did it.
   const businessId = actingFor || userId;
   const client = await pool.connect();
 
@@ -258,7 +258,7 @@ const cancelOrder = async (orderId, userId, reason = null, actingFor = null) => 
     const order = orderResult.rows[0];
 
     // Who is allowed. A seller account browsing as a buyer is still the buyer
-    // of his own order, so this asks who this person is on THIS order rather
+    // of their own order, so this asks who this person is on THIS order rather
     // than what their account role says.
     const isBuyer = order.buyer_id === userId;
     const isSupplier = order.supplier_id === businessId;
@@ -297,7 +297,7 @@ const cancelOrder = async (orderId, userId, reason = null, actingFor = null) => 
         order.status,
         userId,
         // What this person is on this order, not what their account says. A
-        // wholesaler cancelling his own purchase is a buyer here.
+        // wholesaler cancelling their own purchase is a buyer here.
         isSupplier ? 'supplier' : 'buyer',
         reason || (isSupplier ? 'Order refused by the seller' : 'Order cancelled by the buyer'),
       ]

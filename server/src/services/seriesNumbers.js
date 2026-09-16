@@ -35,7 +35,65 @@ const { financialYear } = require("./invoiceNumberService");
  * commit, which is what stops two sales taking the same number.
  */
 
-const take = async (client, wholesalerId, table, legacyPrefix, prefix) => {
+/**
+ * Refused because the number itself is not legal, not because the server broke.
+ * Carries a status and a code so a controller can hand the wholesaler the real
+ * reason. Without them this arrives at the generic catch and a trader who
+ * cannot record a sale is told only "Server error", which tells them nothing
+ * and tells whoever they ring for help even less.
+ */
+class SequenceNumberError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "SequenceNumberError";
+    this.status = 409;
+    this.code = "DOCUMENT_NUMBER_INVALID";
+  }
+}
+
+/**
+ * Rule 46(b) of the CGST Rules: a tax invoice number is at most 16 characters
+ * and holds only letters, digits, hyphen and slash.
+ *
+ * This governs the documents a seller ISSUES under GST, so it is applied to
+ * sale and challan numbers. A purchase voucher is this wholesaler's own record
+ * of somebody else's bill and Rule 46(b) has nothing to say about it, so the
+ * shape is still checked there but the 16 character ceiling is not imposed.
+ */
+const GST_NUMBER_CHARS = /^[A-Za-z0-9/-]+$/;
+const RULE_46B_MAX = 16;
+
+function validateSequenceNumber(number, { statutory = true } = {}) {
+  if (!number || typeof number !== "string") {
+    throw new SequenceNumberError("A document number could not be generated.");
+  }
+  if (statutory && number.length > RULE_46B_MAX) {
+    throw new SequenceNumberError(
+      `Number "${number}" is ${number.length} characters. GST allows at most ` +
+        `${RULE_46B_MAX}, so this series needs a shorter prefix before it can ` +
+        `be used again.`,
+    );
+  }
+  if (!GST_NUMBER_CHARS.test(number)) {
+    throw new SequenceNumberError(
+      `Number "${number}" has characters GST does not allow. Only letters, ` +
+        `digits, hyphen and slash are permitted.`,
+    );
+  }
+  return true;
+}
+
+/**
+ * One upsert, and the number it returns is the one that is checked.
+ *
+ * There is no point reading the counter first to guess what the number will be:
+ * the read is not under the lock, so two sales starting together both guess the
+ * same value, and the guess is thrown away a line later anyway. The upsert is
+ * the only authority. Checking its result is the whole guard, and every caller
+ * runs inside a transaction that rolls back on a throw, so a refused number is
+ * not consumed.
+ */
+const take = async (client, wholesalerId, table, legacyPrefix, prefix, opts = {}) => {
   const has = await invoiceRepository.schemaExtras();
 
   if (!has.has_series_fy) {
@@ -47,7 +105,9 @@ const take = async (client, wholesalerId, table, legacyPrefix, prefix) => {
        RETURNING last_number`,
       [wholesalerId],
     );
-    return `${legacyPrefix}${String(legacy.rows[0].last_number).padStart(4, "0")}`;
+    const generated = `${legacyPrefix}${String(legacy.rows[0].last_number).padStart(4, "0")}`;
+    validateSequenceNumber(generated, opts);
+    return generated;
   }
 
   const fy = financialYear();
@@ -59,7 +119,9 @@ const take = async (client, wholesalerId, table, legacyPrefix, prefix) => {
      RETURNING last_number`,
     [wholesalerId, fy],
   );
-  return `${prefix}${result.rows[0].last_number}/${fy}`;
+  const generated = `${prefix}${result.rows[0].last_number}/${fy}`;
+  validateSequenceNumber(generated, opts);
+  return generated;
 };
 
 /** S/1/26-27, or S-0001 before the migration. */
@@ -94,7 +156,18 @@ const nextPurchaseNumber = async (client, wholesalerId) => {
      RETURNING last_number`,
     [wholesalerId, fy],
   );
-  return `PUR/${result.rows[0].last_number}/${fy}`;
+  const generated = `PUR/${result.rows[0].last_number}/${fy}`;
+  // A purchase voucher is this wholesaler's own note of somebody else's bill.
+  // Rule 46(b) governs what a seller issues, so the shape is checked but the
+  // 16 character ceiling is not imposed on it.
+  validateSequenceNumber(generated, { statutory: false });
+  return generated;
 };
 
-module.exports = { nextSaleNumber, nextChallanNumber, nextPurchaseNumber };
+module.exports = {
+  nextSaleNumber,
+  nextChallanNumber,
+  nextPurchaseNumber,
+  validateSequenceNumber,
+  SequenceNumberError,
+};

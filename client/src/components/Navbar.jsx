@@ -43,7 +43,7 @@ const CityRow = ({ active, onClick, children }) => (
  * The list is whatever the server says has stock, so every line here leads
  * somewhere. It is deliberately not a list of big Indian cities: offering
  * Bangalore when no wholesaler there has listed anything gives the buyer an
- * empty page and no way of telling whether he filtered wrongly.
+ * empty page and no way of telling whether they filtered wrongly.
  *
  * Open state is local to each copy of this, and that is load bearing. The
  * navbar mounts two, one for phones and one for desktop, and only hides the
@@ -119,7 +119,7 @@ const LocationSelector = ({ city, setCity, cities, loadingCities, label }) => {
 
             {!loadingCities && cities.length === 0 && (
               <p className="px-3 py-3 text-xs text-slate-400">
-                No seller has filled in his city yet, so there is nothing to
+                No seller has filled in their city yet, so there is nothing to
                 choose from.
               </p>
             )}
@@ -299,8 +299,8 @@ const Navbar = () => {
    * wordmark and the first icon were touching with nothing between them. That
    * is what "looks weird on mobile" was.
    *
-   * Compact keeps the two that are about THIS moment, where he is buying from
-   * and what is in his basket, and moves messages and the wishlist into the
+   * Compact keeps the two that are about THIS moment, where they are buying from
+   * and what is in their basket, and moves messages and the wishlist into the
    * profile menu, which is where a phone puts the rest of a navigation. Both
    * are still one tap away and neither count is lost: they are carried as a
    * dot on the profile button, see below.

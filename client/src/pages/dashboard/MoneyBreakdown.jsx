@@ -10,7 +10,7 @@ import { amount as money, dateLabel } from "../../utils/money";
  *
  * The Overview shows three totals, and a total nobody can take apart is a
  * number a wholesaler has to trust rather than check. This is the other half
- * of each card: the rows it is made of, adding up in front of him.
+ * of each card: the rows it is made of, adding up in front of them.
  *
  * The total at the bottom is computed from the rows on this page, not sent
  * down separately, so if it ever disagreed with the card the difference would
@@ -187,7 +187,7 @@ const MoneyBreakdown = () => {
 };
 
 /**
- * Each customer with the arithmetic spelled out, because "he owes 4,200" is
+ * Each customer with the arithmetic spelled out, because "they owe 4,200" is
  * not something anyone can check and "billed 9,000, paid 4,800" is.
  */
 const OutstandingRows = ({ rows }) => {
@@ -278,8 +278,8 @@ const OutstandingRows = ({ rows }) => {
       // a phone call.
       <p className="border-t border-slate-100 bg-amber-50 px-5 py-3 text-xs text-amber-900">
         A red balance means that customer has paid you more than you have
-        billed him, so the money is his. It usually means an order was
-        cancelled or returned after he had paid.
+        billed them, so the money is their. It usually means an order was
+        cancelled or returned after they had paid.
       </p>
     )}
   </>

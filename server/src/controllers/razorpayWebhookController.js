@@ -11,9 +11,9 @@ const orderController = require("./orderController");
  * ---------------------------------------------------------------------------
  * Settlement used to depend entirely on the browser posting back to /verify
  * after checkout. That is Razorpay's own "hint", and it is lost whenever the
- * buyer's browser dies, his phone sleeps mid-UPI, or he closes the tab on the
+ * buyer's browser dies, their phone sleeps mid-UPI, or they closes the tab on the
  * bank's page. The money moved and the order did not, and nobody found out
- * until he complained.
+ * until they complained.
  *
  * That was survivable while every rupee sat in one account a person could
  * reconcile by hand. With Route it is not: the money has already been

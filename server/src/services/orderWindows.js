@@ -14,7 +14,7 @@ const pool = require("../config/db");
  *   3. Nothing. After that the order is closed and stays closed.
  *
  * Before this, door two never shut. An order delivered a year ago could still
- * be sent back, and the wholesaler had no ground to stand on when he said no.
+ * be sent back, and the wholesaler had no ground to stand on when they said no.
  */
 
 const RETURN_WINDOW_DAYS = 7;
@@ -55,9 +55,9 @@ const deliveredAt = async (orderId, client = pool) => {
  *
  * An order whose delivery date cannot be established is treated as open, and
  * says so. Orders placed before delivery was recorded have no date to read,
- * and refusing those would lock a buyer out of a return he is entitled to on
+ * and refusing those would lock a buyer out of a return they are entitled to on
  * the strength of a gap in our own records. The wholesaler still decides;
- * this only decides whether he is asked.
+ * this only decides whether they are asked.
  */
 const returnWindow = (deliveredOn, now = new Date()) => {
   if (!deliveredOn) {

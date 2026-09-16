@@ -122,7 +122,7 @@ const mkUser = async (role, phone) =>
   );
   check(
     Number(paidOrder.money.billedThisMonth) === 1000,
-    "and so is what he was billed for it",
+    "and so is what they were billed for it",
     paidOrder.money.billedThisMonth,
   );
 
@@ -170,7 +170,7 @@ const mkUser = async (role, phone) =>
     "the total is what the customer pages add up to",
     { overview: withDebt.money.outstanding, customers: sumOfCustomers },
   );
-  check(Number(withDebt.money.outstanding) === 500, "which is the 500 he is owed", withDebt.money.outstanding);
+  check(Number(withDebt.money.outstanding) === 500, "which is the 500 they are owed", withDebt.money.outstanding);
 
   const top = withDebt.topDues || withDebt.lists?.topDues || [];
   check(
@@ -213,7 +213,7 @@ const mkUser = async (role, phone) =>
   await call(orders.cancelOrderHandler, {
     user: seller, params: { orderId: refunded.body.orderId }, body: { reason: "Out of stock" },
   });
-  check((await partyBalance(creditParty)) === -2000, "he paid 2000 for an order that was cancelled", { bal: await partyBalance(creditParty) });
+  check((await partyBalance(creditParty)) === -2000, "they paid 2000 for an order that was cancelled", { bal: await partyBalance(creditParty) });
 
   // And somebody who genuinely owes, at the same time.
   const debtBuyer = await mkUser("buyer", "9820055443");

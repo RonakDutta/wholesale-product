@@ -4,7 +4,7 @@ import { UNITS, GST_RATES } from "../constants/products";
 import { applyMoneySettings, moneySettings } from "../utils/money";
 
 /**
- * The platform masters: units, tax slabs, states, HSN codes.
+ * The platform administrations: units, tax slabs, states, HSN codes.
  *
  * These were constants in this client until 12 Sept. They now come from tables
  * a platform admin can edit, so correcting a unit or adding a GST slab stops
@@ -72,8 +72,8 @@ const fetchMasters = () => {
       return loaded;
     })
     .catch(() => {
-      // Not surfaced to the user. He is filling in a product form and the
-      // dropdowns are full; there is nothing for him to do about it.
+      // Not surfaced to the user. They are filling in a product form and the
+      // dropdowns are full; there is nothing for them to do about it.
       inFlight = null;
       return FALLBACK;
     });

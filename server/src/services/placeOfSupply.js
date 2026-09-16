@@ -12,14 +12,14 @@
  *
  * The order below is by how much each source actually knows:
  *
- *   1. what he declared    the state he typed into his own settings, or the
+ *   1. what they declared    the state they typed into their own settings, or the
  *                          state on the customer's card. Somebody sat down and
  *                          said this, so it wins.
- *   2. his GST number      the first two digits of a GSTIN ARE the state. This
+ *   2. their GST number      the first two digits of a GSTIN ARE the state. This
  *                          is not a guess or a lookup, it is what the number
  *                          means, and it is right even when the address is
  *                          half filled in.
- *   3. his city            the old map, kept as a last resort, because a book
+ *   3. their city            the old map, kept as a last resort, because a book
  *                          full of customers entered as "Surat" with no state
  *                          and no GST number should still bill correctly.
  *
@@ -152,12 +152,12 @@ const asState = (value) => {
  *
  * Callers that only want the name can use `stateOf`. This one exists so a
  * screen can say WHY it thinks a wholesaler is in Gujarat, which matters when
- * he disagrees with it.
+ * they disagrees with it.
  *
  * @param {object} source
- * @param {string} [source.state] what he declared, warehouse_state or similar
- * @param {string} [source.gstin] his GST number
- * @param {string} [source.city]  his city, the last resort
+ * @param {string} [source.state] what they declared, warehouse_state or similar
+ * @param {string} [source.gstin] their GST number
+ * @param {string} [source.city]  their city, the last resort
  * @returns {{ state: string|null, from: "declared"|"gstin"|"city"|null }}
  */
 const resolveState = ({ state, gstin, city } = {}) => {
@@ -183,13 +183,13 @@ const stateOf = (source) => resolveState(source).state;
  *
  * Returns true when either side is unknown, and that is a decision rather than
  * an oversight. An unknown state is almost always a customer the wholesaler
- * entered by name and phone alone, which is his local trade, and a local sale
+ * entered by name and phone alone, which is their local trade, and a local sale
  * is CGST plus SGST. Guessing inter-state instead would put IGST on the bill
  * of the man who walks into the shop.
  *
  * The previous version reached the same answer by pretending both sides were
  * Delhi, which is the right result by the wrong route: it also told a Surat
- * wholesaler with no city set that he was in Delhi, and anything downstream
+ * wholesaler with no city set that they were in Delhi, and anything downstream
  * that read the location back believed it.
  */
 const isIntraState = (supplier, buyer) => {
@@ -211,7 +211,7 @@ const isIntraState = (supplier, buyer) => {
  * territories merged, the LOWER code wins: 28 rather than 37 for Andhra
  * Pradesh, 25 rather than 26 for Daman and Diu. That is a coin toss on old
  * registrations and it is why the code shown is taken from the customer's own
- * GSTIN when he has one, in preference to this.
+ * GSTIN when they have one, in preference to this.
  */
 const CODE_BY_STATE = (() => {
   const out = {};
@@ -231,8 +231,8 @@ const stateCode = (name) => CODE_BY_STATE[stateKey(name)] || null;
  * The place of supply as it goes on the document: the state, its code, and
  * where the answer came from.
  *
- * The buyer's own GSTIN wins outright when he has one, because its first two
- * digits ARE his state code and no lookup can beat that.
+ * The buyer's own GSTIN wins outright when they have one, because its first two
+ * digits ARE their state code and no lookup can beat that.
  */
 const placeOfSupply = (buyer = {}) => {
   const fromGstin = gstinState(buyer.gstin);

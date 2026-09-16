@@ -10,13 +10,13 @@ import { amount as money } from "../utils/money";
  *
  * There is no payment gateway here, so this does not move any money. It is the
  * same arrangement as every other payment in the product: the wholesaler pays
- * his customer by UPI or in cash, the way he always has, and then writes down
- * that he has. The books follow what he writes.
+ * their customer by UPI or in cash, the way they always has, and then writes down
+ * that they have. The books follow what they write.
  *
  * It offers the full amount received, because paying it all back is what
- * happens nearly every time and asking a man to type a figure he did not
- * choose is how the wrong figure gets typed. He can change it if he settled
- * for less, and the screen then says plainly how much he is still holding
+ * happens nearly every time and asking a man to type a figure they did not
+ * choose is how the wrong figure gets typed. They can change it if they settled
+ * for less, and the screen then says plainly how much they are still holding
  * rather than letting the account look square when it is not.
  *
  * The server caps whatever arrives at the amount actually received, so no
@@ -109,7 +109,7 @@ const RefundModal = ({ order, onClose, onRefunded }) => {
       <div className="px-5 py-5 sm:px-6">
         <p className="rounded-xl bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
           The goods are back with you and you are holding{" "}
-          <span className="font-bold text-espresso">{money(paid)}</span> of his
+          <span className="font-bold text-espresso">{money(paid)}</span> of their
           money. Pay it back the way you normally would, then record it here.
         </p>
 
@@ -134,7 +134,7 @@ const RefundModal = ({ order, onClose, onRefunded }) => {
             />
             {valid && holding > 0 && (
               <p className="mt-1.5 text-[11px] font-semibold text-amber-700">
-                You will still be holding {money(holding)} of his money.
+                You will still be holding {money(holding)} of their money.
               </p>
             )}
             {!valid && asked > paid && (
@@ -149,7 +149,7 @@ const RefundModal = ({ order, onClose, onRefunded }) => {
               htmlFor="refund-method"
               className="mb-1 block text-xs font-semibold text-espresso/70"
             >
-              How did you pay him?
+              How did you pay them?
             </label>
             <select
               id="refund-method"

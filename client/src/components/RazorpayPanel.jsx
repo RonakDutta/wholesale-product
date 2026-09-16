@@ -9,8 +9,8 @@ import { trimmed as money } from "../utils/money";
  * Paying online, through Razorpay's own checkout window.
  *
  * THE PRIMARY WAY TO PAY, and drawn like it. Nothing confirms a UPI QR payment
- * today: the buyer scans, pays in his bank app, comes back and presses a button
- * to say he did, and the cap on what is owed is the entire check. This path is
+ * today: the buyer scans, pays in their bank app, comes back and presses a button
+ * to say they did, and the cap on what is owed is the entire check. This path is
  * the only one where the money is actually confirmed before the order moves,
  * so it leads and the QR code sits underneath as the fallback.
  *
@@ -101,7 +101,7 @@ const RazorpayPanel = ({ orderId, amount, merchant, buyer, onPaid }) => {
               );
             }
           } catch (err) {
-            // The money may well have left his account. Telling him it failed
+            // The money may well have left their account. Telling them it failed
             // would be a lie, so this says what is actually true.
             toast.error(
               err.response?.data?.message ||
@@ -112,7 +112,7 @@ const RazorpayPanel = ({ orderId, amount, merchant, buyer, onPaid }) => {
         },
 
         modal: {
-          // He closed the window. Not a failure, and nothing to record.
+          // They closed the window. Not a failure, and nothing to record.
           ondismiss: () => setBusy(false),
         },
       });

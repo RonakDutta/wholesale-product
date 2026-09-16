@@ -1,9 +1,9 @@
 /**
  * The customer book, shared by every way business arrives.
  *
- * A wholesaler has one list of customers. He writes some of them into it by
+ * A wholesaler has one list of customers. They write some of them into it by
  * hand, and others arrive by placing an order through the shop. Both have to
- * land on the same row, or he ends up with the same man twice and two
+ * land on the same row, or they ends up with the same man twice and two
  * different balances for one khata.
  *
  * That is what this module is for, and it is the only place allowed to decide
@@ -30,7 +30,7 @@ const phoneKey = (value) => {
  *
  *   1. An account already linked to a party. Unambiguous.
  *   2. The same phone number. This is the one that matters in practice: the
- *      wholesaler wrote "Kishan 98200 11223" in his diary months ago, and now
+ *      wholesaler wrote "Kishan 98200 11223" in their diary months ago, and now
  *      Kishan has signed up and ordered. Same man, same row, and the account
  *      gets linked to it so rule 1 answers next time.
  *   3. Nobody matched, so add them.
@@ -63,13 +63,13 @@ const findOrCreateParty = async (client, details) => {
   /**
    * Fill in what this party does not know yet, and nothing else.
    *
-   * A customer who orders through the shop carries details his wholesaler may
-   * never have written down: the name of his firm, and his GST number. Both
+   * A customer who orders through the shop carries details their wholesaler may
+   * never have written down: the name of their firm, and their GST number. Both
    * belong on the bill. The firm is who a tax invoice is addressed to, and
-   * without the GST number the customer cannot claim his input credit, which
-   * costs him money.
+   * without the GST number the customer cannot claim their input credit, which
+   * costs them money.
    *
-   * Strictly blanks only. What the wholesaler typed into his own book is his,
+   * Strictly blanks only. What the wholesaler typed into their own book is their,
    * and an order must never talk over it. That is the same rule the user_id
    * link below already follows.
    */
@@ -140,7 +140,7 @@ const findOrCreateParty = async (client, details) => {
   }
 
   // 3. New customer. Nothing here overwrites anything, so the wholesaler's own
-  // notes on a party he already had are never touched by an order.
+  // notes on a party they already had are never touched by an order.
   try {
     const created = await client.query(
       `INSERT INTO parties
@@ -244,8 +244,8 @@ const hasLedgerLink = async (client) => {
  * Put money that came in through the shop into the customer's khata.
  *
  * The khata is one ledger: cash the wholesaler wrote down and a UPI payment a
- * retailer made on his phone have to sit in the same column, or the customer
- * page answers "how much does he owe me" with only half the story.
+ * retailer made on their phone have to sit in the same column, or the customer
+ * page answers "how much does they owe me" with only half the story.
  *
  * Does nothing, rather than failing, when the order has no customer or the
  * migration has not been run. A payment must never be lost because the

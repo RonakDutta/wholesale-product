@@ -37,12 +37,12 @@ const STATUS_STYLES = {
  * One of the three figures, and the way into the rows behind it.
  *
  * These were plain boxes. A total a wholesaler cannot take apart is a number
- * he has to trust rather than check, and the first question anybody asks of a
+ * they have to trust rather than check, and the first question anybody asks of a
  * figure on a dashboard is "why is it that". Each card now opens the list it
  * is made of.
  *
- * A negative "still to collect" reads red rather than amber. It means he owes
- * his customers money, which is a different fact from being owed some.
+ * A negative "still to collect" reads red rather than amber. It means they owe
+ * their customers money, which is a different fact from being owed some.
  */
 /**
  * `wide` is the phone only.
@@ -53,7 +53,7 @@ const STATUS_STYLES = {
  * weird" was.
  *
  * The fix is not a smaller font. What a wholesaler opens this screen for is
- * what he is owed, so that figure takes the full width and the two month to
+ * what they are owed, so that figure takes the full width and the two month to
  * date totals share the row underneath. Back to three across from sm: up,
  * where they always fitted.
  */
@@ -124,7 +124,7 @@ const Empty = ({ children }) => (
 
 /**
  * The wholesaler's first screen. Built around what needs doing rather than
- * what has happened, and every number on it is counted from his own rows. The
+ * what has happened, and every number on it is counted from their own rows. The
  * marketplace dashboard this replaces showed a buyer rating and a listing
  * count, neither of which describes this product.
  */
@@ -249,10 +249,10 @@ const Overview = () => {
       {/* The money block is WITHHELD, not zeroed, for an employee without the
           money permission: overviewController sends `money: null` rather than
           zeros, so the screen can say "not shown to you" instead of telling
-          him the business is owed nothing, which would be a lie about it.
+          them the business is owed nothing, which would be a lie about it.
           The server did its half from the start and this screen never did its
           own, so such an employee got a blank page here, on the first screen
-          he lands on. */}
+          they land on. */}
       {!m ? (
         <div className="rounded-2xl border border-slate-200 bg-white px-5 py-6 text-center">
           <p className="text-sm font-bold text-espresso">
@@ -289,7 +289,7 @@ const Overview = () => {
       )}
 
       {/* Money that is not yours, said out loud rather than quietly taken off
-          the figure above. A customer goes into credit when he has paid for
+          the figure above. A customer goes into credit when they have paid for
           something that was later cancelled or sent back, and netting it
           against what other customers owe would hide both facts. */}
       {m && Number(m.owedBack) > 0 && (
@@ -411,7 +411,7 @@ const Overview = () => {
           {quiet.length === 0 ? (
             <Empty>
               {/* "Everyone has bought recently" is untrue of an account with
-                  nobody in it, so what this says depends on how far along he
+                  nobody in it, so what this says depends on how far along they
                   actually is. */}
               {counts.parties === 0
                 ? "Once you add customers, anyone who stops buying shows up here to chase."

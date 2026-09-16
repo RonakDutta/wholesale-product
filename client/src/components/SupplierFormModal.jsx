@@ -8,7 +8,7 @@ import ModalShell from "./ModalShell";
  *
  * The supplier form used to be an inline panel that only the Suppliers page
  * could open, which is why recording a purchase from a mill not yet in the
- * book meant leaving the half typed purchase, going to Suppliers, adding him,
+ * book meant leaving the half typed purchase, going to Suppliers, adding them,
  * and coming back to start again. Lifted into a modal so the purchase screen
  * can open it in place.
  *
@@ -17,8 +17,8 @@ import ModalShell from "./ModalShell";
  * a new one written from scratch never quite matches the last.
  *
  * Only the name is required, as on the customer side. A wholesaler entering
- * forty mills out of an old ledger should not be stopped by a field he does
- * not have in front of him.
+ * forty mills out of an old ledger should not be stopped by a field they do
+ * not have in front of them.
  */
 const SupplierFormModal = ({ supplier, onClose, onSaved }) => {
   const editing = Boolean(supplier);
@@ -31,7 +31,7 @@ const SupplierFormModal = ({ supplier, onClose, onSaved }) => {
     gstin: supplier?.gstin || "",
     address: supplier?.address || "",
     notes: supplier?.notes || "",
-    // Positive is what YOU owe him, the mirror of the customer side.
+    // Positive is what YOU owe them, the mirror of the customer side.
     openingBalance:
       supplier?.opening_balance && Number(supplier.opening_balance) !== 0
         ? String(Number(supplier.opening_balance))
@@ -156,14 +156,14 @@ const SupplierFormModal = ({ supplier, onClose, onSaved }) => {
           {field("gstin", "GST number", {
             placeholder: "24AAACC1206D1ZM",
             uppercase: true,
-            hint: "Leave empty if he is not registered. An unregistered supplier's bill carries no input credit.",
+            hint: "Leave empty if they are not registered. An unregistered supplier's bill carries no input credit.",
           })}
 
           {field("address", "Address", {
             placeholder: "Plot number, area",
           })}
 
-          {/* What you already owed him before this book existed. Same
+          {/* What you already owed them before this book existed. Same
               reasoning as the customer side, opposite direction. */}
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-sm font-bold text-espresso">
@@ -190,8 +190,8 @@ const SupplierFormModal = ({ supplier, onClose, onSaved }) => {
                 />
                 <p className="mt-1 text-[11px] text-slate-400">
                   {Number(form.openingBalance) < 0
-                    ? "He is holding your money."
-                    : "What you owed him. Put a minus in front if he was holding your money."}
+                    ? "They are holding your money."
+                    : "What you owed them. Put a minus in front if they were holding your money."}
                 </p>
               </div>
               <div>
@@ -209,7 +209,7 @@ const SupplierFormModal = ({ supplier, onClose, onSaved }) => {
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
                 />
                 <p className="mt-1 text-[11px] text-slate-400">
-                  His statement starts from this date.
+                  Their statement starts from this date.
                 </p>
               </div>
             </div>

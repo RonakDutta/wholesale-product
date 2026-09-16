@@ -13,17 +13,17 @@ import { rupees, trimmed, dateLabel } from "../../utils/money";
  * actually sent out was to open a PDF. That is a poor way to answer "what did
  * I send Ramesh on the 4th", and it is worse on a phone.
  *
- * Everything here is FROZEN on the document. The recipient's name, his GSTIN,
+ * Everything here is FROZEN on the document. The recipient's name, their GSTIN,
  * the quantities and the amount that had been received are all stored on the
  * challan row rather than joined from the customer or the sale, because this
  * is what the paper said on the day the goods were handed over. If the
- * customer later corrects his address, the challan he signed for does not
+ * customer later corrects their address, the challan they signed for does not
  * change. So nothing on this page is looked up live, and nothing is
  * recomputed: it is read back exactly as issued.
  *
  * A challan is NOT a tax invoice and carries no GST. The page says so, because
  * a wholesaler seeing a total and an HSN column could reasonably assume it is
- * a bill, and sending one instead of an invoice is his problem, not ours.
+ * a bill, and sending one instead of an invoice is their problem, not ours.
  */
 const ChallanDetail = () => {
   const { challanId } = useParams();

@@ -1,5 +1,5 @@
 /**
- * Can an employee work on his employer's book, and only his employer's?
+ * Can an employee work on their employer's book, and only their employer's?
  *
  * The whole feature is one substitution: seller screens must read the business
  * being acted for, not the person signed in. For an owner the two are the same
@@ -7,7 +7,7 @@
  * is invisible in every test that only has owners in it.
  *
  * So every check here uses two wholesalers with real books, and asserts both
- * halves: the employee sees his employer's rows, and he never sees the other
+ * halves: the employee sees their employer's rows, and they never sees the other
  * wholesaler's. A leak in the wrong direction is the whole risk of this
  * feature, and it would look exactly like the feature working.
  *
@@ -90,7 +90,7 @@ const mkUser = async (name, role, phone) =>
   saleService.resetSaleLink();
   resetStaffTable();
 
-  // Two wholesalers, each with his own book. The second exists only so every
+  // Two wholesalers, each with their own book. The second exists only so every
   // check can also assert that the employee cannot see it.
   const ramId = await mkUser("Ram", "seller", "9000000001");
   const shyamId = await mkUser("Shyam", "seller", "9000000002");
@@ -120,7 +120,7 @@ const mkUser = async (name, role, phone) =>
   check(invited.statusCode === 201, "the owner can invite somebody", { s: invited.statusCode });
   const kishan = invited.body?.staff;
   check(kishan?.status === "invited", "who starts as invited", { s: kishan?.status });
-  check(!!kishan?.inviteCode, "with a code to read out to him", { has: Boolean(kishan?.inviteCode) });
+  check(!!kishan?.inviteCode, "with a code to read out to them", { has: Boolean(kishan?.inviteCode) });
   check(
     JSON.stringify(kishan?.permissions) === JSON.stringify(DEFAULT_PERMISSIONS),
     "and everything ticked by default",
@@ -146,7 +146,7 @@ const mkUser = async (name, role, phone) =>
   const accepted = await asUser(null, staff.acceptInvite, {
     body: { code: kishan.inviteCode, password: "kishan-password-1", email: `kishan${stamp}@x.local` },
   });
-  check(accepted.statusCode === 201, "the code makes him an account", { s: accepted.statusCode, b: accepted.body });
+  check(accepted.statusCode === 201, "the code makes them an account", { s: accepted.statusCode, b: accepted.body });
 
   const reuse = await asUser(null, staff.acceptInvite, {
     body: { code: kishan.inviteCode, password: "another-password", email: `again${stamp}@x.local` },
@@ -159,11 +159,11 @@ const mkUser = async (name, role, phone) =>
   const kishanUser = { id: kishanUserId, role: "seller" };
 
   // ---- the substitution that is the whole feature -------------------------
-  const his = await asUser(kishanUser, parties.listParties, {}, [requirePermission("customers")]);
-  const names = (his.body || []).map((p) => p.name);
-  check(his.statusCode === 200, "the employee can open the customer book", { s: his.statusCode });
+  const their = await asUser(kishanUser, parties.listParties, {}, [requirePermission("customers")]);
+  const names = (their.body || []).map((p) => p.name);
+  check(their.statusCode === 200, "the employee can open the customer book", { s: their.statusCode });
   check(names.includes(`Ram's customer ${stamp}`),
-    "and it is his employer's book", { names });
+    "and it is their employer's book", { names });
   check(!names.includes(`Shyam's customer ${stamp}`),
     "not the other wholesaler's", { names });
   check(names.length === 1, "and nothing else", { n: names.length });
@@ -173,32 +173,32 @@ const mkUser = async (name, role, phone) =>
         ownBook.body[0].name === `Shyam's customer ${stamp}`,
     "the other wholesaler is unaffected", { n: (ownBook.body || []).length });
 
-  // Writing lands in the employer's book too, not in a book of his own.
+  // Writing lands in the employer's book too, not in a book of their own.
   const wrote = await asUser(kishanUser, parties.createParty, {
     body: { name: `Added by the nephew ${stamp}`, phone: "9820011999" },
   }, [requirePermission("customers")]);
-  check(wrote.statusCode === 201, "he can add a customer", { s: wrote.statusCode });
+  check(wrote.statusCode === 201, "they can add a customer", { s: wrote.statusCode });
   const owner = (await q(
     "SELECT wholesaler_id FROM parties WHERE name = $1", [`Added by the nephew ${stamp}`],
   )).rows[0];
   check(String(owner?.wholesaler_id) === String(ramId),
-    "and it belongs to his employer, not to him", { got: owner?.wholesaler_id, want: ramId });
+    "and it belongs to their employer, not to them", { got: owner?.wholesaler_id, want: ramId });
 
-  // ---- what he may do is changeable ---------------------------------------
+  // ---- what they may do is changeable ---------------------------------------
   const narrowed = await asUser(ram, staff.updateStaff, {
     params: { id: kishan.id },
     body: { permissions: ["orders", "sales"] },
   });
-  check(narrowed.statusCode === 200, "the owner can change what he may do", { s: narrowed.statusCode });
+  check(narrowed.statusCode === 200, "the owner can change what they may do", { s: narrowed.statusCode });
   check(JSON.stringify(narrowed.body?.staff?.permissions) === JSON.stringify(["orders", "sales"]),
     "to exactly what was asked for", { p: narrowed.body?.staff?.permissions });
 
   const nowRefused = await asUser(kishanUser, parties.listParties, {}, [requirePermission("customers")]);
-  check(nowRefused.statusCode === 403, "and the customer book closes to him", { s: nowRefused.statusCode });
+  check(nowRefused.statusCode === 403, "and the customer book closes to them", { s: nowRefused.statusCode });
   check(nowRefused.body?.code === "NOT_ALLOWED", "with a reason, not a redirect", nowRefused.body);
 
   const stillSales = await asUser(kishanUser, sales.listSales, {}, [requirePermission("sales")]);
-  check(stillSales.statusCode === 200, "while what he kept still works", { s: stillSales.statusCode });
+  check(stillSales.statusCode === 200, "while what they kept still works", { s: stillSales.statusCode });
 
   const junk = await asUser(ram, staff.updateStaff, {
     params: { id: kishan.id },
@@ -215,7 +215,7 @@ const mkUser = async (name, role, phone) =>
   // ---- the money block ----------------------------------------------------
   const withMoney = await asUser(kishanUser, overview.getOverview);
   check(withMoney.body?.money !== null && withMoney.body?.money !== undefined,
-    "with the money permission he sees the figures", { m: withMoney.body?.money });
+    "with the money permission they see the figures", { m: withMoney.body?.money });
 
   await asUser(ram, staff.updateStaff, {
     params: { id: kishan.id },
@@ -226,10 +226,10 @@ const mkUser = async (name, role, phone) =>
   check(noMoney.body?.money === null,
     "but the money is withheld rather than shown as nought", { m: noMoney.body?.money });
   check(Array.isArray(noMoney.body?.toDeliver),
-    "and the work he is there to do is still listed", { n: noMoney.body?.toDeliver?.length });
+    "and the work they are there to do is still listed", { n: noMoney.body?.toDeliver?.length });
   const breakdown = await asUser(kishanUser, overview.getBreakdown,
     { query: { metric: "outstanding" } }, [requirePermission("money")]);
-  check(breakdown.statusCode === 403, "the breakdown page is closed to him", { s: breakdown.statusCode });
+  check(breakdown.statusCode === 403, "the breakdown page is closed to them", { s: breakdown.statusCode });
 
   // ---- what nobody may do -------------------------------------------------
   const staffList = await asUser(kishanUser, staff.listStaff, {}, [requireOwner]);
@@ -238,12 +238,12 @@ const mkUser = async (name, role, phone) =>
   check(staffList.body?.code === "OWNER_ONLY", "because it is owner only", staffList.body);
   const selfPromote = await asUser(kishanUser, staff.updateStaff,
     { params: { id: kishan.id }, body: { permissions: PERMISSION_KEYS } }, [requireOwner]);
-  check(selfPromote.statusCode === 403, "so he cannot widen his own permissions", { s: selfPromote.statusCode });
+  check(selfPromote.statusCode === 403, "so they cannot widen their own permissions", { s: selfPromote.statusCode });
 
   // ---- the owner sees everyone --------------------------------------------
   await asUser(ram, staff.inviteStaff, { body: { name: "Second Man", phone: "9820022334" } });
   const list = await asUser(ram, staff.listStaff, {}, [requireOwner]);
-  check(list.statusCode === 200, "the owner sees his staff", { s: list.statusCode });
+  check(list.statusCode === 200, "the owner sees their staff", { s: list.statusCode });
   check((list.body?.staff || []).length === 2, "both of them", { n: (list.body?.staff || []).length });
   check((list.body?.permissions || []).length === PERMISSION_KEYS.length,
     "with the catalogue of what can be granted", { n: (list.body?.permissions || []).length });
@@ -256,26 +256,26 @@ const mkUser = async (name, role, phone) =>
     params: { id: kishan.id }, body: { permissions: [] },
   }, [requireOwner]);
   check(notMine.statusCode === 404,
-    "nor can he touch another wholesaler's employee", { s: notMine.statusCode });
+    "nor can they touch another wholesaler's employee", { s: notMine.statusCode });
 
   // ---- turning somebody off ----------------------------------------------
   const off = await asUser(ram, staff.setStaffStatus, {
     params: { id: kishan.id }, body: { status: "disabled" },
   }, [requireOwner]);
-  check(off.statusCode === 200, "the owner can turn him off", { s: off.statusCode });
+  check(off.statusCode === 200, "the owner can turn them off", { s: off.statusCode });
 
   const afterOff = await asUser(kishanUser, parties.listParties, {}, [requirePermission("customers")]);
   check(afterOff.statusCode === 403,
-    "and he can no longer open the book", { s: afterOff.statusCode });
+    "and they can no longer open the book", { s: afterOff.statusCode });
   const stillThere = await q("SELECT COUNT(*)::int AS n FROM parties WHERE name = $1",
     [`Added by the nephew ${stamp}`]);
   check(stillThere.rows[0].n === 1,
-    "while the work he did is still there", { n: stillThere.rows[0].n });
+    "while the work they did is still there", { n: stillThere.rows[0].n });
 
   const back = await asUser(ram, staff.setStaffStatus, {
     params: { id: kishan.id }, body: { status: "active" },
   }, [requireOwner]);
-  check(back.statusCode === 200, "and he can be turned back on", { s: back.statusCode });
+  check(back.statusCode === 200, "and they can be turned back on", { s: back.statusCode });
 
   // ---- invited by email alone ---------------------------------------------
   // users.phone is NOT NULL. Every invite in this file used to carry a phone,
@@ -302,9 +302,9 @@ const mkUser = async (name, role, phone) =>
        FROM staff_members s JOIN users u ON u.id = s.user_id WHERE s.id = $1`,
     [byEmail.id],
   )).rows[0];
-  check(stored?.phone === "9820055667", "his number is on his account", { p: stored?.phone });
+  check(stored?.phone === "9820055667", "their number is on their account", { p: stored?.phone });
   check(stored?.staff_phone === "9820055667",
-    "and on the owner's list, so it reaches him", { p: stored?.staff_phone });
+    "and on the owner's list, so it reaches them", { p: stored?.staff_phone });
 
   // The other way round: a phone on the invite, nothing typed at join.
   const byPhone = (await asUser(ram, staff.inviteStaff, {
@@ -318,16 +318,16 @@ const mkUser = async (name, role, phone) =>
 
   // ---- who am I ------------------------------------------------------------
   const me = await asUser(kishanUser, auth.getMe);
-  check(me.body?.staff?.isOwner === false, "the employee is told he is not the owner", me.body?.staff);
+  check(me.body?.staff?.isOwner === false, "the employee is told they are not the owner", me.body?.staff);
   check(me.body?.staff?.worksFor === "Ram Textiles",
-    "and whose book he has open", { w: me.body?.staff?.worksFor });
+    "and whose book they have open", { w: me.body?.staff?.worksFor });
   const ownerMe = await asUser(ram, auth.getMe);
-  check(ownerMe.body?.staff?.isOwner === true, "an owner is told he is one", ownerMe.body?.staff);
+  check(ownerMe.body?.staff?.isOwner === true, "an owner is told they are one", ownerMe.body?.staff);
   check(ownerMe.body?.staff?.worksFor === null, "with no employer named", ownerMe.body?.staff);
 
   // ---- an invite turned off can be brought back ---------------------------
-  // The trap this replaced: turning off somebody who had not yet used his code
-  // left him unreachable. The row sat disabled, the button was refused every
+  // The trap this replaced: turning off somebody who had not yet used their code
+  // left them unreachable. The row sat disabled, the button was refused every
   // time, and a second invite under a second row was the only way out.
   const pending = (await asUser(ram, staff.inviteStaff, {
     body: { name: "Never Joined", phone: "9820033445" },
@@ -348,9 +348,9 @@ const mkUser = async (name, role, phone) =>
   const revived = await asUser(ram, staff.setStaffStatus, {
     params: { id: pending.id }, body: { status: "active" },
   }, [requireOwner]);
-  check(revived.statusCode === 200, "and he can be invited again", { s: revived.statusCode });
+  check(revived.statusCode === 200, "and they can be invited again", { s: revived.statusCode });
   check(revived.body?.staff?.status === "invited",
-    "back to waiting rather than working, since he never joined",
+    "back to waiting rather than working, since they never joined",
     { s: revived.body?.staff?.status });
   check(!!revived.body?.staff?.inviteCode && revived.body.staff.inviteCode !== firstCode,
     "with a fresh code, because the old one may have expired", {});
@@ -368,9 +368,9 @@ const mkUser = async (name, role, phone) =>
   check(gone.statusCode === 200, "an invite sent to the wrong number can be removed", { s: gone.statusCode });
   const left = await asUser(ram, staff.listStaff, {}, [requireOwner]);
   check(!(left.body?.staff || []).some((p) => p.id === doomed.id),
-    "and he is off the list", { n: (left.body?.staff || []).length });
+    "and they are off the list", { n: (left.body?.staff || []).length });
 
-  // Somebody who did work can go too, and his work stays.
+  // Somebody who did work can go too, and their work stays.
   const worked = await q("SELECT COUNT(*)::int AS n FROM parties WHERE name = $1",
     [`Added by the nephew ${stamp}`]);
   const removedWorker = await asUser(ram, staff.removeStaff,
@@ -379,7 +379,7 @@ const mkUser = async (name, role, phone) =>
   const afterRemoval = await q("SELECT COUNT(*)::int AS n FROM parties WHERE name = $1",
     [`Added by the nephew ${stamp}`]);
   check(afterRemoval.rows[0].n === worked.rows[0].n,
-    "and the customer he added is untouched", { before: worked.rows[0].n, after: afterRemoval.rows[0].n });
+    "and the customer they added is untouched", { before: worked.rows[0].n, after: afterRemoval.rows[0].n });
 
   const notMineToRemove = await asUser(shyam, staff.removeStaff,
     { params: { id: pending.id } }, [requireOwner]);

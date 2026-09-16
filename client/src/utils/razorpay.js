@@ -14,7 +14,7 @@
  *
  * The promise is cached, so two buttons pressed quickly share one load. A
  * FAILED load is not cached: the usual reason is a flaky connection or a
- * blocker, and both can be gone by the time he presses it again.
+ * blocker, and both can be gone by the time they press it again.
  */
 
 const SRC = "https://checkout.razorpay.com/v1/checkout.js";

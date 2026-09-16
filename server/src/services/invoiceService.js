@@ -158,7 +158,7 @@ class InvoiceService {
       // The declared state goes in on the buyer's side too. It was selected
       // for the supplier and not for the buyer, out of the same table, so the
       // first and strongest source placeOfSupply asks for was never given for
-      // half the bill: a buyer who had set his state and had no GST number
+      // half the bill: a buyer who had set their state and had no GST number
       // was placed by the city map, or nowhere.
       const buyerLocation = {
         state: order.buyer_state,
@@ -188,14 +188,14 @@ class InvoiceService {
          * The shop price is the whole price.
          *
          * A buyer who saw 142 a metre and pressed pay was charged 2100 for
-         * ten metres and a dupatta, and that is all he will ever be asked
+         * ten metres and a dupatta, and that is all they will ever be asked
          * for. Adding tax on top here made the bill say 2205: the customer
-         * had already paid in full and the invoice asked him for 105 more,
+         * had already paid in full and the invoice asked them for 105 more,
          * and the customer page and the bill disagreed by exactly the tax.
          *
          * So the tax comes out of the price rather than going on top. The
          * wholesaler still declares and remits the same GST; it is taken from
-         * what he collected instead of being billed afterwards.
+         * what they collected instead of being billed afterwards.
          *
          * This is the opposite of a hand written sale, where the rate a
          * wholesaler quotes is understood to be before tax. The difference is
@@ -328,9 +328,9 @@ class InvoiceService {
    * correct, which is what makes the backfill migration possible.
    *
    * Part payments count. This used to wait for the whole amount, so a buyer on
-   * the 50/50 plan who had paid his first instalment looked, on his own bill,
+   * the 50/50 plan who had paid their first instalment looked, on their own bill,
    * exactly like a buyer who had paid nothing: no entry, no date, no amount,
-   * and an UNPAID stamp over the PDF. He had a receipt on the order screen and
+   * and an UNPAID stamp over the PDF. They had a receipt on the order screen and
    * a bill that disagreed with it. The invoice now mirrors what the order says
    * has been received, instalment by instalment.
    */
@@ -933,6 +933,24 @@ class InvoiceService {
     ]);
 
     return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+  }
+
+  /**
+   * The HSN summary for the foot of a bill, and for GSTR-1 Table 12.
+   *
+   * The wholesaler is required, not optional. Passing it on from the caller's
+   * token is what keeps one wholesaler out of another's invoices, and a default
+   * here would quietly remove that.
+   *
+   * An HSN of null means the line was billed without one. Show it as not set.
+   * Do not print a stand in code, because a made up HSN on a tax document is a
+   * false statement, and a real looking one is worse than a blank.
+   */
+  async getHsnSummary(invoiceId, wholesalerId) {
+    if (!wholesalerId) {
+      throw new Error("getHsnSummary needs the wholesaler it is reading for");
+    }
+    return invoiceRepository.getHsnSummary(invoiceId, wholesalerId);
   }
 }
 

@@ -274,7 +274,7 @@ class InvoiceRepository {
    *
    * Per wholesaler, not per platform. The counter used to be keyed on the year
    * alone, so Ram's bills came out 000001, 000003, 000009 with another firm's
-   * invoices filling the gaps, and the size of each gap told him how much
+   * invoices filling the gaps, and the size of each gap told them how much
    * business everybody else had done. Rule 46(b) wants a consecutive serial
    * number per supplier, and a gap is exactly what gets asked about.
    *
@@ -550,6 +550,45 @@ class InvoiceRepository {
     invoice.logs = logsResult.rows;
 
     return invoice;
+  }
+
+  /**
+   * The HSN summary that goes at the foot of the bill, and that GSTR-1 Table 12
+   * is filled in from. One row per HSN and rate.
+   *
+   * The taxable value is the line total MINUS its tax, never quantity times
+   * unit price. A shop order is priced tax inclusive, so its `unit_price` is
+   * what the customer paid with the tax already inside it. Multiplying that out
+   * and calling it the taxable value overstates the taxable value by the tax,
+   * and then adding the tax again overstates the total by the same amount. On a
+   * 1180 rupee line at 18 per cent it declares 1180 taxable and a 1360 total
+   * against a bill that says 1000 and 1180.
+   *
+   * `total - tax_amount` is right in both pricing modes, because gstService
+   * writes `total` as the gross either way. Summing the stored `total` rather
+   * than recomputing it is what makes this table tie back to the bill it sits
+   * on, which is the only property that matters here.
+   *
+   * Scoped by wholesaler. This reads a whole invoice by id, so without the
+   * owner check it is a way to read somebody else's book.
+   */
+  async getHsnSummary(invoiceId, wholesalerId) {
+    await ensureSchema();
+    const query = `
+      SELECT
+        NULLIF(TRIM(i.hsn_code), '') AS hsn_code,
+        ROUND(COALESCE(i.gst_percent, 0)::numeric, 2) AS gst_percent,
+        ROUND(SUM(i.total - i.tax_amount)::numeric, 2) AS taxable_amount,
+        ROUND(SUM(i.tax_amount)::numeric, 2) AS gst_amount,
+        ROUND(SUM(i.total)::numeric, 2) AS total_amount
+      FROM invoice_items i
+      JOIN invoices inv ON inv.id = i.invoice_id
+      WHERE i.invoice_id = $1 AND inv.supplier_id = $2
+      GROUP BY NULLIF(TRIM(i.hsn_code), ''), i.gst_percent
+      ORDER BY 1 NULLS LAST, 2
+    `;
+    const result = await pool.query(query, [invoiceId, wholesalerId]);
+    return result.rows;
   }
 
   /**
@@ -937,7 +976,7 @@ class InvoiceRepository {
        * The list beside these cards already knew better. StatusChip shows such
        * a row as "Credited" precisely because it is reversed, so the card and
        * the row underneath it disagreed, and the wholesaler was shown money to
-       * chase that he had already credited back.
+       * chase that they had already credited back.
        *
        * Takes the invoice reference because this clause is pasted into three
        * queries and they do not all alias the table the same way. Unqualified
@@ -1262,7 +1301,7 @@ class InvoiceRepository {
       defaultTerms:
         row.default_terms ??
         "1. Goods once sold will not be returned.\n2. Payment is due within the agreed credit period.",
-      // How his invoice number is shaped. See invoiceNumberService.
+      // How their invoice number is shaped. See invoiceNumberService.
       numberSuffix: row.number_suffix ?? (saved ? "" : "/{FY}"),
       numberPadTo: Number(row.number_pad_to ?? (saved ? 6 : 0)),
     };

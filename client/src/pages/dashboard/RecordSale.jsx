@@ -86,7 +86,7 @@ const RecordSale = () => {
 
       // The product list only fills in suggestions. A wholesaler who has not
       // built one yet must still be able to record a sale by typing, so a
-      // failure here is not worth telling him about.
+      // failure here is not worth telling them about.
       //
       // This reads the one product list, the same rows the Products screen
       // shows. It used to read the separate rate list, which meant a product
@@ -96,7 +96,7 @@ const RecordSale = () => {
         if (alive) {
           setItems(
             (data || [])
-              // A product he has stopped selling is noise in a picker.
+              // A product they have stopped selling is noise in a picker.
               .filter((row) => row.status === "Active")
               // The listing calls it price. Everything downstream of the
               // picker calls it rate, and they are the same number.
@@ -107,7 +107,7 @@ const RecordSale = () => {
         console.error("Failed to load the products", error);
       }
 
-      // His own default GST rate, for any line the product list has no rate
+      // Their own default GST rate, for any line the product list has no rate
       // for. The server resolves it the same way and is the authority; this
       // is only so the total on screen is the total that gets saved.
       try {
@@ -243,7 +243,7 @@ const RecordSale = () => {
   /**
    * The two keys somebody entering a stack of bills actually wants.
    *
-   * Both carry a modifier, because he is inside a field when he wants them
+   * Both carry a modifier, because they are inside a field when they want them
    * and a bare letter would land in the item name. Adding a line is the most
    * repeated action in this form by a wide margin.
    */
@@ -439,7 +439,7 @@ const RecordSale = () => {
               Math.round(toPaise(line.rate) * Number(line.quantity || 0)),
             );
             // A note, not a rule. Nothing enforces a minimum, and a wholesaler
-            // undercutting his own is his business, but he should see it.
+            // undercutting their own is their business, but they should see it.
             const belowMoq =
               line.moq > 0 &&
               Number(line.quantity) > 0 &&
@@ -573,7 +573,7 @@ const RecordSale = () => {
             />
           </div>
 
-          {/* Shown separately because the rate he typed is before tax, and
+          {/* Shown separately because the rate they typed is before tax, and
               the total underneath is what the customer actually pays. Seeing
               only the two ends of that sum is how a wholesaler quotes one
               number and bills another. */}
@@ -672,7 +672,7 @@ const RecordSale = () => {
         />
       </div>
 
-      {/* Sticky, because the total is what he checks before saving */}
+      {/* Sticky, because the total is what they check before saving */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:left-64">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-4">
           <div>

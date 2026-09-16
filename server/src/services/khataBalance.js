@@ -73,9 +73,9 @@ const bridgedGuard = (hasBridge) =>
  * So it is added back here instead. Follow one order through: the customer
  * pays 2,000, which lands in party_payments and is subtracted. The goods come
  * back, the order reaches return_completed, and it stops counting as owed, so
- * his balance is now minus 2,000 and the Overview correctly reports 2,000 of
- * his money sitting in the till. The wholesaler hands it back, and this term
- * adds the 2,000 on again, which cancels the payment exactly and returns him
+ * customer balance is now minus 2,000 and the Overview correctly reports 2,000 of
+ * their money sitting in the till. The wholesaler hands it back, and this term
+ * adds the 2,000 on again, which cancels the payment exactly and returns them
  * to zero.
  *
  * Only refunds actually paid out count. refund_status is written at the moment
@@ -99,12 +99,12 @@ const refundedBack = (partyRef) => REFUNDED_BACK_SQL.replace("%REF%", partyRef);
  * What was already owed before this product.
  *
  * A wholesaler who has traded for twenty years does not start with an empty
- * khata, and until this column existed his only ways to say so were entering a
- * fake sale, which puts goods in his books he never sold and tax on a bill he
+ * khata, and until this column existed their only ways to say so were entering a
+ * fake sale, which puts goods in their books they never sold and tax on a bill they
  * never raised, or not using the product. Taken from Busy's Account master,
  * which carries Op. Bal on every party.
  *
- * Signed rather than a Dr/Cr flag: positive means he owed you. See the
+ * Signed rather than a Dr/Cr flag: positive means they owed you. See the
  * migration for why one column beats a number and a flag.
  *
  * Guarded, because the column arrives with wholesale3_opening_balance.sql and

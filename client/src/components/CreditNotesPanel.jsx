@@ -6,7 +6,7 @@ import { downloadFile } from "../utils/download";
 import { toast } from "sonner";
 import { money, dateLabel } from "../utils/money";
 
-// The stored code is for the database. This is what he reads.
+// The stored code is for the database. This is what they read.
 const REASON_LABELS = {
   sale_cancelled: "Sale cancelled",
   goods_returned: "Goods returned",
@@ -19,7 +19,7 @@ const REASON_LABELS = {
  *
  * Its own list rather than a filter on the invoice list, because a credit
  * note is a document in its own right with its own number series, and at the
- * end of a month it is the thing he has to total separately.
+ * end of a month it is the thing they have to total separately.
  */
 const CreditNotesPanel = () => {
   const [notes, setNotes] = useState([]);

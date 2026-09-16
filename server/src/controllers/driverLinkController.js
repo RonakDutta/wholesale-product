@@ -59,7 +59,7 @@ const DISPATCHABLE = new Set([
 ]);
 
 // What to tell a wholesaler who asks too early or too late. Lifecycle names
-// mean nothing to him, so the message talks about the goods.
+// mean nothing to them, so the message talks about the goods.
 const notDispatchableReason = (status) => {
   switch (status) {
     case "delivered":

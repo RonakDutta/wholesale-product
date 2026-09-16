@@ -115,7 +115,7 @@ const mkUser = async (role, phone) => (await q(
   check(sale.source === "retailer", "marked as coming from the shop", { source: sale.source });
   check(sale.status === "confirmed", "confirmed, so it counts in the khata", { status: sale.status });
   // S/1/26-27 once wholesale3_series_financial_year.sql is run, S-0001 before
-  // it. Both shapes are his own run and neither is the invoice run, which is
+  // it. Both shapes are their own run and neither is the invoice run, which is
   // what this check is about.
   check(/^S[-/]\d+/.test(sale.sale_number || ""), "given the wholesaler's own sale number", { n: sale.sale_number });
 
@@ -160,7 +160,7 @@ const mkUser = async (role, phone) => (await q(
   repo.resetSchemaExtras();
   const { invoice } = await saleInvoiceService.createInvoiceFromSale(sale.id, wid);
   check(Number(invoice.grand_total) === orderTotal,
-    "the bill asks for exactly what he was charged",
+    "the bill asks for exactly what they were charged",
     { bill: invoice.grand_total, order: orderTotal });
   check(
     Math.abs(

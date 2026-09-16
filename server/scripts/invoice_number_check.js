@@ -1,10 +1,10 @@
 /**
- * Does each wholesaler get his own unbroken run of invoice numbers?
+ * Does each wholesaler get their own unbroken run of invoice numbers?
  *
  * The counter was keyed on the year alone, so one run served the whole
  * platform: Ram billed and got 000001, Suresh billed and got 000002, Ram
  * billed again and got 000003. Each man's own book had holes in it, and the
- * size of each hole told him how much business the other had done.
+ * size of each hole told them how much business the other had done.
  *
  * Rule 46(b) wants a consecutive serial number per supplier, so this bills
  * alternately as two wholesalers and checks each one's numbers come out 1, 2,
@@ -63,9 +63,9 @@ const mkSeller = async (name) => (await q(
 
   if (has.has_invoice_sequence_owner) {
     check(consecutive(issued.ram), "Ram's numbers run 1, 2, 3 with no gaps",
-      { his: issued.ram.map(tail) });
+      { their: issued.ram.map(tail) });
     check(consecutive(issued.suresh), "Suresh's numbers run 1, 2, 3 with no gaps",
-      { his: issued.suresh.map(tail) });
+      { their: issued.suresh.map(tail) });
     check(issued.ram[0] === issued.suresh[0],
       "both start at the same number, which is the point", { n: issued.ram[0] });
 
@@ -73,7 +73,7 @@ const mkSeller = async (name) => (await q(
     const rowsA = await q(
       `SELECT last_number FROM invoice_sequences WHERE wholesaler_id = $1 AND year = 2026`, [ram]);
     check(Number(rowsA.rows[0].last_number) === 3,
-      "his counter stands at 3, not 6", { at: rowsA.rows[0].last_number });
+      "their counter stands at 3, not 6", { at: rowsA.rows[0].last_number });
 
     // Two wholesalers can now hold the same invoice_number. Prove the database
     // allows that and still refuses a duplicate from one wholesaler.
@@ -130,7 +130,7 @@ const mkSeller = async (name) => (await q(
     "and a real number comes out in Busy's shape",
     { got: shaped, busy: "OM/2/26-27" });
 
-  // An illegal shape is refused while he is looking at the setting.
+  // An illegal shape is refused while they are looking at the setting.
   const tooLong = await call(settingsCtrl.saveSettings.bind(settingsCtrl), {
     ...asOwner,
     body: { prefix: "VERYLONGPREFIX/", numberSuffix: "/{FY}", numberPadTo: 0,

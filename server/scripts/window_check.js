@@ -5,7 +5,7 @@
  *
  * The return door never shut. `delivered` is `delivered` whether the goods
  * arrived this morning or last February, so an order from a year ago could
- * still be sent back and the wholesaler had nothing to point at when he said
+ * still be sent back and the wholesaler had nothing to point at when they said
  * no. The clock is a separate question from the lifecycle and had never been
  * asked. orders.actual_delivery_date existed from the beginning with nothing
  * ever writing to it, which is why there was no date to ask about.
@@ -200,7 +200,7 @@ const mkUser = async (role, phone) =>
 
   const heldBack = await balance(a.partyId);
   check(heldBack === -a.paid,
-    "his money is now showing as owed back to him", { balance: heldBack, paid: a.paid });
+    "their money is now showing as owed back to them", { balance: heldBack, paid: a.paid });
 
   const owedBack = async () => {
     const o = await call(overview.getOverview, { user: seller, query: {} });
@@ -211,7 +211,7 @@ const mkUser = async (role, phone) =>
     "and the Overview reports it as money you are holding", before);
   check(before.outstanding >= 0, "still to collect stays at nought or above", before);
 
-  // A buyer cannot refund himself.
+  // A buyer cannot refund themselves.
   const notYours = await call(orders.refundOrder, {
     user: { id: a.buyer, role: "buyer" }, params: { orderId: a.orderId }, body: {},
   });
@@ -228,12 +228,12 @@ const mkUser = async (role, phone) =>
   check((await statusOf(a.orderId)) === "refunded", "the order is now refunded", {});
 
   const after = await balance(a.partyId);
-  check(after === 0, "and his account comes back to zero", { balance: after });
+  check(after === 0, "and their account comes back to zero", { balance: after });
   const totals = await owedBack();
-  check(totals.owedBack === 0, "the Overview no longer says you are holding his money", totals);
+  check(totals.owedBack === 0, "the Overview no longer says you are holding their money", totals);
   check(totals.outstanding === 0, "and nothing is to collect either", totals);
 
-  // The breakdown page has to agree with the card that sent him there.
+  // The breakdown page has to agree with the card that sent them there.
   const rows = await call(overview.getBreakdown, { user: seller, query: { metric: "outstanding" } });
   const hisRow = (rows.body?.rows || []).find((r) => String(r.id) === String(a.partyId));
   check(!hisRow, "a settled customer drops off the breakdown", { n: (rows.body?.rows || []).length });

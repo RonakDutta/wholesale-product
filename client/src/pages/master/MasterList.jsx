@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { resetMasters } from "../../hooks/useMasters";
 
 /**
- * One master list, edited.
+ * One administration list, edited.
  *
  * All four screens are this component with a different spec, for the same
  * reason the server keeps its four lists as data: four near identical

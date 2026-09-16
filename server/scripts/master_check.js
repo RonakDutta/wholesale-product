@@ -1,5 +1,5 @@
 /**
- * The platform masters, and the super admin who owns them.
+ * The platform administrations, and the super admin who owns them.
  *
  * Four lists that were constants in code until 12 Sept: states with their GST
  * codes, units, tax slabs, HSN codes. Moving them into tables is only safe if
@@ -13,7 +13,7 @@
  *
  * Plus the admin flag itself, which is the thing that gates all of it. It is
  * read from the database on every request rather than carried in the token,
- * because a revoked admin must lose his powers at once and not when his
+ * because a revoked admin must lose their powers at once and not when their
  * session happens to expire.
  *
  *     node scripts/master_check.js <database>          # migration applied
@@ -63,7 +63,7 @@ const check = (cond, label, detail) => {
 const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
 
 (async () => {
-  console.log(`\n=== platform masters against ${DB}${BARE ? ", migration NOT run" : ""} ===\n`);
+  console.log(`\n=== platform administrations against ${DB}${BARE ? ", migration NOT run" : ""} ===\n`);
   masterService.resetMasters();
   masterService.resetMastersSchema();
   resetAdminColumn();
@@ -142,7 +142,7 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   check((await isPlatformAdmin(null)) === false, "and nobody is nobody");
 
   const refused = await guard(requirePlatformAdmin, asSeller);
-  check(refused.statusCode === 403 && !refused.passed, "the guard refuses him", {
+  check(refused.statusCode === 403 && !refused.passed, "the guard refuses them", {
     s: refused.statusCode,
   });
 
@@ -167,7 +167,7 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
       { why: "not carried in the token, where revoking it would not take effect" });
 
     const allowed = await guard(requirePlatformAdmin, asSeller);
-    check(allowed.passed === true, "the guard lets him through", { passed: allowed.passed });
+    check(allowed.passed === true, "the guard lets them through", { passed: allowed.passed });
 
     await testPool.query("UPDATE users SET is_platform_admin = FALSE WHERE id = $1", [seller]);
     check((await isPlatformAdmin(seller)) === false,
@@ -207,7 +207,7 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   }
 
   // ---------------------------------------------------------------
-  console.log("\nWriting a master, which only the admin may do");
+  console.log("\nWriting an administration list, which only the admin may do");
   // ---------------------------------------------------------------
   if (!BARE) {
     await testPool.query("UPDATE users SET is_platform_admin = TRUE WHERE id = $1", [seller]);
@@ -262,14 +262,14 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
       });
     }
 
-    // An HSN row an admin adds is his, and editing a curated one does not
+    // An HSN row an admin adds is their, and editing a curated one does not
     // quietly relabel it.
     await call(masters.saveMasterRow, {
       ...asAdmin, params: { list: "hsn" },
-      body: { code: "9999", description: "Something he added" },
+      body: { code: "9999", description: "Something they added" },
     });
     const mine = await testPool.query("SELECT source FROM master_hsn WHERE code = '9999'");
-    check(mine.rows[0]?.source === "admin", "an HSN code he adds is marked as his");
+    check(mine.rows[0]?.source === "admin", "an HSN code they add is marked as their");
     await call(masters.saveMasterRow, {
       ...asAdmin, params: { list: "hsn" },
       body: { code: "5007", description: "Woven silk, edited" },

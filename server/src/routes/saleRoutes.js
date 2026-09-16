@@ -15,7 +15,7 @@ const { requirePermission } = require("../middlewares/businessContext");
 const router = express.Router();
 
 // A wholesaler's own sales book. Retailer-created sales will arrive through
-// a separate route when ordering is built; these are the ones he records.
+// a separate route when ordering is built; these are the ones they records.
 router.use(authenticateToken, authorizeRoles("seller", "both"));
 
 router.get("/", requirePermission("sales"), listSales);

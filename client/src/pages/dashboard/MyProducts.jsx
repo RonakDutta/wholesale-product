@@ -64,7 +64,7 @@ const shareUrlFor = (inventoryId) =>
  * The rate, editable where it is shown.
  *
  * Changing prices is something a wholesaler does across many products at
- * once, so making him open a form per product would make the screen useless.
+ * once, so making them open a form per product would make the screen useless.
  * Saves on blur, and only when the number actually changed.
  *
  * It sends the price alone. The endpoint leaves every other column as it
@@ -358,7 +358,7 @@ const MyProducts = () => {
 
       {/* Phone gets cards, not a table. Seven columns on a 390px screen means
           the rate and the shop switch sit off the right edge behind a
-          sideways scroll, and those are the two things he came to change. */}
+          sideways scroll, and those are the two things they came to change. */}
       <div className="space-y-3 sm:hidden">
         {displayedInventory.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500 shadow-sm">

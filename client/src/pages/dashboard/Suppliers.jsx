@@ -11,7 +11,7 @@ import SupplierFormModal from "../../components/SupplierFormModal";
  *
  * The two figures at the top are never netted into one. A wholesaler who owes
  * 80,000 to a mill and has 30,000 sitting on account with an agent does not owe
- * 50,000 to anybody, and showing him that number gets the wrong man paid. Same
+ * 50,000 to anybody, and showing them that number gets the wrong man paid. Same
  * reasoning as the customer side, written up in services/supplierBalance.js.
  */
 

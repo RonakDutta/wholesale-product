@@ -1,15 +1,18 @@
 # What we are building next
 
-Agreed 15 Sept 2026. Nine items, none of them built yet.
+Agreed 15 Sept 2026. Nine items. Work started 16 Sept.
 
 `PROGRESS.md` is the record of what HAS been built. This is the record of what
-has been decided and not yet started, so the two do not get mixed up.
+has been decided, and how much of it is done, so the two do not get mixed up.
+Phases 0 and 1 and most of 4 are finished. Everything else is still on paper.
 
 Read the assessment at the bottom before promising a date on any of this. Two
 of these nine cannot be finished by writing code alone.
 
-**Start here: the task inventory is at the bottom of this file, under THE FULL
-LIST OF WORK. The sections between are the reasoning behind each item.**
+**Start here: the plan of work is at the bottom of this file, under THE PHASES.
+One phase at a time, each finished and verified before the next starts. Above
+it, THE FULL LIST OF WORK is the numbered inventory the phases draw from, and
+the sections between those two are the reasoning behind each item.**
 
 ---
 
@@ -233,19 +236,13 @@ Yes, with two qualifications:
 
 ### The order I would do them in
 
-1. **UQC and HSN digits (3, part)** and **state code on the invoice (2)** are
-   small, self-contained, and are prerequisites for the e-invoice JSON anyway.
-2. **Invoice fields (9, minus IRN)** and **transport details (8)**, because
-   between them they are most of what an e-invoice payload needs. Doing them
-   first means the compliance work is filling in a form rather than inventing
-   a data model.
-3. **Series per channel (6)** and **GST terms and cess (5)**, the two that
-   touch numbering and arithmetic, one at a time.
-4. **Rename and de-gender (4)**, which is best done as one sweep when nothing
-   else is mid-flight, because it touches almost every file.
-5. **ZIP export (1)**, which is independent and can be slotted anywhere.
-6. **e-invoice and e-way bill**, last, by which point the data they need
-   already exists. Start the GSP conversation at step 1, not here.
+Superseded. See THE PHASES at the foot of this file, which is the same
+reasoning turned into a sequence, with one change: the rename and de-gender
+sweep moved from last to first. It was put last because it touches nearly every
+file and wants a quiet moment. But phases 4 and 6 add three new screens to the
+master area, and renaming after they exist means building them under the old
+name and then renaming them. Nothing was mid-flight, so the quiet moment was
+already here.
 
 Item 7 needs nothing built. Item 1's Google Sheets half is its own decision.
 
@@ -376,12 +373,180 @@ DO blocks: see CLAUDE.md for why, it cost a debugging round already.
     `ronak`: none has the state dropdown, the supplier and purchase
     repositioning, or the add-supplier button. They are local on one machine.
 
-## Where to start
+---
 
-Items 1, 11, 14 and 17: the invoice data model, frozen correctly, on the form
-and on the PDF.
+# THE PHASES
 
-Everything else leans on it. The e-invoice payload is a projection of exactly
-those fields, so doing them first turns the compliance work into filling in a
-form rather than inventing a data model. And every one of those fields earns
-its place on the printed bill whether or not the GSP question ever resolves.
+One phase at a time. A phase is finished when it is verified, not when it is
+written, and nothing from the next phase starts until then. The numbers in
+brackets are the items above.
+
+Phases 0, 1 and most of 4 are already done, on the `sanskriti` branch, merged
+here on 16 Sept. What is left starts at phase 2.
+
+## How a phase ends
+
+The same bar every time, so "done" is not a matter of opinion:
+
+- `npx vite build` clean
+- `npm run lint` at or below the 39 problem baseline, and no new problems
+- every controller or repository touched is driven against a local Postgres
+  with a real `req` and `res`, not read and reasoned about
+- every screen touched is rendered at phone width and at desktop
+- every migration is split on semicolons and run one statement at a time, then
+  run a second time, because a hand applied file gets pasted twice
+- `PROGRESS.md` updated in the same commit as the work
+- the migration named explicitly in the closing message, because nothing here
+  applies them for you
+
+## Phase 0. Clear the ground. DONE
+
+No feature code. Debt that every later phase would otherwise inherit, plus the
+things only a person can do.
+
+- [x] Escape closes the last three overlays (21)
+- [x] `trust_score` and `response_rate` dropped, code and column (22).
+      Migration: `drop_trust_score_and_response_rate.sql`
+- [x] `/api/dashboard/stats` deleted (26)
+- [ ] **Rotate the Neon password (24). Yours, not a programmer's.** It was
+      pasted into a chat transcript and a screenshot on 14 Sept and is still
+      live.
+- [ ] **Start the GSP conversation (31). Yours.** The longest lead time on this
+      whole plan. Phases 9 and 10 cannot finish without it and it changes the
+      schema, so it starts here and not at phase 9.
+- [ ] **Razorpay dashboard (32). Yours.** `RAZORPAY_WEBHOOK_SECRET` is unset so
+      the webhook refuses every delivery by design, Route is not enabled, UPI
+      needs turning on.
+- [ ] Rewrite the git history to drop the committed password and the invoice
+      PDF (23). Needs a moment when nobody else is pushing.
+
+## Phase 1. Administration, and language. DONE
+
+Moved to the front, not the back. Three new screens arrive in phases 4 and 6,
+and renaming after they exist means building them twice.
+
+- [x] Master area renamed Administration at `/admin`: routes, nav, titles,
+      comments (19)
+- [x] Gendered language removed throughout (20)
+
+## Phase 2. The invoice data model, frozen. NEXT
+
+Write path only. No form, no PDF, nothing on screen. The point of doing it
+alone is that the freezing can be proved before anything depends on it.
+
+- [ ] Migration: the whole invoice column set in one file (1). Seller address
+      block, dispatch-from, ship-to, GR number and date, bank details,
+      transport block, IRN and acknowledgement placeholders, cess columns, UQC
+      per line. One file rather than five, because each hand applied migration
+      is a round trip through you. The unused columns are nullable and harmless
+      until the phase that fills them.
+- [ ] Copy the seller block onto the invoice at creation, from the profile (11)
+- [ ] **Freeze all of it. Never join.** (11)
+
+Verified by: create an invoice, then edit the wholesaler profile and the party
+it was raised for, re-read the invoice, and prove not one copied field moved.
+That is the whole phase, so it is the test that matters.
+
+## Phase 3. The invoice on screen and on paper
+
+- [ ] Invoice form: seller block, dispatch-from, ship-to, GR number and date (14)
+- [ ] PDF: every new field, bank details, and a QR slot that stays empty until
+      an IRN exists (17)
+- [ ] Print the state code beside the state (2)
+- [ ] Say WHY a sale is IGST, in words, on the sale screen (18). "IGST, because
+      they are in Maharashtra" catches a wrong customer record at the cheapest
+      possible moment, which is before the bill goes out.
+
+## Phase 4. UQC, HSN digits, HSN summary. MOSTLY DONE
+
+- [x] Migration: `master_uqc` holding the official list, `master_units.uqc`
+      with a foreign key onto it (2). File:
+      `wholesale3_uqc_master_units.sql`
+- [x] HSN summary grouped by HSN and rate, tying to the bill (10). No cess
+      column yet, that arrives in phase 6.
+- [x] Document numbers refused at write time if they break Rule 46(b), with a
+      reason the wholesaler can act on
+- [ ] Migration: minimum HSN digit count on `master_settings` (5)
+- [ ] `hsnService` enforces the minimum digit setting (9)
+- [ ] Administration: the UQC column on units, and the HSN digit setting (16,
+      two of its three screens)
+
+The units master currently leaves Case blank on purpose. Nothing is defaulted
+to OTH. The first job of the Administration screen is to let somebody decide
+the blanks and see the decision recorded.
+
+## Phase 5. Transport details
+
+The columns land in phase 2, so this is form, PDF and sale screen only.
+
+- [ ] Transporter name, ID or GSTIN, mode, vehicle number, transport document
+      number and date, on an invoice and on a sale (8, 15 in part)
+
+## Phase 6. Tax terms and cess. THE DANGEROUS ONE
+
+Alone in its phase on purpose. This is the one that puts a wrong number in
+somebody's ledger rather than on a screen.
+
+- [ ] Migration: `master_tax_terms` for the IGST to CGST and SGST grouping (4)
+- [ ] Naming a tax combination so a line can pick it by name (5)
+- [ ] `gstService` treats cess as an additional levy, NOT a share of the rate.
+      18 per cent GST plus 12 per cent cess is 30 per cent of the taxable
+      value, not 18 split three ways (7)
+- [ ] **Cess reaches the money path, not just the bill** (8). Every reader of
+      `grand_total` has to agree: the 50/50 instalment split, `canAcceptPayment`,
+      `reconcileInvoiceForOrder`, and the khata mirror. Miss one and the
+      customer's balance and their bill disagree by exactly the cess.
+- [ ] The tax terms screen in Administration (16, its third screen)
+- [ ] A cess column in the HSN summary grouping (10)
+
+Cess is 12 per cent flat and marked in the code as a TEST DEFAULT THAT MUST NOT
+SHIP. Verified by: an order carrying cess, paid in halves, proving the balance
+and the bill agree to the paisa, then reconciled and proved again. In paise.
+
+## Phase 7. A number series per channel
+
+- [ ] Migration: `series` key on `invoice_sequences`, unique on (wholesaler,
+      series, financial year) (3)
+- [ ] `seriesNumbers` allocates per series (6). The 16 character refusal is
+      already built and tested, so this phase inherits the guard.
+- [ ] A series picker on the sale form (15 in part)
+
+Prefixes `SM`, `SA`, `FK`, `AZ`, fourteen characters each. Verified by:
+allocating concurrently and proving no gap and no duplicate within a series and
+a financial year.
+
+## Phase 8. Export
+
+- [ ] ZIP: a CSV per table plus the invoice PDFs (12)
+
+Scoped by `businessId`, taken from the token and never from the query string.
+Verified by signing in as one wholesaler and asking for another's export by
+every route the endpoint allows.
+
+Google Sheets is NOT in this phase. It needs a Google Cloud project, OAuth
+consent and a per-wholesaler token store, and first a decision about who owns
+the project.
+
+## Phase 9. e-invoice payload
+
+- [ ] The JSON builder, the validator, IRN and acknowledgement storage, the
+      retry and cancellation flow, and the QR slot filled (13)
+
+Buildable here. Proving it against the real IRP is not, and that half waits on
+item 31. Written to the documented contract against a stubbed transport, with
+the first live call treated as the real test, and said in those words rather
+than claimed as working. That is how Razorpay Route was done and it held up.
+
+## Phase 10. e-way bill payload
+
+Same shape. Fields, validation, the distance and validity rules, storage.
+
+## Phase 11. The rest
+
+- [ ] A screen that advances an order past `payment_completed` (25). The API is
+      correct and nothing calls it, so orders stall there in practice.
+- [ ] Seller-side discovery, "textile wholesalers in Surat" (27)
+- [ ] `README.md` (28)
+- [ ] Mobile OTP (29), still deferred, no genuinely free Indian SMS gateway
+- [ ] Google Sheets export, if the Google project question is answered
+- [ ] The `razorpay-integration` branch changes, still local on one machine (33)

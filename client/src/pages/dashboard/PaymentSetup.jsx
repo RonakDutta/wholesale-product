@@ -11,8 +11,8 @@ import { INDIAN_STATES } from "../../utils/gstin";
  *
  * Until this is done, a buyer paying by card or netbanking would send money
  * to the platform's account rather than to the wholesaler, so the product
- * does not offer him that at all and buyers pay him by UPI instead. That is
- * not a degraded mode: the UPI QR pays him directly and always has. This adds
+ * does not offer them that at all and buyers pay them by UPI instead. That is
+ * not a degraded mode: the UPI QR pays them directly and always has. This adds
  * card and netbanking, and takes the confirmation problem away with them.
  *
  * The verification itself is RAZORPAY'S. Nothing on this screen or behind it
@@ -235,7 +235,7 @@ const PaymentSetup = () => {
         </div>
       )}
 
-      {/* Said out loud, because a wholesaler who thinks the app is holding his
+      {/* Said out loud, because a wholesaler who thinks the app is holding their
           money behaves differently from one who knows it is not. */}
       {!done && (
         <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">

@@ -10,7 +10,7 @@
  *   a retailer finds it and orders      -> stock is reserved, a customer
  *                                          appears in the khata, the order is
  *                                          on the seller's Orders tab
- *   he pays half                        -> the khata, the order and the
+ *   they pay half                        -> the khata, the order and the
  *                                          Overview all say the same half
  *   the seller accepts                  -> a sale is written, and the debt is
  *                                          counted once, not twice
@@ -19,7 +19,7 @@
  *   the rest of the money arrives       -> the bill raises itself, the
  *                                          challans point at it, the customer
  *                                          owes nothing
- *   he sends it back                    -> the sale is cancelled, a credit
+ *   they send it back                    -> the sale is cancelled, a credit
  *                                          note reverses the bill, and the
  *                                          khata comes back to where it began
  *
@@ -122,12 +122,12 @@ const settle = () => new Promise((r) => setTimeout(r, 400));
     `SELECT si.id, si.product_id, si.stock, p.name
        FROM supplier_inventory si JOIN products p ON p.id = si.product_id
       WHERE si.supplier_id = $1`, [seller])).rows[0];
-  check(Boolean(listing), "and is on his shelf", { stock: listing?.stock });
+  check(Boolean(listing), "and is on their shelf", { stock: listing?.stock });
 
   const shelf = await call(dashboard.getInventory, asSeller);
   check(
     (shelf.body?.inventory || shelf.body || []).length >= 1,
-    "his Products tab shows it",
+    "their Products tab shows it",
     { n: (shelf.body?.inventory || shelf.body || []).length },
   );
 
@@ -138,10 +138,10 @@ const settle = () => new Promise((r) => setTimeout(r, 400));
     `INSERT INTO users (first_name,last_name,email,phone,password_hash,role)
      VALUES ('Kishan','Kumar',$1,$2,'x','buyer') RETURNING id`,
     [`kishan+${uniq()}@flow.local`, `97${uniq().slice(-8)}`])).rows[0].id;
-  // His trading details. An account can be "both", so the business name and
+  // Their trading details. An account can be "both", so the business name and
   // the GST number live on wholesaler_profiles even for someone who only
   // buys. Checkout reads them from there to fill in the khata, which is the
-  // fix for the name mismatch a wholesaler reported: the Orders tab named him
+  // fix for the name mismatch a wholesaler reported: the Orders tab named them
   // one way and the Invoices tab another.
   await testPool.query(
     `INSERT INTO wholesaler_profiles (user_id, company_name, gstin, city)
@@ -213,17 +213,17 @@ const settle = () => new Promise((r) => setTimeout(r, 400));
   // differently.
   check(
     partyRow.business_name === "Kishan Cloth House",
-    "carrying his business name, not just the name on the parcel",
+    "carrying their business name, not just the name on the parcel",
     { got: partyRow.business_name },
   );
   check(partyRow.gstin === "27BBBBB1111B1ZX",
-    "and his GST number, which decides the tax on his bill",
+    "and their GST number, which decides the tax on their bill",
     { got: partyRow.gstin });
 
   const sellerOrders = await call(orders.getSupplierOrders, asSeller);
   const onTab = (sellerOrders.body || []).find((o) => String(o.id) === String(orderId));
   check(Boolean(onTab), "it is on the seller's Orders tab");
-  check(onTab?.buyer === "Kishan Cloth House", "named the way the khata names him", {
+  check(onTab?.buyer === "Kishan Cloth House", "named the way the khata names them", {
     got: onTab?.buyer,
   });
 
@@ -240,7 +240,7 @@ const settle = () => new Promise((r) => setTimeout(r, 400));
     params: { orderId },
     body: { paymentStatus: "paid", transactionId: session.body?.transactionId || `T${uniq()}` },
   });
-  check(settled1.statusCode === 200, "and he declares he has paid the first half", {
+  check(settled1.statusCode === 200, "and they declares they have paid the first half", {
     s: settled1.statusCode, m: settled1.body?.message,
   });
   await settle();
@@ -257,7 +257,7 @@ const settle = () => new Promise((r) => setTimeout(r, 400));
   });
   const over1 = await call(overview.getOverview, asSeller);
   const owed = money(khata.body?.party?.outstanding ?? khata.body?.outstanding);
-  check(owed === 710, "the customer page says he owes 710", { owed });
+  check(owed === 710, "the customer page says they owe 710", { owed });
   check(
     money(over1.body?.money?.outstanding) === owed,
     "and the Overview says the same, not a different plausible number",
@@ -303,7 +303,7 @@ const settle = () => new Promise((r) => setTimeout(r, 400));
   console.log("\nThe seller accepts, and the debt is still counted once");
   // ---------------------------------------------------------------
   // Declaring the payment already moved it to payment_completed, so accepting
-  // is the only step left for him.
+  // is the only step left for them.
   const beforeAccept = (await testPool.query(
     "SELECT status FROM orders WHERE id = $1", [orderId])).rows[0].status;
   check(beforeAccept === "payment_completed",
@@ -316,13 +316,13 @@ const settle = () => new Promise((r) => setTimeout(r, 400));
   });
   const sale = (await testPool.query(
     "SELECT * FROM sales WHERE order_id = $1", [orderId])).rows[0];
-  check(Boolean(sale), "accepting wrote a sale into his book", { sale: sale?.sale_number });
+  check(Boolean(sale), "accepting wrote a sale into their book", { sale: sale?.sale_number });
   check(money(sale.total) === 1420, "for the same 1420 the customer agreed", {
     total: sale?.total,
   });
 
   /**
-   * And his sales book agrees with the order about the money.
+   * And their sales book agrees with the order about the money.
    *
    * A wholesaler reported the opposite: an order reading "all paid" whose
    * sale read "the whole amount still due". The money from a shop order
@@ -355,7 +355,7 @@ const settle = () => new Promise((r) => setTimeout(r, 400));
   });
   check(
     money(khata2.body?.party?.outstanding ?? khata2.body?.outstanding) === 710,
-    "and he still owes 710, not 1420 twice over",
+    "and they still owes 710, not 1420 twice over",
     { owed: khata2.body?.party?.outstanding ?? khata2.body?.outstanding },
   );
 
@@ -408,7 +408,7 @@ const settle = () => new Promise((r) => setTimeout(r, 400));
        FROM orders o LEFT JOIN sales s ON s.order_id = o.id WHERE o.id = $1`,
     [orderId])).rows[0];
   check(delivered.order_status === "delivered", "the order is delivered");
-  check(delivered.sale_status === "delivered", "and so is the sale in his own book", {
+  check(delivered.sale_status === "delivered", "and so is the sale in their own book", {
     got: delivered.sale_status,
   });
   check(delivered.actual_delivery_date !== null,
@@ -435,14 +435,14 @@ const settle = () => new Promise((r) => setTimeout(r, 400));
     raisedBy: bill[0]?.order_id ? "the order" : "the sale",
   });
   check(money(bill[0]?.grand_total) === 1420,
-    "for what he actually agreed to pay, not a recomputed figure",
+    "for what they actually agreed to pay, not a recomputed figure",
     { total: bill[0]?.grand_total });
   check(bill[0]?.payment_status === "Paid", "stamped Paid", { got: bill[0]?.payment_status });
 
   // Maharashtra buying from Gujarat is interstate, so IGST and nothing else.
   check(
     money(bill[0]?.igst) > 0 && money(bill[0]?.cgst) === 0 && money(bill[0]?.sgst) === 0,
-    "and charged IGST, because he is in another state",
+    "and charged IGST, because they are in another state",
     { igst: bill[0]?.igst, cgst: bill[0]?.cgst, sgst: bill[0]?.sgst },
   );
   check(bill[0]?.place_of_supply === "Maharashtra",
@@ -481,10 +481,10 @@ const settle = () => new Promise((r) => setTimeout(r, 400));
   const invoiceTab = await call(invoices.getInvoices.bind(invoices), { ...asSeller, query: {} });
   const shown = (invoiceTab.body?.invoices || []).find(
     (i) => String(i.id) === String(bill[0].id));
-  check(Boolean(shown), "the bill is on his Invoices tab");
+  check(Boolean(shown), "the bill is on their Invoices tab");
   check(
     (shown?.recipient_name || shown?.buyer_name) === "Kishan Cloth House",
-    "named the same as the order and the khata name him",
+    "named the same as the order and the khata name them",
     { invoice: shown?.recipient_name || shown?.buyer_name, order: onTab?.buyer },
   );
 
@@ -542,7 +542,7 @@ const settle = () => new Promise((r) => setTimeout(r, 400));
     ...asSeller, params: { id: orderRow.party_id },
   });
   const finalOwed = money(khata4.body?.party?.outstanding ?? khata4.body?.outstanding);
-  check(finalOwed === 0, "and the khata is back to zero, not owing him money", {
+  check(finalOwed === 0, "and the khata is back to zero, not owing them money", {
     owed: finalOwed,
   });
 

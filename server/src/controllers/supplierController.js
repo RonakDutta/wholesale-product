@@ -5,10 +5,10 @@ const invoiceRepository = require("../repositories/invoiceRepository");
 const { balanceExpression, payableTotals } = require("../services/supplierBalance");
 
 /**
- * The supplier book: who the wholesaler buys from, and what he owes each.
+ * The supplier book: who the wholesaler buys from, and what they owe each.
  *
  * The mirror of partyController, and kept separate for the reason written at
- * the top of the purchases migration: a party balance means "he owes me" in
+ * the top of the purchases migration: a party balance means "they owe me" in
  * seventeen existing queries, and a supplier balance means the opposite.
  *
  * Every query is scoped by the wholesaler id from the token, so a supplier id
@@ -20,7 +20,7 @@ const { balanceExpression, payableTotals } = require("../services/supplierBalanc
  *
  * Answered as a 503 with a code rather than a 500, so the screen can say "this
  * has not been set up yet" instead of showing a wholesaler a server error for
- * a feature that simply is not switched on in his database. Migrations here
+ * a feature that simply is not switched on in their database. Migrations here
  * are applied by hand, so this state is normal, not exceptional.
  */
 const purchasesReady = async (res) => {
@@ -162,9 +162,9 @@ exports.getSupplierById = async (req, res) => {
 };
 
 /**
- * What you already owed him when the book was opened. Mirrors parseOpening on
+ * What you already owed them when the book was opened. Mirrors parseOpening on
  * the customer side, with the sign meaning what it means everywhere on this
- * side: positive is money YOU owe him.
+ * side: positive is money YOU owe them.
  */
 const parseOpening = (amount, on, res) => {
   const hasAmount = amount !== undefined && amount !== null && String(amount).trim() !== "";
@@ -345,7 +345,7 @@ exports.updateSupplier = async (req, res) => {
  * `purchaseId` is optional and that is the point: a trader pays a round sum
  * against several old bills without saying which, exactly as on the customer
  * side. A payment with no purchase against it sits on the supplier's account
- * and comes off his balance.
+ * and comes off customer balance.
  *
  * Deliberately NOT capped at the outstanding balance. Paying a mill in advance
  * is ordinary trade, and the balance simply goes negative, which the screens
@@ -407,7 +407,7 @@ exports.recordSupplierPayment = async (req, res) => {
         await client.query("ROLLBACK");
         return res.status(400).json({
           message:
-            "That purchase was cancelled. Record this against the supplier instead and it will sit on his account.",
+            "That purchase was cancelled. Record this against the supplier instead and it will sit on their account.",
         });
       }
 
@@ -420,7 +420,7 @@ exports.recordSupplierPayment = async (req, res) => {
       if (amountPaise > outstandingPaise) {
         await client.query("ROLLBACK");
         return res.status(400).json({
-          message: `Only ₹${fromPaise(outstandingPaise)} is still owed on that purchase. Record the rest against the supplier and it will sit on his account.`,
+          message: `Only ₹${fromPaise(outstandingPaise)} is still owed on that purchase. Record the rest against the supplier and it will sit on their account.`,
         });
       }
     }

@@ -88,7 +88,7 @@ const SignUp = () => {
   const [errors, setErrors] = useState({});
   const [shakeFields, setShakeFields] = useState({});
 
-  // Who raises bills, and so who has to be asked where he is.
+  // Who raises bills, and so who has to be asked where they are.
   const sells = bizType === "seller" || bizType === "both";
 
   const showError = useCallback((field, msg) => {
@@ -157,8 +157,8 @@ const SignUp = () => {
       showError("bizType", "Please select a business type");
       valid = false;
     }
-    // Only for someone who will raise bills. A retailer buying for his shop
-    // does not need to be asked, and asking him would be a field for nothing.
+    // Only for someone who will raise bills. A retailer buying for their shop
+    // does not need to be asked, and asking them would be a field for nothing.
     if (sells && !state) {
       showError("state", "Please choose your state");
       valid = false;
@@ -377,7 +377,7 @@ const SignUp = () => {
           </p>
         </div>
 
-        {/* Shown only once he says he sells. A list rather than a text box on
+        {/* Shown only once they say they sell. A list rather than a text box on
             purpose: this is the field that decides CGST and SGST against IGST,
             and "Gujrat" typed by hand is a state nothing recognises. */}
         {sells && (

@@ -16,7 +16,7 @@ import api from "../../utils/axios";
  * The people who work on this wholesaler's book.
  *
  * Owner only, and the server says so too. An employee who could edit
- * permissions could give himself the rest of them, so this is the one part of
+ * permissions could give themselves the rest of them, so this is the one part of
  * the dashboard that is not delegable.
  *
  * The page is built around the two questions an owner actually has: who can
@@ -155,10 +155,10 @@ const Staff = () => {
     const link = `${window.location.origin}/join?code=${encodeURIComponent(person.inviteCode)}`;
     try {
       await navigator.clipboard.writeText(link);
-      toast.success("Link copied. Send it to him on WhatsApp.");
+      toast.success("Link copied. Send it to them on WhatsApp.");
     } catch {
       // Clipboard is blocked on some phones. The code is on screen anyway.
-      toast.error("Could not copy. Read him the code on the screen.");
+      toast.error("Could not copy. Read them the code on the screen.");
     }
   };
 
@@ -206,9 +206,9 @@ const Staff = () => {
           <Users className="mx-auto mb-3 h-10 w-10 text-espresso/15" />
           <p className="font-bold text-espresso">You work alone at the moment</p>
           <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
-            Add your nephew, your munim or anyone who helps you, and he gets his
-            own login instead of using yours. Everything he does is recorded
-            under his name.
+            Add your nephew, your munim or anyone who helps you, and they get their
+            own login instead of using yours. Everything they do is recorded
+            under their name.
           </p>
         </div>
       ) : (
@@ -329,7 +329,7 @@ const PersonCard = ({
       {person.status === "invited" && person.inviteCode && (
         <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
           <p className="text-xs font-semibold text-amber-900">
-            He has not joined yet. Send him this link and he chooses his own
+            They have not joined yet. Send them this link and they choose their own
             password.
           </p>
           <p className="mt-2 break-all rounded-lg bg-white/70 px-2.5 py-2 font-mono text-[11px] text-espresso">
@@ -362,7 +362,7 @@ const PersonCard = ({
 
       <div className="mt-4 border-t border-slate-100 pt-3">
         <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-          What he can do
+          What they can do
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
           {catalogue.map((permission) => {
@@ -408,7 +408,7 @@ const PersonCard = ({
  * Removing somebody, which is the one thing on this page that cannot be undone.
  *
  * It says what actually happens rather than asking "are you sure". A man who
- * has done work keeps his history and only loses his way in; an invite that was
+ * has done work keeps their history and only loses their way in; an invite that was
  * never used simply goes. Those are different enough to be worth two sentences.
  */
 const RemoveModal = ({ person, onClose, onConfirm, busy }) => (
@@ -422,13 +422,13 @@ const RemoveModal = ({ person, onClose, onConfirm, busy }) => (
       <p className="mt-3 text-sm text-slate-600">
         {person.hasAccount ? (
           <>
-            He will not be able to open your book again. Everything he did stays
-            on the record under his name, so your sales and dispatches do not
+            They will not be able to open your book again. Everything they did stays
+            on the record under their name, so your sales and dispatches do not
             change.
           </>
         ) : (
           <>
-            He never used his code, so there is nothing of his in your book. The
+            They never used their code, so there is nothing of their in your book. The
             code stops working.
           </>
         )}
@@ -436,8 +436,8 @@ const RemoveModal = ({ person, onClose, onConfirm, busy }) => (
 
       {person.hasAccount && (
         <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2.5 text-xs text-slate-500">
-          If he might come back, turn him off instead. That keeps him on this
-          list and you can turn him on again in one tap.
+          If they might come back, turn them off instead. That keeps them on this
+          list and you can turn them on again in one tap.
         </p>
       )}
 
@@ -446,14 +446,14 @@ const RemoveModal = ({ person, onClose, onConfirm, busy }) => (
           onClick={onClose}
           className="cursor-pointer rounded-xl px-4 py-2 text-xs font-semibold text-espresso/60 transition-colors hover:bg-slate-100"
         >
-          Keep him
+          Keep them
         </button>
         <button
           onClick={onConfirm}
           disabled={busy}
           className="cursor-pointer rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-rose-700 disabled:opacity-50"
         >
-          {busy ? "Removing..." : "Remove him"}
+          {busy ? "Removing..." : "Remove them"}
         </button>
       </div>
     </div>
@@ -464,8 +464,8 @@ const InviteModal = ({ catalogue, onClose, onInvited }) => {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  // Everything ticked, matching the server's default. An owner adding his
-  // nephew wants him working, not locked out of every screen.
+  // Everything ticked, matching the server's default. An owner adding their
+  // nephew wants them working, not locked out of every screen.
   const [permissions, setPermissions] = useState(() =>
     catalogue.map((p) => p.key),
   );
@@ -487,7 +487,7 @@ const InviteModal = ({ catalogue, onClose, onInvited }) => {
         permissions,
       });
       onInvited(data.staff);
-      toast.success("Added. Send him the code so he can set his password.");
+      toast.success("Added. Send them the code so they can set their password.");
       onClose();
     } catch (err) {
       toast.error(err.response?.data?.message || "Could not add this person");
@@ -506,8 +506,8 @@ const InviteModal = ({ catalogue, onClose, onInvited }) => {
               Add someone to your shop
             </h3>
             <p className="mt-0.5 text-xs text-slate-500">
-              He gets his own login. Everything he does is recorded under his
-              name, and you can turn him off any time.
+              They get their own login. Everything they do is recorded under their
+              name, and you can turn them off any time.
             </p>
           </div>
           <button
@@ -525,7 +525,7 @@ const InviteModal = ({ catalogue, onClose, onInvited }) => {
               htmlFor="staff-name"
               className="mb-1 block text-xs font-semibold text-espresso/70"
             >
-              His name
+              Their name
             </label>
             <input
               id="staff-name"
@@ -571,12 +571,12 @@ const InviteModal = ({ catalogue, onClose, onInvited }) => {
             </div>
           </div>
           <p className="text-[11px] text-slate-400">
-            One of the two is enough. It is how you send him his code.
+            One of the two is enough. It is how you send them their code.
           </p>
 
           <div className="border-t border-slate-100 pt-3">
             <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              What he can do
+              What they can do
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
               {catalogue.map((permission) => {
@@ -628,7 +628,7 @@ const InviteModal = ({ catalogue, onClose, onInvited }) => {
               disabled={working || !name.trim()}
               className="cursor-pointer rounded-xl bg-clay px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-espresso disabled:opacity-50"
             >
-              {working ? "Adding..." : "Add him"}
+              {working ? "Adding..." : "Add them"}
             </button>
           </div>
         </form>

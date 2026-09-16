@@ -30,7 +30,7 @@ const PurchaseDetail = () => {
   /**
    * The migration not having been run is NOT the same as the purchase not
    * existing, and saying "Purchase not found" when the tables are absent tells
-   * a wholesaler his bill has been lost. Distinguished here on the code the
+   * a wholesaler their bill has been lost. Distinguished here on the code the
    * server sends, the same way the list screens do it.
    */
   const [notSetUp, setNotSetUp] = useState(false);
@@ -96,7 +96,7 @@ const PurchaseDetail = () => {
       });
       toast.success(
         Number(body.releasedToAccount) > 0
-          ? `Cancelled. ₹${money(body.releasedToAccount)} already paid is now on his account.`
+          ? `Cancelled. ₹${money(body.releasedToAccount)} already paid is now on their account.`
           : "Cancelled.",
       );
       await load();
@@ -224,7 +224,7 @@ const PurchaseDetail = () => {
         )}
       </div>
 
-      {/* His bill reference, given its own strip because it is the thing a
+      {/* Their bill reference, given its own strip because it is the thing a
           wholesaler comes to this page looking for when a return does not
           match what the supplier filed. */}
       {(purchase.supplier_invoice_number || purchase.supplier_gstin) && (
@@ -299,7 +299,7 @@ const PurchaseDetail = () => {
         {/* What it came to, and what is left */}
         <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">
-            His bill
+            Their bill
           </h3>
           <div className="flex justify-between text-sm">
             <span className="text-slate-500">Goods</span>

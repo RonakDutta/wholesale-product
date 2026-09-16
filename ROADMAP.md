@@ -429,25 +429,34 @@ and renaming after they exist means building them twice.
       comments (19)
 - [x] Gendered language removed throughout (20)
 
-## Phase 2. The invoice data model, frozen. NEXT
+## Phase 2. The invoice data model, frozen. DONE
 
 Write path only. No form, no PDF, nothing on screen. The point of doing it
-alone is that the freezing can be proved before anything depends on it.
+alone was that the freezing could be proved before anything depends on it.
 
-- [ ] Migration: the whole invoice column set in one file (1). Seller address
-      block, dispatch-from, ship-to, GR number and date, bank details,
-      transport block, IRN and acknowledgement placeholders, cess columns, UQC
-      per line. One file rather than five, because each hand applied migration
-      is a round trip through you. The unused columns are nullable and harmless
-      until the phase that fills them.
-- [ ] Copy the seller block onto the invoice at creation, from the profile (11)
-- [ ] **Freeze all of it. Never join.** (11)
+- [x] Migration: the whole invoice column set in one file (1). File:
+      `wholesale3_invoice_document_block.sql`. Seller block, dispatch-from,
+      ship-to, GR number and date, bank details, transport block, IRN and
+      acknowledgement placeholders, cess columns, UQC per line. One file rather
+      than five, because each hand applied migration is a round trip through
+      you. The unused columns are nullable until the phase that fills them.
+- [x] The seller block and bank details are copied onto the invoice at
+      creation, inside `createInvoice` itself rather than at its three call
+      sites, so a fourth caller cannot forget to take the snapshot (11)
+- [x] The recipient's state and state code frozen on the sale path (11)
+- [x] **Frozen. Never joined.** (11)
 
-Verified by: create an invoice, then edit the wholesaler profile and the party
-it was raised for, re-read the invoice, and prove not one copied field moved.
-That is the whole phase, so it is the test that matters.
+Proved by raising a bill, changing the firm name, GSTIN, address, state and
+bank account it was copied from, and showing not one field on the bill moved,
+while the next bill picked up all of it. Eighteen checks against a local
+Postgres.
 
-## Phase 3. The invoice on screen and on paper
+Two deliberate gaps. `parties` holds no pincode, so the recipient pincode stays
+blank rather than being invented. `invoice_items.uqc` has no foreign key onto
+`master_uqc`, because a frozen line must not be coupled to a table somebody can
+edit.
+
+## Phase 3. The invoice on screen and on paper. NEXT
 
 - [ ] Invoice form: seller block, dispatch-from, ship-to, GR number and date (14)
 - [ ] PDF: every new field, bank details, and a QR slot that stays empty until

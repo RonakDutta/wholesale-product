@@ -1677,6 +1677,41 @@ earlier version of it was already applied, and
 Still open in that area: the minimum HSN digit setting, and the Administration
 screens for units and tax terms. See phase 4 in `ROADMAP.md`.
 
+## 16 Sept: the invoice carries its own particulars
+
+Phase 2 of `ROADMAP.md`. Columns and the write path. Nothing on a form or on
+the PDF yet, which is phase 3.
+
+The invoice gained the seller block, the recipient's state and code, a
+dispatch-from address, a ship-to address, GR number and date, bank details, the
+transport block, the IRN and acknowledgement fields, and cess. Lines gained a
+UQC and their own cess. `invoice_settings` gained the live bank details the
+copy is taken from, and `wholesaler_profiles` gained a registered address,
+because the warehouse columns are where goods leave from and that is a
+different question from where a firm is registered.
+
+All of it is copied onto the invoice, not joined to it. An invoice already
+snapshotted who it was billed to, for the reason that a party can be edited and
+a tax document must not change once it is handed over. The seller's own block
+and bank details are the same kind of fact. Join them and a reprint six months
+later shows an address the firm has moved out of and an account it has closed.
+
+The snapshot is taken inside `createInvoice`, not at its three call sites. A
+snapshot a caller has to remember to take is one a fourth caller will forget.
+
+Proved against a local Postgres: raise a bill, then change the firm name,
+GSTIN, address, state and bank account it was copied from, and nothing on the
+bill moves, while the next bill picks up all of it. The state code is derived
+through `placeOfSupply` rather than typed, so it follows the same rule as the
+tax decision.
+
+Two things left blank on purpose. `parties` has no pincode, so the recipient
+pincode is empty rather than invented. `invoice_items.uqc` has no foreign key
+onto `master_uqc`, because a frozen line must not be coupled to a table
+somebody can edit, which is the same mistake as joining the addresses.
+
+**Migration to run:** `wholesale3_invoice_document_block.sql`
+
 ---
 
 ## Left to do

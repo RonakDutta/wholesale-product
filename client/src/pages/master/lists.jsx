@@ -66,6 +66,45 @@ const SPECS = {
       ].join("  |  "),
   },
 
+  "tax-terms": {
+    list: "tax-terms",
+    field: "taxTerms",
+    key: "code",
+    title: "Tax terms",
+    singular: "Tax term",
+    blurb:
+      "A named combination a bill line can be charged under, so nobody types a rate. Enter the GST and CGST and SGST are half of it each, which is what happens inside one state. Cess is separate: it is charged on the same taxable value, ON TOP of the GST, not out of it.",
+    columns: [{ field: "code" }, { field: "label" }],
+    fields: [
+      { name: "code", label: "Code", hint: "Short and fixed, like GST18. Used by the system, not shown on a bill.", fixedOnEdit: true },
+      { name: "label", label: "Name", hint: "What a person picks from a list." },
+      { name: "igstPercent", label: "GST (%)", type: "number", hint: "The full rate. Inside one state it splits into CGST and SGST, half each." },
+      {
+        name: "cessPercent",
+        label: "Cess (%)",
+        type: "number",
+        hint: "On top of the GST, on the same value. Leave blank for the great majority of goods, which carry none. 18 plus 12 means the customer pays 30 per cent, not 18 split three ways.",
+      },
+      { name: "sortOrder", label: "Order in the list", type: "number", hint: "Lower comes first." },
+    ],
+    blank: () => ({ code: "", label: "", igstPercent: 18, cessPercent: "", sortOrder: 0, active: true }),
+    toDraft: (r) => ({
+      code: r.code,
+      label: r.label,
+      igstPercent: r.igstPercent,
+      cessPercent: r.cessPercent ? r.cessPercent : "",
+      sortOrder: 0,
+      active: r.active !== false,
+    }),
+    primary: (r) => r.label || r.code,
+    secondary: (r) =>
+      [
+        `GST ${r.igstPercent}%`,
+        `CGST ${r.cgstPercent ?? r.igstPercent / 2}% + SGST ${r.sgstPercent ?? r.igstPercent / 2}% within a state`,
+        Number(r.cessPercent) > 0 ? `plus cess ${r.cessPercent}%` : "no cess",
+      ].join("  |  "),
+  },
+
   "tax-rates": {
     list: "tax-rates",
     field: "taxRates",
@@ -108,6 +147,7 @@ const SPECS = {
 export const MasterStates = () => <MasterList spec={SPECS.states} />;
 export const MasterUnits = () => <MasterList spec={SPECS.units} />;
 export const MasterTaxRates = () => <MasterList spec={SPECS["tax-rates"]} />;
+export const MasterTaxTerms = () => <MasterList spec={SPECS["tax-terms"]} />;
 export const MasterHsn = () => <MasterList spec={SPECS.hsn} />;
 
 export default SPECS;

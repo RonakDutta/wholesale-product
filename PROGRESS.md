@@ -1859,6 +1859,57 @@ Re-run after the fix: all three agree on every field.
 
 ---
 
+## 16 Sept: tax terms, and cess into the money path
+
+Phase 6, the one where a mistake lands in somebody's ledger rather than on a
+screen. The audit came before the code.
+
+**What the audit found.** Every reader of a total was mapped first, and it
+turned up the thing that would have broken this. `orders.total_amount` is the
+CART GROSS, written at checkout, and it never goes through `gstService` at all.
+The bill for an order derives its tax out of that same gross, which is why the
+two agree today. Add cess ON TOP for that path and the buyer agrees one figure
+at checkout, the bill says a second, and the khata says a third.
+
+**So cess follows the pricing mode, exactly as the GST already does.** On a
+counter sale the rate quoted is before tax, so every levy goes on top and the
+total grows. On a shop order the price on the page is what the customer pays,
+so the cess comes out of it beside the GST and the total does not move. That is
+what keeps the money path together by construction instead of by remembering to
+update a second place.
+
+Cess is its own levy throughout: its own rate per line, its own total on the
+sale and on the bill, its own column in the HSN summary, its own line in the
+totals. It is never a share of the GST. Eighteen plus twelve is thirty per cent
+of the taxable value, not eighteen split three ways.
+
+**Tax terms.** A named combination a line can be billed under, in Administration
+at `/administration/tax-terms`. Entering the GST derives CGST and SGST as half
+each. Those halves are not stored: two stored halves are two things that can
+disagree with the whole.
+
+**A second fault found while doing it.** The HSN summary's taxable value
+subtracted only the GST from the line total. With cess in the total that
+overstates it again, the same shape of fault the table was fixed for this
+morning. It now subtracts both levies.
+
+**The twelve per cent is a test default.** `GST28_CESS12` is seeded so the
+arithmetic can be tested end to end. Nothing carries cess unless a line says so,
+so no existing bill changes. Real cess is commodity specific and a blanket rate
+on a live bill is a wrong number on a legal document. Remove that term, or set
+its cess to zero, before this goes near a real customer.
+
+**Verified.** 24 arithmetic checks with no database, then 17 against a local
+Postgres: the sale total, the customer's khata, the invoice grand total and the
+invoice line all carry the same cess to the paisa, a bill raised from a sale
+equals the sale, a sale without cess is exactly what it always was, and a
+billed sale still cannot be edited. Every earlier suite was re-run, 107 checks
+in all, and the three ways of raising an invoice still agree on every field.
+
+**Migration to run:** `wholesale3_tax_terms_and_cess.sql`
+
+---
+
 ## Left to do
 
 Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.

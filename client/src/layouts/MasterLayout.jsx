@@ -49,6 +49,7 @@ const LINKS = [
   { to: "/administration/states", label: "States", icon: MapPin },
   { to: "/administration/units", label: "Units", icon: Ruler },
   { to: "/administration/tax-rates", label: "Tax rates", icon: Percent },
+  { to: "/administration/tax-terms", label: "Tax terms", icon: Percent },
   { to: "/administration/hsn", label: "HSN codes", icon: Hash },
   { to: "/administration/settings", label: "Settings", icon: SlidersHorizontal },
 ];

@@ -447,6 +447,14 @@ export default function InvoicePreview({ invoice, onClose, onSendEmail }) {
                 <span>Total Tax:</span>
                 <span>₹{money(invoice.total_tax || 0)}</span>
               </div>
+              {/* Its own line, because it is its own levy. Cess does not come
+                  out of the GST above it and is not part of that figure. */}
+              {Number(invoice.total_cess) > 0 && (
+                <div className="flex justify-between text-slate-500">
+                  <span>Cess:</span>
+                  <span>₹{money(invoice.total_cess)}</span>
+                </div>
+              )}
               {/* Ruled, not filled. A rounded dark pill is a web button
                   shape, and a bill is a document: the total is set apart the
                   way a printed invoice does it, with a rule above and below

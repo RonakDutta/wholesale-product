@@ -187,6 +187,10 @@ async function schemaExtras(db = pool) {
         -- The transport block on a sale, from wholesale3_sale_transport.sql.
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'sales' AND column_name = 'transport_mode') AS has_sale_transport,
+        -- Cess, from wholesale3_tax_terms_and_cess.sql. Probed on the sale
+        -- line, because that is the one the money path reads through.
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'sale_lines' AND column_name = 'cess_percent') AS has_cess,
         -- And on an order, from wholesale3_order_transport.sql.
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'orders' AND column_name = 'transport_mode') AS has_order_transport,
@@ -251,6 +255,7 @@ async function schemaExtras(db = pool) {
       has_sale_tax: false,
       has_sale_transport: false,
       has_order_transport: false,
+      has_cess: false,
       has_sale_order_id: false,
       has_number_format: false,
       has_series_fy: false,
@@ -450,6 +455,12 @@ class InvoiceRepository {
         ["recipient_address", recipientAddress],
         ["recipient_phone", recipientPhone],
       );
+    }
+
+    // Its own total on the bill, because it is its own levy. Gated on the
+    // document block, which is the migration that added the column.
+    if (has.has_document_block) {
+      columns.push(["total_cess", invoiceData.totalCess ?? 0]);
     }
 
     if (has.has_document_block) {
@@ -700,12 +711,17 @@ class InvoiceRepository {
    */
   async getHsnSummary(invoiceId, wholesalerId) {
     await ensureSchema();
+    const has = await schemaExtras();
     const query = `
       SELECT
         NULLIF(TRIM(i.hsn_code), '') AS hsn_code,
         ROUND(COALESCE(i.gst_percent, 0)::numeric, 2) AS gst_percent,
-        ROUND(SUM(i.total - i.tax_amount)::numeric, 2) AS taxable_amount,
+        -- The taxable value is the line total less BOTH levies, because the
+        -- total carries both. Subtracting only the GST would overstate it by
+        -- the cess, which is the same fault this query was fixed for once.
+        ROUND(SUM(i.total - i.tax_amount - ${has.has_document_block ? "i.cess_amount" : "0"})::numeric, 2) AS taxable_amount,
         ROUND(SUM(i.tax_amount)::numeric, 2) AS gst_amount,
+        ${has.has_document_block ? "ROUND(SUM(i.cess_amount)::numeric, 2)" : "0"} AS cess_amount,
         ROUND(SUM(i.total)::numeric, 2) AS total_amount
       FROM invoice_items i
       JOIN invoices inv ON inv.id = i.invoice_id

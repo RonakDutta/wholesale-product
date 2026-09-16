@@ -60,7 +60,8 @@ class SaleInvoiceService {
         // is selected as NULL, which is exactly what the legacy check below
         // is looking for, so an unmigrated database bills the old way.
         `SELECT item_name, quantity, unit, rate, amount, hsn_code,
-                ${has.has_line_gst ? "gst_percent" : "NULL AS gst_percent"}
+                ${has.has_line_gst ? "gst_percent" : "NULL AS gst_percent"},
+                ${has.has_cess ? "cess_percent" : "0 AS cess_percent"}
            FROM sale_lines WHERE sale_id = $1 ORDER BY created_at ASC`,
         [saleId],
       ),
@@ -320,6 +321,10 @@ class SaleInvoiceService {
             line.gst_percent !== null && line.gst_percent !== undefined
               ? Number(line.gst_percent)
               : settings.defaultTaxRate,
+          // Same rule for the cess: off the line, never out of today's term.
+          // A sale recorded at 12 per cent must bill at 12 per cent even if
+          // somebody has since set the term to zero.
+          cessPercent: Number(line.cess_percent ?? 0),
           hsnCode: line.hsn_code || undefined,
         })),
         discount: Number(sale.discount || 0),
@@ -383,6 +388,7 @@ class SaleInvoiceService {
         igst: gst.igst,
         totalTax: gst.totalTax,
         grandTotal: gst.grandTotal,
+        totalCess: gst.totalCess,
         // Rule 46 particulars, frozen at issue. The place of supply is the
         // state the goods went TO, which is what decides IGST against CGST
         // plus SGST, and it has been computed all along without being stored.

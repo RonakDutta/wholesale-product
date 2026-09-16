@@ -14,12 +14,13 @@ const { isPlatformAdmin } = require("../middlewares/platformAdmin");
  */
 exports.getMasters = async (req, res) => {
   try {
-    const [states, units, taxRates, hsn, uqcCodes] = await Promise.all([
+    const [states, units, taxRates, hsn, uqcCodes, taxTerms] = await Promise.all([
       masterService.states(),
       masterService.units(),
       masterService.taxRates(),
       masterService.hsn(),
       masterService.uqcCodes(),
+      masterService.taxTerms(),
     ]);
     /**
      * Rows that have been switched off, when the console asks for them.
@@ -32,18 +33,27 @@ exports.getMasters = async (req, res) => {
     let off = {};
     if (req.query?.includeInactive && (await masterService.mastersExist())) {
       const pool = require("../config/db");
-      const [s, u, t, h] = await Promise.all([
+      const [s, u, t, tt, h] = await Promise.all([
         pool.query("SELECT code, name, is_union_territory, active FROM master_states WHERE NOT active ORDER BY code"),
         pool.query(`SELECT code, name, allows_decimals, ${
           (await masterService.uqcExists()) ? "uqc" : "NULL AS uqc"
         }, active FROM master_units WHERE NOT active ORDER BY sort_order, name`),
         pool.query("SELECT rate, label, active FROM master_tax_rates WHERE NOT active ORDER BY rate"),
+        (await masterService.taxTermsExist())
+          ? pool.query(`SELECT code, label, igst_percent, cess_percent, active
+                          FROM master_tax_terms WHERE NOT active ORDER BY sort_order`)
+          : { rows: [] },
         pool.query("SELECT code, description, active FROM master_hsn WHERE NOT active ORDER BY code"),
       ]);
       off = {
         statesInactive: s.rows.map((r) => ({ code: r.code, name: r.name, isUnionTerritory: r.is_union_territory, active: false })),
         unitsInactive: u.rows.map((r) => ({ code: r.code, name: r.name, allowsDecimals: r.allows_decimals, uqc: r.uqc || null, active: false })),
         taxRatesInactive: t.rows.map((r) => ({ rate: Number(r.rate), label: r.label, active: false })),
+        taxTermsInactive: tt.rows.map((r) => ({
+          code: r.code, label: r.label,
+          igstPercent: Number(r.igst_percent), cessPercent: Number(r.cess_percent),
+          active: false,
+        })),
         hsnInactive: h.rows.map((r) => ({ code: r.code, label: r.description, active: false })),
       };
     }
@@ -56,6 +66,9 @@ exports.getMasters = async (req, res) => {
       // The statutory UQC list, for the dropdown on the units screen. Empty
       // until wholesale3_uqc_master_units.sql has been run.
       uqcCodes,
+      // The named tax combinations, with CGST and SGST derived. Empty until
+      // wholesale3_tax_terms_and_cess.sql has been run.
+      taxTerms,
       // Read by every screen that shows an amount or a date, which is most of
       // them, so it rides along with the lists rather than costing its own
       // request on every page.
@@ -143,6 +156,41 @@ const LISTS = {
           active: body.active === undefined ? true : Boolean(body.active),
           sort_order: Number.isFinite(Number(body.sortOrder)) ? Math.round(Number(body.sortOrder)) : 0,
           uqc: uqc || null,
+        },
+      };
+    },
+  },
+  "tax-terms": {
+    table: "master_tax_terms",
+    key: "code",
+    label: "tax term",
+    columns: ["label", "igst_percent", "cess_percent", "active", "sort_order"],
+    check: (body) => {
+      const code = String(body.code || "").trim().toUpperCase();
+      if (!/^[A-Z0-9][A-Z0-9_]{0,23}$/.test(code)) {
+        return { error: "A term code is up to 24 capitals, digits or underscore, such as GST18." };
+      }
+      const igst = Number(body.igstPercent);
+      if (!Number.isFinite(igst) || igst < 0 || igst > 100) {
+        return { error: "The GST rate is between 0 and 100. CGST and SGST are half of it each." };
+      }
+      // Blank means none, which is the right answer for almost everything.
+      const cessRaw = body.cessPercent;
+      const cess =
+        cessRaw === undefined || cessRaw === null || String(cessRaw).trim() === ""
+          ? 0
+          : Number(cessRaw);
+      if (!Number.isFinite(cess) || cess < 0 || cess > 500) {
+        return { error: "A cess rate is between 0 and 500. Leave it blank for goods that carry none." };
+      }
+      return {
+        key: code,
+        values: {
+          label: String(body.label || `GST ${igst}%`).trim().slice(0, 64),
+          igst_percent: Number(igst.toFixed(2)),
+          cess_percent: Number(cess.toFixed(2)),
+          active: body.active === undefined ? true : Boolean(body.active),
+          sort_order: Number.isFinite(Number(body.sortOrder)) ? Math.round(Number(body.sortOrder)) : 0,
         },
       };
     },

@@ -61,7 +61,7 @@ const mastersExist = async (db = pool) => {
   }
   return ready;
 };
-const resetMastersSchema = () => { ready = null; uqcReady = null; };
+const resetMastersSchema = () => { ready = null; uqcReady = null; termsReady = null; };
 
 /**
  * Is the UQC list in? Its own probe, because master_uqc arrives in a later
@@ -172,14 +172,68 @@ exports.units = async () => {
 };
 
 /**
+ * Is the tax terms table in? Its own probe, like the UQC one, because it
+ * arrives in a later migration than the other masters.
+ */
+let termsReady = null;
+const taxTermsExist = async (db = pool) => {
+  if (termsReady !== null) return termsReady;
+  try {
+    const probe = await db.query(
+      "SELECT to_regclass('public.master_tax_terms') IS NOT NULL AS yes",
+    );
+    termsReady = Boolean(probe.rows[0]?.yes);
+  } catch {
+    termsReady = false;
+  }
+  return termsReady;
+};
+
+exports.taxTermsExist = taxTermsExist;
+
+/**
+ * The named tax combinations a line can be billed under.
+ *
+ * CGST and SGST are NOT stored. They are half the IGST rate each for a sale
+ * inside one state, which is what gstService has always done, and two stored
+ * halves are two things that can disagree with the whole. They are derived
+ * here so a screen can show the combination without working it out again.
+ *
+ * Empty until the migration is run, which a screen reads as "this platform has
+ * no terms" rather than as an error.
+ */
+exports.taxTerms = async () => {
+  if (!(await taxTermsExist())) return [];
+  return read(
+    "taxTerms",
+    `SELECT code, label, igst_percent, cess_percent FROM master_tax_terms
+      WHERE active ORDER BY sort_order, igst_percent`,
+    (r) => {
+      const igst = Number(r.igst_percent);
+      const cgst = Number((igst / 2).toFixed(2));
+      return {
+        code: r.code,
+        label: r.label,
+        igstPercent: igst,
+        // The remainder, so the two halves always add back to the whole.
+        cgstPercent: cgst,
+        sgstPercent: Number((igst - cgst).toFixed(2)),
+        cessPercent: Number(r.cess_percent),
+      };
+    },
+    () => [],
+  );
+};
+
+exports.uqcExists = uqcExists;
+
+/**
  * The GST Unique Quantity Codes, for the dropdown on the units screen.
  *
  * A fixed statutory list, not something an admin adds to, so there is no write
  * path for it. Empty until the migration is run, and an empty list means the
  * screen shows the unit's UQC as a plain value rather than offering choices.
  */
-exports.uqcExists = uqcExists;
-
 exports.uqcCodes = async () => {
   if (!(await uqcExists())) return [];
   return read(

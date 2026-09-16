@@ -4,8 +4,7 @@ Agreed 15 Sept 2026. Nine items. Work started 16 Sept.
 
 `PROGRESS.md` is the record of what HAS been built. This is the record of what
 has been decided, and how much of it is done, so the two do not get mixed up.
-Phases 0 to 5 are finished. Phase 6, cess into the money path, is next and is
-the one to be careful with.
+Phases 0 to 6 are finished. Phase 7, a number series per channel, is next.
 
 Read the assessment at the bottom before promising a date on any of this. Two
 of these nine cannot be finished by writing code alone.
@@ -538,30 +537,60 @@ One definition of the block on each side, `services/transportDetails.js` and
 `components/TransportFields.jsx`, because two copies of eight fields is how one
 screen starts offering a mode the other refuses.
 
-## Phase 6. Tax terms and cess. NEXT
+## Phase 6. Tax terms and cess. DONE
 
-### The dangerous one
+The one where a mistake lands in somebody's ledger rather than on a screen.
 
-Alone in its phase on purpose. This is the one that puts a wrong number in
-somebody's ledger rather than on a screen.
+- [x] Migration: `master_tax_terms`, plus cess columns on sale and purchase
+      lines and totals. File: `wholesale3_tax_terms_and_cess.sql`
+- [x] A named combination a line can be billed under. Entering the GST derives
+      CGST and SGST as half each. They are NOT stored: two stored halves are
+      two things that can disagree with the whole.
+- [x] `gstService` treats cess as an additional levy on the same taxable value,
+      never a share of the GST. 18 plus 12 is 30 per cent of the taxable value.
+- [x] **Cess reaches the money path.** Proved, not assumed.
+- [x] The tax terms screen in Administration
+- [x] A cess column in the HSN summary, in SQL and on the PDF, with the taxable
+      value corrected to the line total less BOTH levies
+- [x] A cess line in the totals, on the PDF and in the preview
 
-- [ ] Migration: `master_tax_terms` for the IGST to CGST and SGST grouping (4)
-- [ ] Naming a tax combination so a line can pick it by name (5)
-- [ ] `gstService` treats cess as an additional levy, NOT a share of the rate.
-      18 per cent GST plus 12 per cent cess is 30 per cent of the taxable
-      value, not 18 split three ways (7)
-- [ ] **Cess reaches the money path, not just the bill** (8). Every reader of
-      `grand_total` has to agree: the 50/50 instalment split, `canAcceptPayment`,
-      `reconcileInvoiceForOrder`, and the khata mirror. Miss one and the
-      customer's balance and their bill disagree by exactly the cess.
-- [ ] The tax terms screen in Administration (16, its third screen)
-- [ ] A cess column in the HSN summary grouping (10)
+### How the money path was kept together
 
-Cess is 12 per cent flat and marked in the code as a TEST DEFAULT THAT MUST NOT
-SHIP. Verified by: an order carrying cess, paid in halves, proving the balance
-and the bill agree to the paisa, then reconciled and proved again. In paise.
+The audit came first. Every reader of a total was mapped before a line was
+written, and it turned up the thing that would have broken this:
 
-## Phase 7. A number series per channel
+`orders.total_amount` is the CART GROSS, set at checkout, and never goes
+through `gstService` at all. The bill for an order derives its tax out of that
+same gross. So they agree by construction today. Add cess ON TOP for that path
+and the buyer agrees X at checkout, the bill says X plus cess, and the khata
+says X. Three figures, one order.
+
+So cess follows the pricing mode exactly as the GST already does:
+
+  - tax exclusive, a counter sale: the rate quoted is before tax, so every levy
+    goes on top and the total grows
+  - tax inclusive, a shop order: the shop price is what the customer pays, so
+    the cess comes OUT of it beside the GST and the total does not move
+
+That is what makes the path safe by construction rather than by remembering to
+update a second place. `sales.total` grows because a counter rate is pre-tax,
+and the khata and the bill both read through `gstService`, so they follow
+automatically.
+
+Verified against a local Postgres: the sale total, the customer's khata, the
+invoice grand total and the invoice line all carry the same cess to the paisa,
+a bill raised from the sale equals the sale, and a sale without cess is exactly
+what it always was.
+
+### The twelve per cent is a test default
+
+`GST28_CESS12` is seeded so the arithmetic can be tested end to end. Nothing is
+charged cess unless a line says so, so no existing bill changes. Real cess is
+commodity specific, and a blanket rate on a live bill is a wrong number on a
+legal document. Take that term out, or set its cess to zero, before this goes
+near a real customer.
+
+## Phase 7. A number series per channel. NEXT
 
 - [ ] Migration: `series` key on `invoice_sequences`, unique on (wholesaler,
       series, financial year) (3)

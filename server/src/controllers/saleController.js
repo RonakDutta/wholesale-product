@@ -48,6 +48,9 @@ const priceSale = (lines, discountPaise) =>
       quantity: line.quantity,
       unitPrice: line.rate,
       gstPercent: line.gstPercent,
+      // On top of the GST, on the same taxable value. Zero for almost
+      // everything, and zero is what a line without one carries.
+      cessPercent: line.cessPercent,
       hsnCode: line.hsnCode || undefined,
     })),
     discount: fromPaise(discountPaise),
@@ -144,12 +147,24 @@ const buildLines = (rawLines, minHsn = 4) => {
     const hsn = checkHsn(raw.hsnCode ?? raw.hsn_code, { minDigits: minHsn });
     if (!hsn.ok) return { error: `${hsn.reason} Check the HSN for ${itemName}.` };
 
+    // Cess is refused outright rather than clamped, because a silently
+    // corrected tax rate is a wrong number nobody was told about.
+    let cessPercent = 0;
+    const rawCess = raw.cessPercent ?? raw.cess_percent;
+    if (rawCess !== undefined && rawCess !== null && String(rawCess).trim() !== "") {
+      cessPercent = Number(rawCess);
+      if (!Number.isFinite(cessPercent) || cessPercent < 0 || cessPercent > 500) {
+        return { error: `Enter a cess rate between 0 and 500 for ${itemName}` };
+      }
+    }
+
     lines.push({
       itemName,
       quantity,
       unit: clean(raw.unit),
       rate,
       gstPercent,
+      cessPercent,
       // Snapshot from the rate list, so editing an item later cannot change
       // the HSN printed on a bill already raised.
       hsnCode: hsn.hsn,
@@ -252,6 +267,7 @@ exports.createSale = async (req, res) => {
       ["notes", clean(notes)],
     ];
     if (has.has_sale_tax) columns.push(["tax_amount", fromPaise(taxPaise)]);
+    if (has.has_cess) columns.push(["total_cess", gst ? gst.totalCess : 0]);
     if (has.has_sale_transport) {
       for (const col of TRANSPORT_COLUMNS) columns.push([col, transport[col]]);
     }
@@ -266,12 +282,18 @@ exports.createSale = async (req, res) => {
     );
     const saleId = sale.rows[0].id;
 
-    for (const line of priced) {
+    for (const [i, line] of priced.entries()) {
       await client.query(
+        // The cess rate AND what it came to, snapshot beside the GST for the
+        // same reason: a term edited next year must not restate a bill raised
+        // this year.
         `INSERT INTO sale_lines
            (sale_id, item_name, quantity, unit, rate, amount, hsn_code
-            ${has.has_line_gst ? ", gst_percent" : ""})
-         VALUES ($1, $2, $3, $4, $5, $6, $7${has.has_line_gst ? ", $8" : ""})`,
+            ${has.has_line_gst ? ", gst_percent" : ""}
+            ${has.has_cess ? ", cess_percent, cess_amount" : ""})
+         VALUES ($1, $2, $3, $4, $5, $6, $7${has.has_line_gst ? ", $8" : ""}${
+           has.has_cess ? (has.has_line_gst ? ", $9, $10" : ", $8, $9") : ""
+         })`,
         [
           saleId,
           line.itemName,
@@ -281,6 +303,11 @@ exports.createSale = async (req, res) => {
           fromPaise(line.amountPaise),
           line.hsnCode,
           ...(has.has_line_gst ? [line.gstPercent] : []),
+          // The amount comes off the priced result rather than the raw line,
+          // because gstService is the only thing that works it out.
+          ...(has.has_cess
+            ? [line.cessPercent ?? 0, Number(gst?.items?.[i]?.cessAmount ?? 0)]
+            : []),
         ],
       );
     }
@@ -736,6 +763,7 @@ exports.updateSale = async (req, res) => {
       ["notes", clean(notes)],
     ];
     if (has.has_sale_tax) sets.push(["tax_amount", fromPaise(taxPaise)]);
+    if (has.has_cess) sets.push(["total_cess", gst ? gst.totalCess : 0]);
     if (has.has_sale_transport) {
       for (const col of TRANSPORT_COLUMNS) sets.push([col, transport[col]]);
     }
@@ -752,12 +780,18 @@ exports.updateSale = async (req, res) => {
     // Lines are replaced wholesale. Nothing references a sale line, so there
     // is nothing to preserve by trying to match them up one by one.
     await client.query("DELETE FROM sale_lines WHERE sale_id = $1", [id]);
-    for (const line of priced) {
+    for (const [i, line] of priced.entries()) {
       await client.query(
+        // The cess rate AND what it came to, snapshot beside the GST for the
+        // same reason: a term edited next year must not restate a bill raised
+        // this year.
         `INSERT INTO sale_lines
            (sale_id, item_name, quantity, unit, rate, amount, hsn_code
-            ${has.has_line_gst ? ", gst_percent" : ""})
-         VALUES ($1, $2, $3, $4, $5, $6, $7${has.has_line_gst ? ", $8" : ""})`,
+            ${has.has_line_gst ? ", gst_percent" : ""}
+            ${has.has_cess ? ", cess_percent, cess_amount" : ""})
+         VALUES ($1, $2, $3, $4, $5, $6, $7${has.has_line_gst ? ", $8" : ""}${
+           has.has_cess ? (has.has_line_gst ? ", $9, $10" : ", $8, $9") : ""
+         })`,
         [
           id,
           line.itemName,
@@ -767,6 +801,11 @@ exports.updateSale = async (req, res) => {
           fromPaise(line.amountPaise),
           line.hsnCode,
           ...(has.has_line_gst ? [line.gstPercent] : []),
+          // The amount comes off the priced result rather than the raw line,
+          // because gstService is the only thing that works it out.
+          ...(has.has_cess
+            ? [line.cessPercent ?? 0, Number(gst?.items?.[i]?.cessAmount ?? 0)]
+            : []),
         ],
       );
     }

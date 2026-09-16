@@ -456,15 +456,26 @@ blank rather than being invented. `invoice_items.uqc` has no foreign key onto
 `master_uqc`, because a frozen line must not be coupled to a table somebody can
 edit.
 
-## Phase 3. The invoice on screen and on paper. NEXT
+## Phase 3. The invoice on screen and on paper. MOSTLY DONE
 
-- [ ] Invoice form: seller block, dispatch-from, ship-to, GR number and date (14)
-- [ ] PDF: every new field, bank details, and a QR slot that stays empty until
-      an IRN exists (17)
-- [ ] Print the state code beside the state (2)
-- [ ] Say WHY a sale is IGST, in words, on the sale screen (18). "IGST, because
-      they are in Maharashtra" catches a wrong customer record at the cheapest
-      possible moment, which is before the bill goes out.
+- [x] PDF: the seller block with its address, both addresses when they differ,
+      GR number and date, the transport band, bank details, UQC beside each
+      quantity, and an e-invoice block that appears only once an IRN exists (17)
+- [x] The state code printed beside the state, on both sides of the bill (2)
+- [x] Say WHY the tax split is what it is, in words, on the invoice screen (18)
+- [x] The printed HSN summary had the same arithmetic fault as the SQL one and
+      was overstating the taxable value on every tax inclusive bill. Fixed and
+      it now ties to the total above it.
+- [ ] Invoice form: the new fields entered rather than only printed (14). The
+      columns and the PDF are done, so this is the box to type them into.
+
+Rendered and looked at, not just written: a bill with every field filled in, a
+bill with an IRN and a signed QR, and an old bill carrying none of them, which
+still prints exactly as it did before.
+
+The explanation of the tax split is shown only when the invoice actually
+recorded both states it compared. Guessing at the reason would be worse than
+saying nothing.
 
 ## Phase 4. UQC, HSN digits, HSN summary. MOSTLY DONE
 
@@ -475,14 +486,17 @@ edit.
       column yet, that arrives in phase 6.
 - [x] Document numbers refused at write time if they break Rule 46(b), with a
       reason the wholesaler can act on
+- [x] Administration: the UQC on the units screen (16, one of its three).
+      Every unit lists the code it is filed as, or says "UQC not set", and the
+      editor offers the statutory list as a dropdown. Blank is allowed and
+      means nobody has decided.
 - [ ] Migration: minimum HSN digit count on `master_settings` (5)
 - [ ] `hsnService` enforces the minimum digit setting (9)
-- [ ] Administration: the UQC column on units, and the HSN digit setting (16,
-      two of its three screens)
+- [ ] Administration: the HSN digit setting (16, its second)
 
-The units master currently leaves Case blank on purpose. Nothing is defaulted
-to OTH. The first job of the Administration screen is to let somebody decide
-the blanks and see the decision recorded.
+The units master leaves Case blank on purpose. Nothing is defaulted to OTH. The
+Administration screen is where somebody decides the blanks and the decision is
+recorded, which is why it says "not set" rather than filling it in quietly.
 
 ## Phase 5. Transport details
 

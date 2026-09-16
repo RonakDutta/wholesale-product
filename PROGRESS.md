@@ -1712,6 +1712,41 @@ somebody can edit, which is the same mistake as joining the addresses.
 
 **Migration to run:** `wholesale3_invoice_document_block.sql`
 
+## 16 Sept: UQC on the Administration screen, and the bill prints its block
+
+Phase 3, and the UQC part of phase 4.
+
+**Administration.** Every unit now shows the GST code it is filed as, or says
+"UQC not set", and the editor offers the statutory list as a dropdown with the
+meaning beside each code. Blank is allowed and means nobody has decided yet,
+which is deliberately not the same as OTH. A unit cannot be saved with a code
+that is not on the list: the foreign key refuses it and the screen says so in
+words rather than reporting a fault.
+
+**The bill.** The PDF now prints the seller block with its address, state and
+state code, the customer's state and code, dispatched-from and shipped-to when
+they differ from the registered addresses, the transport band with the GR
+number, bank details, and the UQC beside each quantity. An e-invoice block with
+the IRN, acknowledgement and signed QR appears only once a real submission has
+filled them in. Nothing is computed locally, because an IRN cannot be.
+
+**A fault found while doing it.** The printed HSN summary computed the taxable
+value as quantity times unit price, exactly as the SQL one did before it was
+fixed this morning. On a tax inclusive bill that overstates the taxable value by
+the tax, which is every marketplace order. It now reads the line total minus its
+tax, and the summary ties to the total above it on the page.
+
+The invoice screen now says why the tax split is what it is: "IGST, because you
+are in Maharashtra and they are in Gujarat". Shown only when the invoice
+recorded both states, since guessing at the reason would be worse than silence.
+
+Rendered and looked at: a bill with every field, a bill with an IRN and QR, an
+old bill with none of them which prints as it always did, and the units screen
+at desktop and phone width.
+
+Still open in phase 3: the form to TYPE the new fields into. The columns and
+the printing are done.
+
 ---
 
 ## Left to do

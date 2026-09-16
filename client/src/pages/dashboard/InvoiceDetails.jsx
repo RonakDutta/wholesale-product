@@ -433,6 +433,36 @@ export default function InvoiceDetails() {
                   <span>Total Tax:</span>
                   <span>{inr(invoice.total_tax || 0)}</span>
                 </div>
+                {/*
+                  Why the tax split is what it is, in words.
+
+                  Same state as the customer is CGST plus SGST, a different
+                  state is IGST, and it is a number on a legal document. A
+                  wholesaler who reads "IGST, because they are in Gujarat" can
+                  catch a customer record with the wrong state on it before the
+                  bill goes out, which is the cheapest moment there is to catch
+                  it. Afterwards it means a credit note.
+
+                  Only shown when the invoice actually records the states it
+                  compared. Guessing at the reason would be worse than silence.
+                */}
+                {(invoice.place_of_supply || invoice.recipient_state) &&
+                  (invoice.supplier_state || invoice.seller_state) && (
+                    <p className="pt-1 text-[11px] leading-snug text-slate-400">
+                      {Number(invoice.igst) > 0 ? (
+                        <>
+                          IGST, because you are in{" "}
+                          {invoice.seller_state || invoice.supplier_state} and they are in{" "}
+                          {invoice.place_of_supply || invoice.recipient_state}.
+                        </>
+                      ) : (
+                        <>
+                          CGST and SGST, because you and they are both in{" "}
+                          {invoice.seller_state || invoice.supplier_state}.
+                        </>
+                      )}
+                    </p>
+                  )}
                 {/* Same treatment as the preview and the PDF: a rule, not a
                     dark rounded pill. The three should look like one bill. */}
                 <div className="mt-2.5 flex items-baseline justify-between border-y-2 border-espresso py-2">

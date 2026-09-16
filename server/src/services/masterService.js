@@ -61,7 +61,27 @@ const mastersExist = async (db = pool) => {
   }
   return ready;
 };
-const resetMastersSchema = () => { ready = null; };
+const resetMastersSchema = () => { ready = null; uqcReady = null; };
+
+/**
+ * Is the UQC list in? Its own probe, because master_uqc arrives in a later
+ * migration than the other masters. Without this the units query would name a
+ * column that is not there yet, fail, and fall back to the built in list,
+ * which would lose every unit an admin had added.
+ */
+let uqcReady = null;
+const uqcExists = async (db = pool) => {
+  if (uqcReady !== null) return uqcReady;
+  try {
+    const probe = await db.query(
+      "SELECT to_regclass('public.master_uqc') IS NOT NULL AS yes",
+    );
+    uqcReady = Boolean(probe.rows[0]?.yes);
+  } catch {
+    uqcReady = false;
+  }
+  return uqcReady;
+};
 
 /**
  * One read, cached, falling back to `whenMissing` if the table is not there or
@@ -130,14 +150,45 @@ exports.states = () =>
     builtInStates,
   );
 
-exports.units = () =>
-  read(
-    "units",
-    `SELECT code, name, allows_decimals FROM master_units
+exports.units = async () => {
+  // NULL AS uqc rather than the column itself until the migration is in, so an
+  // unmigrated database still lists its units instead of falling back.
+  const hasUqc = await uqcExists();
+  return read(
+    hasUqc ? "unitsWithUqc" : "units",
+    `SELECT code, name, allows_decimals, ${hasUqc ? "uqc" : "NULL AS uqc"}
+       FROM master_units
       WHERE active ORDER BY sort_order, name`,
-    (r) => ({ code: r.code, name: r.name, allowsDecimals: r.allows_decimals }),
+    (r) => ({
+      code: r.code,
+      name: r.name,
+      allowsDecimals: r.allows_decimals,
+      // Null means nobody has decided yet. It is not the same as OTH, which is
+      // a declaration that the unit has no standard code.
+      uqc: r.uqc || null,
+    }),
     () => BUILT_IN_UNITS,
   );
+};
+
+/**
+ * The GST Unique Quantity Codes, for the dropdown on the units screen.
+ *
+ * A fixed statutory list, not something an admin adds to, so there is no write
+ * path for it. Empty until the migration is run, and an empty list means the
+ * screen shows the unit's UQC as a plain value rather than offering choices.
+ */
+exports.uqcExists = uqcExists;
+
+exports.uqcCodes = async () => {
+  if (!(await uqcExists())) return [];
+  return read(
+    "uqc",
+    "SELECT code, description FROM master_uqc WHERE active ORDER BY code",
+    (r) => ({ code: r.code, description: r.description }),
+    () => [],
+  );
+};
 
 exports.taxRates = () =>
   read(

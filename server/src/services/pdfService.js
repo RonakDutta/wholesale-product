@@ -155,6 +155,22 @@ class PDFService {
       console.warn("QR code generation skipped:", qrErr.message);
     }
 
+    /**
+     * The e-invoice QR, rendered from the payload the IRP signed.
+     *
+     * Prepared out here beside the UPI one, because drawing happens inside a
+     * plain Promise executor that cannot await. Null until a real submission
+     * has stored a signed payload, and nothing is invented in the meantime.
+     */
+    let signedQrDataUrl = null;
+    if (invoice.signed_qr) {
+      try {
+        signedQrDataUrl = await QRCode.toDataURL(invoice.signed_qr, { margin: 1, width: 160 });
+      } catch (signedQrErr) {
+        console.warn("Could not render the signed e-invoice QR:", signedQrErr.message);
+      }
+    }
+
     return new Promise((resolve, reject) => {
       try {
         const doc = new PDFDocument({ size: "A4", margin: 36, bufferPages: true });
@@ -229,34 +245,73 @@ class PDFService {
         // ----------------------------------------------------
         let y = 115;
 
+        /**
+         * The frozen block wins over the join.
+         *
+         * These columns are copied onto the invoice when it is raised, so a
+         * reprint shows the address the bill actually went out with rather
+         * than wherever the firm is today. The joins stay as the fallback for
+         * invoices raised before the block existed, which must keep printing
+         * exactly as they were issued.
+         */
+        const sellerName = invoice.seller_name || invoice.supplier_company || invoice.supplier_name || "Wholesaler";
+        const sellerGstin = invoice.seller_gstin || invoice.supplier_gstin;
+
+        /** "Bhiwandi, Maharashtra (27) - 421302", skipping whatever is blank. */
+        const placeLine = (city, state, code, pincode) => {
+          const where = [city, state && code ? `${state} (${code})` : state]
+            .filter(Boolean)
+            .join(", ");
+          return [where, pincode].filter(Boolean).join(" - ") || null;
+        };
+
+        /** Prints a list of lines from a y offset, skipping the blanks. */
+        const stack = (lines, x, startY, width) => {
+          let ly = startY;
+          for (const line of lines.filter(Boolean)) {
+            doc.text(line, x, ly, { width, height: 10, ellipsis: true });
+            ly += 11;
+          }
+          return ly;
+        };
+
+        const BOX_H = 118;
+
         // Supplier Box
-        doc.rect(36, y, 255, 100).lineWidth(1).strokeColor("#e2e8f0").stroke();
+        doc.rect(36, y, 255, BOX_H).lineWidth(1).strokeColor("#e2e8f0").stroke();
         doc.rect(36, y, 255, 20).fill("#f8fafc");
         doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text("SUPPLIER DETAILS (ISSUER)", 44, y + 5);
 
-        doc.fillColor("#1e293b").fontSize(9).font("Helvetica-Bold").text(invoice.supplier_company || invoice.supplier_name || "Wholesaler", 44, y + 26);
+        doc.fillColor("#1e293b").fontSize(9).font("Helvetica-Bold").text(sellerName, 44, y + 26, { width: 239, height: 11, ellipsis: true });
         doc.fontSize(8).font("Helvetica").fillColor("#475569");
-        doc.text(`GSTIN: ${invoice.supplier_gstin || "N/A"}`, 44, y + 40);
         // Characters 3 to 12 of a GSTIN are the PAN, so this is not a second
         // field to store or to keep in step; it is the same number read.
-        const supplierPan = panFromGstin(invoice.supplier_gstin);
-        doc.text(`PAN: ${supplierPan || "N/A"}`, 44, y + 52);
-        doc.text(`Phone: ${invoice.supplier_phone || "N/A"}`, 44, y + 64);
-        doc.text(`Email: ${invoice.supplier_email || "N/A"}`, 44, y + 76);
-        if (invoice.supplier_upi_id) {
-          doc.text(`UPI ID: ${invoice.supplier_upi_id}`, 44, y + 88);
-        }
+        stack(
+          [
+            invoice.seller_address,
+            placeLine(
+              invoice.seller_city || invoice.supplier_city,
+              invoice.seller_state || invoice.supplier_state,
+              invoice.seller_state_code,
+              invoice.seller_pincode,
+            ),
+            `GSTIN: ${sellerGstin || "N/A"}`,
+            `PAN: ${panFromGstin(sellerGstin) || "N/A"}`,
+            `Phone: ${invoice.seller_phone || invoice.supplier_phone || "N/A"}`,
+            invoice.supplier_upi_id ? `UPI ID: ${invoice.supplier_upi_id}` : null,
+          ],
+          44,
+          y + 40,
+          239,
+        );
 
         // Buyer Box
-        doc.rect(304, y, 255, 100).lineWidth(1).strokeColor("#e2e8f0").stroke();
+        doc.rect(304, y, 255, BOX_H).lineWidth(1).strokeColor("#e2e8f0").stroke();
         doc.rect(304, y, 255, 20).fill("#f8fafc");
         doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text("BILLED TO (BUYER)", 312, y + 5);
 
-        doc.fillColor("#1e293b").fontSize(9).font("Helvetica-Bold").text(invoice.buyer_company || invoice.buyer_name || "Retail Buyer", 312, y + 26);
+        doc.fillColor("#1e293b").fontSize(9).font("Helvetica-Bold").text(invoice.recipient_name || invoice.buyer_company || invoice.buyer_name || "Retail Buyer", 312, y + 26, { width: 239, height: 11, ellipsis: true });
         doc.fontSize(8).font("Helvetica").fillColor("#475569");
-        doc.text(`GSTIN: ${invoice.buyer_gstin || "N/A"}`, 312, y + 40);
-        doc.text(`Phone: ${invoice.buyer_phone || "N/A"}`, 312, y + 52);
-        doc.text(`Email: ${invoice.buyer_email || "N/A"}`, 312, y + 64);
         // Named after what it actually is. Printing "Order Ref: #N/A" on a
         // bill raised from a recorded sale told the customer nothing.
         const sourceRef = invoice.sale_number
@@ -264,7 +319,23 @@ class PDFService {
           : invoice.order_number
             ? `Order Ref: ${invoice.order_number}`
             : null;
-        if (sourceRef) doc.text(sourceRef, 312, y + 76);
+        stack(
+          [
+            invoice.recipient_address,
+            placeLine(
+              invoice.recipient_city || invoice.buyer_city,
+              invoice.recipient_state,
+              invoice.recipient_state_code,
+              invoice.recipient_pincode,
+            ),
+            `GSTIN: ${invoice.recipient_gstin || invoice.buyer_gstin || "N/A"}`,
+            `Phone: ${invoice.recipient_phone || invoice.buyer_phone || "N/A"}`,
+            sourceRef,
+          ],
+          312,
+          y + 40,
+          239,
+        );
 
         // ----------------------------------------------------
         // PLACE OF SUPPLY AND REVERSE CHARGE
@@ -273,7 +344,7 @@ class PDFService {
         // of supply is the state that decided whether this bill charges IGST
         // or CGST plus SGST, so leaving it off made the tax split unexplained
         // on the one document that has to explain it.
-        y += 115;
+        y += BOX_H + 15;
 
         const posText = invoice.place_of_supply
           ? `${invoice.place_of_supply}${invoice.place_of_supply_code ? ` (${invoice.place_of_supply_code})` : ""}`
@@ -290,12 +361,92 @@ class PDFService {
           y += 26;
         }
 
+        // ----------------------------------------------------
+        // DISPATCHED FROM AND SHIPPED TO
+        // ----------------------------------------------------
+        // Only when they were filled in. A wholesaler registered in Surat who
+        // despatches from a Bhiwandi godown has to say so, and goods billed to
+        // a head office are often delivered somewhere else. When neither is
+        // given the registered addresses above are the answer and repeating
+        // them would only add noise to the page.
+        const dispatchLines = [
+          invoice.dispatch_from_name,
+          invoice.dispatch_from_address,
+          placeLine(
+            invoice.dispatch_from_city,
+            invoice.dispatch_from_state,
+            invoice.dispatch_from_state_code,
+            invoice.dispatch_from_pincode,
+          ),
+        ].filter(Boolean);
+
+        const shipLines = [
+          invoice.ship_to_name,
+          invoice.ship_to_gstin ? `GSTIN: ${invoice.ship_to_gstin}` : null,
+          invoice.ship_to_address,
+          placeLine(
+            invoice.ship_to_city,
+            invoice.ship_to_state,
+            invoice.ship_to_state_code,
+            invoice.ship_to_pincode,
+          ),
+        ].filter(Boolean);
+
+        if (dispatchLines.length || shipLines.length) {
+          const rows = Math.max(dispatchLines.length, shipLines.length);
+          const bandH = 22 + rows * 11;
+          doc.rect(36, y, 523, bandH).lineWidth(1).strokeColor("#e2e8f0").stroke();
+
+          doc.fillColor("#334155").fontSize(8).font("Helvetica-Bold");
+          if (dispatchLines.length) doc.text("DISPATCHED FROM", 44, y + 6);
+          if (shipLines.length) doc.text("SHIPPED TO", 312, y + 6);
+
+          doc.fontSize(8).font("Helvetica").fillColor("#475569");
+          if (dispatchLines.length) stack(dispatchLines, 44, y + 19, 239);
+          if (shipLines.length) stack(shipLines, 312, y + 19, 239);
+
+          y += bandH + 8;
+        }
+
+        // ----------------------------------------------------
+        // TRANSPORT AND GOODS RECEIPT
+        // ----------------------------------------------------
+        // The e-way bill fields, printed because the lorry driver and the
+        // checkpost both want them on the paper travelling with the goods.
+        const transportBits = [
+          invoice.transporter_name ? `Transporter: ${invoice.transporter_name}` : null,
+          invoice.transporter_id ? `Transporter ID: ${invoice.transporter_id}` : null,
+          invoice.transport_mode ? `Mode: ${invoice.transport_mode}` : null,
+          invoice.vehicle_number ? `Vehicle: ${invoice.vehicle_number}` : null,
+          invoice.transport_doc_number ? `LR/RR No: ${invoice.transport_doc_number}` : null,
+          invoice.transport_doc_date
+            ? `LR/RR Date: ${new Date(invoice.transport_doc_date).toLocaleDateString("en-IN")}`
+            : null,
+          invoice.gr_number ? `GR No: ${invoice.gr_number}` : null,
+          invoice.gr_date ? `GR Date: ${new Date(invoice.gr_date).toLocaleDateString("en-IN")}` : null,
+        ].filter(Boolean);
+
+        if (transportBits.length) {
+          const lines = [];
+          for (let i = 0; i < transportBits.length; i += 3) {
+            lines.push(transportBits.slice(i, i + 3).join("    "));
+          }
+          const bandH = 18 + lines.length * 11;
+          doc.rect(36, y, 523, bandH).fill("#f8fafc");
+          doc.fillColor("#334155").fontSize(8).font("Helvetica-Bold").text("TRANSPORT", 44, y + 5);
+          doc.font("Helvetica").fillColor("#475569");
+          stack(lines, 120, y + 5, 430);
+          y += bandH + 8;
+        }
+
         // Table Header
         doc.rect(36, y, 523, 22).fill("#0f172a");
         doc.fillColor("#ffffff").fontSize(8).font("Helvetica-Bold");
 
         doc.text("ITEM DESCRIPTION", 44, y + 6, { width: 170 });
         doc.text("HSN", 220, y + 6, { width: 45, align: "center" });
+        // Quantity and the unit it is counted in. An e-invoice is validated on
+        // the UQC, so the bill shows the same code it will be filed under.
         doc.text("QTY", 270, y + 6, { width: 40, align: "center" });
         doc.text("UNIT PRICE", 315, y + 6, { width: 65, align: "right" });
         doc.text("GST %", 385, y + 6, { width: 45, align: "center" });
@@ -315,8 +466,13 @@ class PDFService {
           doc.text(item.product_name || "Product", 44, y + 5, { width: 170, height: 12, ellipsis: true });
           doc.text(item.hsn_code || "-", 220, y + 5, { width: 45, align: "center" });
           // Through Number first: the column is NUMERIC now, so pg hands back
-          // "2.500" and the bill would read 2.500 metres.
-          doc.text(String(Number(item.quantity)), 270, y + 5, { width: 40, align: "center" });
+          // "2.500" and the bill would read 2.500 metres. The UQC rides with
+          // the figure when the unit has one, and is simply absent when it
+          // does not, rather than printing a stand in code.
+          doc.text(
+            item.uqc ? `${Number(item.quantity)} ${item.uqc}` : String(Number(item.quantity)),
+            270, y + 5, { width: 40, align: "center" },
+          );
           doc.text(rupees(item.unit_price), 315, y + 5, { width: 65, align: "right" });
           doc.text(`${item.gst_percent || 18}%`, 385, y + 5, { width: 45, align: "center" });
           doc.text(rupees(item.tax_amount), 435, y + 5, { width: 55, align: "right" });
@@ -424,10 +580,17 @@ class PDFService {
         // Rule 46 in practice: this is the table a buyer's accountant
         // reconciles against GSTR-2B. Built from the lines, so it needs no
         // new data, only adding up what is already on the page.
+        //
+        // The taxable value is the line total MINUS its tax, never quantity
+        // times unit price. A shop order is priced tax inclusive, so its
+        // unit_price already has the tax inside it, and multiplying that out
+        // printed a taxable value overstated by exactly the tax on every
+        // marketplace bill. total - tax is right whichever way the line was
+        // priced, and it makes this table tie to the total above it.
         const byHsn = new Map();
         for (const item of items) {
           const key = `${item.hsn_code || "-"}|${Number(item.gst_percent ?? 18)}`;
-          const taxable = Number(item.unit_price || 0) * Number(item.quantity || 0);
+          const taxable = Number(item.total || 0) - Number(item.tax_amount || 0);
           const row = byHsn.get(key) || {
             hsn: item.hsn_code || "-",
             rate: Number(item.gst_percent ?? 18),
@@ -438,6 +601,11 @@ class PDFService {
           row.tax += Number(item.tax_amount || 0);
           byHsn.set(key, row);
         }
+
+        // The HSN table is 300 wide on the left, so the bank details and the
+        // e-invoice block sit beside it rather than under it. Stacked below,
+        // they ran straight through the footer.
+        const sideY = boxY + 4;
 
         if (byHsn.size > 0) {
           let hy = boxY + 4;
@@ -467,6 +635,69 @@ class PDFService {
           doc.text("Total", 42, hy + 3, { width: 70 });
           doc.text(rupees(sumTaxable), 156, hy + 3, { width: 80, align: "right" });
           doc.text(rupees(sumTax), 240, hy + 3, { width: 90, align: "right" });
+        }
+
+        // ----------------------------------------------------
+        // BANK DETAILS AND THE E-INVOICE SLOT
+        // ----------------------------------------------------
+        // The bank as it stood when the bill was raised, not as it is today.
+        // A customer paying an old invoice has to pay into the account that
+        // invoice named.
+        const bankBits = [
+          invoice.bank_account_name ? `Account name: ${invoice.bank_account_name}` : null,
+          invoice.bank_name ? `Bank: ${invoice.bank_name}` : null,
+          invoice.bank_account_number ? `A/c No: ${invoice.bank_account_number}` : null,
+          invoice.bank_ifsc ? `IFSC: ${invoice.bank_ifsc}` : null,
+          invoice.bank_branch ? `Branch: ${invoice.bank_branch}` : null,
+        ].filter(Boolean);
+
+        let sideCursor = sideY;
+
+        /**
+         * The IRN, its acknowledgement and the signed QR.
+         *
+         * Nothing here is computed. An IRN is issued by the Invoice
+         * Registration Portal once the invoice has been accepted, and the QR
+         * is a payload the IRP signs. Anything worked out locally would not be
+         * valid, so this prints only when a real submission has filled it in
+         * and stays silent otherwise rather than showing an empty box that
+         * looks like something failed.
+         */
+        if (invoice.irn) {
+          doc.fillColor("#334155").fontSize(8).font("Helvetica-Bold");
+          doc.text("E-INVOICE", 340, sideCursor);
+          doc.fontSize(7).font("Helvetica").fillColor("#475569");
+          // An IRN is 64 characters, which does not fit one column. Broken in
+          // half rather than trimmed with an ellipsis, because a partial IRN
+          // on a printed bill is no use to anybody checking it.
+          const irn = String(invoice.irn);
+          sideCursor = stack(
+            [
+              "IRN",
+              irn.slice(0, 32),
+              irn.length > 32 ? irn.slice(32) : null,
+              invoice.ack_number ? `Ack No: ${invoice.ack_number}` : null,
+              invoice.ack_date
+                ? `Ack Date: ${new Date(invoice.ack_date).toLocaleDateString("en-IN")}`
+                : null,
+            ],
+            340, sideCursor + 12, 140,
+          );
+          if (signedQrDataUrl) {
+            try {
+              doc.image(signedQrDataUrl, 489, sideY, { width: 60, height: 60 });
+            } catch (signedQrErr) {
+              console.warn("Could not embed the signed e-invoice QR:", signedQrErr.message);
+            }
+          }
+          sideCursor = Math.max(sideCursor, sideY + 64) + 6;
+        }
+
+        if (bankBits.length) {
+          doc.fillColor("#334155").fontSize(8).font("Helvetica-Bold");
+          doc.text("BANK DETAILS", 340, sideCursor);
+          doc.fontSize(7).font("Helvetica").fillColor("#475569");
+          stack(bankBits, 340, sideCursor + 12, 219);
         }
 
         // ----------------------------------------------------

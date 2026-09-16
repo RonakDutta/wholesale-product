@@ -14,11 +14,12 @@ const { isPlatformAdmin } = require("../middlewares/platformAdmin");
  */
 exports.getMasters = async (req, res) => {
   try {
-    const [states, units, taxRates, hsn] = await Promise.all([
+    const [states, units, taxRates, hsn, uqcCodes] = await Promise.all([
       masterService.states(),
       masterService.units(),
       masterService.taxRates(),
       masterService.hsn(),
+      masterService.uqcCodes(),
     ]);
     /**
      * Rows that have been switched off, when the console asks for them.
@@ -33,13 +34,15 @@ exports.getMasters = async (req, res) => {
       const pool = require("../config/db");
       const [s, u, t, h] = await Promise.all([
         pool.query("SELECT code, name, is_union_territory, active FROM master_states WHERE NOT active ORDER BY code"),
-        pool.query("SELECT code, name, allows_decimals, active FROM master_units WHERE NOT active ORDER BY sort_order, name"),
+        pool.query(`SELECT code, name, allows_decimals, ${
+          (await masterService.uqcExists()) ? "uqc" : "NULL AS uqc"
+        }, active FROM master_units WHERE NOT active ORDER BY sort_order, name`),
         pool.query("SELECT rate, label, active FROM master_tax_rates WHERE NOT active ORDER BY rate"),
         pool.query("SELECT code, description, active FROM master_hsn WHERE NOT active ORDER BY code"),
       ]);
       off = {
         statesInactive: s.rows.map((r) => ({ code: r.code, name: r.name, isUnionTerritory: r.is_union_territory, active: false })),
-        unitsInactive: u.rows.map((r) => ({ code: r.code, name: r.name, allowsDecimals: r.allows_decimals, active: false })),
+        unitsInactive: u.rows.map((r) => ({ code: r.code, name: r.name, allowsDecimals: r.allows_decimals, uqc: r.uqc || null, active: false })),
         taxRatesInactive: t.rows.map((r) => ({ rate: Number(r.rate), label: r.label, active: false })),
         hsnInactive: h.rows.map((r) => ({ code: r.code, label: r.description, active: false })),
       };
@@ -50,6 +53,9 @@ exports.getMasters = async (req, res) => {
       units,
       taxRates,
       hsn,
+      // The statutory UQC list, for the dropdown on the units screen. Empty
+      // until wholesale3_uqc_master_units.sql has been run.
+      uqcCodes,
       // Read by every screen that shows an amount or a date, which is most of
       // them, so it rides along with the lists rather than costing its own
       // request on every page.
@@ -111,13 +117,24 @@ const LISTS = {
     table: "master_units",
     key: "code",
     label: "unit",
-    columns: ["name", "allows_decimals", "active", "sort_order"],
+    columns: ["name", "allows_decimals", "active", "sort_order", "uqc"],
     check: (body) => {
       const code = String(body.code || "").trim().toLowerCase();
       if (!/^[a-z0-9][a-z0-9_-]{0,15}$/.test(code)) {
         return { error: "A unit code is up to 16 letters, digits, hyphen or underscore." };
       }
       if (!String(body.name || "").trim()) return { error: "A unit needs a name." };
+
+      // Blank is allowed and means nobody has decided yet. That is different
+      // from OTH, which is a declaration to the GST system that this unit has
+      // no standard code, and it should be chosen rather than defaulted to.
+      // The shape is checked here. Whether the code actually exists is the
+      // foreign key's job, because master_uqc is the list and this is not.
+      const uqc = String(body.uqc || "").trim().toUpperCase();
+      if (uqc && !/^[A-Z]{3}$/.test(uqc)) {
+        return { error: "A UQC is the three letter code from the GST list, such as MTR or KGS." };
+      }
+
       return {
         key: code,
         values: {
@@ -125,6 +142,7 @@ const LISTS = {
           allows_decimals: body.allowsDecimals === undefined ? true : Boolean(body.allowsDecimals),
           active: body.active === undefined ? true : Boolean(body.active),
           sort_order: Number.isFinite(Number(body.sortOrder)) ? Math.round(Number(body.sortOrder)) : 0,
+          uqc: uqc || null,
         },
       };
     },
@@ -192,7 +210,14 @@ exports.saveMasterRow = async (req, res) => {
   if (checked.error) return res.status(400).json({ message: checked.error });
 
   try {
-    const cols = Object.keys(checked.values).filter((c) => spec.columns.includes(c));
+    let cols = Object.keys(checked.values).filter((c) => spec.columns.includes(c));
+
+    // The uqc column arrives in a later migration than the units table. Until
+    // it is run, saving a unit still has to work rather than failing on a
+    // column that is not there.
+    if (cols.includes("uqc") && !(await masterService.uqcExists())) {
+      cols = cols.filter((c) => c !== "uqc");
+    }
     const placeholders = cols.map((_, i) => `$${i + 2}`);
     const updates = cols
       // `source` is set on insert and left alone on update, so editing a
@@ -213,6 +238,13 @@ exports.saveMasterRow = async (req, res) => {
 
     res.status(200).json({ success: true, row: saved.rows[0] });
   } catch (err) {
+    // The foreign key onto master_uqc is what guarantees a unit cannot carry a
+    // code the GST system does not have. Say so, rather than reporting a fault.
+    if (err.code === "23503" && String(err.constraint || "").includes("uqc")) {
+      return res.status(400).json({
+        message: "That is not a UQC on the GST list. Pick one from the list, or leave it blank.",
+      });
+    }
     console.error(`Error saving a ${spec.label}:`, err);
     res.status(500).json({ message: "Server error" });
   }

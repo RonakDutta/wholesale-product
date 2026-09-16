@@ -8,11 +8,11 @@ const { can } = require("../services/staffAccess");
  *
  *   { id, isOwner, staffId, name, permissions }
  *
- * `id` is the wholesaler. For an owner it is his own id, which is why the
+ * `id` is the wholesaler. For an owner it is their own id, which is why the
  * distinction was invisible before and why `req.user.id` was doing both jobs.
- * For an employee it is his employer's, and that one substitution is what
- * turns every seller screen into his employer's book rather than an empty one
- * of his own.
+ * For an employee it is their employer's, and that one substitution is what
+ * turns every seller screen into their employer's book rather than an empty one
+ * of their own.
  *
  * Runs after authenticateToken and needs nothing from the route. Controllers
  * read `businessId(req)` rather than `req.user.id` wherever they mean the
@@ -65,8 +65,8 @@ const resolveBusiness = async (req, res, next) => {
 
     // Any employment, not only a live one. The difference matters: somebody
     // who has been turned off is not the same as somebody who was never staff.
-    // Resolving him as his own owner would hand a sacked employee a working
-    // seller dashboard, empty but his, which is a confusing way to be
+    // Resolving them as their own owner would hand a sacked employee a working
+    // seller dashboard, empty but their, which is a confusing way to be
     // dismissed and an odd thing for the product to do.
     const { rows } = await pool.query(
       `SELECT id, wholesaler_id, name, permissions, status
@@ -105,7 +105,7 @@ const resolveBusiness = async (req, res, next) => {
       permissions: Array.isArray(staff.permissions) ? staff.permissions : [],
     };
 
-    // Useful to the owner, and the only way he can tell a login has gone
+    // Useful to the owner, and the only way they can tell a login has gone
     // stale. Never awaited: a write to a bookkeeping column must not hold up
     // the request, and losing one is worth nothing.
     pool
@@ -117,8 +117,8 @@ const resolveBusiness = async (req, res, next) => {
 
     return next();
   } catch (err) {
-    // Falling back to "his own business" is the safe failure. It shows an
-    // owner his own book, and shows an employee an empty one, which is
+    // Falling back to "their own business" is the safe failure. It shows an
+    // owner their own book, and shows an employee an empty one, which is
     // confusing but harmless. The alternative, guessing an employer, is not.
     console.warn("Could not resolve the business for this request:", err.message);
     req.business = ownBusiness(userId);
@@ -134,9 +134,9 @@ const resolveBusiness = async (req, res, next) => {
  * than reading undefined and quietly matching nothing.
  */
 const businessId = (req) => {
-  // A turned off employee has no business, and must not fall back to himself:
-  // that is what would give him his own empty seller dashboard. Null here
-  // matches no rows anywhere, and the two gates below refuse him outright.
+  // A turned off employee has no business, and must not fall back to themselves:
+  // that is what would give them their own empty seller dashboard. Null here
+  // matches no rows anywhere, and the two gates below refuse them outright.
   if (req.business?.blocked) return null;
   return req.business?.id || req.user?.id || null;
 };
@@ -151,7 +151,7 @@ const businessId = (req) => {
  * stale screen or somebody trying the endpoint directly.
  *
  * A 403 does not clear the token; utils/axios only does that on a 401. An
- * employee who touches something he may not touch stays signed in.
+ * employee who touches something they may not touch stays signed in.
  */
 const BLOCKED_MESSAGE =
   "Your access to this shop has been turned off. Ask the owner to turn it back on.";

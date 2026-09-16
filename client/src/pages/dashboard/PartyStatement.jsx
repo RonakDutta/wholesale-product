@@ -62,7 +62,7 @@ const RANGES = [
 /**
  * One customer's account over a period.
  *
- * The numbers here have to agree with the balance on his customer page, so
+ * The numbers here have to agree with the balance on their customer page, so
  * both are built from the same two facts: confirmed and delivered sales, and
  * money received. A draft is not a debt and a cancelled bill is not owed, so
  * neither appears.
@@ -179,7 +179,7 @@ const PartyStatement = () => {
 
   // A wa.me link carries text, not a file. There is no way to attach the PDF
   // from a browser, so this sends the figures and says where they came from,
-  // and the PDF stays a separate button he can send himself. Promising to
+  // and the PDF stays a separate button they can send themselves. Promising to
   // "send the statement" and delivering four lines would be a lie.
   const whatsappText = encodeURIComponent(
     [
@@ -476,7 +476,7 @@ const METHOD_LABELS = {
 
 const Particulars = ({ row }) => {
   // An order the customer placed through the shop. Owed exactly like a sale,
-  // but named as what he did, so he recognises it on his own statement.
+  // but named as what they did, so they recognises it on their own statement.
   if (row.kind === "order") {
     return (
       <span className="flex items-center gap-2">

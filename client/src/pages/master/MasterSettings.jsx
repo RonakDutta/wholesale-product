@@ -12,12 +12,12 @@ import { money, taxRate, dateLabel, applyMoneySettings } from "../../utils/money
  * Every field here is a CONVENTION rather than a preference, which is why it
  * is platform level. Indian digit grouping is not something one wholesaler
  * should be able to turn off: 12,00,000 and 1,200,000 are the same number
- * written for two different readerships, and his customers are all in the
+ * written for two different readerships, and their customers are all in the
  * first. Same for the rupee symbol and the date order.
  *
  * What is deliberately NOT here, and stays on each wholesaler's own Invoice
  * defaults screen: invoice prefix, suffix and padding, due days, default GST
- * rate, notes, terms, bank details, GSTIN. One wholesaler changing his prefix
+ * rate, notes, terms, bank details, GSTIN. One wholesaler changing their prefix
  * must not change everybody's.
  *
  * THE SAMPLE UPDATES AS YOU TYPE, and it is not decoration. Somebody choosing
@@ -35,7 +35,7 @@ const FIELDS = [
         type: "number",
         min: 0,
         max: 4,
-        hint: "What a wholesaler sees at a glance. Zero reads best: he wants 27,200, not 27,200.00.",
+        hint: "What a wholesaler sees at a glance. Zero reads best: they want 27,200, not 27,200.00.",
       },
       {
         name: "documentDecimals",
@@ -90,7 +90,7 @@ const FIELDS = [
           { value: 6, label: "6 digits" },
           { value: 8, label: "8 digits" },
         ],
-        hint: "A starting point for a NEW wholesaler, not a rule. His own turnover decides his: six above 5 crore, four below.",
+        hint: "A starting point for a NEW wholesaler, not a rule. Their own turnover decides their: six above 5 crore, four below.",
       },
     ],
   },
@@ -117,7 +117,7 @@ const FIELDS = [
  * An invoice serial may be at most sixteen characters, may use only letters,
  * digits, a hyphen and a slash, and must be unique within a financial year.
  * That is law, not a setting, and putting it in a box somebody can change
- * would imply otherwise. It is here because the master area is where somebody
+ * would imply otherwise. It is here because the administration area is where somebody
  * looks for it.
  */
 const LEGAL = [

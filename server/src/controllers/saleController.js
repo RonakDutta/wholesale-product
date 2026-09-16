@@ -4,16 +4,20 @@ const saleInvoiceService = require("../services/saleInvoiceService");
 const creditNoteService = require("../services/creditNoteService");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const gstService = require("../services/gstService");
-const { checkHsn } = require("../services/hsnService");
+const { checkHsn, minHsnDigits } = require("../services/hsnService");
 const challanService = require("../services/challanService");
 const { receivedExpression } = require("../services/saleSettlement");
 const { nextSaleNumber } = require("../services/seriesNumbers");
 const { businessId } = require("../middlewares/businessContext");
+const {
+  TRANSPORT_COLUMNS,
+  parseTransport,
+} = require("../services/transportDetails");
 
 /**
- * Recording a sale is the wholesaler's core action. He is usually writing
+ * Recording a sale is the wholesaler's core action. They are usually writing
  * down something that already happened, so a new sale is 'confirmed' rather
- * than 'draft' unless he says otherwise.
+ * than 'draft' unless they say otherwise.
  *
  * Every query is scoped by the wholesaler id from the token. A party id in
  * the request body is checked against that scope before anything is written,
@@ -30,7 +34,7 @@ const { businessId } = require("../middlewares/businessContext");
  *
  * The rate a wholesaler quotes is BEFORE GST: "142 a metre" means the shop
  * pays 142 plus tax. So the tax belongs on the sale, not only on the bill.
- * The customer's khata is what he owes, and he owes the tax too.
+ * The customer's khata is what they owe, and they owe the tax too.
  *
  * Run through gstService, the same function the invoice uses, rather than
  * worked out separately here. Two implementations of the same sum drift, and
@@ -62,7 +66,7 @@ const resolveRates = async (client, wholesalerId, lines) => {
   const settings = await invoiceRepository.getSettings(wholesalerId);
   const fallback = Number(settings.defaultTaxRate ?? 18);
 
-  // Read off his shop listings, which is where a product's tax rate now
+  // Read off their shop listings, which is where a product's tax rate now
   // lives. It used to read the rate list, a second product table that has
   // since been merged into the listings and whose screen is gone: a rate
   // edited on the product page would have been ignored here, and a sale of
@@ -102,7 +106,7 @@ const resolveRates = async (client, wholesalerId, lines) => {
  * Validates and normalises the lines on a sale. Returns either an error
  * message or the cleaned lines with their amounts already worked out.
  */
-const buildLines = (rawLines) => {
+const buildLines = (rawLines, minHsn = 4) => {
   if (!Array.isArray(rawLines) || rawLines.length === 0) {
     return { error: "Add at least one item to this sale" };
   }
@@ -135,9 +139,9 @@ const buildLines = (rawLines) => {
 
     // The HSN says what the goods ARE on a tax document. Blank is allowed and
     // common; a code of the wrong length is a slipped keystroke, and letting
-    // it through prints a false description on a bill the customer claims his
+    // it through prints a false description on a bill the customer claims their
     // input credit against.
-    const hsn = checkHsn(raw.hsnCode ?? raw.hsn_code);
+    const hsn = checkHsn(raw.hsnCode ?? raw.hsn_code, { minDigits: minHsn });
     if (!hsn.ok) return { error: `${hsn.reason} Check the HSN for ${itemName}.` };
 
     lines.push({
@@ -173,8 +177,13 @@ exports.createSale = async (req, res) => {
     return res.status(400).json({ message: "Choose a customer" });
   }
 
-  const { lines, error } = buildLines(rawLines);
+  const { lines, error } = buildLines(rawLines, await minHsnDigits());
   if (error) return res.status(400).json({ message: error });
+
+  // Refused here rather than by the CHECK, so the wholesaler reads the four
+  // choices instead of a constraint violation.
+  const { values: transport, error: transportError } = parseTransport(req.body);
+  if (transportError) return res.status(400).json({ message: transportError });
 
   const saleStatus = status || "confirmed";
   if (!["draft", "confirmed", "delivered"].includes(saleStatus)) {
@@ -228,25 +237,32 @@ exports.createSale = async (req, res) => {
 
     const saleNumber = await nextSaleNumber(client, wholesalerId);
 
+    // Named rather than positional, for the reason createInvoice was changed:
+    // two optional column groups counted out by hand is how the lorry number
+    // ends up in the notes.
+    const columns = [
+      ["wholesaler_id", wholesalerId],
+      ["party_id", partyId],
+      ["sale_number", saleNumber],
+      ["source", "wholesaler"],
+      ["status", saleStatus],
+      ["subtotal", fromPaise(subtotalPaise)],
+      ["discount", fromPaise(discountPaise)],
+      ["total", fromPaise(totalPaise)],
+      ["notes", clean(notes)],
+    ];
+    if (has.has_sale_tax) columns.push(["tax_amount", fromPaise(taxPaise)]);
+    if (has.has_sale_transport) {
+      for (const col of TRANSPORT_COLUMNS) columns.push([col, transport[col]]);
+    }
+
+    // sale_date keeps its COALESCE so a blank date still means today.
     const sale = await client.query(
-      `INSERT INTO sales
-         (wholesaler_id, party_id, sale_number, sale_date, source, status,
-          subtotal, discount, ${has.has_sale_tax ? "tax_amount," : ""} total, notes)
-       VALUES ($1, $2, $3, COALESCE($4::date, CURRENT_DATE), 'wholesaler',
-               $5, $6, $7, ${has.has_sale_tax ? "$8, $9, $10" : "$8, $9"})
+      `INSERT INTO sales (${columns.map(([c]) => c).join(", ")}, sale_date)
+       VALUES (${columns.map((_, i) => `$${i + 1}`).join(", ")},
+               COALESCE($${columns.length + 1}::date, CURRENT_DATE))
        RETURNING *`,
-      [
-        wholesalerId,
-        partyId,
-        saleNumber,
-        clean(saleDate),
-        saleStatus,
-        fromPaise(subtotalPaise),
-        fromPaise(discountPaise),
-        ...(has.has_sale_tax ? [fromPaise(taxPaise)] : []),
-        fromPaise(totalPaise),
-        clean(notes),
-      ],
+      [...columns.map(([, v]) => v), clean(saleDate)],
     );
     const saleId = sale.rows[0].id;
 
@@ -309,6 +325,12 @@ exports.createSale = async (req, res) => {
     });
   } catch (err) {
     await client.query("ROLLBACK");
+    // A refusal that carries its own status is a rule the sale broke, not a
+    // fault. Pass the reason on, or the wholesaler is left with "Server error"
+    // and no idea that their number series has outgrown what GST allows.
+    if (err.status) {
+      return res.status(err.status).json({ message: err.message, code: err.code });
+    }
     console.error("Error recording sale:", err);
     res.status(500).json({ message: "Server error" });
   } finally {
@@ -383,7 +405,7 @@ exports.getSaleById = async (req, res) => {
     const has = await invoiceRepository.schemaExtras();
 
     // The order this sale came from, when it came from one. The page needs it
-    // to send the wholesaler to the order rather than offering him a second
+    // to send the wholesaler to the order rather than offering them a second
     // set of buttons for the same goods, see updateSaleStatus below.
     const fromOrder = has.has_sale_order_id;
 
@@ -445,7 +467,7 @@ exports.getSaleById = async (req, res) => {
 };
 
 // The four states are a deliberate spine, not a lifecycle. Once a wholesaler
-// describes how he actually works, this is where the real stages go.
+// describes how they actually works, this is where the real stages go.
 const ALLOWED_NEXT = {
   draft: ["confirmed", "cancelled"],
   confirmed: ["delivered", "cancelled"],
@@ -512,7 +534,7 @@ exports.updateSaleStatus = async (req, res) => {
     // customer. Voiding the invoice was the old answer and it was the wrong
     // instrument: once a bill has been handed over, the way to reverse it is
     // a credit note, which is a document of its own that the customer can put
-    // in his books too. The invoice stands. See creditNoteService.
+    // in their books too. The invoice stands. See creditNoteService.
     let creditNote = null;
     if (status === "cancelled") {
       try {
@@ -530,7 +552,7 @@ exports.updateSaleStatus = async (req, res) => {
         }
       } catch (creditError) {
         // The sale is already cancelled and committed. Failing the whole
-        // request now would tell him it did not work when it did, so this is
+        // request now would tell them it did not work when it did, so this is
         // logged and the note is left to be raised by hand from the bill.
         console.error("Could not raise a credit note for this sale:", creditError);
       }
@@ -567,7 +589,7 @@ exports.createInvoiceForSale = async (req, res) => {
     if (result.error) {
       const [status, message] = REASONS[result.error] || [400, "Cannot bill this sale"];
       // The unpaid case carries the numbers with it, so the screen can say
-      // how much is left rather than making him go and look.
+      // how much is left rather than making them go and look.
       if (result.error === "unpaid") {
         return res.status(status).json({
           message,
@@ -621,8 +643,11 @@ exports.updateSale = async (req, res) => {
   const { id } = req.params;
   const { saleDate, discount, notes, lines: rawLines } = req.body;
 
-  const { lines, error } = buildLines(rawLines);
+  const { lines, error } = buildLines(rawLines, await minHsnDigits());
   if (error) return res.status(400).json({ message: error });
+
+  const { values: transport, error: transportError } = parseTransport(req.body);
+  if (transportError) return res.status(400).json({ message: transportError });
 
   const subtotalPaise = lines.reduce((sum, line) => sum + line.amountPaise, 0);
   const discountPaise = Math.max(0, toPaise(discount));
@@ -652,7 +677,7 @@ exports.updateSale = async (req, res) => {
     // The same rule as the status buttons, for the same reason. A sale
     // written from a shop order owes exactly what the customer agreed at
     // checkout, and part of it may already be paid. Retyping the lines here
-    // would move the debt away from the figure he pressed pay on.
+    // would move the debt away from the figure they pressed pay on.
     if (sale.order_id) {
       await client.query("ROLLBACK");
       return res.status(409).json({
@@ -702,23 +727,26 @@ exports.updateSale = async (req, res) => {
       });
     }
 
+    // Same name and value pairs as the insert. A lorry is booked after the sale
+    // is written at least as often as before it, so this has to be editable.
+    const sets = [
+      ["subtotal", fromPaise(subtotalPaise)],
+      ["discount", fromPaise(discountPaise)],
+      ["total", fromPaise(totalPaise)],
+      ["notes", clean(notes)],
+    ];
+    if (has.has_sale_tax) sets.push(["tax_amount", fromPaise(taxPaise)]);
+    if (has.has_sale_transport) {
+      for (const col of TRANSPORT_COLUMNS) sets.push([col, transport[col]]);
+    }
+
     await client.query(
       `UPDATE sales SET
-         sale_date  = COALESCE($2::date, sale_date),
-         subtotal   = $3,
-         discount   = $4,
-         ${has.has_sale_tax ? "tax_amount = $5, total = $6, notes = $7" : "total = $5, notes = $6"},
+         sale_date = COALESCE($2::date, sale_date),
+         ${sets.map(([c], i) => `${c} = $${i + 3}`).join(", ")},
          updated_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
-      [
-        id,
-        clean(saleDate),
-        fromPaise(subtotalPaise),
-        fromPaise(discountPaise),
-        ...(has.has_sale_tax ? [fromPaise(taxPaise)] : []),
-        fromPaise(totalPaise),
-        clean(notes),
-      ],
+      [id, clean(saleDate), ...sets.map(([, v]) => v)],
     );
 
     // Lines are replaced wholesale. Nothing references a sale line, so there

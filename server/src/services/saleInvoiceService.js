@@ -2,7 +2,8 @@ const pool = require("../config/db");
 const { fullName } = require("../utils/money");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const challanService = require("./challanService");
-const { placeOfSupply } = require("./placeOfSupply");
+const { placeOfSupply, stateOf, stateCode } = require("./placeOfSupply");
+const { toInvoiceFields } = require("./transportDetails");
 const invoiceNumberService = require("./invoiceNumberService");
 const gstService = require("./gstService");
 
@@ -88,12 +89,34 @@ class SaleInvoiceService {
    * with none of this filled in.
    */
   async stampRecipient(client, invoiceId, sale) {
+    const has = await invoiceRepository.schemaExtras();
+
+    // The state the customer is in, frozen with the rest of the address. It
+    // comes from placeOfSupply so it follows the same order as the tax
+    // decision did: a declared state, then the state the GSTIN carries, then
+    // the city. A bill that shows one state and charged tax for another is
+    // the confusion this is meant to prevent.
+    //
+    // There is no pincode here because parties does not hold one. Blank is
+    // honest. An invented pincode on a tax document is not.
+    const state = has.has_document_block
+      ? stateOf({
+          state: sale.party_state,
+          gstin: sale.party_gstin,
+          city: sale.party_city,
+        })
+      : null;
+
+    const extra = has.has_document_block
+      ? ", recipient_state = $10, recipient_state_code = $11"
+      : "";
+
     const stamped = await client.query(
       `UPDATE invoices SET
          sale_id = $2, party_id = $3,
          recipient_name = $4, recipient_gstin = $5, recipient_city = $6,
          recipient_address = $7, recipient_phone = $8,
-         pdf_url = $9
+         pdf_url = $9${extra}
        WHERE id = $1
        RETURNING *`,
       [
@@ -106,6 +129,7 @@ class SaleInvoiceService {
         sale.party_address,
         sale.party_phone,
         `/api/invoices/${invoiceId}/pdf`,
+        ...(has.has_document_block ? [state || null, state ? stateCode(state) : null] : []),
       ],
     );
     return stamped.rows[0];
@@ -274,11 +298,11 @@ class SaleInvoiceService {
 
       // A sale raised from a shop order is priced the way the shop prices
       // things: the buyer paid the listed amount at checkout and that is all
-      // he will be asked for. Adding tax on top would bill him past what he
-      // has already paid and make this invoice disagree with his khata.
+      // they will be asked for. Adding tax on top would bill them past what they
+      // has already paid and make this invoice disagree with customer khata.
       //
-      // A sale the wholesaler typed himself follows the other convention: the
-      // rate he quotes is before tax. Same table, two honest meanings, told
+      // A sale the wholesaler typed themselves follows the other convention: the
+      // rate they quotes is before tax. Same table, two honest meanings, told
       // apart by where the sale came from.
       const fromShop = Boolean(sale.order_id);
 
@@ -300,14 +324,14 @@ class SaleInvoiceService {
         })),
         discount: Number(sale.discount || 0),
         shippingCharge: 0,
-        // The customer's GST number settles his state outright, which matters
+        // The customer's GST number settles their state outright, which matters
         // most here: a party is usually entered with a name, a phone and a
         // city, and half the cities in India are not in any map we hold.
         //
         // A customer with neither a GST number nor a city known to that map
-        // comes back unknown, and unknown is read as the same state, so his
+        // comes back unknown, and unknown is read as the same state, so their
         // bill is CGST plus SGST. That is what a local sale is, and it is what
-        // the previous code did too, by pretending he lived where the seller
+        // the previous code did too, by pretending they lived where the seller
         // lives.
         supplierLocation: {
           state: seller.warehouse_state,
@@ -376,6 +400,15 @@ class SaleInvoiceService {
         notes: settings.defaultNotes,
         termsConditions: settings.defaultTerms,
         pdfUrl: null,
+
+        // The lorry the wholesaler recorded on the sale, carried onto the bill
+        // raised from it. Typed once, at the moment the goods went out, which
+        // is the only moment anybody actually knows the vehicle number.
+        //
+        // Copied, not joined. Editing the sale afterwards must not change a
+        // bill that has already been handed over, which is the same rule the
+        // recipient and the seller block follow.
+        ...toInvoiceFields(sale),
       };
 
       const invoice = await invoiceRepository.createInvoice(
@@ -437,7 +470,7 @@ class SaleInvoiceService {
    *
    * The rule is that a tax invoice waits until the sale is fully paid. That
    * left the last step to a button nobody had to press: a wholesaler could
-   * settle a sale and his customer would simply never get a bill.
+   * settle a sale and their customer would simply never get a bill.
    *
    * The order side already worked this way, through reconcileInvoiceForOrder,
    * so this closes an asymmetry rather than inventing a behaviour: the same

@@ -1,19 +1,19 @@
 /**
  * Money of a customer's that the wholesaler is holding, and spending it.
  *
- * Reported 11 Sept 2026, in the wholesaler's own words: he was owed nothing,
- * the customer paid him, and afterwards he owed the customer 2 lakh.
+ * Reported 11 Sept 2026, in the wholesaler's own words: they were owed nothing,
+ * the customer paid them, and afterwards they owed the customer 2 lakh.
  *
  * The sequence, all of it arithmetically correct and all of it useless:
  *
- *   he returns a 2 lakh order, not refunded    you owe him 2,00,000
- *   he orders 4 lakh, pays half                he owes 0
- *   he pays the other half                     you owe him 2,00,000
+ *   they return a 2 lakh order, not refunded    you owe them 2,00,000
+ *   they orders 4 lakh, pays half                they owe 0
+ *   they pay the other half                     you owe them 2,00,000
  *
  * The credit was never spent. The khata is one netted number per customer, so
- * billing him 4 lakh cancelled his 2 lakh of credit on the display, and
- * settling that bill uncovered it again. He was asked to pay the whole 4 lakh
- * while 2 lakh of his money sat in the till, because nothing in the product
+ * billing them 4 lakh cancelled their 2 lakh of credit on the display, and
+ * settling that bill uncovered it again. They were asked to pay the whole 4 lakh
+ * while 2 lakh of their money sat in the till, because nothing in the product
  * could set a credit against an order, although two screens offered to.
  *
  * What has to hold:
@@ -21,7 +21,7 @@
  *   - setting it against a bill spends it, and it cannot come back
  *   - the customer's balance does not move, because nothing happened between
  *     them: the same rupees are simply against different goods
- *   - the order stops asking him for money he has already handed over
+ *   - the order stops asking them for money they have already handed over
  *   - it cannot be spent twice, cannot exceed what is owed, and cannot be put
  *     against another wholesaler's sale
  *
@@ -136,7 +136,7 @@ const wait = () => new Promise((r) => setTimeout(r, 600));
   };
 
   // ---------------------------------------------------------------
-  console.log("He returns a 2 lakh order and is not refunded");
+  console.log("They return a 2 lakh order and is not refunded");
   // ---------------------------------------------------------------
   const first = await place(200);
   await pay(first);
@@ -153,11 +153,11 @@ const wait = () => new Promise((r) => setTimeout(r, 600));
     "SELECT party_id FROM orders WHERE id = $1", [first])).rows[0].party_id;
 
   check(await balanceOf(partyId) === -200000,
-    "the customer page says the wholesaler owes him 2,00,000",
+    "the customer page says the wholesaler owes them 2,00,000",
     { balance: await balanceOf(partyId) });
 
   const held = await creditService.offer(partyId, seller);
-  check(held.credit === 200000, "and 2,00,000 of his money is loose", { credit: held.credit });
+  check(held.credit === 200000, "and 2,00,000 of their money is loose", { credit: held.credit });
   check(held.targets.length === 0, "with nothing yet to set it against", { n: held.targets.length });
 
   // ---------------------------------------------------------------
@@ -174,7 +174,7 @@ const wait = () => new Promise((r) => setTimeout(r, 600));
     "SELECT id, sale_number FROM sales WHERE order_id = $1", [second])).rows[0];
 
   const netted = await balanceOf(partyId);
-  check(netted === 0, "his balance nets to zero, which is what misled the wholesaler", {
+  check(netted === 0, "customer balance nets to zero, which is what misled the wholesaler", {
     balance: netted,
     why: "2 lakh held against 2 lakh owed, both real, neither visible",
   });
@@ -205,7 +205,7 @@ const wait = () => new Promise((r) => setTimeout(r, 600));
   await wait();
 
   check(await balanceOf(partyId) === 0,
-    "his balance has not moved, because nothing happened between the two of them",
+    "customer balance has not moved, because nothing happened between the two of them",
     { balance: await balanceOf(partyId) });
 
   const row = await saleRow(sale.id);
@@ -217,7 +217,7 @@ const wait = () => new Promise((r) => setTimeout(r, 600));
     "SELECT total_amount - COALESCE(amount_paid,0) AS n FROM orders WHERE id = $1",
     [second])).rows[0].n);
   check(askedFor === 0,
-    "and the order stops asking him for money he has already handed over",
+    "and the order stops asking them for money they have already handed over",
     { stillAsks: askedFor, was: 200000 });
 
   const noMore = await creditService.offer(partyId, seller);
@@ -299,7 +299,7 @@ const wait = () => new Promise((r) => setTimeout(r, 600));
 
   const before = await creditService.offer(partyId, seller);
   const target = (before.targets || []).find((t) => String(t.saleId) === String(smallSale?.id));
-  check(before.credit === 300000, "3,00,000 of his money is loose again", {
+  check(before.credit === 300000, "3,00,000 of their money is loose again", {
     credit: before.credit,
   });
   check(
@@ -318,7 +318,7 @@ const wait = () => new Promise((r) => setTimeout(r, 600));
   );
   check(
     money(partial.body?.creditLeft) === money(300000 - target.outstanding),
-    "and the rest of his money is still his",
+    "and the rest of their money is still their",
     { left: partial.body?.creditLeft },
   );
 

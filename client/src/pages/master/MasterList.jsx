@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { resetMasters } from "../../hooks/useMasters";
 
 /**
- * One master list, edited.
+ * One administration list, edited.
  *
  * All four screens are this component with a different spec, for the same
  * reason the server keeps its four lists as data: four near identical
@@ -26,11 +26,18 @@ const MasterList = ({ spec }) => {
   const [showOff, setShowOff] = useState(false);
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
+  /**
+   * Fixed lists a field offers choices from, such as the GST UQC codes. They
+   * ride along on the same response as the rows, so a select does not cost a
+   * second request.
+   */
+  const [extras, setExtras] = useState({});
 
   const load = async () => {
     try {
       const { data } = await api.get("/api/masters");
       setRows(data?.[spec.field] || []);
+      setExtras({ uqcCodes: data?.uqcCodes || [] });
     } catch {
       toast.error("Could not load this list.");
     }
@@ -55,6 +62,7 @@ const MasterList = ({ spec }) => {
       .then(({ data }) => {
         if (!alive) return;
         setRows(data?.[spec.field] || []);
+        setExtras({ uqcCodes: data?.uqcCodes || [] });
         setLoading(false);
       })
       .catch(() => {
@@ -199,7 +207,31 @@ const MasterList = ({ spec }) => {
                 <label className="mb-1 block text-xs font-semibold text-slate-600">
                   {f.label}
                 </label>
-                {f.type === "checkbox" ? (
+                {f.type === "select" ? (
+                  <>
+                    <select
+                      value={draft[f.name] ?? ""}
+                      onChange={(e) => setDraft({ ...draft, [f.name]: e.target.value })}
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-clay"
+                    >
+                      <option value="">{f.blankLabel || "Not set"}</option>
+                      {(extras[f.optionsFrom] || []).map((o) => (
+                        <option key={o.code} value={o.code}>
+                          {o.code}  {o.description}
+                        </option>
+                      ))}
+                    </select>
+                    {/* A fixed statutory list. If it is empty the migration
+                        that seeds it has not been run, and saying so beats an
+                        empty dropdown with no explanation. */}
+                    {(extras[f.optionsFrom] || []).length === 0 && (
+                      <p className="mt-1 text-[11px] text-clay">
+                        This list is empty. Run the UQC migration to fill it.
+                      </p>
+                    )}
+                    {f.hint && <p className="mt-1 text-[11px] text-slate-400">{f.hint}</p>}
+                  </>
+                ) : f.type === "checkbox" ? (
                   <label className="flex items-center gap-2 py-2 text-sm text-slate-700">
                     <input
                       type="checkbox"

@@ -2,8 +2,8 @@
  * Where a wholesaler's goods come from, and how a buyer filters by it.
  *
  * Two columns hold a city. `warehouse_city` is where the stock actually sits
- * and is the one that matters to a buyer working out how far his order has to
- * travel; `city` is the older, plainer field a seller filled in when he signed
+ * and is the one that matters to a buyer working out how far their order has to
+ * travel; `city` is the older, plainer field a seller filled in when they signed
  * up. The warehouse wins when it is set, because that is the more specific
  * answer, and the older field is the fallback so a seller who never opened the
  * warehouse screen is still findable.
@@ -14,7 +14,7 @@
  *
  * What this deliberately does NOT do is decide that "Delhi", "New Delhi" and
  * "Delhi NCR" are the same place. They may well be, but guessing would put a
- * seller in a city he did not choose, and a buyer filtering to Delhi would be
+ * seller in a city they did not choose, and a buyer filtering to Delhi would be
  * shown stock the system only assumes is nearby. The picker offers exactly the
  * cities sellers have actually typed, so whatever a buyer picks has stock
  * behind it.
@@ -44,7 +44,7 @@ const cityKey = (value) => {
  *
  * An absent city, an empty one, or the explicit "all" means no filter at all,
  * which is the right default: a buyer who has not chosen should see the whole
- * country rather than one city picked for him.
+ * country rather than one city picked for them.
  */
 const cityFilterFrom = (query = {}) => {
   const key = cityKey(query.city);

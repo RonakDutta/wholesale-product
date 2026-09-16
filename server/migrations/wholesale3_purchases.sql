@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS purchases (
     supplier_id UUID NOT NULL REFERENCES suppliers(id) ON DELETE RESTRICT,
 
     -- OUR reference for this entry, PUR/1/26-27. Ours is for finding the
-    -- thing again; the supplier's number below is the one that matters to the
+    -- thing again. The supplier's number below is the one that matters to the
     -- tax department.
     purchase_number VARCHAR(50),
     purchase_date DATE NOT NULL DEFAULT CURRENT_DATE,

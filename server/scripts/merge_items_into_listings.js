@@ -3,15 +3,15 @@
  *
  * For every row in a wholesaler's rate list this either fills in an existing
  * listing of the same product, or creates one. It never creates a second
- * listing for something he already sells, and it never overwrites a value he
+ * listing for something they already sells, and it never overwrites a value they
  * has already set in the shop.
  *
  * Two decisions worth knowing before running it:
  *
  *   New listings are created PRIVATE. A rate list is not a shop window. A
- *   wholesaler who has been keeping private prices would otherwise find his
+ *   wholesaler who has been keeping private prices would otherwise find their
  *   whole book public the moment this ran, which is the exact leak
- *   supplier_inventory.visibility exists to prevent. He turns on the ones he
+ *   supplier_inventory.visibility exists to prevent. They turns on the ones they
  *   wants to sell publicly, product by product.
  *
  *   Nothing is deleted. The items rows stay exactly where they are, so this
@@ -96,8 +96,8 @@ const ready = async (client) => {
           continue;
         }
 
-        // 2. He may already sell this product in the shop under the same
-        // name. Fill that listing in rather than giving him the same product
+        // 2. They may already sell this product in the shop under the same
+        // name. Fill that listing in rather than giving them the same product
         // twice in one list.
         const match = await client.query(
           `SELECT si.id, si.unit, si.pack_size, si.hsn_code, si.gst_percent, si.notes, si.moq
@@ -114,7 +114,7 @@ const ready = async (client) => {
         if (match.rows.length > 0) {
           const listing = match.rows[0];
           // COALESCE in the query, not here: a value the wholesaler has
-          // already set in the shop is his current answer and outranks the
+          // already set in the shop is their current answer and outranks the
           // rate list. This only fills blanks.
           await client.query(
             `UPDATE supplier_inventory SET
@@ -140,7 +140,7 @@ const ready = async (client) => {
           filled++;
         } else {
           // 3. Not in the shop at all. Give it a catalogue entry and a
-          // listing, private until he says otherwise.
+          // listing, private until they say otherwise.
           const product = await client.query(
             `INSERT INTO products (name, category) VALUES ($1, $2) RETURNING id`,
             [clean(item.name), clean(item.category)],

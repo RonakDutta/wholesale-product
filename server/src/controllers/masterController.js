@@ -2,7 +2,7 @@ const masterService = require("../services/masterService");
 const { isPlatformAdmin } = require("../middlewares/platformAdmin");
 
 /**
- * The platform masters, read.
+ * The platform administrations, read.
  *
  * Writing them is the admin console's job and is not built yet; this is the
  * read side, which every screen with a unit or a tax rate dropdown needs.
@@ -10,21 +10,22 @@ const { isPlatformAdmin } = require("../middlewares/platformAdmin");
  * Readable by any signed in user, deliberately. These are the state list, the
  * units, the GST slabs and a short list of HSN codes: public facts, printed on
  * documents that go to customers. Gating them would only mean a buyer's
- * checkout could not name the state he lives in.
+ * checkout could not name the state they live in.
  */
 exports.getMasters = async (req, res) => {
   try {
-    const [states, units, taxRates, hsn] = await Promise.all([
+    const [states, units, taxRates, hsn, uqcCodes] = await Promise.all([
       masterService.states(),
       masterService.units(),
       masterService.taxRates(),
       masterService.hsn(),
+      masterService.uqcCodes(),
     ]);
     /**
      * Rows that have been switched off, when the console asks for them.
      *
      * The plain read returns only active rows, because that is what every
-     * dropdown in the product wants. The master screens need the rest too, or
+     * dropdown in the product wants. The administration screens need the rest too, or
      * a row the admin has just switched off simply vanishes and looks deleted.
      * Asked for explicitly so no ordinary screen pays for it.
      */
@@ -33,13 +34,15 @@ exports.getMasters = async (req, res) => {
       const pool = require("../config/db");
       const [s, u, t, h] = await Promise.all([
         pool.query("SELECT code, name, is_union_territory, active FROM master_states WHERE NOT active ORDER BY code"),
-        pool.query("SELECT code, name, allows_decimals, active FROM master_units WHERE NOT active ORDER BY sort_order, name"),
+        pool.query(`SELECT code, name, allows_decimals, ${
+          (await masterService.uqcExists()) ? "uqc" : "NULL AS uqc"
+        }, active FROM master_units WHERE NOT active ORDER BY sort_order, name`),
         pool.query("SELECT rate, label, active FROM master_tax_rates WHERE NOT active ORDER BY rate"),
         pool.query("SELECT code, description, active FROM master_hsn WHERE NOT active ORDER BY code"),
       ]);
       off = {
         statesInactive: s.rows.map((r) => ({ code: r.code, name: r.name, isUnionTerritory: r.is_union_territory, active: false })),
-        unitsInactive: u.rows.map((r) => ({ code: r.code, name: r.name, allowsDecimals: r.allows_decimals, active: false })),
+        unitsInactive: u.rows.map((r) => ({ code: r.code, name: r.name, allowsDecimals: r.allows_decimals, uqc: r.uqc || null, active: false })),
         taxRatesInactive: t.rows.map((r) => ({ rate: Number(r.rate), label: r.label, active: false })),
         hsnInactive: h.rows.map((r) => ({ code: r.code, label: r.description, active: false })),
       };
@@ -50,6 +53,9 @@ exports.getMasters = async (req, res) => {
       units,
       taxRates,
       hsn,
+      // The statutory UQC list, for the dropdown on the units screen. Empty
+      // until wholesale3_uqc_master_units.sql has been run.
+      uqcCodes,
       // Read by every screen that shows an amount or a date, which is most of
       // them, so it rides along with the lists rather than costing its own
       // request on every page.
@@ -67,7 +73,7 @@ exports.getMasters = async (req, res) => {
 };
 
 /**
- * Writing a master.
+ * Writing an administration list.
  *
  * Everything here sits behind requirePlatformAdmin at the route. These lists
  * shape documents that go to customers and a tax rate on a bill is a number
@@ -111,13 +117,24 @@ const LISTS = {
     table: "master_units",
     key: "code",
     label: "unit",
-    columns: ["name", "allows_decimals", "active", "sort_order"],
+    columns: ["name", "allows_decimals", "active", "sort_order", "uqc"],
     check: (body) => {
       const code = String(body.code || "").trim().toLowerCase();
       if (!/^[a-z0-9][a-z0-9_-]{0,15}$/.test(code)) {
         return { error: "A unit code is up to 16 letters, digits, hyphen or underscore." };
       }
       if (!String(body.name || "").trim()) return { error: "A unit needs a name." };
+
+      // Blank is allowed and means nobody has decided yet. That is different
+      // from OTH, which is a declaration to the GST system that this unit has
+      // no standard code, and it should be chosen rather than defaulted to.
+      // The shape is checked here. Whether the code actually exists is the
+      // foreign key's job, because master_uqc is the list and this is not.
+      const uqc = String(body.uqc || "").trim().toUpperCase();
+      if (uqc && !/^[A-Z]{3}$/.test(uqc)) {
+        return { error: "A UQC is the three letter code from the GST list, such as MTR or KGS." };
+      }
+
       return {
         key: code,
         values: {
@@ -125,6 +142,7 @@ const LISTS = {
           allows_decimals: body.allowsDecimals === undefined ? true : Boolean(body.allowsDecimals),
           active: body.active === undefined ? true : Boolean(body.active),
           sort_order: Number.isFinite(Number(body.sortOrder)) ? Math.round(Number(body.sortOrder)) : 0,
+          uqc: uqc || null,
         },
       };
     },
@@ -165,7 +183,7 @@ const LISTS = {
         key: code,
         values: {
           description: String(body.description).trim(),
-          // Rows an admin adds are marked as his, so the curated list this
+          // Rows an admin adds are marked as their, so the curated list this
           // product shipped with stays tellable from what was added later.
           source: "admin",
           active: body.active === undefined ? true : Boolean(body.active),
@@ -182,17 +200,24 @@ const LISTS = {
  * keyed on the thing itself, a state code or a GST rate, so saving "24" twice
  * is an edit and not a duplicate. Saving a row that already exists keeps its
  * source, so an admin editing the description of a curated HSN code does not
- * silently reclassify it as his own.
+ * silently reclassify it as their own.
  */
 exports.saveMasterRow = async (req, res) => {
   const spec = LISTS[req.params.list];
-  if (!spec) return res.status(404).json({ message: "No such master list" });
+  if (!spec) return res.status(404).json({ message: "No such administration list" });
 
   const checked = spec.check(req.body || {});
   if (checked.error) return res.status(400).json({ message: checked.error });
 
   try {
-    const cols = Object.keys(checked.values).filter((c) => spec.columns.includes(c));
+    let cols = Object.keys(checked.values).filter((c) => spec.columns.includes(c));
+
+    // The uqc column arrives in a later migration than the units table. Until
+    // it is run, saving a unit still has to work rather than failing on a
+    // column that is not there.
+    if (cols.includes("uqc") && !(await masterService.uqcExists())) {
+      cols = cols.filter((c) => c !== "uqc");
+    }
     const placeholders = cols.map((_, i) => `$${i + 2}`);
     const updates = cols
       // `source` is set on insert and left alone on update, so editing a
@@ -208,11 +233,18 @@ exports.saveMasterRow = async (req, res) => {
       [checked.key, ...cols.map((c) => checked.values[c])],
     );
 
-    // So the admin sees his own change at once rather than in five minutes.
+    // So the admin sees their own change at once rather than in five minutes.
     masterService.resetMasters();
 
     res.status(200).json({ success: true, row: saved.rows[0] });
   } catch (err) {
+    // The foreign key onto master_uqc is what guarantees a unit cannot carry a
+    // code the GST system does not have. Say so, rather than reporting a fault.
+    if (err.code === "23503" && String(err.constraint || "").includes("uqc")) {
+      return res.status(400).json({
+        message: "That is not a UQC on the GST list. Pick one from the list, or leave it blank.",
+      });
+    }
     console.error(`Error saving a ${spec.label}:`, err);
     res.status(500).json({ message: "Server error" });
   }
@@ -226,7 +258,7 @@ exports.saveMasterRow = async (req, res) => {
  */
 exports.setMasterRowActive = async (req, res) => {
   const spec = LISTS[req.params.list];
-  if (!spec) return res.status(404).json({ message: "No such master list" });
+  if (!spec) return res.status(404).json({ message: "No such administration list" });
 
   const active = Boolean(req.body?.active);
   try {
@@ -240,8 +272,8 @@ exports.setMasterRowActive = async (req, res) => {
 
     // Switching off the last one would empty the dropdown everywhere. The read
     // side falls back rather than serving nothing, so this is not a disaster,
-    // but it is worth refusing outright rather than leaving him wondering why
-    // his change had no effect.
+    // but it is worth refusing outright rather than leaving them wondering why
+    // their change had no effect.
     if (!active) {
       const left = await pool.query(
         `SELECT COUNT(*)::int AS n FROM ${spec.table} WHERE active`,
@@ -281,7 +313,7 @@ exports.saveSettings = async (req, res) => {
     }
     res.status(200).json({ success: true, settings: result.settings });
   } catch (err) {
-    console.error("Error saving the master settings:", err);
+    console.error("Error saving the administration settings:", err);
     res.status(500).json({ success: false, message: "Could not save those settings." });
   }
 };

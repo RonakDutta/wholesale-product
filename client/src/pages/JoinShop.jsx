@@ -7,11 +7,11 @@ import api from "../utils/axios";
 /**
  * The employee's way in.
  *
- * His owner adds him and reads him a code, or sends him a link with the code
- * in it. Here he chooses a password, and from then on he signs in on the
+ * Their owner adds them and reads them a code, or sends them a link with the code
+ * in it. Here they choose a password, and from then on they sign in on the
  * ordinary login screen like everybody else. One way in rather than two.
  *
- * Public by necessity: he has no account yet, and the code is the credential.
+ * Public by necessity: they have no account yet, and the code is the credential.
  * The server treats a wrong code and an already used one the same way, so this
  * page cannot be used to find out which codes exist.
  */
@@ -20,7 +20,7 @@ const JoinShop = () => {
   const navigate = useNavigate();
 
   // Read from the link on the first render rather than in an effect. A link
-  // carries the code, so he does not have to read it off a phone screen and
+  // carries the code, so they do not have to read it off a phone screen and
   // type it; typing it is still allowed for a code given verbally.
   const [code, setCode] = useState(() => params.get("code") || "");
   const [email, setEmail] = useState("");
@@ -69,7 +69,7 @@ const JoinShop = () => {
           Join your shop
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          Your owner has added you. Use the code he gave you and choose a
+          Your owner has added you. Use the code they gave you and choose a
           password. After this you sign in normally.
         </p>
       </div>

@@ -12,7 +12,7 @@ import SupplierFormModal from "../../components/SupplierFormModal";
  * Deliberately the same shape as the Sales list, because they are the same
  * kind of list and a wholesaler should not have to learn two. The differences
  * are the two things a purchase has that a sale does not: the supplier's own
- * bill number, which is what he will be asked for, and money owed rather than
+ * bill number, which is what they will be asked for, and money owed rather than
  * money to collect.
  */
 
@@ -178,7 +178,7 @@ const Purchases = () => {
                         {dateLabel(purchase.purchase_date)} ·{" "}
                         {purchase.line_count}{" "}
                         {Number(purchase.line_count) === 1 ? "item" : "items"}
-                        {/* His bill number, not ours. This is the one a
+                        {/* Their bill number, not ours. This is the one a
                             wholesaler is asked for when a return does not
                             match, and it cannot be reconstructed later. */}
                         {purchase.supplier_invoice_number && (

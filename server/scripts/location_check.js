@@ -3,8 +3,8 @@
  *
  * It used to be decoration: a hardcoded list of ten big cities, a piece of
  * local state, and nothing downstream of it. A buyer who picked Surat saw the
- * same catalogue he saw before, which is worse than having no picker, because
- * he believes he is looking at Surat.
+ * same catalogue they saw before, which is worse than having no picker, because
+ * they believes they are looking at Surat.
  *
  * The parts that have to hold:
  *   - filtering removes listings, not products, so a filtered card cannot
@@ -76,7 +76,7 @@ const seller = async (firm, profile) => {
   // Signed up from Mumbai, ships from Surat. The warehouse is the truth.
   const movedIn = await seller(`Moved In ${stamp}`, { city: "Mumbai", warehouseCity: "Surat" });
   const ludhiana = await seller(`Ludhiana Mills ${stamp}`, { city: "Ludhiana" });
-  // No profile row at all. He must not vanish, and must not be a city.
+  // No profile row at all. They must not vanish, and must not be a city.
   const bare = await seller(`No Profile ${stamp}`, null);
 
   const prodName = `Grey shirting ${stamp}`;
@@ -177,7 +177,7 @@ const seller = async (firm, profile) => {
   const one = await call(products.getProductById, { params: { id: prod } });
   const movedRow = (one.body?.suppliers || []).find((s) => String(s.supplierId) === String(movedIn));
   check(cityKey(movedRow?.city) === "surat",
-    "the product page places him where the filter does", { c: movedRow?.city });
+    "the product page places them where the filter does", { c: movedRow?.city });
 
   console.log(fails ? `\n${fails} FAILED\n` : "\nall good\n");
   await testPool.end();

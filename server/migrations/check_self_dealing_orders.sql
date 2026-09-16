@@ -6,7 +6,7 @@
 -- is still sitting in the table. Such a row is what makes your own company
 -- appear as the buyer on your own invoice.
 --
--- Read-only. Nothing here changes data; the cleanup is at the bottom,
+-- Read-only. Nothing here changes data. The cleanup is at the bottom,
 -- commented out, so you can look before deciding.
 -- =====================================================
 
@@ -62,7 +62,7 @@ ORDER BY o.created_at DESC;
 --      SET status = 'cancelled'
 --    WHERE buyer_id = supplier_id;
 --
--- Only delete if these were pure test rows you want gone entirely; the
+-- Only delete if these were pure test rows you want gone entirely. The
 -- order cascade takes its order_items and invoice with it:
 --
 --   DELETE FROM orders WHERE buyer_id = supplier_id;

@@ -73,7 +73,7 @@ export default function InvoiceSettings() {
         if (!cancelled && res.data?.success) setPreview(res.data);
       } catch {
         // A failed preview leaves the last good sample on screen. There is
-        // nothing for him to do about it and the save will still be checked.
+        // nothing for them to do about it and the save will still be checked.
       }
     }, 250);
     return () => {
@@ -144,7 +144,7 @@ export default function InvoiceSettings() {
 
           {/* The sample, and the refusal when the shape is illegal. Rule 46(b)
               constrains the whole string, so a prefix and a suffix that are
-              each fine can still be illegal together: he should find that out
+              each fine can still be illegal together: they should find that out
               here rather than at invoice 1000. */}
           {preview && (
             <div

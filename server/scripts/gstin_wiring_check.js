@@ -92,16 +92,16 @@ const BAD = "24AAACC1206D1ZZ"; // one character off, so the check digit fails
     "and it really is cleared", {},
   );
 
-  // ---- his own profile --------------------------------------------------
+  // ---- their own profile --------------------------------------------------
   await q(
     `INSERT INTO wholesaler_profiles (user_id, company_name, city) VALUES ($1,'Ram Textiles','Surat')`,
     [wid],
   );
   const badProfile = await call(profile.updateProfile, { user, body: { gstin: BAD } });
-  check(badProfile.statusCode === 400, "his own mistyped GST number is refused", { s: badProfile.statusCode });
+  check(badProfile.statusCode === 400, "their own mistyped GST number is refused", { s: badProfile.statusCode });
 
   const goodProfile = await call(profile.updateProfile, { user, body: { gstin: GOOD.toLowerCase() } });
-  check(goodProfile.statusCode === 200, "his real one is accepted", { s: goodProfile.statusCode });
+  check(goodProfile.statusCode === 200, "their real one is accepted", { s: goodProfile.statusCode });
   check(
     (await q("SELECT gstin FROM wholesaler_profiles WHERE user_id=$1", [wid])).rows[0].gstin === GOOD,
     "and stored tidied up", {},
@@ -109,7 +109,7 @@ const BAD = "24AAACC1206D1ZZ"; // one character off, so the check digit fails
 
   // ---- what a buyer is told ---------------------------------------------
   const seen = await call(products.getWholesalerById, { params: { id: wid }, query: {} });
-  check(seen.body?.gstVerified === true, "a buyer sees him as GST registered", seen.body?.gstVerified);
+  check(seen.body?.gstVerified === true, "a buyer sees them as GST registered", seen.body?.gstVerified);
 
   // The badge must not appear for junk written before the check existed.
   await q("UPDATE wholesaler_profiles SET gstin = 'NOT A NUMBER' WHERE user_id = $1", [wid]);

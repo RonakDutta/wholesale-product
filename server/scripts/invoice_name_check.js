@@ -1,7 +1,7 @@
 /**
  * Does the bill say the same thing the order said?
  *
- * A wholesaler saw one name on his Orders tab and a different name on his
+ * A wholesaler saw one name on their Orders tab and a different name on their
  * Invoices tab, for the same goods and the same customer. Two separate faults
  * were behind it, and both are checked here.
  *
@@ -20,7 +20,7 @@
  *
  * The rule this pins down: one lot of goods has one bill, addressed to the
  * firm when there is one, and nothing an order does may overwrite what the
- * wholesaler wrote in his own book.
+ * wholesaler wrote in their own book.
  *
  *     node scripts/invoice_name_check.js <database>
  */
@@ -75,7 +75,7 @@ const makeSeller = async () => {
   return id;
 };
 
-/** A retailer who also sells, so he has a firm name on his account. */
+/** A retailer who also sells, so they have a firm name on their account. */
 const makeBuyer = async (company) => {
   const id = (await testPool.query(
     `INSERT INTO users (first_name,last_name,email,phone,password_hash,role)
@@ -156,13 +156,13 @@ const invoicesFor = async (orderId) =>
     "SELECT * FROM parties WHERE wholesaler_id = $1", [seller])).rows[0];
   check(
     party.business_name === "Kishan Cloth House",
-    "the customer's firm reaches his page in the book",
+    "the customer's firm reaches their page in the book",
     { got: party.business_name, was: null },
   );
   check(
     party.gstin === BUYER_GSTIN,
-    "and so does his GST number",
-    { got: party.gstin, why: "without it his customer loses the input credit" },
+    "and so does their GST number",
+    { got: party.gstin, why: "without it their customer loses the input credit" },
   );
   check(
     party.name === "Kishan Kumar",
@@ -197,7 +197,7 @@ const invoicesFor = async (orderId) =>
   );
   check(
     rows[0]?.recipient_gstin === BUYER_GSTIN,
-    "with his GST number frozen onto it",
+    "with their GST number frozen onto it",
     { got: rows[0]?.recipient_gstin, was: null },
   );
 
@@ -250,7 +250,7 @@ const invoicesFor = async (orderId) =>
   // ---------------------------------------------------------------
   const buyer3 = await makeBuyer("Shree Fabrics Pvt Ltd");
   const phone3 = `97${uniq().slice(-8)}`;
-  // He already had this man in his diary, under his own name for him.
+  // They already had this man in their diary, under their own name for them.
   const kept = (await testPool.query(
     `INSERT INTO parties (wholesaler_id, name, business_name, phone, notes)
      VALUES ($1,'Munna bhai','Shree Fabrics',$2,'Always wants 60 days')
@@ -274,14 +274,14 @@ const invoicesFor = async (orderId) =>
     `SELECT COUNT(*)::int AS n FROM parties
       WHERE wholesaler_id = $1 AND right(regexp_replace(phone,'\\D','','g'),10) = $2`,
     [seller, phone3.slice(-10)])).rows[0].n;
-  check(partyCount === 1, "the order finds the man he already had", { got: partyCount });
-  check(after.name === "Munna bhai", "his own name for him is untouched", { got: after.name });
+  check(partyCount === 1, "the order finds the man they already had", { got: partyCount });
+  check(after.name === "Munna bhai", "their own name for them is untouched", { got: after.name });
   check(
     after.business_name === "Shree Fabrics",
-    "and so is the firm he wrote himself",
+    "and so is the firm they wrote themselves",
     { got: after.business_name, note: "the account says Shree Fabrics Pvt Ltd" },
   );
-  check(after.notes === "Always wants 60 days", "and his private note survives", {
+  check(after.notes === "Always wants 60 days", "and their private note survives", {
     got: after.notes,
   });
   check(
@@ -292,7 +292,7 @@ const invoicesFor = async (orderId) =>
   check(String(after.user_id) === String(buyer3), "and the diary entry gains its account");
 
   // ---------------------------------------------------------------
-  console.log("\nA customer with no firm keeps his own name");
+  console.log("\nA customer with no firm keeps their own name");
   // ---------------------------------------------------------------
   const plain = await makeBuyer(null);
   const stock4 = await makeListing(seller);
@@ -309,7 +309,7 @@ const invoicesFor = async (orderId) =>
   );
   check(
     rows4[0]?.recipient_gstin === null,
-    "and no GST number is invented for him",
+    "and no GST number is invented for them",
     { got: rows4[0]?.recipient_gstin },
   );
 

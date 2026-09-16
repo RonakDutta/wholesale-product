@@ -5,6 +5,13 @@ import api from "../../utils/axios";
 import { toast } from "sonner";
 import { useHotkey } from "../../hooks/useHotkey";
 import ItemPicker from "../../components/ItemPicker";
+import TransportCard from "../../components/TransportFields";
+import PaidInFull from "../../components/PaidInFull";
+import {
+  blankTransport,
+  transportFromRow,
+  hasTransport,
+} from "../../utils/transport";
 
 // Short values on purpose here: this select sits beside the quantity box on a
 // phone, where "Kilogram (kg)" would not fit.
@@ -68,6 +75,19 @@ const RecordSale = () => {
   const [amountPaid, setAmountPaid] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [notes, setNotes] = useState("");
+
+  /**
+   * The lorry, if there is one.
+   *
+   * Recorded on the SALE rather than only on the bill, because a bill may be
+   * raised days later or never, and the vehicle number is only known at the
+   * moment the goods go out. saleInvoiceService carries it onto the invoice
+   * when one is raised, so it is typed once.
+   */
+  const [transport, setTransport] = useState(blankTransport());
+  const [showTransport, setShowTransport] = useState(false);
+  const setTransportField = (name, value) =>
+    setTransport((prev) => ({ ...prev, [name]: value }));
   const [sale, setSale] = useState(null);
   // The wholesaler's own default GST rate, used for any line the rate list
   // has no rate for. Falls back to 18 only until the settings arrive.
@@ -86,7 +106,7 @@ const RecordSale = () => {
 
       // The product list only fills in suggestions. A wholesaler who has not
       // built one yet must still be able to record a sale by typing, so a
-      // failure here is not worth telling him about.
+      // failure here is not worth telling them about.
       //
       // This reads the one product list, the same rows the Products screen
       // shows. It used to read the separate rate list, which meant a product
@@ -96,7 +116,7 @@ const RecordSale = () => {
         if (alive) {
           setItems(
             (data || [])
-              // A product he has stopped selling is noise in a picker.
+              // A product they have stopped selling is noise in a picker.
               .filter((row) => row.status === "Active")
               // The listing calls it price. Everything downstream of the
               // picker calls it rate, and they are the same number.
@@ -107,7 +127,7 @@ const RecordSale = () => {
         console.error("Failed to load the products", error);
       }
 
-      // His own default GST rate, for any line the product list has no rate
+      // Their own default GST rate, for any line the product list has no rate
       // for. The server resolves it the same way and is the authority; this
       // is only so the total on screen is the total that gets saved.
       try {
@@ -126,6 +146,12 @@ const RecordSale = () => {
             setPartyId(data.sale.party_id);
             setSaleDate(String(data.sale.sale_date).slice(0, 10));
             setNotes(data.sale.notes || "");
+            const saved = transportFromRow(data.sale);
+            setTransport(saved);
+            // Opened only when there is something to see. A sale that went
+            // out in the customer's own auto should not reopen on eight
+            // empty boxes.
+            setShowTransport(hasTransport(saved));
             setDiscount(
               Number(data.sale.discount) > 0
                 ? String(Number(data.sale.discount))
@@ -243,7 +269,7 @@ const RecordSale = () => {
   /**
    * The two keys somebody entering a stack of bills actually wants.
    *
-   * Both carry a modifier, because he is inside a field when he wants them
+   * Both carry a modifier, because they are inside a field when they want them
    * and a bare letter would land in the item name. Adding a line is the most
    * repeated action in this form by a wide margin.
    */
@@ -289,6 +315,7 @@ const RecordSale = () => {
       saleDate,
       discount: discount || 0,
       notes,
+      ...transport,
       lines: filled.map((line) => ({
         itemName: line.itemName,
         quantity: line.quantity,
@@ -439,7 +466,7 @@ const RecordSale = () => {
               Math.round(toPaise(line.rate) * Number(line.quantity || 0)),
             );
             // A note, not a rule. Nothing enforces a minimum, and a wholesaler
-            // undercutting his own is his business, but he should see it.
+            // undercutting their own is their business, but they should see it.
             const belowMoq =
               line.moq > 0 &&
               Number(line.quantity) > 0 &&
@@ -573,7 +600,7 @@ const RecordSale = () => {
             />
           </div>
 
-          {/* Shown separately because the rate he typed is before tax, and
+          {/* Shown separately because the rate they typed is before tax, and
               the total underneath is what the customer actually pays. Seeing
               only the two ends of that sum is how a wholesaler quotes one
               number and bills another. */}
@@ -616,6 +643,14 @@ const RecordSale = () => {
             on their account.
           </p>
 
+          <PaidInFull
+            id="sale-paid-in-full"
+            total={totals.total}
+            value={amountPaid}
+            onChange={setAmountPaid}
+            label="Paid the whole bill"
+          />
+
           <div className="grid grid-cols-2 gap-3">
             <input
               value={amountPaid}
@@ -655,6 +690,13 @@ const RecordSale = () => {
         )}
       </div>
 
+      <TransportCard
+        value={transport}
+        onChange={setTransportField}
+        open={showTransport}
+        onToggle={() => setShowTransport((o) => !o)}
+      />
+
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <label
           htmlFor="sale-notes"
@@ -672,7 +714,7 @@ const RecordSale = () => {
         />
       </div>
 
-      {/* Sticky, because the total is what he checks before saving */}
+      {/* Sticky, because the total is what they check before saving */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:left-64">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-4">
           <div>

@@ -9,8 +9,8 @@ import { money as fmt } from "../utils/money";
  * Refusing an order, or calling one off.
  *
  * The same screen serves both sides, because the thing being done is the same
- * and only the wording changes. A wholesaler refuses an order he cannot fill;
- * a buyer calls off an order he no longer wants.
+ * and only the wording changes. A wholesaler refuses an order they cannot fill;
+ * a buyer calls off an order they no longer wants.
  *
  * It asks for a reason and it will not proceed without one. The reason goes
  * into the order's history and is the only thing the other side has to go on,
@@ -20,8 +20,8 @@ import { money as fmt } from "../utils/money";
  * It warns about money before anything is pressed, because that is the part
  * people get wrong. Refusing does not refund anybody. Money already taken
  * stays on the books as the customer's credit until somebody actually hands
- * it back or sets it against his next order. Saying so here is the difference
- * between a wholesaler who knows he owes ₹2,100 and one who finds out when
+ * it back or sets it against their next order. Saying so here is the difference
+ * between a wholesaler who knows they owe ₹2,100 and one who finds out when
  * the customer telephones.
  */
 const RefuseOrderModal = ({ order, asSeller = true, onClose, onCancelled }) => {
@@ -109,7 +109,7 @@ const RefuseOrderModal = ({ order, asSeller = true, onClose, onCancelled }) => {
       <form id="refuse-order-form" onSubmit={submit} className="space-y-4 px-5 py-5">
           <p className="text-sm text-slate-600">
             {asSeller
-              ? "This order will be closed and your customer will be told. It cannot be reopened, so he will have to place a fresh order."
+              ? "This order will be closed and your customer will be told. It cannot be reopened, so they will have to place a fresh order."
               : "This order will be closed. You will have to place a fresh order if you change your mind."}
           </p>
 
@@ -121,14 +121,14 @@ const RefuseOrderModal = ({ order, asSeller = true, onClose, onCancelled }) => {
                   <>
                     <strong>{money}</strong> has already been paid for this
                     order. Cancelling does not send it back. It stays in your
-                    khata as this customer's credit until you refund him or put
-                    it against his next order.
+                    khata as this customer's credit until you refund them or put
+                    it against their next order.
                   </>
                 ) : (
                   <>
                     You have already paid <strong>{money}</strong>. Cancelling
                     does not return it automatically. It stays as credit with
-                    the seller, so speak to him about a refund.
+                    the seller, so speak to them about a refund.
                   </>
                 )}
               </p>

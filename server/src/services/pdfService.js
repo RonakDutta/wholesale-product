@@ -97,6 +97,15 @@ const dateOf = (value) =>
       })
     : "";
 
+// How the goods travel, as a person reads it. Stored as a word. The e-way bill
+// API numbers these 1 to 4, which is an encoding detail of that API.
+const TRANSPORT_MODE_TEXT = {
+  road: "Road",
+  rail: "Rail",
+  air: "Air",
+  ship: "Ship",
+};
+
 const METHOD_TEXT = {
   cash: "Cash",
   upi: "UPI",
@@ -112,7 +121,7 @@ const particularsOf = (row) => {
     return `Bill ${row.ref || ""}`.trim();
   }
   // Owed exactly like a bill, but named as what the customer actually did, so
-  // he can match the line against the order on his phone.
+  // they can match the line against the order on their phone.
   if (row.kind === "order") {
     return `Shop order ${row.ref || ""}`.trim();
   }
@@ -153,6 +162,22 @@ class PDFService {
       qrDataUrl = await QRCode.toDataURL(qrPayload, { margin: 1, width: 100 });
     } catch (qrErr) {
       console.warn("QR code generation skipped:", qrErr.message);
+    }
+
+    /**
+     * The e-invoice QR, rendered from the payload the IRP signed.
+     *
+     * Prepared out here beside the UPI one, because drawing happens inside a
+     * plain Promise executor that cannot await. Null until a real submission
+     * has stored a signed payload, and nothing is invented in the meantime.
+     */
+    let signedQrDataUrl = null;
+    if (invoice.signed_qr) {
+      try {
+        signedQrDataUrl = await QRCode.toDataURL(invoice.signed_qr, { margin: 1, width: 160 });
+      } catch (signedQrErr) {
+        console.warn("Could not render the signed e-invoice QR:", signedQrErr.message);
+      }
     }
 
     return new Promise((resolve, reject) => {
@@ -197,98 +222,294 @@ class PDFService {
         doc.fillOpacity(1);
 
         // ----------------------------------------------------
-        // HEADER BAR
+        // THE INVOICE HEAD
         // ----------------------------------------------------
-        doc.rect(36, 36, 523, 65).fill("#0f172a");
+        /**
+         * Laid out the way a tax invoice in this trade is laid out: one ruled
+         * frame, the seller on the left, the invoice particulars on the right,
+         * the two addresses under them, and the transport as a bordered table
+         * of its own.
+         *
+         * The number and dates used to float inside the dark banner at the top
+         * right, which reads like a web header rather than a document. They now
+         * sit in a ruled box beside the seller, which is where somebody looking
+         * for the invoice number on a piece of paper looks first.
+         */
+        const L = 36;            // left edge
+        const R = 559;           // right edge
+        const MID = 300;         // where the frame splits
+        const W = R - L;
 
-        doc.fillColor("#ffffff").fontSize(20).font("Helvetica-Bold");
-        doc.text("TAX INVOICE", 50, 48);
+        const rule = (yy, x1 = L, x2 = R) =>
+          doc.rect(x1, yy, x2 - x1, 0.8).fill("#cbd5e1");
+        const vrule = (yy, hh, x = MID) => doc.rect(x, yy, 0.8, hh).fill("#cbd5e1");
 
-        // Rule 46 wants each copy marked. Original for the recipient is the
-        // one that leaves with the goods; the other two are printed from the
-        // same page by whoever needs them.
-        doc.fontSize(7).font("Helvetica").fillColor("#94a3b8");
-        doc.text(copyTitle, 350, 40, { align: "right", width: 195 });
+        /** A small grey caption over a block. */
+        const caption = (text, x, yy) =>
+          doc.fillColor("#64748b").fontSize(7).font("Helvetica-Bold").text(text, x, yy);
 
-        doc.fontSize(9).font("Helvetica").fillColor("#94a3b8");
-        doc.text(invoice.supplier_company || invoice.supplier_name || BRAND.name, 50, 72);
+        /** Prints a list of lines from a y offset, skipping the blanks. */
+        const stack = (list, x, startY, width, gap = 11) => {
+          let ly = startY;
+          for (const line of list.filter(Boolean)) {
+            doc.text(line, x, ly, { width, height: gap - 1, ellipsis: true });
+            ly += gap;
+          }
+          return ly;
+        };
 
-        doc.fillColor("#ffffff").fontSize(12).font("Helvetica-Bold");
-        doc.text(invoice.invoice_number || "INV-2026-000000", 350, 48, { align: "right", width: 195 });
+        /** "Bhiwandi, Maharashtra (27) - 421302", skipping whatever is blank. */
+        const placeLine = (city, state, code, pincode) => {
+          const where = [city, state && code ? `${state} (${code})` : state]
+            .filter(Boolean)
+            .join(", ");
+          return [where, pincode].filter(Boolean).join(" - ") || null;
+        };
 
-        doc.fontSize(8).font("Helvetica").fillColor("#cbd5e1");
-        const issueDateStr = invoice.issue_date ? new Date(invoice.issue_date).toLocaleDateString("en-IN") : new Date().toLocaleDateString("en-IN");
-        doc.text(`Issue Date: ${issueDateStr}`, 350, 68, { align: "right", width: 195 });
-        if (invoice.due_date) {
-          const dueDateStr = new Date(invoice.due_date).toLocaleDateString("en-IN");
-          doc.text(`Due Date: ${dueDateStr}`, 350, 80, { align: "right", width: 195 });
-        }
+        const asDate = (v) =>
+          v ? new Date(v).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : null;
 
-        // ----------------------------------------------------
-        // SUPPLIER & BUYER INFORMATION
-        // ----------------------------------------------------
-        let y = 115;
+        // Numeric and compact, for the transport table where the columns are
+        // narrow and the row is read across rather than down. Day first, which
+        // is how a date is read on a consignment note here.
+        const shortDate = (v) => {
+          if (!v) return null;
+          const d = new Date(v);
+          const pad = (n) => String(n).padStart(2, "0");
+          return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
+        };
 
-        // Supplier Box
-        doc.rect(36, y, 255, 100).lineWidth(1).strokeColor("#e2e8f0").stroke();
-        doc.rect(36, y, 255, 20).fill("#f8fafc");
-        doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text("SUPPLIER DETAILS (ISSUER)", 44, y + 5);
+        // The title bar. Just the title and which copy this is, because that is
+        // all a banner should carry.
+        doc.rect(L, 36, W, 34).fill("#0f172a");
+        doc.fillColor("#ffffff").fontSize(15).font("Helvetica-Bold");
+        doc.text("TAX INVOICE", L + 12, 47);
+        // Rule 46(o) wants each copy marked.
+        doc.fontSize(7.5).font("Helvetica").fillColor("#cbd5e1");
+        doc.text(copyTitle, MID, 50, { align: "right", width: R - MID - 12 });
 
-        doc.fillColor("#1e293b").fontSize(9).font("Helvetica-Bold").text(invoice.supplier_company || invoice.supplier_name || "Wholesaler", 44, y + 26);
+        /**
+         * The frozen block wins over the join.
+         *
+         * These columns are copied onto the invoice when it is raised, so a
+         * reprint shows the address the bill actually went out with rather
+         * than wherever the firm is today. The joins stay as the fallback for
+         * invoices raised before the block existed, which must keep printing
+         * exactly as they were issued.
+         */
+        const sellerName = invoice.seller_name || invoice.supplier_company || invoice.supplier_name || "Wholesaler";
+        const sellerGstin = invoice.seller_gstin || invoice.supplier_gstin;
+
+        let y = 70;
+
+        // --- Row one: the seller, and the invoice particulars beside it. ---
+        const headTop = y;
+
+        doc.fillColor("#1e293b").fontSize(10).font("Helvetica-Bold");
+        doc.text(sellerName, L + 12, y + 10, { width: MID - L - 24, height: 12, ellipsis: true });
         doc.fontSize(8).font("Helvetica").fillColor("#475569");
-        doc.text(`GSTIN: ${invoice.supplier_gstin || "N/A"}`, 44, y + 40);
-        // Characters 3 to 12 of a GSTIN are the PAN, so this is not a second
-        // field to store or to keep in step; it is the same number read.
-        const supplierPan = panFromGstin(invoice.supplier_gstin);
-        doc.text(`PAN: ${supplierPan || "N/A"}`, 44, y + 52);
-        doc.text(`Phone: ${invoice.supplier_phone || "N/A"}`, 44, y + 64);
-        doc.text(`Email: ${invoice.supplier_email || "N/A"}`, 44, y + 76);
-        if (invoice.supplier_upi_id) {
-          doc.text(`UPI ID: ${invoice.supplier_upi_id}`, 44, y + 88);
+        // Characters 3 to 12 of a GSTIN are the PAN, so this is the same number
+        // read differently, not a second field to keep in step.
+        const sellerEnd = stack(
+          [
+            invoice.seller_address,
+            placeLine(
+              invoice.seller_city || invoice.supplier_city,
+              invoice.seller_state || invoice.supplier_state,
+              invoice.seller_state_code,
+              invoice.seller_pincode,
+            ),
+            sellerGstin ? `GSTIN  ${sellerGstin}` : null,
+            panFromGstin(sellerGstin) ? `PAN  ${panFromGstin(sellerGstin)}` : null,
+            (invoice.seller_phone || invoice.supplier_phone)
+              ? `Phone  ${invoice.seller_phone || invoice.supplier_phone}` : null,
+            invoice.supplier_upi_id ? `UPI  ${invoice.supplier_upi_id}` : null,
+          ],
+          L + 12, y + 26, MID - L - 24,
+        );
+
+        /**
+         * The particulars, as label and value pairs on their own rules.
+         *
+         * A wholesaler chasing a payment reads down this column, so the labels
+         * are fixed width and the values line up. Only what is known is
+         * printed: a row reading "Due Date  -" is noise.
+         */
+        const particulars = [
+          ["Invoice No.", invoice.invoice_number || null],
+          ["Invoice Date", asDate(invoice.issue_date) || asDate(new Date())],
+          ["Due Date", asDate(invoice.due_date)],
+          [
+            "Place of Supply",
+            invoice.place_of_supply
+              ? `${invoice.place_of_supply}${invoice.place_of_supply_code ? ` (${invoice.place_of_supply_code})` : ""}`
+              : null,
+          ],
+          ["Reverse Charge", invoice.reverse_charge ? "Yes" : "No"],
+          [
+            "Reference",
+            invoice.sale_number || invoice.order_number || null,
+          ],
+        ].filter(([, v]) => v);
+
+        let py = y + 10;
+        for (const [label, value] of particulars) {
+          doc.fillColor("#64748b").fontSize(7.5).font("Helvetica");
+          doc.text(label, MID + 12, py + 1, { width: 86 });
+          doc.fillColor("#1e293b").fontSize(8.5).font("Helvetica-Bold");
+          doc.text(String(value), MID + 100, py, { width: R - MID - 112, height: 11, ellipsis: true });
+          py += 14;
         }
 
-        // Buyer Box
-        doc.rect(304, y, 255, 100).lineWidth(1).strokeColor("#e2e8f0").stroke();
-        doc.rect(304, y, 255, 20).fill("#f8fafc");
-        doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text("BILLED TO (BUYER)", 312, y + 5);
+        const rowOneBottom = Math.max(sellerEnd + 6, py + 4, y + 96);
+        caption("SUPPLIER (ISSUER)", L + 12, y + 2);
+        rule(rowOneBottom);
+        vrule(y, rowOneBottom - y);
 
-        doc.fillColor("#1e293b").fontSize(9).font("Helvetica-Bold").text(invoice.buyer_company || invoice.buyer_name || "Retail Buyer", 312, y + 26);
+        // --- Row two: billed to, and shipped to. ---
+        y = rowOneBottom;
+
+        caption("BILLED TO", L + 12, y + 6);
+        doc.fillColor("#1e293b").fontSize(10).font("Helvetica-Bold");
+        doc.text(
+          invoice.recipient_name || invoice.buyer_company || invoice.buyer_name || "Buyer",
+          L + 12, y + 18, { width: MID - L - 24, height: 12, ellipsis: true },
+        );
         doc.fontSize(8).font("Helvetica").fillColor("#475569");
-        doc.text(`GSTIN: ${invoice.buyer_gstin || "N/A"}`, 312, y + 40);
-        doc.text(`Phone: ${invoice.buyer_phone || "N/A"}`, 312, y + 52);
-        doc.text(`Email: ${invoice.buyer_email || "N/A"}`, 312, y + 64);
-        // Named after what it actually is. Printing "Order Ref: #N/A" on a
-        // bill raised from a recorded sale told the customer nothing.
-        const sourceRef = invoice.sale_number
-          ? `Sale Ref: ${invoice.sale_number}`
-          : invoice.order_number
-            ? `Order Ref: ${invoice.order_number}`
-            : null;
-        if (sourceRef) doc.text(sourceRef, 312, y + 76);
+        const billedEnd = stack(
+          [
+            invoice.recipient_address,
+            placeLine(
+              invoice.recipient_city || invoice.buyer_city,
+              invoice.recipient_state,
+              invoice.recipient_state_code,
+              invoice.recipient_pincode,
+            ),
+            `GSTIN  ${invoice.recipient_gstin || invoice.buyer_gstin || "Not registered"}`,
+            (invoice.recipient_phone || invoice.buyer_phone)
+              ? `Phone  ${invoice.recipient_phone || invoice.buyer_phone}` : null,
+          ],
+          L + 12, y + 34, MID - L - 24,
+        );
 
-        // ----------------------------------------------------
-        // PLACE OF SUPPLY AND REVERSE CHARGE
-        // ----------------------------------------------------
-        // Rule 46(n) and 46(p). Both were computed and thrown away: the place
-        // of supply is the state that decided whether this bill charges IGST
-        // or CGST plus SGST, so leaving it off made the tax split unexplained
-        // on the one document that has to explain it.
-        y += 115;
+        /**
+         * Shipped to, and only when it differs.
+         *
+         * When the goods go to the billing address, repeating it is noise on a
+         * page that is already dense. The caption says so instead, which is
+         * what a printed invoice does.
+         */
+        const shipLines = [
+          invoice.ship_to_name,
+          invoice.ship_to_gstin ? `GSTIN  ${invoice.ship_to_gstin}` : null,
+          invoice.ship_to_address,
+          placeLine(
+            invoice.ship_to_city,
+            invoice.ship_to_state,
+            invoice.ship_to_state_code,
+            invoice.ship_to_pincode,
+          ),
+        ].filter(Boolean);
 
-        const posText = invoice.place_of_supply
-          ? `${invoice.place_of_supply}${invoice.place_of_supply_code ? ` (${invoice.place_of_supply_code})` : ""}`
-          : null;
-        if (posText || invoice.reverse_charge !== undefined) {
-          doc.rect(36, y, 523, 18).fill("#f1f5f9");
-          doc.fillColor("#334155").fontSize(8).font("Helvetica-Bold");
-          if (posText) doc.text(`Place of Supply: ${posText}`, 44, y + 5);
-          doc.font("Helvetica").fillColor("#475569");
-          doc.text(
-            `Reverse Charge: ${invoice.reverse_charge ? "Yes" : "No"}`,
-            330, y + 5, { width: 220, align: "right" },
-          );
-          y += 26;
+        caption("SHIPPED TO", MID + 12, y + 6);
+        let shippedEnd;
+        if (shipLines.length) {
+          doc.fillColor("#1e293b").fontSize(10).font("Helvetica-Bold");
+          doc.text(shipLines[0], MID + 12, y + 18, { width: R - MID - 24, height: 12, ellipsis: true });
+          doc.fontSize(8).font("Helvetica").fillColor("#475569");
+          shippedEnd = stack(shipLines.slice(1), MID + 12, y + 34, R - MID - 24);
+        } else {
+          doc.fillColor("#94a3b8").fontSize(8).font("Helvetica-Oblique");
+          doc.text("Same as the billing address", MID + 12, y + 20, { width: R - MID - 24 });
+          shippedEnd = y + 34;
         }
+
+        // Dispatched from, under shipped to, and again only when it differs.
+        const dispatchLines = [
+          invoice.dispatch_from_name,
+          invoice.dispatch_from_address,
+          placeLine(
+            invoice.dispatch_from_city,
+            invoice.dispatch_from_state,
+            invoice.dispatch_from_state_code,
+            invoice.dispatch_from_pincode,
+          ),
+        ].filter(Boolean);
+
+        if (dispatchLines.length) {
+          caption("DISPATCHED FROM", MID + 12, shippedEnd + 4);
+          doc.fontSize(8).font("Helvetica").fillColor("#475569");
+          shippedEnd = stack(dispatchLines, MID + 12, shippedEnd + 16, R - MID - 24);
+        }
+
+        const rowTwoBottom = Math.max(billedEnd, shippedEnd) + 8;
+        rule(rowTwoBottom);
+        vrule(y, rowTwoBottom - y);
+        y = rowTwoBottom;
+
+        // ----------------------------------------------------
+        // TRANSPORT, AS A TABLE
+        // ----------------------------------------------------
+        /**
+         * A bordered table with its own column headings, not a paragraph of
+         * "Label: value" pairs.
+         *
+         * These are the e-way bill fields, and on a real consignment note they
+         * are read across by somebody at a checkpost comparing them against the
+         * lorry in front of them. Ruled columns are how that is read. Written
+         * as a run of text it looked like a note somebody had typed at the
+         * bottom of the page.
+         *
+         * Printed only when something was recorded. Most counter sales have no
+         * transport, and an empty row of headings reads like a gap.
+         */
+        // The widths add up to the frame, 523, so the last column closes on the
+        // right edge rather than leaving a sliver.
+        const transportCells = [
+          ["TRANSPORTER", invoice.transporter_name, 96],
+          ["TRANSPORTER ID", invoice.transporter_id, 88],
+          ["MODE", invoice.transport_mode ? TRANSPORT_MODE_TEXT[invoice.transport_mode] : null, 38],
+          ["VEHICLE", invoice.vehicle_number, 68],
+          ["LR/RR NO.", invoice.transport_doc_number, 60],
+          ["LR/RR DATE", shortDate(invoice.transport_doc_date), 62],
+          ["GR NO.", invoice.gr_number, 55],
+          ["GR DATE", shortDate(invoice.gr_date), 56],
+        ];
+
+        if (transportCells.some(([, v]) => v)) {
+          doc.rect(L, y, W, 15).fill("#f1f5f9");
+          let cx = L;
+          doc.fillColor("#475569").fontSize(6.5).font("Helvetica-Bold");
+          for (const [label, , wdt] of transportCells) {
+            doc.text(label, cx + 6, y + 5, { width: wdt - 8, height: 8, ellipsis: true });
+            cx += wdt;
+          }
+          rule(y + 15);
+
+          cx = L;
+          doc.fillColor("#1e293b").fontSize(7.5).font("Helvetica");
+          for (const [, value, wdt] of transportCells) {
+            doc.text(value || "-", cx + 6, y + 20, { width: wdt - 8, height: 10, ellipsis: true });
+            cx += wdt;
+          }
+
+          // The column rules, drawn last so they sit over the fill.
+          let vx = L;
+          for (const [, , wdt] of transportCells.slice(0, -1)) {
+            vx += wdt;
+            doc.rect(vx, y, 0.8, 33).fill("#cbd5e1");
+          }
+
+          y += 33;
+          rule(y);
+        }
+
+        // The frame's own left and right edges, from the title bar to here.
+        doc.rect(L, headTop, 0.8, y - headTop).fill("#cbd5e1");
+        doc.rect(R, headTop, 0.8, y - headTop).fill("#cbd5e1");
+
+        y += 10;
+
 
         // Table Header
         doc.rect(36, y, 523, 22).fill("#0f172a");
@@ -296,6 +517,8 @@ class PDFService {
 
         doc.text("ITEM DESCRIPTION", 44, y + 6, { width: 170 });
         doc.text("HSN", 220, y + 6, { width: 45, align: "center" });
+        // Quantity and the unit it is counted in. An e-invoice is validated on
+        // the UQC, so the bill shows the same code it will be filed under.
         doc.text("QTY", 270, y + 6, { width: 40, align: "center" });
         doc.text("UNIT PRICE", 315, y + 6, { width: 65, align: "right" });
         doc.text("GST %", 385, y + 6, { width: 45, align: "center" });
@@ -315,8 +538,13 @@ class PDFService {
           doc.text(item.product_name || "Product", 44, y + 5, { width: 170, height: 12, ellipsis: true });
           doc.text(item.hsn_code || "-", 220, y + 5, { width: 45, align: "center" });
           // Through Number first: the column is NUMERIC now, so pg hands back
-          // "2.500" and the bill would read 2.500 metres.
-          doc.text(String(Number(item.quantity)), 270, y + 5, { width: 40, align: "center" });
+          // "2.500" and the bill would read 2.500 metres. The UQC rides with
+          // the figure when the unit has one, and is simply absent when it
+          // does not, rather than printing a stand in code.
+          doc.text(
+            item.uqc ? `${Number(item.quantity)} ${item.uqc}` : String(Number(item.quantity)),
+            270, y + 5, { width: 40, align: "center" },
+          );
           doc.text(rupees(item.unit_price), 315, y + 5, { width: 65, align: "right" });
           doc.text(`${item.gst_percent || 18}%`, 385, y + 5, { width: 45, align: "center" });
           doc.text(rupees(item.tax_amount), 435, y + 5, { width: 55, align: "right" });
@@ -406,7 +634,7 @@ class PDFService {
         addTotalRow("GRAND TOTAL:", invoice.grand_total || 0, true, true);
 
         // Total quantity, beside the money. A wholesaler checks the bale count
-        // before he checks the rupees.
+        // before they check the rupees.
         const totalQty = items.reduce((sum, i) => sum + Number(i.quantity || 0), 0);
         doc.fontSize(8).font("Helvetica").fillColor("#475569");
         doc.text(`Total quantity: ${Number(totalQty.toFixed(3))}`, boxX + 10, boxY);
@@ -424,10 +652,17 @@ class PDFService {
         // Rule 46 in practice: this is the table a buyer's accountant
         // reconciles against GSTR-2B. Built from the lines, so it needs no
         // new data, only adding up what is already on the page.
+        //
+        // The taxable value is the line total MINUS its tax, never quantity
+        // times unit price. A shop order is priced tax inclusive, so its
+        // unit_price already has the tax inside it, and multiplying that out
+        // printed a taxable value overstated by exactly the tax on every
+        // marketplace bill. total - tax is right whichever way the line was
+        // priced, and it makes this table tie to the total above it.
         const byHsn = new Map();
         for (const item of items) {
           const key = `${item.hsn_code || "-"}|${Number(item.gst_percent ?? 18)}`;
-          const taxable = Number(item.unit_price || 0) * Number(item.quantity || 0);
+          const taxable = Number(item.total || 0) - Number(item.tax_amount || 0);
           const row = byHsn.get(key) || {
             hsn: item.hsn_code || "-",
             rate: Number(item.gst_percent ?? 18),
@@ -438,6 +673,11 @@ class PDFService {
           row.tax += Number(item.tax_amount || 0);
           byHsn.set(key, row);
         }
+
+        // The HSN table is 300 wide on the left, so the bank details and the
+        // e-invoice block sit beside it rather than under it. Stacked below,
+        // they ran straight through the footer.
+        const sideY = boxY + 4;
 
         if (byHsn.size > 0) {
           let hy = boxY + 4;
@@ -467,6 +707,69 @@ class PDFService {
           doc.text("Total", 42, hy + 3, { width: 70 });
           doc.text(rupees(sumTaxable), 156, hy + 3, { width: 80, align: "right" });
           doc.text(rupees(sumTax), 240, hy + 3, { width: 90, align: "right" });
+        }
+
+        // ----------------------------------------------------
+        // BANK DETAILS AND THE E-INVOICE SLOT
+        // ----------------------------------------------------
+        // The bank as it stood when the bill was raised, not as it is today.
+        // A customer paying an old invoice has to pay into the account that
+        // invoice named.
+        const bankBits = [
+          invoice.bank_account_name ? `Account name: ${invoice.bank_account_name}` : null,
+          invoice.bank_name ? `Bank: ${invoice.bank_name}` : null,
+          invoice.bank_account_number ? `A/c No: ${invoice.bank_account_number}` : null,
+          invoice.bank_ifsc ? `IFSC: ${invoice.bank_ifsc}` : null,
+          invoice.bank_branch ? `Branch: ${invoice.bank_branch}` : null,
+        ].filter(Boolean);
+
+        let sideCursor = sideY;
+
+        /**
+         * The IRN, its acknowledgement and the signed QR.
+         *
+         * Nothing here is computed. An IRN is issued by the Invoice
+         * Registration Portal once the invoice has been accepted, and the QR
+         * is a payload the IRP signs. Anything worked out locally would not be
+         * valid, so this prints only when a real submission has filled it in
+         * and stays silent otherwise rather than showing an empty box that
+         * looks like something failed.
+         */
+        if (invoice.irn) {
+          doc.fillColor("#334155").fontSize(8).font("Helvetica-Bold");
+          doc.text("E-INVOICE", 340, sideCursor);
+          doc.fontSize(7).font("Helvetica").fillColor("#475569");
+          // An IRN is 64 characters, which does not fit one column. Broken in
+          // half rather than trimmed with an ellipsis, because a partial IRN
+          // on a printed bill is no use to anybody checking it.
+          const irn = String(invoice.irn);
+          sideCursor = stack(
+            [
+              "IRN",
+              irn.slice(0, 32),
+              irn.length > 32 ? irn.slice(32) : null,
+              invoice.ack_number ? `Ack No: ${invoice.ack_number}` : null,
+              invoice.ack_date
+                ? `Ack Date: ${new Date(invoice.ack_date).toLocaleDateString("en-IN")}`
+                : null,
+            ],
+            340, sideCursor + 12, 140,
+          );
+          if (signedQrDataUrl) {
+            try {
+              doc.image(signedQrDataUrl, 489, sideY, { width: 60, height: 60 });
+            } catch (signedQrErr) {
+              console.warn("Could not embed the signed e-invoice QR:", signedQrErr.message);
+            }
+          }
+          sideCursor = Math.max(sideCursor, sideY + 64) + 6;
+        }
+
+        if (bankBits.length) {
+          doc.fillColor("#334155").fontSize(8).font("Helvetica-Bold");
+          doc.text("BANK DETAILS", 340, sideCursor);
+          doc.fontSize(7).font("Helvetica").fillColor("#475569");
+          stack(bankBits, 340, sideCursor + 12, 219);
         }
 
         // ----------------------------------------------------

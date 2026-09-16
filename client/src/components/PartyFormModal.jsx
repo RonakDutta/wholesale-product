@@ -8,8 +8,8 @@ import { gstinFeedback, INDIAN_STATES } from "../utils/gstin";
  * Adds a customer or edits one. The same form does both, because the fields
  * are identical and keeping two copies is how they drift apart.
  *
- * Only the name is required. Somebody typing sixty customers out of his phone
- * should not be stopped by a field he does not have in front of him, and the
+ * Only the name is required. Somebody typing sixty customers out of their phone
+ * should not be stopped by a field they do not have in front of them, and the
  * rest can be filled in later from the customer's own page.
  */
 const PartyFormModal = ({ party, onClose, onSaved }) => {
@@ -24,7 +24,7 @@ const PartyFormModal = ({ party, onClose, onSaved }) => {
     gstin: party?.gstin || "",
     address: party?.address || "",
     notes: party?.notes || "",
-    // Signed: positive is what HE owes, negative is his money you are holding.
+    // Signed: positive is what they owe, negative is their money you are holding.
     // Kept as a string so the box can be empty, which is not the same as zero.
     openingBalance:
       party?.opening_balance && Number(party.opening_balance) !== 0
@@ -48,7 +48,7 @@ const PartyFormModal = ({ party, onClose, onSaved }) => {
       toast.error("Please enter a name.");
       return;
     }
-    // A half typed number counts as wrong at this point: he pressed save.
+    // A half typed number counts as wrong at this point: they pressed save.
     if (form.gstin.trim() && gst.state !== "good") {
       toast.error("Please check the GST number, or clear it.");
       return;
@@ -162,7 +162,7 @@ const PartyFormModal = ({ party, onClose, onSaved }) => {
             })}
           </div>
 
-          {/* The state decides the tax on his bill: same state as you is CGST
+          {/* The state decides the tax on their bill: same state as you is CGST
               plus SGST, a different one is IGST. A GST number answers it on
               its own, so this is for the customer who has none. Left empty it
               is treated as your own state, which is what local trade is. */}
@@ -240,12 +240,12 @@ const PartyFormModal = ({ party, onClose, onSaved }) => {
             placeholder: "Shop number, street, area",
           })}
 
-          {/* What he already owed when this book was opened.
+          {/* What they already owed when this book was opened.
               
-              Without it a wholesaler who has traded for twenty years opens his
-              customer book and is told nobody owes him anything. His only ways
-              round it were entering a fake sale, which puts goods in his books
-              he never sold, or not using the product. */}
+              Without it a wholesaler who has traded for twenty years opens their
+              customer book and is told nobody owes them anything. Their only ways
+              round it were entering a fake sale, which puts goods in their books
+              they never sold, or not using the product. */}
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-sm font-bold text-espresso">
               Already owed, before you started using this
@@ -271,8 +271,8 @@ const PartyFormModal = ({ party, onClose, onSaved }) => {
                 />
                 <p className="mt-1 text-[11px] text-slate-400">
                   {Number(form.openingBalance) < 0
-                    ? "You are holding his money."
-                    : "What he owed you. Put a minus in front if you were holding his money."}
+                    ? "You are holding their money."
+                    : "What they owed you. Put a minus in front if you were holding their money."}
                 </p>
               </div>
               <div>
@@ -290,7 +290,7 @@ const PartyFormModal = ({ party, onClose, onSaved }) => {
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
                 />
                 <p className="mt-1 text-[11px] text-slate-400">
-                  His statement starts from this date.
+                  Their statement starts from this date.
                 </p>
               </div>
             </div>

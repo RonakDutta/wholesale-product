@@ -4,7 +4,7 @@ const crypto = require("crypto");
  * Razorpay, scaffolded.
  *
  * There is no payment gateway in this product. A buyer scans a UPI QR code and
- * presses a button to say he paid, and the server caps what he can claim at
+ * presses a button to say they paid, and the server caps what they can claim at
  * what is owed. That is honest for a closed network where the two parties know
  * each other, and it is not going to be enough forever.
  *
@@ -248,7 +248,7 @@ const verifySignature = ({ orderId, paymentId, signature }) => {
  * Everything above takes money INTO one account. Everything below splits it
  * out to the wholesaler who was actually bought from, through Razorpay Route.
  *
- * A linked account is created by the platform on his behalf, Razorpay does
+ * A linked account is created by the platform on their behalf, Razorpay does
  * the KYC, and only once it says `activated` may a transfer be attached to a
  * payment. The gap between "created" and "activated" is the dangerous one:
  * transfers to an unactivated account are held, so a payment taken then is a
@@ -291,7 +291,7 @@ const apiCall = async (method, path, body) => {
       err.code = "RAZORPAY_REFUSED";
       err.status = response.status;
       // Kept, because Razorpay names the offending field here and a
-      // wholesaler retyping his PAN needs to be told which one it is.
+      // wholesaler retyping their PAN needs to be told which one it is.
       err.field = parsed?.error?.field || null;
       throw err;
     }
@@ -383,7 +383,7 @@ const setSettlementAccount = (accountId, productId, { beneficiaryName, accountNu
     tnc_accepted: true,
   });
 
-/** What Razorpay currently thinks of him. The source of truth for the gate. */
+/** What Razorpay currently thinks of them. The source of truth for the gate. */
 const fetchLinkedAccount = (accountId) =>
   apiCall("GET", `/v2/accounts/${accountId}`);
 

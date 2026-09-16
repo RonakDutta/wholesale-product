@@ -1,7 +1,7 @@
 const pool = require("../config/db");
 const { clean, fromPaise, toPaise } = require("../utils/money");
 const gstService = require("../services/gstService");
-const { checkHsn } = require("../services/hsnService");
+const { checkHsn, minHsnDigits } = require("../services/hsnService");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const { nextPurchaseNumber } = require("../services/seriesNumbers");
 const { businessId } = require("../middlewares/businessContext");
@@ -43,7 +43,7 @@ const purchasesReady = async (res) => {
  * identical: a rate before tax, a discount off the top, tax on what is left.
  *
  * KNOWN LIMIT, worth stating because it is a real one. The authority on a
- * purchase is the paper the supplier handed over, and his software may round
+ * purchase is the paper the supplier handed over, and their software may round
  * a line differently from ours, so a computed total can land a rupee away from
  * the printed one. That gap matters when it is claimed as input credit and
  * matched against GSTR-2B. Letting the wholesaler state the tax figure off the
@@ -70,13 +70,13 @@ const pricePurchase = (lines, discountPaise) =>
  *
  * The GST rate is NOT resolved from the wholesaler's own product list here,
  * which is the one place this deliberately parts company with buildLines on
- * the sale side. On a sale the rate is his to decide, so falling back to his
+ * the sale side. On a sale the rate is their to decide, so falling back to their
  * default is right. On a purchase the rate is whatever the supplier charged,
- * and guessing it from his own selling list would invent a tax figure on a
- * document he did not write. A line with no rate stated is taxed at zero and
+ * and guessing it from their own selling list would invent a tax figure on a
+ * document they did not write. A line with no rate stated is taxed at zero and
  * says so on the screen.
  */
-const buildLines = (rawLines) => {
+const buildLines = (rawLines, minHsn = 4) => {
   if (!Array.isArray(rawLines) || rawLines.length === 0) {
     return { error: "Add at least one item to this purchase" };
   }
@@ -105,7 +105,7 @@ const buildLines = (rawLines) => {
       }
     }
 
-    const hsn = checkHsn(raw.hsnCode ?? raw.hsn_code);
+    const hsn = checkHsn(raw.hsnCode ?? raw.hsn_code, { minDigits: minHsn });
     if (!hsn.ok) return { error: `${hsn.reason} Check the HSN for ${itemName}.` };
 
     // Defaults to claimable, because the great majority of a wholesaler's
@@ -134,7 +134,7 @@ const buildLines = (rawLines) => {
  * The supplier bill unique index, turned into something a person can act on.
  *
  * Worth catching by name rather than reporting "server error", because hitting
- * it means the wholesaler is about to enter a bill he has already entered,
+ * it means the wholesaler is about to enter a bill they have already entered,
  * which is the thing the index exists to stop.
  */
 const duplicateBill = (err, res, supplierInvoiceNumber) => {
@@ -166,7 +166,7 @@ exports.createPurchase = async (req, res) => {
     return res.status(400).json({ message: "Choose a supplier" });
   }
 
-  const { lines, error } = buildLines(rawLines);
+  const { lines, error } = buildLines(rawLines, await minHsnDigits());
   if (error) return res.status(400).json({ message: error });
 
   const purchaseStatus = status || "received";
@@ -212,7 +212,7 @@ exports.createPurchase = async (req, res) => {
 
     // A draft is somebody part way through typing, so it is not yet a debt and
     // must not carry money. Refused rather than quietly dropped: silently
-    // losing a payment he typed is the worse failure of the two.
+    // losing a payment they typed is the worse failure of the two.
     if (paidPaise > 0 && purchaseStatus === "draft") {
       await client.query("ROLLBACK");
       return res.status(400).json({
@@ -298,6 +298,11 @@ exports.createPurchase = async (req, res) => {
   } catch (err) {
     await client.query("ROLLBACK");
     if (duplicateBill(err, res, clean(supplierInvoiceNumber))) return;
+    // A refusal that carries its own status is a rule the purchase broke, not
+    // a fault. Pass the reason on rather than flattening it to "Server error".
+    if (err.status) {
+      return res.status(err.status).json({ message: err.message, code: err.code });
+    }
     console.error("Error recording purchase:", err);
     res.status(500).json({ message: "Server error" });
   } finally {
@@ -531,7 +536,7 @@ exports.updatePurchase = async (req, res) => {
     lines: rawLines,
   } = req.body;
 
-  const { lines, error } = buildLines(rawLines);
+  const { lines, error } = buildLines(rawLines, await minHsnDigits());
   if (error) return res.status(400).json({ message: error });
 
   const subtotalPaise = lines.reduce((sum, line) => sum + line.amountPaise, 0);

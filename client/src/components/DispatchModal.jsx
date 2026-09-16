@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { TransportGrid } from "./TransportFields";
+import { blankTransport, hasTransport } from "../utils/transport";
 import { Truck, Copy, Check, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/axios";
@@ -9,12 +11,12 @@ import ModalShell from "./ModalShell";
  *
  * Two things happen at once here, and they are separate on purpose. The order
  * moves to "shipped", which is the record. And a link is made for the driver
- * to broadcast his location from, which is what lets the buyer follow the
- * delivery on his own order page.
+ * to broadcast their location from, which is what lets the buyer follow the
+ * delivery on their own order page.
  *
  * That link goes to the DRIVER and to nobody else. Opening it and pressing its
  * one button starts reporting that phone as the vehicle, so a buyer given the
- * link would be broadcasting his own position as the delivery.
+ * link would be broadcasting their own position as the delivery.
  *
  * The link is optional. Plenty of goods go out with a man on a scooter who has
  * no smartphone, and the order still has to be dispatchable. So the driver
@@ -29,6 +31,21 @@ const DispatchModal = ({ order, onClose, onDispatched }) => {
   const [driverName, setDriverName] = useState("");
   const [driverPhone, setDriverPhone] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
+  /**
+   * The e-way bill block, sent with the despatch.
+   *
+   * The driver's name, phone and vehicle above are for the TRACKING LINK the
+   * customer opens to watch the lorry. That is a courtesy, it expires, and a
+   * tax document must not be built out of it. These are the fields that go on
+   * the bill, and they are stamped onto the order and onto the invoice already
+   * raised from it.
+   *
+   * The vehicle number is typed once, above, and fed into both.
+   */
+  const [transport, setTransport] = useState(blankTransport());
+  const [showTransport, setShowTransport] = useState(false);
+  const setTransportField = (name, value) =>
+    setTransport((prev) => ({ ...prev, [name]: value }));
   const [sending, setSending] = useState(false);
   const [trackUrl, setTrackUrl] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -42,6 +59,9 @@ const DispatchModal = ({ order, onClose, onDispatched }) => {
         remarks: driverName
           ? `Sent out with ${driverName}${vehicleNumber ? `, ${vehicleNumber}` : ""}`
           : "Sent out",
+        ...transport,
+        // Typed once at the top of this form, and wanted by both.
+        vehicleNumber: vehicleNumber || transport.vehicleNumber || "",
       });
 
       // The order is out. Anything below this point is a convenience.
@@ -87,7 +107,7 @@ const DispatchModal = ({ order, onClose, onDispatched }) => {
     }
   };
 
-  // Addressed to the driver, and opened on his number when we have it, so it
+  // Addressed to the driver, and opened on their number when we have it, so it
   // is harder to send to the wrong person by accident.
   const whatsapp = () => {
     const text =
@@ -125,15 +145,15 @@ const DispatchModal = ({ order, onClose, onDispatched }) => {
             {/* This link belongs to the driver, not the customer. Opening it
                 and pressing the button starts broadcasting that phone's
                 location as the vehicle, so sending it to the buyer would have
-                him reporting his own position as the delivery. The customer
-                follows the delivery from his own order page instead. */}
+                them reporting their own position as the delivery. The customer
+                follows the delivery from their own order page instead. */}
             <p className="text-sm text-slate-600">
               Send this to{" "}
               <strong className="text-espresso">
                 {driverName || "the driver"}
               </strong>
-              , not to your customer. He opens it and presses one button, and
-              then {order.buyer} can watch the delivery on his own order page.
+              , not to your customer. They open it and presses one button, and
+              then {order.buyer} can watch the delivery on their own order page.
             </p>
             <p className="text-xs text-slate-500">
               The link stops working on its own after the delivery.
@@ -193,7 +213,7 @@ const DispatchModal = ({ order, onClose, onDispatched }) => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1.5 block text-xs font-semibold text-slate-600">
-                  His phone
+                  Their phone
                 </label>
                 <input
                   value={driverPhone}
@@ -214,6 +234,37 @@ const DispatchModal = ({ order, onClose, onDispatched }) => {
                   className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition-colors focus:border-clay focus:bg-white"
                 />
               </div>
+            </div>
+
+            {/*
+              Closed by default. Most orders go out without a transporter's
+              paperwork, and opening on eight more boxes turns a two field
+              despatch into a form.
+            */}
+            <div className="rounded-lg border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setShowTransport((o) => !o)}
+                aria-expanded={showTransport}
+                className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left"
+              >
+                <span className="text-xs font-semibold text-slate-600">
+                  Transporter's paperwork
+                  {hasTransport(transport) ? " (filled in)" : ""}
+                </span>
+                <span className="text-xs font-bold text-clay">
+                  {showTransport ? "Hide" : "Add"}
+                </span>
+              </button>
+              {showTransport && (
+                <div className="border-t border-slate-100 p-4">
+                  <p className="mb-3 text-[11px] text-slate-500">
+                    These print on the bill for this order. Leave them blank if
+                    there is no transporter.
+                  </p>
+                  <TransportGrid value={transport} onChange={setTransportField} />
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 pt-1">

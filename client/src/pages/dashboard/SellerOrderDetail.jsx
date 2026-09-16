@@ -200,7 +200,7 @@ const SellerOrderDetail = () => {
   /**
    * The bill for this order.
    *
-   * The buyer has had this button on his own order page all along; the
+   * The buyer has had this button on their own order page all along; the
    * wholesaler who raised the bill had no way to reach it from the order at
    * all, and had to go and find it in the invoice list. Same endpoint, which
    * already allows either side of the order, so this fetches the one existing
@@ -299,8 +299,8 @@ const SellerOrderDetail = () => {
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           {canRefund(order.status) ? (
             /* The last step of a return, and the one nothing used to offer.
-               Until it is done the goods are back on his shelf and the
-               customer's money is still in his till, which the Overview
+               Until it is done the goods are back on their shelf and the
+               customer's money is still in their till, which the Overview
                reports as owed back. */
             <>
               <p className="text-sm font-bold text-espresso">
@@ -311,8 +311,8 @@ const SellerOrderDetail = () => {
               {paid > 0 ? (
                 <>
                   <p className="mt-1 text-xs text-slate-500">
-                    Pay him back however you normally would, by UPI or cash,
-                    then record it here so his account comes back to zero.
+                    Pay them back however you normally would, by UPI or cash,
+                    then record it here so their account comes back to zero.
                   </p>
                   <button
                     onClick={() => setRefunding(true)}
@@ -402,7 +402,7 @@ const SellerOrderDetail = () => {
                 to={`/seller/customers/${order.party_id}`}
                 className="text-xs font-bold text-clay hover:underline"
               >
-                His khata
+                Customer khata
               </Link>
             ) : null
           }
@@ -454,7 +454,7 @@ const SellerOrderDetail = () => {
       </div>
 
       {/* Goods out before the money is in. Standing on the order screen as
-          well as the sale page, because this is where a wholesaler is when he
+          well as the sale page, because this is where a wholesaler is when they
           decides to send the bales. */}
       {(canChallan || challans.length > 0) && (
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

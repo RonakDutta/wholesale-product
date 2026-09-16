@@ -10,7 +10,7 @@
 --              over on 1 January. An invoice raised in January 2027 would
 --              reuse a number already issued in FY 2026-27, a duplicate
 --              serial inside one return period. The code fix keys the counter
---              on the financial year instead; nothing needs migrating,
+--              on the financial year instead. Nothing needs migrating,
 --              because for any date from April to December the two keys are
 --              the same number and this is being run in September.
 --

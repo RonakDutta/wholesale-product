@@ -258,7 +258,7 @@ const CommandPalette = ({ items, onClose }) => {
           })
         )}
 
-        {/* Only with an empty box. Once he is typing he is going somewhere,
+        {/* Only with an empty box. Once they are typing they are going somewhere,
             and a list of shortcuts under the results is just noise. */}
         {!query.trim() && shortcuts.length > 0 && (
           <div className="mt-2 border-t border-slate-100 px-3 pt-3">

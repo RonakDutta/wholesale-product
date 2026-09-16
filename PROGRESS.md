@@ -1636,9 +1636,232 @@ will reach some screens and not others.
 
 ---
 
+## 16 Sept: Administration, UQC, and the HSN summary
+
+The first phases of `ROADMAP.md`. Most of it came from the `sanskriti` branch
+and was merged here.
+
+**Done on that branch.** The master area renamed to Administration at `/admin`,
+across routes, nav, page titles and comments. Gendered language taken out of
+the whole codebase, 149 files: the wholesaler is no longer "he" in comments,
+and UI copy that said "what he owed you" now addresses the reader. Escape on
+the last three overlays. `trust_score` and `response_rate` dropped from the
+schema, not only from the screens. The dead `/api/dashboard/stats` removed.
+Then UQC on the units master, an HSN summary, and a Rule 46(b) check on
+document numbers.
+
+**Corrected on top of it.** The HSN summary read the taxable value as quantity
+times unit price. A shop order is priced tax inclusive, so `unit_price` already
+has the tax inside it: a 1180 rupee line at 18 per cent was declared as 1180
+taxable with a 1360 total, against a bill that says 1000 and 1180, and GSTR-1
+Table 12 gets filled in from that table. It now sums `total - tax_amount` and
+the stored `total`, which is right whichever way the line was priced. It also
+took an invoice id with no owner check, so it read any wholesaler's invoice.
+
+Document numbers were refused correctly but threw into the generic catch, so
+the wholesaler saw "Server error" and nothing else. The refusal now carries a
+status and says which prefix is too long. Rule 46(b) applies to sales and
+challans, not to purchase vouchers, which are our own note of somebody else's
+bill.
+
+UQC no longer guesses. `master_uqc` holds the published list with a foreign key
+onto it, so a unit cannot carry a code that does not exist. Units map only
+where the word means what the GST list means by it, and Case is deliberately
+blank: there is no CAS code, and BOX, CTN and PAC are each a guess. Nothing
+defaults to OTH, which is a real declaration rather than a fallback.
+
+**Migration to run:** `wholesale3_uqc_master_units.sql`, again even if the
+earlier version of it was already applied, and
+`drop_trust_score_and_response_rate.sql`.
+
+Still open in that area: the minimum HSN digit setting, and the Administration
+screens for units and tax terms. See phase 4 in `ROADMAP.md`.
+
+## 16 Sept: the invoice carries its own particulars
+
+Phase 2 of `ROADMAP.md`. Columns and the write path. Nothing on a form or on
+the PDF yet, which is phase 3.
+
+The invoice gained the seller block, the recipient's state and code, a
+dispatch-from address, a ship-to address, GR number and date, bank details, the
+transport block, the IRN and acknowledgement fields, and cess. Lines gained a
+UQC and their own cess. `invoice_settings` gained the live bank details the
+copy is taken from, and `wholesaler_profiles` gained a registered address,
+because the warehouse columns are where goods leave from and that is a
+different question from where a firm is registered.
+
+All of it is copied onto the invoice, not joined to it. An invoice already
+snapshotted who it was billed to, for the reason that a party can be edited and
+a tax document must not change once it is handed over. The seller's own block
+and bank details are the same kind of fact. Join them and a reprint six months
+later shows an address the firm has moved out of and an account it has closed.
+
+The snapshot is taken inside `createInvoice`, not at its three call sites. A
+snapshot a caller has to remember to take is one a fourth caller will forget.
+
+Proved against a local Postgres: raise a bill, then change the firm name,
+GSTIN, address, state and bank account it was copied from, and nothing on the
+bill moves, while the next bill picks up all of it. The state code is derived
+through `placeOfSupply` rather than typed, so it follows the same rule as the
+tax decision.
+
+Two things left blank on purpose. `parties` has no pincode, so the recipient
+pincode is empty rather than invented. `invoice_items.uqc` has no foreign key
+onto `master_uqc`, because a frozen line must not be coupled to a table
+somebody can edit, which is the same mistake as joining the addresses.
+
+**Migration to run:** `wholesale3_invoice_document_block.sql`
+
+## 16 Sept: UQC on the Administration screen, and the bill prints its block
+
+Phase 3, and the UQC part of phase 4.
+
+**Administration.** Every unit now shows the GST code it is filed as, or says
+"UQC not set", and the editor offers the statutory list as a dropdown with the
+meaning beside each code. Blank is allowed and means nobody has decided yet,
+which is deliberately not the same as OTH. A unit cannot be saved with a code
+that is not on the list: the foreign key refuses it and the screen says so in
+words rather than reporting a fault.
+
+**The bill.** The PDF now prints the seller block with its address, state and
+state code, the customer's state and code, dispatched-from and shipped-to when
+they differ from the registered addresses, the transport band with the GR
+number, bank details, and the UQC beside each quantity. An e-invoice block with
+the IRN, acknowledgement and signed QR appears only once a real submission has
+filled them in. Nothing is computed locally, because an IRN cannot be.
+
+**A fault found while doing it.** The printed HSN summary computed the taxable
+value as quantity times unit price, exactly as the SQL one did before it was
+fixed this morning. On a tax inclusive bill that overstates the taxable value by
+the tax, which is every marketplace order. It now reads the line total minus its
+tax, and the summary ties to the total above it on the page.
+
+The invoice screen now says why the tax split is what it is: "IGST, because you
+are in Maharashtra and they are in Gujarat". Shown only when the invoice
+recorded both states, since guessing at the reason would be worse than silence.
+
+Rendered and looked at: a bill with every field, a bill with an IRN and QR, an
+old bill with none of them which prints as it always did, and the units screen
+at desktop and phone width.
+
+## 16 Sept: the invoice form, and the HSN digit rule actually bites
+
+Phases 3 and 4 finished.
+
+**The form.** The new invoice screen has a "Dispatch, delivery and transport"
+section, closed by default because most bills go from the registered address to
+the registered address with no lorry to record. Inside it: dispatched from,
+shipped to, the transporter block and the GR number. Each line gained a Unit
+picker, which is also how the line gets its UQC: the wholesaler picks Metre and
+the bill is filed as MTR. Nobody is asked to know that Bundle is BDL.
+
+State CODES are derived from the state name on the server, never typed. It is
+the number that decides CGST and SGST against IGST, and asking somebody to type
+27 beside Maharashtra is asking them to get it wrong on a tax document.
+
+**The HSN digit rule.** `default_hsn_min_digits` has been in `master_settings`
+since the platform masters were built, and it is on the Administration settings
+screen. Nothing read it. `hsnService` checked that a code was 4, 6 or 8 digits
+and stopped there, so a platform set to 6 accepted 4 digit codes everywhere.
+
+It is enforced now on sales, purchases, products and manual invoices. The
+manual invoice path was not checking the HSN at all, so the same code could be
+refused on a sale and accepted on a bill. `checkHsn` stays pure and takes the
+minimum as an argument; the caller reads the setting once before looping.
+
+No migration. The column and the screen were already there.
+
+**Verified.** Eighteen checks against a local Postgres: changing the setting
+changes what is accepted, a short code is refused with the line named, the
+dispatch and transport fields reach the invoice, the state codes are derived,
+the customer's state is frozen from their own record, the seller block is
+copied without the form sending it, a line that picked a unit carries its UQC
+and a line that did not is left blank. The form was rendered at desktop and
+phone width, which caught the unit dropdown showing "Metr".
+
+---
+
+## 16 Sept: transport on a sale, and a tick for "paid in full"
+
+Phase 5, plus a small thing asked for alongside it.
+
+**Transport on the sale.** The invoice has carried these fields since this
+morning, but a sale often has no invoice yet: a wholesaler records the sale and
+loads the lorry the same afternoon, and the bill may go out days later or never.
+The vehicle number is only known at the moment the goods leave. So `sales` has
+its own transporter, transporter ID, mode, vehicle, LR or RR number and date,
+and GR number and date, and when a bill is raised from the sale they are copied
+onto it. Typed once. Copied and not joined, so editing the sale afterwards
+cannot change a bill already handed over.
+
+There is one definition of the block on each side, `services/transportDetails.js`
+and `components/TransportFields.jsx`, used by both the sale and the invoice
+screens. Two copies of eight fields is how one screen starts offering a mode the
+other refuses.
+
+**Paid in full.** A tick beside every box where somebody would otherwise read a
+total off the screen and type it back in: recording a sale, entering a purchase,
+taking a payment from a customer, paying a supplier. It writes the exact figure
+to the paisa and locks the box so the two cannot disagree. It unticks itself if
+the total moves, rather than silently sitting at the old figure and understating
+what was taken.
+
+**A hazard found and cleared.** Running the migrations through a splitter, as
+CLAUDE.md says to, showed `wholesale3_invoice_from_sale.sql` failing with
+`syntax error at or near "every"`. It had a semicolon in the middle of a prose
+comment, the exact trap that cost a debugging round on 14 Sept. A scan found 20
+of them across 13 files. All replaced with full stops. A semicolon at the END of
+a commented out example is harmless, because the fragment it makes is comment
+only, and those were left alone.
+
+**Migration to run:** `wholesale3_sale_transport.sql`
+
+## 16 Sept: transport on orders too, and the three roads made to agree
+
+Asked: does a bill raised from a shop order carry the transport as well? It did
+not. Checked rather than assumed, and the answer was no on both counts.
+
+**Orders had nowhere to put it.** `orders` held `shipping_carrier` and
+`tracking_number`, which are a courier and a consignment number, not the e-way
+bill fields. The dispatch box asked for a vehicle number but sent it to
+`shipment_tracking_links`, which is the link a customer opens to watch the
+lorry: a courtesy that expires, and not something a tax document should be built
+out of. So `orders` gets the same eight columns the sale and the invoice have.
+
+**The timing is different from a sale, and that shapes the design.** A shop
+order raises its bill the moment the order is placed, long before anything is
+loaded. The transport cannot be copied at billing time because nobody knows it
+yet, so it is stamped at despatch onto the order AND onto the invoice that
+already exists. That is a deliberate exception to the freezing rule and a narrow
+one: the addresses and the amounts are frozen because they were true at issue,
+while the vehicle is decided afterwards, and the e-way bill rules themselves
+allow a vehicle number to be changed in transit.
+
+**Then the three roads were compared.** One bill raised by each, from the same
+firm to the same customer, and every column printed side by side. They agreed on
+the seller block, the bank details, the transport and the tax particulars, and
+disagreed on who the bill was made out to:
+
+  - from a sale, fully frozen
+  - from an order, nothing frozen at all, joined at read time
+  - typed by hand, only the state frozen
+
+So a bill from an order, reprinted after the customer changed their firm name or
+moved, showed today's details on a document issued months ago. That is the exact
+thing the recipient snapshot exists to prevent, and only one of the three roads
+was doing it. `createInvoice` now writes the recipient itself, so all three
+freeze it and a fourth caller cannot forget. The order path prefers the delivery
+address the customer gave for that order, since that is where the goods went.
+
+Re-run after the fix: all three agree on every field.
+
+**Migration to run:** `wholesale3_order_transport.sql`
+
+---
+
 ## Left to do
 
-Roughly in the order agreed.
+Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.
 
 Items 1 to 4 were done on 10 Sept, see above.
 
@@ -1646,13 +1869,13 @@ Items 1 to 4 were done on 10 Sept, see above.
    we know of; every gateway charges per message.
 2. **e-Way Bill against the free sandbox**, once the GSP question below is
    settled. It is the one GST integration worth doing, see the note.
-3. **The invented demo products on the home page.** Delete them and show the
-   failure. Now also out of step with the city filter.
-4. **The 4.5 star rating search invents** for a wholesaler with none, which it
-   then sorts and filters on. Same rule that removed `trust_score`.
-5. **Rewrite the git history** to take out the committed password and the
-   invoice PDF. The Neon credential is already rotated. Needs a moment when
-   nobody else is pushing, because it changes every commit hash.
+3. **Rewrite the git history** to take out the committed password and the
+   invoice PDF. The Neon credential in git is already rotated, the one pasted
+   into chat on 14 Sept is not. Needs a moment when nobody else is pushing,
+   because it changes every commit hash.
+
+The invented demo products on the home page and the 4.5 star rating that search
+used to invent were both dealt with on 14 Sept and are no longer on this list.
 
 ### GST APIs, looked into 4 Sept
 

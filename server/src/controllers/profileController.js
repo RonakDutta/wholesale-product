@@ -12,8 +12,8 @@ exports.getProfile = async (req, res) => {
        FROM wholesaler_profiles wp 
        JOIN users u ON wp.user_id = u.id 
        WHERE wp.user_id = $1`,
-      // The business, so an employee sees the shop he actually works in
-      // rather than an empty profile of his own. Changing it is owner only,
+      // The business, so an employee sees the shop they actually works in
+      // rather than an empty profile of their own. Changing it is owner only,
       // enforced at the router: the GSTIN here goes on every invoice.
       [businessId(req)],
     );
@@ -44,7 +44,7 @@ exports.updateProfile = async (req, res) => {
   const lng = Number(warehouseLng);
   const hasPin = Number.isFinite(lat) && Number.isFinite(lng);
 
-  // His own GST number ends up on every invoice he raises, so a mistyped one
+  // Their own GST number ends up on every invoice they raises, so a mistyped one
   // is worse here than anywhere else. Checked by the number's own arithmetic,
   // which costs nothing. Leaving the field out is still fine.
   let gstinValue = gstin;

@@ -1,10 +1,10 @@
 /**
- * Can a wholesaler who has not filled in his business details sell anything?
+ * Can a wholesaler who has not filled in their business details sell anything?
  *
  * The catalogue used to inner join wholesaler_profiles, so a seller who had
- * signed up but not completed his profile had every listing vanish from
+ * signed up but not completed their profile had every listing vanish from
  * search, from the product page and from the shop page. No error and no empty
- * state: the products simply were not there, and he had no way to find out
+ * state: the products simply were not there, and they had no way to find out
  * why. A new seller's first hour is exactly when that row is least likely to
  * exist.
  *
@@ -36,7 +36,7 @@ let seq = 0;
 (async () => {
   console.log(`\n=== catalogue, ${DB} ===`);
 
-  // Two sellers listing the same product. One has filled in his business
+  // Two sellers listing the same product. One has filled in their business
   // details, the other signed up an hour ago and has not.
   const named = (await q(
     `INSERT INTO users (first_name,last_name,email,role,phone,password_hash)
@@ -75,7 +75,7 @@ let seq = 0;
   const names = (row?.suppliers || []).map((s) => s.companyName).sort();
   check(names.includes("Ram Textiles"), "the named firm shows its firm name", { names });
   check(names.includes("Suresh Patel"),
-    "the seller with no profile shows his own name", { names });
+    "the seller with no profile shows their own name", { names });
   check(!names.some((n) => n === null || n === undefined || n === ""),
     "nobody is listed with a blank name", { names });
 
@@ -87,7 +87,7 @@ let seq = 0;
   check(bareRow?.verified === false,
     "a seller with no profile is not shown as verified", { v: bareRow?.verified });
   check(bareRow?.contactPhone === "9000000102",
-    "his own phone stands in for the missing business phone", { p: bareRow?.contactPhone });
+    "their own phone stands in for the missing business phone", { p: bareRow?.contactPhone });
 
   const contact = await call(products.contactSupplier, {
     params: { id: prod },

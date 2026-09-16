@@ -14,7 +14,7 @@ const router = express.Router();
  * Getting paid is the owner's business, not an employee's.
  *
  * Gated on the settings permission rather than invoices: this submits the
- * owner's PAN and names the bank account his takings land in, which is a
+ * owner's PAN and names the bank account their takings land in, which is a
  * different thing from being allowed to raise a bill.
  */
 router.use(authenticateToken, authorizeRoles("seller", "both"));

@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS delivery_challans (
     wholesaler_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 
     -- One of these two is set. A challan raised from the sales book carries a
-    -- sale; one raised from a shop order carries the order and, once the
+    -- sale. One raised from a shop order carries the order and, once the
     -- order has written its sale, both.
     sale_id UUID REFERENCES sales(id) ON DELETE SET NULL,
     order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS delivery_challans (
 
     challan_number VARCHAR(50) NOT NULL,
 
-    -- Why it was raised. Only one value is reachable today; the column exists
+    -- Why it was raised. Only one value is reachable today. The column exists
     -- so the Rule 55 reasons can be added without a migration.
     reason VARCHAR(30) NOT NULL DEFAULT 'payment_pending'
         CHECK (reason IN ('payment_pending', 'job_work', 'on_approval',

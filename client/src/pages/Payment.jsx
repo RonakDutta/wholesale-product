@@ -318,7 +318,7 @@ const Payment = () => {
         )}
 
         {/* Leads, and is the only way to pay that is actually confirmed.
-            Nothing verifies a QR payment: the buyer presses a button to say he
+            Nothing verifies a QR payment: the buyer presses a button to say they
             paid and the cap on what is owed is the entire check. So this is
             the recommended path and the QR code is the fallback underneath. */}
         {payable && (
@@ -345,8 +345,8 @@ const Payment = () => {
 
             Nothing here confirms that money actually moved, which is why it is
             second rather than first. That is deliberately NOT said on screen:
-            a buyer cannot act on it and it would only make him doubt a payment
-            he has made. It is written up in PROGRESS.md instead. */}
+            a buyer cannot act on it and it would only make them doubt a payment
+            they have made. It is written up in PROGRESS.md instead. */}
         {payable && (
           <details className="group mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">

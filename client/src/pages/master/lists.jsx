@@ -1,7 +1,7 @@
 import MasterList from "./MasterList";
 
 /**
- * The four master lists, as data.
+ * The four administration lists, as data.
  *
  * Same shape as the server's LISTS map and for the same reason: four screens
  * that each keep their own copy of "validate, save, refresh" is how three of
@@ -9,7 +9,7 @@ import MasterList from "./MasterList";
  *
  * The validation lives on the server. What is here is labels, hints and what
  * a blank row looks like, so a person filling one in knows what is wanted
- * before he is told no.
+ * before they are told no.
  */
 
 const SPECS = {
@@ -40,18 +40,30 @@ const SPECS = {
     title: "Units",
     singular: "Unit",
     blurb:
-      "How goods are counted. Cloth by the metre, oil by the litre, and a wholesaler who sells in bales needs the word bale.",
+      "How goods are counted. Cloth by the metre, oil by the litre, and a wholesaler who sells in bales needs the word bale. Each one also needs the GST code it is filed as, which is the UQC.",
     columns: [{ field: "code" }, { field: "name" }],
     fields: [
       { name: "code", label: "Code", hint: "What is stored and shown on a bill, like mtr.", fixedOnEdit: true },
       { name: "name", label: "Name", hint: "What a person reads, like Metre." },
+      {
+        name: "uqc",
+        label: "GST code (UQC)",
+        type: "select",
+        optionsFrom: "uqcCodes",
+        blankLabel: "Not decided yet",
+        hint: "What this unit is filed as on an e-invoice, an e-way bill and in the HSN summary of GSTR-1. Leave it blank until you are sure. OTH means the unit has no standard code, which is an answer to choose rather than one to fall back on.",
+      },
       { name: "allowsDecimals", label: "Allows fractions", type: "checkbox", hint: "2.5 metres makes sense; 2.5 pieces does not." },
       { name: "sortOrder", label: "Order in the list", type: "number", hint: "Lower comes first." },
     ],
-    blank: () => ({ code: "", name: "", allowsDecimals: true, sortOrder: 0, active: true }),
-    toDraft: (r) => ({ code: r.code, name: r.name, allowsDecimals: r.allowsDecimals !== false, sortOrder: 0, active: r.active !== false }),
+    blank: () => ({ code: "", name: "", uqc: "", allowsDecimals: true, sortOrder: 0, active: true }),
+    toDraft: (r) => ({ code: r.code, name: r.name, uqc: r.uqc || "", allowsDecimals: r.allowsDecimals !== false, sortOrder: 0, active: r.active !== false }),
     primary: (r) => `${r.name} (${r.code})`,
-    secondary: (r) => (r.allowsDecimals === false ? "Whole numbers only" : "Fractions allowed"),
+    secondary: (r) =>
+      [
+        r.uqc ? `UQC ${r.uqc}` : "UQC not set",
+        r.allowsDecimals === false ? "Whole numbers only" : "Fractions allowed",
+      ].join("  |  "),
   },
 
   "tax-rates": {
@@ -80,7 +92,7 @@ const SPECS = {
     title: "HSN codes",
     singular: "HSN code",
     blurb:
-      "What the goods ARE on a tax bill, and what the customer claims his input credit against. Codes and descriptions only: nothing here maps a code to a GST rate, because rates change and the same heading carries several by price slab.",
+      "What the goods ARE on a tax bill, and what the customer claims their input credit against. Codes and descriptions only: nothing here maps a code to a GST rate, because rates change and the same heading carries several by price slab.",
     columns: [{ field: "code" }, { field: "label" }],
     fields: [
       { name: "code", label: "Code", hint: "4, 6 or 8 digits. Six is required above 5 crore turnover.", fixedOnEdit: true },

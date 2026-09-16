@@ -2,15 +2,16 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Plus, TriangleAlert } from "lucide-react";
 import api from "../../utils/axios";
+import PaidInFull from "../../components/PaidInFull";
 import { toast } from "sonner";
 import { money, dateLabel } from "../../utils/money";
 
 /**
- * One supplier: what he has billed, what has been paid, and what is left.
+ * One supplier: what they have billed, what has been paid, and what is left.
  *
  * The payment box offers a bill to pay against, and "nothing in particular".
  * Both are real. A trader pays a round sum across several old bills without
- * saying which, and forcing him to allocate it makes him invent an allocation,
+ * saying which, and forcing them to allocate it makes them invent an allocation,
  * which is worse data than none. Money against no bill sits on the account and
  * comes off the balance either way.
  */
@@ -180,7 +181,7 @@ const SupplierDetail = () => {
             </p>
           ) : (
             <p className="mt-0.5 text-xs text-amber-700">
-              No GST number recorded, so his bills carry no input credit.
+              No GST number recorded, so their bills carry no input credit.
             </p>
           )}
         </div>
@@ -196,9 +197,9 @@ const SupplierDetail = () => {
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
           {balance > 0
-            ? "You owe him"
+            ? "You owe them"
             : balance < 0
-              ? "He is holding your money"
+              ? "They are holding your money"
               : "Settled"}
         </p>
         <p
@@ -220,7 +221,7 @@ const SupplierDetail = () => {
         className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
       >
         <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">
-          Record money paid to him
+          Record money paid to them
         </h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
@@ -238,6 +239,17 @@ const SupplierDetail = () => {
               placeholder="0"
               className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-clay"
             />
+            {/* Only when there is a balance to clear. A supplier who is square,
+                or who owes US money, has no "in full" to offer. */}
+            <div className="mt-2">
+              <PaidInFull
+                id="supplier-paid-in-full"
+                total={balance > 0 ? balance : 0}
+                value={payment.amount}
+                onChange={(next) => setPayment({ ...payment, amount: next })}
+                label="Clearing everything you owe them"
+              />
+            </div>
           </div>
           <div>
             <label
@@ -326,16 +338,16 @@ const SupplierDetail = () => {
         </button>
       </form>
 
-      {/* His bills */}
+      {/* Their bills */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 bg-slate-50 px-5 py-3">
           <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">
-            His bills
+            Their bills
           </h3>
         </div>
         {purchases.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-slate-500">
-            No bills from him yet.
+            No bills from them yet.
           </p>
         ) : (
           <ul className="divide-y divide-slate-100">
@@ -383,16 +395,16 @@ const SupplierDetail = () => {
         )}
       </div>
 
-      {/* Money paid to him */}
+      {/* Money paid to them */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 bg-slate-50 px-5 py-3">
           <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">
-            Money paid to him
+            Money paid to them
           </h3>
         </div>
         {payments.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-slate-500">
-            Nothing paid to him yet.
+            Nothing paid to them yet.
           </p>
         ) : (
           <ul className="divide-y divide-slate-100">

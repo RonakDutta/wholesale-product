@@ -8,7 +8,7 @@
  *
  * See server/src/services/hsnService.js. Nothing here maps a code to a tax
  * rate, on purpose: rates change and the same code carries different rates by
- * price slab, so the rate stays a number the wholesaler sets himself.
+ * price slab, so the rate stays a number the wholesaler sets themselves.
  */
 
 export const tidyHsn = (value) => String(value ?? "").replace(/[\s.-]/g, "");
@@ -28,8 +28,8 @@ export const hsnFeedback = (value) => {
   if (!/^\d+$/.test(hsn)) {
     return { state: "bad", message: "An HSN code is digits only." };
   }
-  // Between the valid lengths he is still typing, not wrong. Going red at
-  // five digits on the way to six would make the box argue with him.
+  // Between the valid lengths they are still typing, not wrong. Going red at
+  // five digits on the way to six would make the box argue with them.
   if (hsn.length < 4) {
     return { state: "typing", message: "4, 6 or 8 digits" };
   }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import api from "../../utils/axios";
+import PaidInFull from "../../components/PaidInFull";
 import { toast } from "sonner";
 import { useHotkey } from "../../hooks/useHotkey";
 import { useMasters } from "../../hooks/useMasters";
@@ -16,10 +17,10 @@ import SupplierFormModal from "../../components/SupplierFormModal";
  * Three things differ from recording a sale, and all three come from the same
  * fact, that this document was written by somebody else:
  *
- *   * His bill number and its date are asked for, because they are what the
+ *   * Their bill number and its date are asked for, because they are what the
  *     tax department matches on and cannot be reconstructed afterwards.
  *   * The GST rate starts empty rather than at the wholesaler's own default.
- *     On a sale the rate is his to decide; on a purchase it is whatever the
+ *     On a sale the rate is their to decide; on a purchase it is whatever the
  *     supplier charged, and defaulting it would invent a figure on somebody
  *     else's document.
  *   * A line can be marked as carrying no input credit.
@@ -185,7 +186,7 @@ const RecordPurchase = () => {
   /**
    * The two keys somebody entering a stack of bills actually wants.
    *
-   * Both carry a modifier, because he is inside a field when he wants them
+   * Both carry a modifier, because they are inside a field when they want them
    * and a bare letter would land in the item name. Adding a line is the most
    * repeated action in this form by a wide margin.
    */
@@ -330,7 +331,7 @@ const RecordPurchase = () => {
         <p className="mt-1 text-sm text-slate-500">
           {editing
             ? "Fix what was entered. What you owe this supplier moves with it."
-            : "Copy across what the supplier billed you. It goes onto his account and its GST counts towards your input credit."}
+            : "Copy across what the supplier billed you. It goes onto their account and its GST counts towards your input credit."}
         </p>
       </div>
 
@@ -357,8 +358,8 @@ const RecordPurchase = () => {
             /* The list, and a way out of it.
 
                A bill from a mill not yet in the book used to mean abandoning
-               a half typed purchase, going to Suppliers, adding him, and
-               starting again. The modal adds him here and selects him. */
+               a half typed purchase, going to Suppliers, adding them, and
+               starting again. The modal adds them here and selects them. */
             <div className="flex gap-2">
               <select
                 id="purchase-supplier"
@@ -413,11 +414,11 @@ const RecordPurchase = () => {
             id="purchase-bill"
             value={billNumber}
             onChange={(e) => setBillNumber(e.target.value)}
-            placeholder="As printed on his bill"
+            placeholder="As printed on their bill"
             className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
           />
           <p className="mt-1 text-xs text-slate-500">
-            The number on his paper, not ours. This is what your GST return is
+            The number on their paper, not ours. This is what your GST return is
             matched on, and the same bill cannot be entered twice.
           </p>
         </div>
@@ -510,10 +511,10 @@ const RecordPurchase = () => {
                         onChange={(e) =>
                           setLine(line.key, "gstPercent", e.target.value)
                         }
-                        aria-label="GST rate he charged"
+                        aria-label="GST rate they charged"
                         className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm outline-none transition-colors focus:border-clay"
                       >
-                        <option value="">GST he charged</option>
+                        <option value="">GST they charged</option>
                         {taxRates.map((rate) => (
                           <option key={rate.rate} value={rate.rate}>
                             {rate.label || `GST ${rate.rate}%`}
@@ -533,7 +534,7 @@ const RecordPurchase = () => {
 
                     {/* Off by default on nothing. Almost every purchase a
                         wholesaler makes is claimable, so this is the exception
-                        he ticks, not a box he has to clear each time. */}
+                        they ticks, not a box they have to clear each time. */}
                     <label className="flex items-center gap-2 text-xs text-slate-600">
                       <input
                         type="checkbox"
@@ -588,7 +589,7 @@ const RecordPurchase = () => {
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">
-            His bill
+            Their bill
           </h3>
 
           <div className="flex items-center justify-between text-sm">
@@ -626,8 +627,8 @@ const RecordPurchase = () => {
             </span>
           </div>
           <p className="text-xs text-slate-500">
-            Check this against the figure printed on his bill. If they differ by
-            a rupee his software has rounded a line differently, and the printed
+            Check this against the figure printed on their bill. If they differ by
+            a rupee their software has rounded a line differently, and the printed
             one is the one that counts.
           </p>
         </div>
@@ -649,8 +650,16 @@ const RecordPurchase = () => {
             </h3>
             <p className="text-xs text-slate-500">
               Leave this empty if you will pay later. Whatever is left shows on
-              his account.
+              their account.
             </p>
+
+            <PaidInFull
+              id="purchase-paid-in-full"
+              total={totals.total}
+              value={amountPaid}
+              onChange={setAmountPaid}
+              label="Paid the whole bill"
+            />
 
             <div className="grid grid-cols-2 gap-3">
               <input
@@ -728,7 +737,7 @@ const RecordPurchase = () => {
         </div>
       </div>
 
-      {/* Adds him and selects him, so the purchase being typed carries on
+      {/* Adds them and selects them, so the purchase being typed carries on
           rather than being abandoned. The list is reloaded from the server
           instead of being patched locally, so the new row is exactly what
           every other row is. */}

@@ -12,7 +12,7 @@
 -- Run this first. It should return no rows. If it returns any, those orders
 -- already have more than one invoice and the index below will refuse to build
 -- until you decide which invoice is the real one. Do not delete anything on
--- the strength of this query alone; a duplicate that already carries payments
+-- the strength of this query alone. A duplicate that already carries payments
 -- needs those payments moved onto the surviving invoice first.
 SELECT
     order_id,

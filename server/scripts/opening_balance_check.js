@@ -2,16 +2,16 @@
  * What was already owed before this product.
  *
  * Taken from Busy's Account master, which carries Op. Bal on every party. It is
- * the thing that stops a real wholesaler moving onto this: his customer book
- * opened at zero on day one, so the only number he cares about was wrong, and
- * his choices were entering a fake sale for the old balance or not using it.
+ * the thing that stops a real wholesaler moving onto this: their customer book
+ * opened at zero on day one, so the only number they cares about was wrong, and
+ * their choices were entering a fake sale for the old balance or not using it.
  *
  * What has to hold:
  *   - it reaches the balance, the customer list, and the overview totals, all
  *     three, because a figure that is in one and not another is the exact
  *     disagreement khataBalance exists to prevent
  *   - a NEGATIVE opening is money the wholesaler is holding, and lands in the
- *     "owed by you" column rather than reducing what he is owed by others
+ *     "owed by you" column rather than reducing what they are owed by others
  *   - a figure with no date is refused, because a statement cannot start from
  *     nowhere
  *   - it is per wholesaler, like everything else in the book
@@ -112,12 +112,12 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   check(owing.statusCode === 201, "a customer who already owed 2 lakh is added", { got: owing.statusCode });
   const kishan = owing.body.id;
 
-  // Negative: the wholesaler is holding HIS money.
+  // Negative: the wholesaler is holding THEIR money.
   const credit = await call(parties.createParty, {
     ...asSeller,
     body: { name: "Sanskriti", openingBalance: -50000, openingBalanceOn: "2026-04-01" },
   });
-  check(credit.statusCode === 201, "and one whose money he is holding", { got: credit.statusCode });
+  check(credit.statusCode === 201, "and one whose money they are holding", { got: credit.statusCode });
   const sanskriti = credit.body.id;
 
   // No opening at all is the ordinary case and stays zero.
@@ -145,7 +145,7 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
       lines: [{ itemName: "Cotton", quantity: 10, rate: 1000, gstPercent: 0 }],
     },
   });
-  check(sold.statusCode === 201, "a sale is recorded against him", { got: sold.statusCode });
+  check(sold.statusCode === 201, "a sale is recorded against them", { got: sold.statusCode });
 
   const after = await call(parties.getPartyById, { ...asSeller, params: { id: kishan } });
   check(money(after.body?.party?.outstanding) === 210000,
@@ -164,9 +164,9 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
 
   const stats = await call(parties.getPartyStats, { ...asSeller, query: {} });
   check(money(stats.body?.outstanding) === 0,
-    "nothing is owed to him once Kishan has paid", { got: stats.body?.outstanding });
+    "nothing is owed to them once Kishan has paid", { got: stats.body?.outstanding });
   check(money(stats.body?.owedBack) === 50000,
-    "and Sanskriti's 50,000 is money he owes HER, reported separately",
+    "and Sanskriti's 50,000 is money they owe THEIR, reported separately",
     { got: stats.body?.owedBack });
 
   const home = await call(overview.getOverview, { ...asSeller, query: {} });
@@ -203,7 +203,7 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
 
   const theirStats = await call(parties.getPartyStats, { ...asOther, query: {} });
   check(money(theirStats.body?.outstanding) === 0 && money(theirStats.body?.owedBack) === 0,
-    "and none of it shows in his book", theirStats.body);
+    "and none of it shows in their book", theirStats.body);
 
   // ---------------------------------------------------------------
   console.log("\n-- the supplier side, the same way round --");
@@ -213,11 +213,11 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
     body: { name: "Arvind Mills", phone: `88${uniq().slice(-8)}`,
             openingBalance: 120000, openingBalanceOn: "2026-04-01" },
   });
-  check(mill.statusCode === 201, "a supplier he already owed is added", { got: mill.statusCode, msg: mill.body?.message });
+  check(mill.statusCode === 201, "a supplier they already owed is added", { got: mill.statusCode, msg: mill.body?.message });
 
   const millRead = await call(suppliers.getSupplierById, { ...asSeller, params: { id: mill.body.id } });
   check(money(millRead.body?.supplier?.balance) === 120000,
-    "and the balance says he owes the mill 1,20,000", { got: millRead.body?.supplier?.balance });
+    "and the balance says they owe the mill 1,20,000", { got: millRead.body?.supplier?.balance });
 
   const payables = await call(suppliers.getSupplierStats, { ...asSeller, query: {} });
   check(money(payables.body?.owedByYou) === 120000,

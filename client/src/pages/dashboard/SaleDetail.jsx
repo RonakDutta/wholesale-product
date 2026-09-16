@@ -16,6 +16,15 @@ import { downloadFile } from "../../utils/download";
 import { toast } from "sonner";
 import { amount as money, dateLabel } from "../../utils/money";
 
+// Stored as a word for the screen. The e-way bill API numbers these 1 to 4,
+// which is an encoding detail of that API and means nothing to a wholesaler.
+const TRANSPORT_MODE_TEXT = {
+  road: "By road",
+  rail: "By rail",
+  air: "By air",
+  ship: "By ship",
+};
+
 const METHOD_LABELS = {
   cash: "Cash",
   upi: "UPI",
@@ -202,7 +211,7 @@ const SaleDetail = () => {
       setData((prev) => ({ ...prev, sale: { ...prev.sale, ...sale } }));
 
       // Cancelling a billed sale reverses the bill with a credit note. Saying
-      // so here matters: he expects the invoice to disappear, and it does not.
+      // so here matters: they expect the invoice to disappear, and it does not.
       if (raised) {
         setCreditNote(raised);
         toast.success(`Sale cancelled. Credit note ${raised.note_number} raised.`);
@@ -241,6 +250,28 @@ const SaleDetail = () => {
 
   const { sale, lines, payments, settlement, challansOn } = data;
 
+  /**
+   * How the goods went out, with the blanks dropped.
+   *
+   * Built once rather than twice, because the same list decides both whether
+   * the card appears at all and what is inside it. Two copies of it is how one
+   * of them ends up listing a field the other does not.
+   *
+   * Empty on a sale collected from the shop counter, which is most of them, and
+   * then the card is not rendered: a card headed Transport with nothing in it
+   * reads as though somebody forgot to fill it in.
+   */
+  const transportRows = [
+    ["Transporter", sale.transporter_name],
+    ["Transporter ID", sale.transporter_id],
+    ["Mode", TRANSPORT_MODE_TEXT[sale.transport_mode] || sale.transport_mode],
+    ["Vehicle", sale.vehicle_number],
+    ["LR or RR number", sale.transport_doc_number],
+    ["LR or RR date", sale.transport_doc_date ? dateLabel(sale.transport_doc_date) : null],
+    ["GR number", sale.gr_number],
+    ["GR date", sale.gr_date ? dateLabel(sale.gr_date) : null],
+  ].filter(([, value]) => value);
+
   // The server owns the rule. An order backed sale has money on the order as
   // well as in party_payments, so summing the rows on this screen would say
   // a settled sale still owed money.
@@ -278,7 +309,7 @@ const SaleDetail = () => {
   // two switches: the order's, which stamps a delivery date and opens the
   // return window, and this page's, which did neither. The server refuses the
   // change anyway; hiding the button is so nobody presses it and reads an
-  // error he did not deserve.
+  // error they did not deserve.
   const fromOrder = Boolean(sale.order_id);
   const actions = fromOrder ? [] : NEXT_ACTIONS[sale.status] || [];
   const canEdit = !fromOrder && sale.status !== "cancelled" && !invoice;
@@ -438,7 +469,7 @@ const SaleDetail = () => {
             </div>
 
             {/* The reversing document. Its own number, because the customer
-                needs it for his books as much as the wholesaler does. */}
+                needs it for their books as much as the wholesaler does. */}
             {creditNote && (
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-sky-50 p-4">
                 <div className="flex min-w-0 items-center gap-3">
@@ -648,6 +679,31 @@ const SaleDetail = () => {
           </div>
         </div>
       </div>
+
+      {/*
+        How the goods went out.
+
+        Shown only when something was recorded. A sale collected from the shop
+        counter has no transport, and an empty card headed "Transport" reads as
+        though somebody forgot to fill it in.
+      */}
+      {transportRows.length > 0 && (
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 bg-slate-50 px-6 py-4">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">
+              How the goods went out
+            </h3>
+          </div>
+          <dl className="grid grid-cols-1 gap-x-8 gap-y-3 px-6 py-5 sm:grid-cols-2">
+            {transportRows.map(([label, value]) => (
+                <div key={label} className="flex justify-between gap-4 text-sm">
+                  <dt className="text-slate-500">{label}</dt>
+                  <dd className="text-right font-semibold text-espresso">{value}</dd>
+                </div>
+            ))}
+          </dl>
+        </div>
+      )}
 
       {/* Payments against this sale */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">

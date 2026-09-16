@@ -2,7 +2,7 @@
  * Refusing an order: does everything it should unwind actually unwind?
  *
  * Cancelling is where quiet damage hides. A cancelled order that leaves its
- * sale standing keeps billing a customer for goods he will never receive, and
+ * sale standing keeps billing a customer for goods they will never receive, and
  * one that credits stock back after the money has been taken invents goods.
  * Every check below asserts an exact figure rather than "it worked".
  *
@@ -124,12 +124,12 @@ const mkUser = async (role, phone) =>
   });
   check(twice.statusCode === 400, "a cancelled order cannot be cancelled again", { s: twice.statusCode });
 
-  // ---- a buyer calls off his own order ---------------------------------
+  // ---- a buyer calls off their own order ---------------------------------
   const b = await place();
   const byBuyer = await call(orders.cancelOrderHandler, {
     user: shopper, params: { orderId: b.body.orderId }, body: {},
   });
-  check(byBuyer.statusCode === 200, "buyer may cancel his own order", { s: byBuyer.statusCode });
+  check(byBuyer.statusCode === 200, "buyer may cancel their own order", { s: byBuyer.statusCode });
   const bHist = await q(
     `SELECT updated_by_role FROM order_status_history WHERE order_id=$1 ORDER BY created_at DESC LIMIT 1`,
     [b.body.orderId],
@@ -181,7 +181,7 @@ const mkUser = async (role, phone) =>
       .rows[0].n,
   );
   check(still === 2100, "the payment is not deleted", { still });
-  check((await balance(dParty)) === -2100, "customer is in credit, so he is owed a refund", { bal: await balance(dParty) });
+  check((await balance(dParty)) === -2100, "customer is in credit, so they are owed a refund", { bal: await balance(dParty) });
 
   // ---- stock is not invented -------------------------------------------
   // Stock tracking is off, so checkout floors the subtraction at zero and a
@@ -218,7 +218,7 @@ const mkUser = async (role, phone) =>
       WHERE user_id = $1 ORDER BY created_at`,
     [dBuyer],
   );
-  check(notes.rows.length > 0, "the buyer was told his payment landed", { n: notes.rows.length });
+  check(notes.rows.length > 0, "the buyer was told their payment landed", { n: notes.rows.length });
   check(
     notes.rows.every((n) => n.type && n.notification_type),
     "both type columns are filled in",

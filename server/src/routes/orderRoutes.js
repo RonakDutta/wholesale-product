@@ -62,7 +62,7 @@ router.post("/:orderId/driver-link", authenticateToken, authorizeRoles("seller",
 router.post("/:orderId/return", authenticateToken, requestReturn);
 // The last step of a return. Not role gated at the route: the handler checks
 // that the caller is the seller on this order, and a 403 from the middleware
-// would clear the token and log him out mid job.
+// would clear the token and log them out mid job.
 router.post("/:orderId/refund", authenticateToken, requirePermission("refunds"), refundOrder);
 router.get("/:orderId/invoice", authenticateToken, generateInvoice);
 router.get("/:orderId/packing-slip", authenticateToken, generatePackingSlip);

@@ -40,7 +40,7 @@ const DRY = process.argv.includes("--dry");
     }
 
     // Only money that actually settled. A pending or superseded attempt is not
-    // a payment, and counting one would hand a customer credit he never paid.
+    // a payment, and counting one would hand a customer credit they never paid.
     const settled = await client.query(
       `SELECT pt.id, pt.order_id, pt.amount, pt.payment_method,
               pt.payment_date, o.party_id, o.supplier_id, o.order_number

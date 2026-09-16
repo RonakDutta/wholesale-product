@@ -2,7 +2,7 @@
  * Why does this customer's balance say what it says?
  *
  * A negative balance means the wholesaler has taken more money from someone
- * than he has billed him for. That is sometimes exactly right, an advance or
+ * than they have billed them for. That is sometimes exactly right, an advance or
  * a payment against an order that was later cancelled, and sometimes it is old
  * test data from a prototype that was never real business.
  *
@@ -95,7 +95,7 @@ const hasColumn = async (table, column) =>
         console.log("\nNothing was removed. If this is prototype data and none of it was");
         console.log("real money, run it again with --confirm to delete these rows.");
         console.log("If any of it was real, leave it: the customer is genuinely in credit");
-        console.log("and you owe him a refund or the money counts against his next order.");
+        console.log("and you owe them a refund or the money counts against their next order.");
         return;
       }
 
@@ -180,8 +180,8 @@ const hasColumn = async (table, column) =>
     if (!ONE) {
       console.log("What to do:");
       console.log("  A payment against a cancelled or failed order is real money the");
-      console.log("  customer handed over, so the credit is correct and you owe him a");
-      console.log("  refund, or it counts against his next order.");
+      console.log("  customer handed over, so the credit is correct and you owe them a");
+      console.log("  refund, or it counts against their next order.");
       console.log("");
       console.log("  If it is left over from testing and was never real, delete just");
       console.log("  those payment rows:");

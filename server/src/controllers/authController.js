@@ -38,7 +38,7 @@ exports.register = async (req, res) => {
        * state as the customer means CGST plus SGST, a different one means
        * IGST. Nothing used to ask for it, and wholesaler_profiles.city
        * defaults to 'Delhi', so a Surat wholesaler's first invoice was worked
-       * out as though he were in Delhi.
+       * out as though they were in Delhi.
        *
        * Checked against the list rather than stored as typed, because this is
        * a value a bill is computed from, and "Gujrat" is not a state.
@@ -131,10 +131,10 @@ exports.getMe = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Who he is working for, and what he may do. An owner gets isOwner true
+    // Who they are working for, and what they may do. An owner gets isOwner true
     // and an empty permission list, which the client reads as "everything":
     // sending an owner the whole catalogue would mean a new permission had to
-    // be added in two places to reach him.
+    // be added in two places to reach them.
     const business = req.business || { id: req.user.id, isOwner: true, permissions: [] };
     const employer = business.isOwner
       ? null
@@ -153,7 +153,7 @@ exports.getMe = async (req, res) => {
         isOwner: business.isOwner,
         permissions: business.permissions,
         // Shown in the dashboard header, so an employee can see at a glance
-        // whose book he has open. Two brothers with two firms and one phone
+        // whose book they have open. Two brothers with two firms and one phone
         // is not an unusual arrangement.
         worksFor: employer,
       },
@@ -171,7 +171,7 @@ exports.upgradeToSeller = async (req, res) => {
   const { companyName, gstin, phone, city, state } = req.body;
 
   // Checked here rather than left for the profile screen, because this number
-  // goes onto his invoices from the first one he raises.
+  // goes onto their invoices from the first one they raises.
   let gstinValue = gstin;
   if (gstin !== undefined && gstin !== null && String(gstin).trim() !== "") {
     const result = checkGstin(gstin);
@@ -194,10 +194,10 @@ exports.upgradeToSeller = async (req, res) => {
 
     await pool.query("UPDATE users SET role = 'both' WHERE id = $1", [userId]);
 
-    // The state comes from what he picked if he picked one, and otherwise
-    // from his GST number, whose first two digits are the state. Only if he
+    // The state comes from what they picked if they picked one, and otherwise
+    // from their GST number, whose first two digits are the state. Only if they
     // gave neither is it left blank, which is honest: better an empty field
-    // the invoice screen can ask him about than a wrong one it bills from.
+    // the invoice screen can ask them about than a wrong one it bills from.
     const declaredState =
       asState(state) || (gstinValue ? checkGstin(gstinValue).stateName : null);
 

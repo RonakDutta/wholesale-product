@@ -13,18 +13,18 @@ import api from "../utils/axios";
  *
  * The navbar picker used to be a piece of local state next to a list of ten
  * big Indian cities, and nothing read it. Picking Surat changed the label and
- * nothing else, so a buyer was shown the whole country while believing he was
+ * nothing else, so a buyer was shown the whole country while believing they were
  * being shown one city.
  *
  * Two things are deliberate here.
  *
  * The cities come from the server, built from listings that actually exist. A
  * fixed list offers Bangalore whether or not one wholesaler there has listed
- * anything, and an empty result gives the buyer no way to tell whether he
+ * anything, and an empty result gives the buyer no way to tell whether they
  * filtered wrongly or the shop is broken.
  *
  * The default is the whole country, not a city. Guessing a buyer's city from
- * his IP address or from the top of the list hides stock from him without his
+ * their IP address or from the top of the list hides stock from them without their
  * ever having asked for that, and the hiding is invisible.
  */
 
@@ -89,7 +89,7 @@ export const LocationProvider = ({ children }) => {
   /**
    * A saved city that no longer has any stock behind it is ignored rather than
    * obeyed. A buyer who chose Surat months ago would otherwise see an empty
-   * shop with "Surat" in the navbar and no hint that his own old filter is the
+   * shop with "Surat" in the navbar and no hint that their own old filter is the
    * reason.
    *
    * Ignored, not deleted: the choice stays in storage, so when a Surat seller

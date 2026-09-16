@@ -6,7 +6,7 @@
 --
 -- The wholesaler generates a link and sends it over WhatsApp/SMS. The driver
 -- opens it in whatever browser their phone has and taps once to share
--- location; the page then posts positions while it stays open. No account, no
+-- location. The page then posts positions while it stays open. No account, no
 -- app, no background-location permission - which is what makes it realistic,
 -- since drivers are rarely platform users.
 --

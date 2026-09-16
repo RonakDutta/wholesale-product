@@ -1636,9 +1636,52 @@ will reach some screens and not others.
 
 ---
 
+## 16 Sept: Administration, UQC, and the HSN summary
+
+The first phases of `ROADMAP.md`. Most of it came from the `sanskriti` branch
+and was merged here.
+
+**Done on that branch.** The master area renamed to Administration at `/admin`,
+across routes, nav, page titles and comments. Gendered language taken out of
+the whole codebase, 149 files: the wholesaler is no longer "he" in comments,
+and UI copy that said "what he owed you" now addresses the reader. Escape on
+the last three overlays. `trust_score` and `response_rate` dropped from the
+schema, not only from the screens. The dead `/api/dashboard/stats` removed.
+Then UQC on the units master, an HSN summary, and a Rule 46(b) check on
+document numbers.
+
+**Corrected on top of it.** The HSN summary read the taxable value as quantity
+times unit price. A shop order is priced tax inclusive, so `unit_price` already
+has the tax inside it: a 1180 rupee line at 18 per cent was declared as 1180
+taxable with a 1360 total, against a bill that says 1000 and 1180, and GSTR-1
+Table 12 gets filled in from that table. It now sums `total - tax_amount` and
+the stored `total`, which is right whichever way the line was priced. It also
+took an invoice id with no owner check, so it read any wholesaler's invoice.
+
+Document numbers were refused correctly but threw into the generic catch, so
+the wholesaler saw "Server error" and nothing else. The refusal now carries a
+status and says which prefix is too long. Rule 46(b) applies to sales and
+challans, not to purchase vouchers, which are our own note of somebody else's
+bill.
+
+UQC no longer guesses. `master_uqc` holds the published list with a foreign key
+onto it, so a unit cannot carry a code that does not exist. Units map only
+where the word means what the GST list means by it, and Case is deliberately
+blank: there is no CAS code, and BOX, CTN and PAC are each a guess. Nothing
+defaults to OTH, which is a real declaration rather than a fallback.
+
+**Migration to run:** `wholesale3_uqc_master_units.sql`, again even if the
+earlier version of it was already applied, and
+`drop_trust_score_and_response_rate.sql`.
+
+Still open in that area: the minimum HSN digit setting, and the Administration
+screens for units and tax terms. See phase 4 in `ROADMAP.md`.
+
+---
+
 ## Left to do
 
-Roughly in the order agreed.
+Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.
 
 Items 1 to 4 were done on 10 Sept, see above.
 
@@ -1646,13 +1689,13 @@ Items 1 to 4 were done on 10 Sept, see above.
    we know of; every gateway charges per message.
 2. **e-Way Bill against the free sandbox**, once the GSP question below is
    settled. It is the one GST integration worth doing, see the note.
-3. **The invented demo products on the home page.** Delete them and show the
-   failure. Now also out of step with the city filter.
-4. **The 4.5 star rating search invents** for a wholesaler with none, which it
-   then sorts and filters on. Same rule that removed `trust_score`.
-5. **Rewrite the git history** to take out the committed password and the
-   invoice PDF. The Neon credential is already rotated. Needs a moment when
-   nobody else is pushing, because it changes every commit hash.
+3. **Rewrite the git history** to take out the committed password and the
+   invoice PDF. The Neon credential in git is already rotated, the one pasted
+   into chat on 14 Sept is not. Needs a moment when nobody else is pushing,
+   because it changes every commit hash.
+
+The invented demo products on the home page and the 4.5 star rating that search
+used to invent were both dealt with on 14 Sept and are no longer on this list.
 
 ### GST APIs, looked into 4 Sept
 

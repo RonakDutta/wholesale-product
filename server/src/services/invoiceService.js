@@ -5,7 +5,29 @@ const gstService = require("./gstService");
 const challanService = require("./challanService");
 const { placeOfSupply, stateCode } = require("./placeOfSupply");
 const { checkHsn, minHsnDigits } = require("./hsnService");
-const { clean } = require("../utils/money");
+const { clean, fullName } = require("../utils/money");
+
+/**
+ * The delivery address on an order, as one line for the bill.
+ *
+ * Stored as JSON from the checkout form, whose shape is house, street, area,
+ * city, state, pincode. Only the street part is wanted here, because the city,
+ * state and pincode are their own columns on the invoice and repeating them
+ * inside the address line prints them twice.
+ *
+ * Returns null rather than an empty string when there is nothing, so the
+ * caller's fallback to the profile address actually fires.
+ */
+const addressLine = (address) => {
+  if (!address || typeof address !== "object") return null;
+  const parts = [address.house, address.street, address.area]
+    .map((p) => String(p || "").trim())
+    .filter(Boolean);
+  // Older orders stored a single `address` string instead of the parts.
+  if (parts.length === 0 && address.address) return String(address.address).trim() || null;
+  return parts.length ? parts.join(", ") : null;
+};
+const { toInvoiceFields } = require("./transportDetails");
 const pdfService = require("./pdfService");
 const emailService = require("./emailService");
 
@@ -94,9 +116,14 @@ class InvoiceService {
         SELECT 
           o.id, o.order_number, o.buyer_id, o.supplier_id, o.total_amount,
           o.subtotal, o.status, o.payment_status, o.amount_paid, o.created_at, o.delivery_address,
+          ${bridged.has_order_transport
+            ? `o.transporter_name, o.transporter_id, o.transport_mode, o.vehicle_number,
+               o.transport_doc_number, o.transport_doc_date, o.gr_number, o.gr_date,`
+            : ""}
           bu.first_name AS buyer_first_name, bu.last_name AS buyer_last_name, bu.email AS buyer_email,
+          bu.phone AS buyer_phone,
           bwp.company_name AS buyer_company, bwp.gstin AS buyer_gstin, bwp.city AS buyer_city,
-          bwp.warehouse_state AS buyer_state,
+          bwp.warehouse_state AS buyer_state, bwp.warehouse_address AS buyer_address,
           su.first_name AS supplier_first_name, su.last_name AS supplier_last_name, su.email AS supplier_email,
           swp.company_name AS supplier_company, swp.gstin AS supplier_gstin, swp.upi_id AS supplier_upi_id,
           swp.warehouse_state AS supplier_state,
@@ -148,6 +175,12 @@ class InvoiceService {
       `;
       const itemsResult = await client.query(itemsQuery, [orderId]);
       const orderItems = itemsResult.rows;
+
+      // pg hands back jsonb already parsed, but an older row may hold a string.
+      let deliveryAddress = order.delivery_address || null;
+      if (typeof deliveryAddress === "string") {
+        try { deliveryAddress = JSON.parse(deliveryAddress); } catch { deliveryAddress = null; }
+      }
 
       // Where each side sits, for CGST plus SGST against IGST. The GST number
       // goes along with the address because the first two digits of a GSTIN
@@ -252,6 +285,35 @@ class InvoiceService {
         notes: `Invoice generated for Order ${order.order_number || order.id}`,
         termsConditions: settings.defaultTerms,
         pdfUrl: `/api/invoices/by-order/${order.id}/pdf`,
+
+        /**
+         * Who the bill was made out to, frozen.
+         *
+         * This path stored none of it and joined the buyer's profile at read
+         * time, so a bill reprinted after the customer changed their firm name
+         * or moved showed today's details on a document issued months ago. The
+         * sale path has always snapshotted these. All three roads now do.
+         *
+         * The delivery address on the order is preferred, because that is the
+         * address the customer actually gave for THIS order, and it is what the
+         * goods were sent to.
+         */
+        recipientName: order.buyer_company
+          || fullName(order.buyer_first_name, order.buyer_last_name) || null,
+        recipientGstin: order.buyer_gstin || null,
+        recipientCity: deliveryAddress?.city || order.buyer_city || null,
+        recipientAddress: addressLine(deliveryAddress) || order.buyer_address || null,
+        recipientPhone: deliveryAddress?.phone || order.buyer_phone || null,
+        recipientState: pos.state,
+        recipientStateCode: pos.code,
+        recipientPincode: deliveryAddress?.pincode || null,
+
+        // Usually empty, because a shop order raises its bill the moment the
+        // order is placed and nothing has been loaded yet. Carried anyway for
+        // the case where a bill is made after despatch, such as a reconcile,
+        // so this path behaves the same as the sale path rather than being the
+        // one that quietly drops it.
+        ...toInvoiceFields(order),
       };
 
       const createdInvoice = await invoiceRepository.createInvoice(
@@ -563,7 +625,9 @@ class InvoiceService {
       }
 
       const buyerQuery = await client.query(
-        `SELECT u.id, u.email, wp.city, wp.gstin, wp.warehouse_state AS state
+        `SELECT u.id, u.email, u.phone, u.first_name, u.last_name,
+                wp.company_name, wp.city, wp.gstin,
+                wp.warehouse_state AS state, wp.warehouse_address
            FROM users u
            LEFT JOIN wholesaler_profiles wp ON u.id = wp.user_id
           WHERE u.id = $1`,
@@ -656,6 +720,19 @@ class InvoiceService {
          * copies those from the profile itself, so they cannot be forgotten
          * and cannot be forged from the request body.
          */
+        /**
+         * Who the bill was made out to, frozen.
+         *
+         * This path used to store only the state and leave the name, GSTIN and
+         * address to a join, so a bill reprinted after the customer changed
+         * their firm name showed the new one. The sale path has always
+         * snapshotted these. All three roads now do.
+         */
+        recipientName: buyerUser.company_name || fullName(buyerUser.first_name, buyerUser.last_name) || null,
+        recipientGstin: buyerUser.gstin || null,
+        recipientCity: buyerUser.city || null,
+        recipientAddress: buyerUser.warehouse_address || null,
+        recipientPhone: buyerUser.phone || null,
         recipientState: pos.state,
         recipientStateCode: pos.code,
 

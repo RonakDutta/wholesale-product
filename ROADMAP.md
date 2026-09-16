@@ -525,6 +525,14 @@ recorded, which is why it says "not set" rather than filling it in quietly.
       once. Copied, not joined, so editing the sale later cannot change a bill
       already handed over.
 - [x] Shown on the sale detail screen, and only when something was recorded.
+- [x] The same block on an ORDER, stamped at despatch onto the order and onto
+      the bill already raised from it, because a shop order is billed when it
+      is placed and the lorry is not known until later. Migration:
+      `wholesale3_order_transport.sql`
+- [x] All three ways of raising an invoice compared field by field and made to
+      agree. The order path froze no recipient at all and the manual path froze
+      only the state, so a bill reprinted after a customer changed their firm
+      name showed today's details on an old document.
 
 One definition of the block on each side, `services/transportDetails.js` and
 `components/TransportFields.jsx`, because two copies of eight fields is how one

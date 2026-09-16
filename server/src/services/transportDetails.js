@@ -91,10 +91,53 @@ const toInvoiceFields = (row = {}) => ({
   grDate: row.gr_date || null,
 });
 
+/**
+ * Writes the transport block onto a row, and onto the invoice already raised
+ * from it if there is one.
+ *
+ * WHY THE INVOICE IS UPDATED AT ALL, given that a tax document is frozen.
+ *
+ * A shop order raises its bill the moment the order is placed, long before
+ * anything is loaded onto a lorry. So the transport cannot be copied at
+ * billing time: nobody knows it yet. Stamping it at despatch is the only
+ * moment the information exists.
+ *
+ * This is a deliberate exception and a narrow one. The addresses and the
+ * amounts are frozen because they were true when the document was issued. The
+ * vehicle is not that kind of fact. It is decided afterwards, and the e-way
+ * bill rules themselves allow the vehicle number to be changed in transit,
+ * because lorries break down and goods get moved. Nothing else on the invoice
+ * is touched here.
+ *
+ * @param db      a pool or a client, so the caller decides the transaction
+ * @param table   'orders' or 'sales'
+ * @param id      the row's id
+ * @param values  from parseTransport
+ */
+const stampTransport = async (db, table, id, values) => {
+  if (!hasAnyTransport(values)) return { row: false, invoice: false };
+
+  const set = TRANSPORT_COLUMNS.map((c, i) => `${c} = $${i + 2}`).join(", ");
+  const args = TRANSPORT_COLUMNS.map((c) => values[c]);
+
+  await db.query(`UPDATE ${table} SET ${set} WHERE id = $1`, [id, ...args]);
+
+  // The bill raised from it, if one exists. The column it is linked by differs
+  // by table and there are only two, so it is named rather than derived.
+  const link = table === "orders" ? "order_id" : "sale_id";
+  const stamped = await db.query(
+    `UPDATE invoices SET ${set} WHERE ${link} = $1`,
+    [id, ...args],
+  );
+
+  return { row: true, invoice: stamped.rowCount > 0 };
+};
+
 module.exports = {
   TRANSPORT_MODES,
   TRANSPORT_COLUMNS,
   parseTransport,
   hasAnyTransport,
   toInvoiceFields,
+  stampTransport,
 };

@@ -187,6 +187,9 @@ async function schemaExtras(db = pool) {
         -- The transport block on a sale, from wholesale3_sale_transport.sql.
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'sales' AND column_name = 'transport_mode') AS has_sale_transport,
+        -- And on an order, from wholesale3_order_transport.sql.
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'orders' AND column_name = 'transport_mode') AS has_order_transport,
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'sales' AND column_name = 'order_id') AS has_sale_order_id,
         EXISTS (SELECT 1 FROM information_schema.columns
@@ -247,6 +250,7 @@ async function schemaExtras(db = pool) {
       has_document_block: false,
       has_sale_tax: false,
       has_sale_transport: false,
+      has_order_transport: false,
       has_sale_order_id: false,
       has_number_format: false,
       has_series_fy: false,
@@ -361,6 +365,11 @@ class InvoiceRepository {
       // details are NOT taken from here by default: they are read from the
       // wholesaler's own profile below, so no caller can forget to take the
       // snapshot. A caller may still pass them to override.
+      recipientName = null,
+      recipientGstin = null,
+      recipientCity = null,
+      recipientAddress = null,
+      recipientPhone = null,
       recipientState = null,
       recipientStateCode = null,
       recipientPincode = null,
@@ -422,6 +431,24 @@ class InvoiceRepository {
         ["supplier_state", supplierState],
         ["reverse_charge", reverseCharge],
         ["round_off", roundOff],
+      );
+    }
+
+    /**
+     * Who the bill is made out to, frozen onto the row.
+     *
+     * The sale path has always done this through a follow up UPDATE. Doing it
+     * here as well means the order and manual paths get it without a second
+     * write, and a fourth caller cannot forget. Passing nothing leaves the
+     * columns null, which is what the sale path relies on before it stamps.
+     */
+    if (has.has_recipient) {
+      columns.push(
+        ["recipient_name", recipientName],
+        ["recipient_gstin", recipientGstin],
+        ["recipient_city", recipientCity],
+        ["recipient_address", recipientAddress],
+        ["recipient_phone", recipientPhone],
       );
     }
 

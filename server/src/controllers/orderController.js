@@ -19,6 +19,7 @@ const invoiceRepository = require("../repositories/invoiceRepository");
 const challanService = require("../services/challanService");
 const creditNoteService = require("../services/creditNoteService");
 const pdfService = require("../services/pdfService");
+const { parseTransport, stampTransport } = require("../services/transportDetails");
 const {
   enqueueNotification,
   NOTIFICATION_CHANNELS,
@@ -1338,6 +1339,15 @@ const updateOrderStatus = async (req, res) => {
     // because this route writes the status itself rather than going through
     // it. The return window is counted from that date, and the column had
     // never been written to by anything.
+    // Despatch is the only moment the transport is known, and on a shop order
+    // the bill was raised when the order was placed. So it is stamped onto the
+    // order AND onto the invoice that already exists. See transportDetails for
+    // why that is not a breach of the freezing rule.
+    const { values: transport, error: transportError } = parseTransport(req.body);
+    if (transportError) {
+      return res.status(400).json({ success: false, message: transportError });
+    }
+
     await pool.query(
       `UPDATE orders
           SET status = $1,
@@ -1351,6 +1361,17 @@ const updateOrderStatus = async (req, res) => {
         WHERE id = $2`,
       [status, orderId, status === "delivered"],
     );
+
+    // Its own try. Transport details that could not be written are worth a
+    // line in the log; they are not worth refusing a despatch the wholesaler
+    // has already made.
+    if ((await invoiceRepository.schemaExtras()).has_order_transport) {
+      try {
+        await stampTransport(pool, "orders", orderId, transport);
+      } catch (transportErr) {
+        console.warn("Could not record the transport on this order:", transportErr.message);
+      }
+    }
 
     // Accepting is the moment the order becomes business. It goes into the
     // sales book here, and from there the invoice, the statement and the

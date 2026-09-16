@@ -1816,6 +1816,47 @@ only, and those were left alone.
 
 **Migration to run:** `wholesale3_sale_transport.sql`
 
+## 16 Sept: transport on orders too, and the three roads made to agree
+
+Asked: does a bill raised from a shop order carry the transport as well? It did
+not. Checked rather than assumed, and the answer was no on both counts.
+
+**Orders had nowhere to put it.** `orders` held `shipping_carrier` and
+`tracking_number`, which are a courier and a consignment number, not the e-way
+bill fields. The dispatch box asked for a vehicle number but sent it to
+`shipment_tracking_links`, which is the link a customer opens to watch the
+lorry: a courtesy that expires, and not something a tax document should be built
+out of. So `orders` gets the same eight columns the sale and the invoice have.
+
+**The timing is different from a sale, and that shapes the design.** A shop
+order raises its bill the moment the order is placed, long before anything is
+loaded. The transport cannot be copied at billing time because nobody knows it
+yet, so it is stamped at despatch onto the order AND onto the invoice that
+already exists. That is a deliberate exception to the freezing rule and a narrow
+one: the addresses and the amounts are frozen because they were true at issue,
+while the vehicle is decided afterwards, and the e-way bill rules themselves
+allow a vehicle number to be changed in transit.
+
+**Then the three roads were compared.** One bill raised by each, from the same
+firm to the same customer, and every column printed side by side. They agreed on
+the seller block, the bank details, the transport and the tax particulars, and
+disagreed on who the bill was made out to:
+
+  - from a sale, fully frozen
+  - from an order, nothing frozen at all, joined at read time
+  - typed by hand, only the state frozen
+
+So a bill from an order, reprinted after the customer changed their firm name or
+moved, showed today's details on a document issued months ago. That is the exact
+thing the recipient snapshot exists to prevent, and only one of the three roads
+was doing it. `createInvoice` now writes the recipient itself, so all three
+freeze it and a fourth caller cannot forget. The order path prefers the delivery
+address the customer gave for that order, since that is where the goods went.
+
+Re-run after the fix: all three agree on every field.
+
+**Migration to run:** `wholesale3_order_transport.sql`
+
 ---
 
 ## Left to do

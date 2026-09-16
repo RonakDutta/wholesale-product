@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { TransportGrid } from "./TransportFields";
+import { blankTransport, hasTransport } from "../utils/transport";
 import { Truck, Copy, Check, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/axios";
@@ -29,6 +31,21 @@ const DispatchModal = ({ order, onClose, onDispatched }) => {
   const [driverName, setDriverName] = useState("");
   const [driverPhone, setDriverPhone] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
+  /**
+   * The e-way bill block, sent with the despatch.
+   *
+   * The driver's name, phone and vehicle above are for the TRACKING LINK the
+   * customer opens to watch the lorry. That is a courtesy, it expires, and a
+   * tax document must not be built out of it. These are the fields that go on
+   * the bill, and they are stamped onto the order and onto the invoice already
+   * raised from it.
+   *
+   * The vehicle number is typed once, above, and fed into both.
+   */
+  const [transport, setTransport] = useState(blankTransport());
+  const [showTransport, setShowTransport] = useState(false);
+  const setTransportField = (name, value) =>
+    setTransport((prev) => ({ ...prev, [name]: value }));
   const [sending, setSending] = useState(false);
   const [trackUrl, setTrackUrl] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -42,6 +59,9 @@ const DispatchModal = ({ order, onClose, onDispatched }) => {
         remarks: driverName
           ? `Sent out with ${driverName}${vehicleNumber ? `, ${vehicleNumber}` : ""}`
           : "Sent out",
+        ...transport,
+        // Typed once at the top of this form, and wanted by both.
+        vehicleNumber: vehicleNumber || transport.vehicleNumber || "",
       });
 
       // The order is out. Anything below this point is a convenience.
@@ -214,6 +234,37 @@ const DispatchModal = ({ order, onClose, onDispatched }) => {
                   className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition-colors focus:border-clay focus:bg-white"
                 />
               </div>
+            </div>
+
+            {/*
+              Closed by default. Most orders go out without a transporter's
+              paperwork, and opening on eight more boxes turns a two field
+              despatch into a form.
+            */}
+            <div className="rounded-lg border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setShowTransport((o) => !o)}
+                aria-expanded={showTransport}
+                className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left"
+              >
+                <span className="text-xs font-semibold text-slate-600">
+                  Transporter's paperwork
+                  {hasTransport(transport) ? " (filled in)" : ""}
+                </span>
+                <span className="text-xs font-bold text-clay">
+                  {showTransport ? "Hide" : "Add"}
+                </span>
+              </button>
+              {showTransport && (
+                <div className="border-t border-slate-100 p-4">
+                  <p className="mb-3 text-[11px] text-slate-500">
+                    These print on the bill for this order. Leave them blank if
+                    there is no transporter.
+                  </p>
+                  <TransportGrid value={transport} onChange={setTransportField} />
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 pt-1">

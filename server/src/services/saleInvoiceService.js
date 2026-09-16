@@ -2,7 +2,7 @@ const pool = require("../config/db");
 const { fullName } = require("../utils/money");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const challanService = require("./challanService");
-const { placeOfSupply } = require("./placeOfSupply");
+const { placeOfSupply, stateOf, stateCode } = require("./placeOfSupply");
 const invoiceNumberService = require("./invoiceNumberService");
 const gstService = require("./gstService");
 
@@ -88,12 +88,34 @@ class SaleInvoiceService {
    * with none of this filled in.
    */
   async stampRecipient(client, invoiceId, sale) {
+    const has = await invoiceRepository.schemaExtras();
+
+    // The state the customer is in, frozen with the rest of the address. It
+    // comes from placeOfSupply so it follows the same order as the tax
+    // decision did: a declared state, then the state the GSTIN carries, then
+    // the city. A bill that shows one state and charged tax for another is
+    // the confusion this is meant to prevent.
+    //
+    // There is no pincode here because parties does not hold one. Blank is
+    // honest. An invented pincode on a tax document is not.
+    const state = has.has_document_block
+      ? stateOf({
+          state: sale.party_state,
+          gstin: sale.party_gstin,
+          city: sale.party_city,
+        })
+      : null;
+
+    const extra = has.has_document_block
+      ? ", recipient_state = $10, recipient_state_code = $11"
+      : "";
+
     const stamped = await client.query(
       `UPDATE invoices SET
          sale_id = $2, party_id = $3,
          recipient_name = $4, recipient_gstin = $5, recipient_city = $6,
          recipient_address = $7, recipient_phone = $8,
-         pdf_url = $9
+         pdf_url = $9${extra}
        WHERE id = $1
        RETURNING *`,
       [
@@ -106,6 +128,7 @@ class SaleInvoiceService {
         sale.party_address,
         sale.party_phone,
         `/api/invoices/${invoiceId}/pdf`,
+        ...(has.has_document_block ? [state || null, state ? stateCode(state) : null] : []),
       ],
     );
     return stamped.rows[0];

@@ -1,4 +1,5 @@
 const pool = require("../config/db");
+const { sellerSnapshot, bankSnapshot } = require("../services/invoiceSnapshot");
 
 let schemaEnsured = false;
 
@@ -176,6 +177,11 @@ async function schemaExtras(db = pool) {
                  WHERE table_name = 'invoices' AND column_name = 'sale_id') AS has_sale_id,
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'invoices' AND column_name = 'recipient_name') AS has_recipient,
+        -- The seller block, both addresses, bank details, transport and the
+        -- e-invoice fields all arrive together in
+        -- wholesale3_invoice_document_block.sql, so one probe covers them.
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'invoices' AND column_name = 'seller_gstin') AS has_document_block,
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'sales' AND column_name = 'tax_amount') AS has_sale_tax,
         EXISTS (SELECT 1 FROM information_schema.columns
@@ -235,6 +241,7 @@ async function schemaExtras(db = pool) {
       has_sales: false,
       has_sale_id: false,
       has_recipient: false,
+      has_document_block: false,
       has_sale_tax: false,
       has_sale_order_id: false,
       has_number_format: false,
@@ -345,52 +352,130 @@ class InvoiceRepository {
       supplierState = null,
       reverseCharge = false,
       roundOff = 0,
+      // The document block, from wholesale3_invoice_document_block.sql. All
+      // optional, all frozen onto the row. The seller block and the bank
+      // details are NOT taken from here by default: they are read from the
+      // wholesaler's own profile below, so no caller can forget to take the
+      // snapshot. A caller may still pass them to override.
+      recipientState = null,
+      recipientStateCode = null,
+      recipientPincode = null,
+      dispatchFromName = null,
+      dispatchFromAddress = null,
+      dispatchFromCity = null,
+      dispatchFromState = null,
+      dispatchFromStateCode = null,
+      dispatchFromPincode = null,
+      shipToName = null,
+      shipToGstin = null,
+      shipToAddress = null,
+      shipToCity = null,
+      shipToState = null,
+      shipToStateCode = null,
+      shipToPincode = null,
+      grNumber = null,
+      grDate = null,
+      transporterName = null,
+      transporterId = null,
+      transportMode = null,
+      vehicleNumber = null,
+      transportDocNumber = null,
+      transportDocDate = null,
     } = invoiceData;
 
     const has = await schemaExtras();
     const rule46 = has.has_rule46_fields;
 
+    // Named rather than positional. Forty more columns counted out by hand as
+    // $26 through $65 is how a bank account number ends up in the pincode.
+    const columns = [
+      ["invoice_number", invoiceNumber],
+      ["order_id", orderId],
+      ["buyer_id", buyerId],
+      ["supplier_id", supplierId],
+      ["subtotal", subtotal],
+      ["discount", discount],
+      ["shipping_charge", shippingCharge],
+      ["taxable_amount", taxableAmount],
+      ["cgst", cgst],
+      ["sgst", sgst],
+      ["igst", igst],
+      ["total_tax", totalTax],
+      ["grand_total", grandTotal],
+      ["payment_status", paymentStatus],
+      ["invoice_status", invoiceStatus],
+      ["issue_date", issueDate],
+      ["due_date", dueDate],
+      ["notes", notes],
+      ["terms_conditions", termsConditions],
+      ["pdf_url", pdfUrl],
+    ];
+
+    if (rule46) {
+      columns.push(
+        ["place_of_supply", placeOfSupply],
+        ["place_of_supply_code", placeOfSupplyCode],
+        ["supplier_state", supplierState],
+        ["reverse_charge", reverseCharge],
+        ["round_off", roundOff],
+      );
+    }
+
+    if (has.has_document_block) {
+      // Taken here, inside the same transaction that writes the invoice, so
+      // the copy is of the profile as it stood at the moment the bill was
+      // raised. An explicit value from the caller wins, which is how a
+      // correction or an import supplies its own.
+      const seller = await sellerSnapshot(dbClient, supplierId);
+      const bank = await bankSnapshot(dbClient, supplierId);
+      const pick = (given, snapped) => (given !== null && given !== undefined ? given : snapped ?? null);
+
+      columns.push(
+        ["seller_name", pick(invoiceData.sellerName, seller.sellerName)],
+        ["seller_gstin", pick(invoiceData.sellerGstin, seller.sellerGstin)],
+        ["seller_address", pick(invoiceData.sellerAddress, seller.sellerAddress)],
+        ["seller_city", pick(invoiceData.sellerCity, seller.sellerCity)],
+        ["seller_state", pick(invoiceData.sellerState, seller.sellerState)],
+        ["seller_state_code", pick(invoiceData.sellerStateCode, seller.sellerStateCode)],
+        ["seller_pincode", pick(invoiceData.sellerPincode, seller.sellerPincode)],
+        ["seller_phone", pick(invoiceData.sellerPhone, seller.sellerPhone)],
+        ["bank_account_name", pick(invoiceData.bankAccountName, bank.bankAccountName)],
+        ["bank_name", pick(invoiceData.bankName, bank.bankName)],
+        ["bank_account_number", pick(invoiceData.bankAccountNumber, bank.bankAccountNumber)],
+        ["bank_ifsc", pick(invoiceData.bankIfsc, bank.bankIfsc)],
+        ["bank_branch", pick(invoiceData.bankBranch, bank.bankBranch)],
+        ["recipient_state", recipientState],
+        ["recipient_state_code", recipientStateCode],
+        ["recipient_pincode", recipientPincode],
+        ["dispatch_from_name", dispatchFromName],
+        ["dispatch_from_address", dispatchFromAddress],
+        ["dispatch_from_city", dispatchFromCity],
+        ["dispatch_from_state", dispatchFromState],
+        ["dispatch_from_state_code", dispatchFromStateCode],
+        ["dispatch_from_pincode", dispatchFromPincode],
+        ["ship_to_name", shipToName],
+        ["ship_to_gstin", shipToGstin],
+        ["ship_to_address", shipToAddress],
+        ["ship_to_city", shipToCity],
+        ["ship_to_state", shipToState],
+        ["ship_to_state_code", shipToStateCode],
+        ["ship_to_pincode", shipToPincode],
+        ["gr_number", grNumber],
+        ["gr_date", grDate],
+        ["transporter_name", transporterName],
+        ["transporter_id", transporterId],
+        ["transport_mode", transportMode],
+        ["vehicle_number", vehicleNumber],
+        ["transport_doc_number", transportDocNumber],
+        ["transport_doc_date", transportDocDate],
+      );
+    }
+
     const invoiceResult = await dbClient.query(
-      `INSERT INTO invoices (
-        invoice_number, order_id, buyer_id, supplier_id,
-        subtotal, discount, shipping_charge, taxable_amount,
-        cgst, sgst, igst, total_tax, grand_total,
-        payment_status, invoice_status, issue_date, due_date,
-        notes, terms_conditions, pdf_url${rule46 ? `,
-        place_of_supply, place_of_supply_code, supplier_state,
-        reverse_charge, round_off` : ""}
-      ) VALUES (
-        $1, $2, $3, $4,
-        $5, $6, $7, $8,
-        $9, $10, $11, $12, $13,
-        $14, $15, $16, $17,
-        $18, $19, $20${rule46 ? ", $21, $22, $23, $24, $25" : ""}
-      ) RETURNING *`,
-      [
-        invoiceNumber,
-        orderId,
-        buyerId,
-        supplierId,
-        subtotal,
-        discount,
-        shippingCharge,
-        taxableAmount,
-        cgst,
-        sgst,
-        igst,
-        totalTax,
-        grandTotal,
-        paymentStatus,
-        invoiceStatus,
-        issueDate,
-        dueDate,
-        notes,
-        termsConditions,
-        pdfUrl,
-        ...(rule46
-          ? [placeOfSupply, placeOfSupplyCode, supplierState, reverseCharge, roundOff]
-          : []),
-      ]
+      `INSERT INTO invoices (${columns.map(([c]) => c).join(", ")})
+       VALUES (${columns.map((_, i) => `$${i + 1}`).join(", ")})
+       RETURNING *`,
+      columns.map(([, v]) => v),
     );
 
     const invoice = invoiceResult.rows[0];
@@ -400,8 +485,12 @@ class InvoiceRepository {
       const itemResult = await dbClient.query(
         `INSERT INTO invoice_items (
           invoice_id, product_id, product_name, hsn_code,
-          quantity, unit_price, gst_percent, tax_amount, total
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          quantity, unit_price, gst_percent, tax_amount, total${
+            has.has_document_block ? ", uqc, cess_percent, cess_amount" : ""
+          }
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9${
+          has.has_document_block ? ", $10, $11, $12" : ""
+        })
         RETURNING *`,
         [
           invoice.id,
@@ -413,6 +502,12 @@ class InvoiceRepository {
           item.gstPercent || 18.00,
           item.taxAmount || 0.00,
           item.total,
+          // The unit as GST accepts it, frozen with the rest of the line. Null
+          // when the unit has no UQC decided yet, which is a gap to fill in
+          // rather than a reason to guess at one.
+          ...(has.has_document_block
+            ? [item.uqc || null, item.cessPercent || 0.00, item.cessAmount || 0.00]
+            : []),
         ]
       );
       insertedItems.push(itemResult.rows[0]);

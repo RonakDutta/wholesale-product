@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS shipment_checkpoints (
     note         TEXT,
     lat          NUMERIC(10,7),
     lng          NUMERIC(10,7),
-    -- 'actual' is somewhere the consignment has been; 'planned' is a
+    -- 'actual' is somewhere the consignment has been. 'planned' is a
     -- projected waypoint drawn on the route.
     kind         VARCHAR(20) NOT NULL DEFAULT 'actual'
                  CHECK (kind IN ('actual', 'planned')),

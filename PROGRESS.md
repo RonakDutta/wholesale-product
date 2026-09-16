@@ -1781,6 +1781,43 @@ phone width, which caught the unit dropdown showing "Metr".
 
 ---
 
+## 16 Sept: transport on a sale, and a tick for "paid in full"
+
+Phase 5, plus a small thing asked for alongside it.
+
+**Transport on the sale.** The invoice has carried these fields since this
+morning, but a sale often has no invoice yet: a wholesaler records the sale and
+loads the lorry the same afternoon, and the bill may go out days later or never.
+The vehicle number is only known at the moment the goods leave. So `sales` has
+its own transporter, transporter ID, mode, vehicle, LR or RR number and date,
+and GR number and date, and when a bill is raised from the sale they are copied
+onto it. Typed once. Copied and not joined, so editing the sale afterwards
+cannot change a bill already handed over.
+
+There is one definition of the block on each side, `services/transportDetails.js`
+and `components/TransportFields.jsx`, used by both the sale and the invoice
+screens. Two copies of eight fields is how one screen starts offering a mode the
+other refuses.
+
+**Paid in full.** A tick beside every box where somebody would otherwise read a
+total off the screen and type it back in: recording a sale, entering a purchase,
+taking a payment from a customer, paying a supplier. It writes the exact figure
+to the paisa and locks the box so the two cannot disagree. It unticks itself if
+the total moves, rather than silently sitting at the old figure and understating
+what was taken.
+
+**A hazard found and cleared.** Running the migrations through a splitter, as
+CLAUDE.md says to, showed `wholesale3_invoice_from_sale.sql` failing with
+`syntax error at or near "every"`. It had a semicolon in the middle of a prose
+comment, the exact trap that cost a debugging round on 14 Sept. A scan found 20
+of them across 13 files. All replaced with full stops. A semicolon at the END of
+a commented out example is harmless, because the fragment it makes is comment
+only, and those were left alone.
+
+**Migration to run:** `wholesale3_sale_transport.sql`
+
+---
+
 ## Left to do
 
 Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.

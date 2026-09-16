@@ -6,7 +6,7 @@
 -- everybody else the new one.
 --
 -- One row per employment, not per person. The person is a normal user in
--- `users` and signs in the ordinary way; this table is what points his session
+-- `users` and signs in the ordinary way. This table is what points his session
 -- at his employer's customers, sales and stock instead of at an empty book of
 -- his own.
 
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS staff_members (
     email          VARCHAR(255),
 
     -- What he may do. Checked against the catalogue in services/staffAccess,
-    -- which is the authority; the column is deliberately not an enum array,
+    -- which is the authority. The column is deliberately not an enum array,
     -- because adding a permission should not need a migration.
     permissions    TEXT[] NOT NULL DEFAULT '{}',
 

@@ -9,6 +9,10 @@ const challanService = require("../services/challanService");
 const { receivedExpression } = require("../services/saleSettlement");
 const { nextSaleNumber } = require("../services/seriesNumbers");
 const { businessId } = require("../middlewares/businessContext");
+const {
+  TRANSPORT_COLUMNS,
+  parseTransport,
+} = require("../services/transportDetails");
 
 /**
  * Recording a sale is the wholesaler's core action. They are usually writing
@@ -176,6 +180,11 @@ exports.createSale = async (req, res) => {
   const { lines, error } = buildLines(rawLines, await minHsnDigits());
   if (error) return res.status(400).json({ message: error });
 
+  // Refused here rather than by the CHECK, so the wholesaler reads the four
+  // choices instead of a constraint violation.
+  const { values: transport, error: transportError } = parseTransport(req.body);
+  if (transportError) return res.status(400).json({ message: transportError });
+
   const saleStatus = status || "confirmed";
   if (!["draft", "confirmed", "delivered"].includes(saleStatus)) {
     return res.status(400).json({ message: "Unknown status" });
@@ -228,25 +237,32 @@ exports.createSale = async (req, res) => {
 
     const saleNumber = await nextSaleNumber(client, wholesalerId);
 
+    // Named rather than positional, for the reason createInvoice was changed:
+    // two optional column groups counted out by hand is how the lorry number
+    // ends up in the notes.
+    const columns = [
+      ["wholesaler_id", wholesalerId],
+      ["party_id", partyId],
+      ["sale_number", saleNumber],
+      ["source", "wholesaler"],
+      ["status", saleStatus],
+      ["subtotal", fromPaise(subtotalPaise)],
+      ["discount", fromPaise(discountPaise)],
+      ["total", fromPaise(totalPaise)],
+      ["notes", clean(notes)],
+    ];
+    if (has.has_sale_tax) columns.push(["tax_amount", fromPaise(taxPaise)]);
+    if (has.has_sale_transport) {
+      for (const col of TRANSPORT_COLUMNS) columns.push([col, transport[col]]);
+    }
+
+    // sale_date keeps its COALESCE so a blank date still means today.
     const sale = await client.query(
-      `INSERT INTO sales
-         (wholesaler_id, party_id, sale_number, sale_date, source, status,
-          subtotal, discount, ${has.has_sale_tax ? "tax_amount," : ""} total, notes)
-       VALUES ($1, $2, $3, COALESCE($4::date, CURRENT_DATE), 'wholesaler',
-               $5, $6, $7, ${has.has_sale_tax ? "$8, $9, $10" : "$8, $9"})
+      `INSERT INTO sales (${columns.map(([c]) => c).join(", ")}, sale_date)
+       VALUES (${columns.map((_, i) => `$${i + 1}`).join(", ")},
+               COALESCE($${columns.length + 1}::date, CURRENT_DATE))
        RETURNING *`,
-      [
-        wholesalerId,
-        partyId,
-        saleNumber,
-        clean(saleDate),
-        saleStatus,
-        fromPaise(subtotalPaise),
-        fromPaise(discountPaise),
-        ...(has.has_sale_tax ? [fromPaise(taxPaise)] : []),
-        fromPaise(totalPaise),
-        clean(notes),
-      ],
+      [...columns.map(([, v]) => v), clean(saleDate)],
     );
     const saleId = sale.rows[0].id;
 
@@ -630,6 +646,9 @@ exports.updateSale = async (req, res) => {
   const { lines, error } = buildLines(rawLines, await minHsnDigits());
   if (error) return res.status(400).json({ message: error });
 
+  const { values: transport, error: transportError } = parseTransport(req.body);
+  if (transportError) return res.status(400).json({ message: transportError });
+
   const subtotalPaise = lines.reduce((sum, line) => sum + line.amountPaise, 0);
   const discountPaise = Math.max(0, toPaise(discount));
   if (discountPaise > subtotalPaise) {
@@ -708,23 +727,26 @@ exports.updateSale = async (req, res) => {
       });
     }
 
+    // Same name and value pairs as the insert. A lorry is booked after the sale
+    // is written at least as often as before it, so this has to be editable.
+    const sets = [
+      ["subtotal", fromPaise(subtotalPaise)],
+      ["discount", fromPaise(discountPaise)],
+      ["total", fromPaise(totalPaise)],
+      ["notes", clean(notes)],
+    ];
+    if (has.has_sale_tax) sets.push(["tax_amount", fromPaise(taxPaise)]);
+    if (has.has_sale_transport) {
+      for (const col of TRANSPORT_COLUMNS) sets.push([col, transport[col]]);
+    }
+
     await client.query(
       `UPDATE sales SET
-         sale_date  = COALESCE($2::date, sale_date),
-         subtotal   = $3,
-         discount   = $4,
-         ${has.has_sale_tax ? "tax_amount = $5, total = $6, notes = $7" : "total = $5, notes = $6"},
+         sale_date = COALESCE($2::date, sale_date),
+         ${sets.map(([c], i) => `${c} = $${i + 3}`).join(", ")},
          updated_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
-      [
-        id,
-        clean(saleDate),
-        fromPaise(subtotalPaise),
-        fromPaise(discountPaise),
-        ...(has.has_sale_tax ? [fromPaise(taxPaise)] : []),
-        fromPaise(totalPaise),
-        clean(notes),
-      ],
+      [id, clean(saleDate), ...sets.map(([, v]) => v)],
     );
 
     // Lines are replaced wholesale. Nothing references a sale line, so there

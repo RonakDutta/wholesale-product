@@ -1,6 +1,7 @@
 import { useState } from "react";
 import api from "../utils/axios";
 import ModalShell from "./ModalShell";
+import PaidInFull from "./PaidInFull";
 import { toast } from "sonner";
 
 /**
@@ -108,6 +109,18 @@ const RecordPaymentModal = ({ partyId, partyName, outstanding, sales = [], onClo
               placeholder="0"
               className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-lg font-bold outline-none transition-colors focus:border-clay"
             />
+            {/* Settling the lot is the common case, so it is one tick rather
+                than reading the figure off the panel above and typing it back
+                in. */}
+            <div className="mt-2">
+              <PaidInFull
+                id="pay-in-full"
+                total={outstanding}
+                value={amount}
+                onChange={setAmount}
+                label="Clearing everything they owe"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

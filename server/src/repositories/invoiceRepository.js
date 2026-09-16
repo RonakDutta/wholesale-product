@@ -184,6 +184,9 @@ async function schemaExtras(db = pool) {
                  WHERE table_name = 'invoices' AND column_name = 'seller_gstin') AS has_document_block,
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'sales' AND column_name = 'tax_amount') AS has_sale_tax,
+        -- The transport block on a sale, from wholesale3_sale_transport.sql.
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'sales' AND column_name = 'transport_mode') AS has_sale_transport,
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'sales' AND column_name = 'order_id') AS has_sale_order_id,
         EXISTS (SELECT 1 FROM information_schema.columns
@@ -243,6 +246,7 @@ async function schemaExtras(db = pool) {
       has_recipient: false,
       has_document_block: false,
       has_sale_tax: false,
+      has_sale_transport: false,
       has_sale_order_id: false,
       has_number_format: false,
       has_series_fy: false,

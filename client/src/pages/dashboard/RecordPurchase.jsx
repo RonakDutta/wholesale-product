@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import api from "../../utils/axios";
+import PaidInFull from "../../components/PaidInFull";
 import { toast } from "sonner";
 import { useHotkey } from "../../hooks/useHotkey";
 import { useMasters } from "../../hooks/useMasters";
@@ -651,6 +652,14 @@ const RecordPurchase = () => {
               Leave this empty if you will pay later. Whatever is left shows on
               their account.
             </p>
+
+            <PaidInFull
+              id="purchase-paid-in-full"
+              total={totals.total}
+              value={amountPaid}
+              onChange={setAmountPaid}
+              label="Paid the whole bill"
+            />
 
             <div className="grid grid-cols-2 gap-3">
               <input

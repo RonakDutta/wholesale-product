@@ -5,66 +5,17 @@ import { toast } from "sonner";
 import axios from "../../utils/axios";
 import { rupees } from "../../utils/money";
 import { useMasters } from "../../hooks/useMasters";
+import {
+  Field,
+  StateField,
+  TransportGrid,
+} from "../../components/TransportFields";
+import { blankTransport } from "../../utils/transport";
 
 // Document precision, the same as the bill this form is about to produce.
 // These totals used to be hard coded to two decimals with no grouping, so a
 // wholesaler read 1500.00 here and 1,500 everywhere else.
 const inr = (value) => rupees(value, { document: true });
-
-/**
- * One labelled box on the dispatch section.
- *
- * Pulled out because there are eighteen of them and eighteen copies of the
- * same three class names is how two of them end up looking different from the
- * rest. Reads its own value out of the group's state by name, so a field
- * cannot be wired to the wrong key and still look right.
- */
-const Field = ({ label, name, value, onChange, type = "text", placeholder }) => (
-  <div>
-    <label className="mb-1 block text-xs font-semibold text-espresso/70">{label}</label>
-    <input
-      type={type}
-      value={value[name] || ""}
-      placeholder={placeholder}
-      onChange={(e) => onChange(name, e.target.value)}
-      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-espresso placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-clay/20"
-    />
-  </div>
-);
-
-/**
- * A state, picked by name.
- *
- * The two digit GST code is NOT asked for. It is looked up from the name on
- * the server, because it is the number that decides CGST and SGST against
- * IGST, and asking somebody to type 27 next to Maharashtra is asking them to
- * get it wrong on a tax document.
- *
- * Falls back to a plain box if the state master has not been loaded, so the
- * field still works rather than offering an empty list.
- */
-const StateField = ({ label, name, value, onChange, states }) => {
-  if (!states?.length) {
-    return <Field label={label} name={name} value={value} onChange={onChange} />;
-  }
-  return (
-    <div>
-      <label className="mb-1 block text-xs font-semibold text-espresso/70">{label}</label>
-      <select
-        value={value[name] || ""}
-        onChange={(e) => onChange(name, e.target.value)}
-        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-espresso focus:outline-none focus:ring-2 focus:ring-clay/20"
-      >
-        <option value="">Not stated</option>
-        {states.map((s) => (
-          <option key={s.code} value={s.name}>
-            {s.name} ({s.code})
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-};
 
 export default function CreateInvoice() {
   const navigate = useNavigate();
@@ -104,14 +55,9 @@ export default function CreateInvoice() {
     shipToCity: "",
     shipToState: "",
     shipToPincode: "",
-    grNumber: "",
-    grDate: "",
-    transporterName: "",
-    transporterId: "",
-    transportMode: "",
-    vehicleNumber: "",
-    transportDocNumber: "",
-    transportDocDate: "",
+    // The eight transport fields, from the shared definition, so this screen
+    // and the sale screen cannot drift apart on what they send.
+    ...blankTransport(),
   });
   const setField = (name, value) =>
     setDespatch((prev) => ({ ...prev, [name]: value }));
@@ -591,31 +537,7 @@ export default function CreateInvoice() {
                 <legend className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                   Transport
                 </legend>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <Field label="Transporter" name="transporterName" value={despatch} onChange={setField} placeholder="Maruti Roadlines" />
-                  <Field label="Transporter ID or GSTIN" name="transporterId" value={despatch} onChange={setField} />
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-espresso/70">
-                      How it travels
-                    </label>
-                    <select
-                      value={despatch.transportMode}
-                      onChange={(e) => setField("transportMode", e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-espresso focus:outline-none focus:ring-2 focus:ring-clay/20"
-                    >
-                      <option value="">Not stated</option>
-                      <option value="road">By road</option>
-                      <option value="rail">By rail</option>
-                      <option value="air">By air</option>
-                      <option value="ship">By ship</option>
-                    </select>
-                  </div>
-                  <Field label="Vehicle number" name="vehicleNumber" value={despatch} onChange={setField} placeholder="MH04AB1234" />
-                  <Field label="LR or RR number" name="transportDocNumber" value={despatch} onChange={setField} />
-                  <Field label="LR or RR date" name="transportDocDate" value={despatch} onChange={setField} type="date" />
-                  <Field label="GR number" name="grNumber" value={despatch} onChange={setField} />
-                  <Field label="GR date" name="grDate" value={despatch} onChange={setField} type="date" />
-                </div>
+                <TransportGrid value={despatch} onChange={setField} />
               </fieldset>
             </div>
           )}

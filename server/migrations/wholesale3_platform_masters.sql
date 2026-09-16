@@ -8,7 +8,7 @@
 -- WHAT THIS DOES NOT DO. It does not switch anything over. Every reader keeps
 -- its constant as a fallback and probes for these tables the same way the rest
 -- of this codebase probes for a migration it cannot assume has been run. Until
--- this file is applied the product behaves exactly as it does today; after it
+-- this file is applied the product behaves exactly as it does today. After it
 -- is applied the tables win. Migrations here are run by hand, so code shipping
 -- before its SQL is the normal case and not an edge one.
 --
@@ -65,8 +65,8 @@ CREATE TABLE IF NOT EXISTS master_states (
 CREATE TABLE IF NOT EXISTS master_units (
     code        VARCHAR(16) PRIMARY KEY,
     name        VARCHAR(64) NOT NULL,
-    -- Whether a fraction of this unit makes sense. 2.5 metres does; 2.5 pieces
-    -- does not. Nothing enforces it yet; it is here for the screens that will.
+    -- Whether a fraction of this unit makes sense. 2.5 metres does. 2.5 pieces
+    -- does not. Nothing enforces it yet. It is here for the screens that will.
     allows_decimals BOOLEAN NOT NULL DEFAULT TRUE,
     active      BOOLEAN NOT NULL DEFAULT TRUE,
     sort_order  INTEGER NOT NULL DEFAULT 0,

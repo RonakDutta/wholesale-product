@@ -11,7 +11,7 @@
 --        invalid input syntax for type integer: "<uuid>"
 --
 --   2. Legacy NOT NULL columns duplicate newer ones. order_status_history
---      carries both to_status/changed_by and status/updated_by; the app only
+--      carries both to_status/changed_by and status/updated_by. The app only
 --      writes the latter, so inserts fail with a not-null violation on the
 --      former. Same for payment_transactions.payment_type/status.
 --

@@ -4,7 +4,8 @@ Agreed 15 Sept 2026. Nine items. Work started 16 Sept.
 
 `PROGRESS.md` is the record of what HAS been built. This is the record of what
 has been decided, and how much of it is done, so the two do not get mixed up.
-Phases 0 and 1 and most of 4 are finished. Everything else is still on paper.
+Phases 0 to 5 are finished. Phase 6, cess into the money path, is next and is
+the one to be careful with.
 
 Read the assessment at the bottom before promising a date on any of this. Two
 of these nine cannot be finished by writing code alone.
@@ -512,18 +513,26 @@ The units master leaves Case blank on purpose. Nothing is defaulted to OTH. The
 Administration screen is where somebody decides the blanks and the decision is
 recorded, which is why it says "not set" rather than filling it in quietly.
 
-## Phase 5. Transport details. NEXT, and half of it is done
-
-The columns landed in phase 2 and the invoice side landed in phases 3 and 4,
-so what is left is the sale.
+## Phase 5. Transport details. DONE
 
 - [x] Transporter name, ID or GSTIN, mode, vehicle number, transport document
       number and date, on an INVOICE, entered and printed (8)
-- [ ] The same block on a SALE (15 in part). A sale has no invoice until one is
-      raised from it, so the details have to be captured where the wholesaler
-      actually records the despatch.
+- [x] The same block on a SALE (15 in part), with its own columns rather than a
+      join, because a sale often has no invoice yet and the vehicle number is
+      only known at the moment the goods go out. Migration:
+      `wholesale3_sale_transport.sql`
+- [x] Carried onto the bill when one is raised from the sale, so it is typed
+      once. Copied, not joined, so editing the sale later cannot change a bill
+      already handed over.
+- [x] Shown on the sale detail screen, and only when something was recorded.
 
-## Phase 6. Tax terms and cess. THE DANGEROUS ONE
+One definition of the block on each side, `services/transportDetails.js` and
+`components/TransportFields.jsx`, because two copies of eight fields is how one
+screen starts offering a mode the other refuses.
+
+## Phase 6. Tax terms and cess. NEXT
+
+### The dangerous one
 
 Alone in its phase on purpose. This is the one that puts a wrong number in
 somebody's ledger rather than on a screen.

@@ -18,13 +18,13 @@
 -- 1 April.
 --
 -- Unlike the invoice series this is NOT a legal requirement. Rule 46(b)
--- constrains the tax invoice; a sale is the wholesaler's own record and a
+-- constrains the tax invoice. A sale is the wholesaler's own record and a
 -- delivery challan under this product's rule is explicitly not a tax document.
 -- The reason to do it is that three documents describing the same goods should
 -- not be numbered three different ways.
 --
 -- WHAT HAPPENS TO NUMBERS ALREADY ISSUED. Nothing. Rows already in `sales` and
--- `delivery_challans` keep the number printed on them; a document that has
+-- `delivery_challans` keep the number printed on them. A document that has
 -- gone out cannot be renumbered. Only the counter changes, and existing
 -- counters are carried into the CURRENT financial year rather than reset, so
 -- nobody's next sale collides with one he issued last week.

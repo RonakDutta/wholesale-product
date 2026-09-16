@@ -41,7 +41,7 @@ CREATE SEQUENCE IF NOT EXISTS order_number_seq;
 -- which is the thing this migration exists to get rid of.
 --
 -- Past a million orders the tail simply grows to seven digits. It stays
--- unique; it is only the padding that assumes six.
+-- unique. It is only the padding that assumes six.
 --
 -- It starts at 1 even on a database full of orders, and that is safe: every
 -- number issued by the old function is ORD followed by eighteen digits, and
@@ -53,7 +53,7 @@ CREATE SEQUENCE IF NOT EXISTS order_number_seq;
 -- here. Reading a starting point back out of mixed old and new shapes is easy
 -- to get subtly wrong, and getting it wrong hands out a duplicate, which is
 -- the exact failure this file exists to remove. IF NOT EXISTS means the
--- counter survives this file being run again; if anyone ever drops it by
+-- counter survives this file being run again. If anyone ever drops it by
 -- hand, setval it by hand too.
 
 CREATE OR REPLACE FUNCTION generate_order_number()

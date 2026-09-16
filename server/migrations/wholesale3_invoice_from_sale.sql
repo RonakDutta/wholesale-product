@@ -22,7 +22,7 @@
 --
 -- RUN wholesale3_parties_and_sales.sql FIRST. The columns added here point at
 -- sales and parties. Run out of order it stops on "relation sales does not
--- exist"; every statement is IF NOT EXISTS, so run it again afterwards and it
+-- exist". Every statement is IF NOT EXISTS, so run it again afterwards and it
 -- completes.
 --
 -- Run by hand against Neon, like every other file in this directory.

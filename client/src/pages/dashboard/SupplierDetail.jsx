@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Plus, TriangleAlert } from "lucide-react";
 import api from "../../utils/axios";
+import PaidInFull from "../../components/PaidInFull";
 import { toast } from "sonner";
 import { money, dateLabel } from "../../utils/money";
 
@@ -238,6 +239,17 @@ const SupplierDetail = () => {
               placeholder="0"
               className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-clay"
             />
+            {/* Only when there is a balance to clear. A supplier who is square,
+                or who owes US money, has no "in full" to offer. */}
+            <div className="mt-2">
+              <PaidInFull
+                id="supplier-paid-in-full"
+                total={balance > 0 ? balance : 0}
+                value={payment.amount}
+                onChange={(next) => setPayment({ ...payment, amount: next })}
+                label="Clearing everything you owe them"
+              />
+            </div>
           </div>
           <div>
             <label

@@ -5,6 +5,13 @@ import api from "../../utils/axios";
 import { toast } from "sonner";
 import { useHotkey } from "../../hooks/useHotkey";
 import ItemPicker from "../../components/ItemPicker";
+import TransportCard from "../../components/TransportFields";
+import PaidInFull from "../../components/PaidInFull";
+import {
+  blankTransport,
+  transportFromRow,
+  hasTransport,
+} from "../../utils/transport";
 
 // Short values on purpose here: this select sits beside the quantity box on a
 // phone, where "Kilogram (kg)" would not fit.
@@ -68,6 +75,19 @@ const RecordSale = () => {
   const [amountPaid, setAmountPaid] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [notes, setNotes] = useState("");
+
+  /**
+   * The lorry, if there is one.
+   *
+   * Recorded on the SALE rather than only on the bill, because a bill may be
+   * raised days later or never, and the vehicle number is only known at the
+   * moment the goods go out. saleInvoiceService carries it onto the invoice
+   * when one is raised, so it is typed once.
+   */
+  const [transport, setTransport] = useState(blankTransport());
+  const [showTransport, setShowTransport] = useState(false);
+  const setTransportField = (name, value) =>
+    setTransport((prev) => ({ ...prev, [name]: value }));
   const [sale, setSale] = useState(null);
   // The wholesaler's own default GST rate, used for any line the rate list
   // has no rate for. Falls back to 18 only until the settings arrive.
@@ -126,6 +146,12 @@ const RecordSale = () => {
             setPartyId(data.sale.party_id);
             setSaleDate(String(data.sale.sale_date).slice(0, 10));
             setNotes(data.sale.notes || "");
+            const saved = transportFromRow(data.sale);
+            setTransport(saved);
+            // Opened only when there is something to see. A sale that went
+            // out in the customer's own auto should not reopen on eight
+            // empty boxes.
+            setShowTransport(hasTransport(saved));
             setDiscount(
               Number(data.sale.discount) > 0
                 ? String(Number(data.sale.discount))
@@ -289,6 +315,7 @@ const RecordSale = () => {
       saleDate,
       discount: discount || 0,
       notes,
+      ...transport,
       lines: filled.map((line) => ({
         itemName: line.itemName,
         quantity: line.quantity,
@@ -616,6 +643,14 @@ const RecordSale = () => {
             on their account.
           </p>
 
+          <PaidInFull
+            id="sale-paid-in-full"
+            total={totals.total}
+            value={amountPaid}
+            onChange={setAmountPaid}
+            label="Paid the whole bill"
+          />
+
           <div className="grid grid-cols-2 gap-3">
             <input
               value={amountPaid}
@@ -654,6 +689,13 @@ const RecordSale = () => {
         </div>
         )}
       </div>
+
+      <TransportCard
+        value={transport}
+        onChange={setTransportField}
+        open={showTransport}
+        onToggle={() => setShowTransport((o) => !o)}
+      />
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <label

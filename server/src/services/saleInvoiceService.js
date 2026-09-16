@@ -3,6 +3,7 @@ const { fullName } = require("../utils/money");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const challanService = require("./challanService");
 const { placeOfSupply, stateOf, stateCode } = require("./placeOfSupply");
+const { toInvoiceFields } = require("./transportDetails");
 const invoiceNumberService = require("./invoiceNumberService");
 const gstService = require("./gstService");
 
@@ -399,6 +400,15 @@ class SaleInvoiceService {
         notes: settings.defaultNotes,
         termsConditions: settings.defaultTerms,
         pdfUrl: null,
+
+        // The lorry the wholesaler recorded on the sale, carried onto the bill
+        // raised from it. Typed once, at the moment the goods went out, which
+        // is the only moment anybody actually knows the vehicle number.
+        //
+        // Copied, not joined. Editing the sale afterwards must not change a
+        // bill that has already been handed over, which is the same rule the
+        // recipient and the seller block follow.
+        ...toInvoiceFields(sale),
       };
 
       const invoice = await invoiceRepository.createInvoice(

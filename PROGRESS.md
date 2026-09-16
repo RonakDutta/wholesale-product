@@ -1744,8 +1744,40 @@ Rendered and looked at: a bill with every field, a bill with an IRN and QR, an
 old bill with none of them which prints as it always did, and the units screen
 at desktop and phone width.
 
-Still open in phase 3: the form to TYPE the new fields into. The columns and
-the printing are done.
+## 16 Sept: the invoice form, and the HSN digit rule actually bites
+
+Phases 3 and 4 finished.
+
+**The form.** The new invoice screen has a "Dispatch, delivery and transport"
+section, closed by default because most bills go from the registered address to
+the registered address with no lorry to record. Inside it: dispatched from,
+shipped to, the transporter block and the GR number. Each line gained a Unit
+picker, which is also how the line gets its UQC: the wholesaler picks Metre and
+the bill is filed as MTR. Nobody is asked to know that Bundle is BDL.
+
+State CODES are derived from the state name on the server, never typed. It is
+the number that decides CGST and SGST against IGST, and asking somebody to type
+27 beside Maharashtra is asking them to get it wrong on a tax document.
+
+**The HSN digit rule.** `default_hsn_min_digits` has been in `master_settings`
+since the platform masters were built, and it is on the Administration settings
+screen. Nothing read it. `hsnService` checked that a code was 4, 6 or 8 digits
+and stopped there, so a platform set to 6 accepted 4 digit codes everywhere.
+
+It is enforced now on sales, purchases, products and manual invoices. The
+manual invoice path was not checking the HSN at all, so the same code could be
+refused on a sale and accepted on a bill. `checkHsn` stays pure and takes the
+minimum as an argument; the caller reads the setting once before looping.
+
+No migration. The column and the screen were already there.
+
+**Verified.** Eighteen checks against a local Postgres: changing the setting
+changes what is accepted, a short code is refused with the line named, the
+dispatch and transport fields reach the invoice, the state codes are derived,
+the customer's state is frozen from their own record, the seller block is
+copied without the form sending it, a line that picked a unit carries its UQC
+and a line that did not is left blank. The form was rendered at desktop and
+phone width, which caught the unit dropdown showing "Metr".
 
 ---
 

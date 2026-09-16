@@ -44,7 +44,7 @@ const tidyHsn = (value) => String(value ?? "").replace(/[\s.-]/g, "");
  *
  * @returns {{ ok: boolean, hsn: string|null, reason?: string }}
  */
-const checkHsn = (value) => {
+const checkHsn = (value, { minDigits = 4 } = {}) => {
   const hsn = tidyHsn(value);
   if (!hsn) return { ok: true, hsn: null };
 
@@ -58,7 +58,40 @@ const checkHsn = (value) => {
       reason: `An HSN code is 4, 6 or 8 digits. This one has ${hsn.length}.`,
     };
   }
+  // How many digits this platform bills at, from the Administration setting.
+  //
+  // The notification ties this to turnover: four digits up to 5 crore, six
+  // above it, eight on exports and imports. Nothing here knows anybody's
+  // turnover, and inventing a figure to derive a rule from would be worse than
+  // asking. So it is a setting somebody sets, and the screen says as much.
+  if (hsn.length < minDigits) {
+    return {
+      ok: false,
+      hsn,
+      reason: `This bill needs at least ${minDigits} digit HSN codes. "${hsn}" has ${hsn.length}. Change it in Administration if that is not right for you.`,
+    };
+  }
   return { ok: true, hsn };
+};
+
+/**
+ * The minimum digit count in force, read once and cached by masterService.
+ *
+ * Async, which is why it is separate from checkHsn: the check itself stays
+ * pure and synchronous so it can be called from anywhere, including a loop
+ * over invoice lines, and the caller fetches the number once before it starts.
+ *
+ * Falls back to 4 rather than throwing. A bill that is checked against the
+ * shipped floor beats a bill that cannot be raised at all.
+ */
+const minHsnDigits = async () => {
+  try {
+    const settings = await require("./masterService").settings();
+    const n = Number(settings.defaultHsnMinDigits);
+    return [4, 6, 8].includes(n) ? n : 4;
+  } catch {
+    return 4;
+  }
 };
 
 /**
@@ -190,4 +223,4 @@ const suggest = async (db, wholesalerId, query = "", limit = 8) => {
   return out;
 };
 
-module.exports = { checkHsn, tidyHsn, suggest, historyFor, TEXTILE_HSN };
+module.exports = { checkHsn, minHsnDigits, tidyHsn, suggest, historyFor, TEXTILE_HSN };

@@ -2,7 +2,7 @@ const pool = require("../config/db");
 const { FEATURES } = require("../config/features");
 const { clean, optionalNumber } = require("../utils/money");
 const invoiceRepository = require("../repositories/invoiceRepository");
-const { checkHsn } = require("../services/hsnService");
+const { checkHsn, minHsnDigits } = require("../services/hsnService");
 const { businessId } = require("../middlewares/businessContext");
 const {
   CITY_SQL,
@@ -93,7 +93,7 @@ exports.addProduct = async (req, res) => {
     // Digits only, and 4, 6 or 8 of them. Refused rather than stored, because
     // a code of the wrong length ends up printed on a tax invoice describing
     // the goods as something they are not.
-    const hsn = checkHsn(hsnCode);
+    const hsn = checkHsn(hsnCode, { minDigits: await minHsnDigits() });
     if (!hsn.ok) return res.status(400).json({ message: hsn.reason });
 
     // The billing columns arrive with wholesale3_listing_billing_fields.sql.
@@ -633,7 +633,7 @@ exports.updateInventoryItem = async (req, res) => {
     }
 
     // Same check as when a product is added, for the same reason.
-    const hsn = checkHsn(hsnCode);
+    const hsn = checkHsn(hsnCode, { minDigits: await minHsnDigits() });
     if (!hsn.ok) return res.status(400).json({ message: hsn.reason });
 
     /**

@@ -456,7 +456,7 @@ blank rather than being invented. `invoice_items.uqc` has no foreign key onto
 `master_uqc`, because a frozen line must not be coupled to a table somebody can
 edit.
 
-## Phase 3. The invoice on screen and on paper. MOSTLY DONE
+## Phase 3. The invoice on screen and on paper. DONE
 
 - [x] PDF: the seller block with its address, both addresses when they differ,
       GR number and date, the transport band, bank details, UQC beside each
@@ -466,8 +466,11 @@ edit.
 - [x] The printed HSN summary had the same arithmetic fault as the SQL one and
       was overstating the taxable value on every tax inclusive bill. Fixed and
       it now ties to the total above it.
-- [ ] Invoice form: the new fields entered rather than only printed (14). The
-      columns and the PDF are done, so this is the box to type them into.
+- [x] Invoice form: the new fields entered rather than only printed (14). A
+      "Dispatch, delivery and transport" section, closed by default because
+      most bills need none of it, plus a Unit picker on each line that carries
+      the UQC. State codes are derived from the state name on the server, never
+      typed: it is the number that decides CGST and SGST against IGST.
 
 Rendered and looked at, not just written: a bill with every field filled in, a
 bill with an IRN and a signed QR, and an old bill carrying none of them, which
@@ -477,7 +480,7 @@ The explanation of the tax split is shown only when the invoice actually
 recorded both states it compared. Guessing at the reason would be worse than
 saying nothing.
 
-## Phase 4. UQC, HSN digits, HSN summary. MOSTLY DONE
+## Phase 4. UQC, HSN digits, HSN summary. DONE
 
 - [x] Migration: `master_uqc` holding the official list, `master_units.uqc`
       with a foreign key onto it (2). File:
@@ -490,20 +493,35 @@ saying nothing.
       Every unit lists the code it is filed as, or says "UQC not set", and the
       editor offers the statutory list as a dropdown. Blank is allowed and
       means nobody has decided.
-- [ ] Migration: minimum HSN digit count on `master_settings` (5)
-- [ ] `hsnService` enforces the minimum digit setting (9)
-- [ ] Administration: the HSN digit setting (16, its second)
+- [x] Migration: minimum HSN digit count on `master_settings` (5). Already
+      existed as `default_hsn_min_digits` in `wholesale3_master_settings.sql`,
+      with a CHECK of 4, 6 or 8. No new migration was needed.
+- [x] Administration: the HSN digit setting (16, its second). Already on the
+      settings screen. It was being read and ignored.
+- [x] `hsnService` enforces the minimum digit setting (9). It checked the shape
+      and nothing else, so the setting had no effect anywhere. Enforced now on
+      sales, purchases, products and manual invoices. The manual invoice path
+      was not checking the HSN at all, so a bill could go out with a code the
+      same product would have been refused for.
+
+`checkHsn` stays pure and synchronous and takes the minimum as an argument.
+The caller reads the setting once with `minHsnDigits()` before looping over
+lines, rather than every line awaiting a cached read.
 
 The units master leaves Case blank on purpose. Nothing is defaulted to OTH. The
 Administration screen is where somebody decides the blanks and the decision is
 recorded, which is why it says "not set" rather than filling it in quietly.
 
-## Phase 5. Transport details
+## Phase 5. Transport details. NEXT, and half of it is done
 
-The columns land in phase 2, so this is form, PDF and sale screen only.
+The columns landed in phase 2 and the invoice side landed in phases 3 and 4,
+so what is left is the sale.
 
-- [ ] Transporter name, ID or GSTIN, mode, vehicle number, transport document
-      number and date, on an invoice and on a sale (8, 15 in part)
+- [x] Transporter name, ID or GSTIN, mode, vehicle number, transport document
+      number and date, on an INVOICE, entered and printed (8)
+- [ ] The same block on a SALE (15 in part). A sale has no invoice until one is
+      raised from it, so the details have to be captured where the wholesaler
+      actually records the despatch.
 
 ## Phase 6. Tax terms and cess. THE DANGEROUS ONE
 

@@ -23,6 +23,17 @@ const validateManualInvoicePayload = (req, res, next) => {
     }
   }
 
+  // The database has a CHECK on this column. Caught here so a wholesaler reads
+  // what the four choices are, rather than a constraint violation.
+  const MODES = ["road", "rail", "air", "ship"];
+  const mode = req.body.transportMode;
+  if (mode && !MODES.includes(String(mode).toLowerCase())) {
+    return res.status(400).json({
+      success: false,
+      message: `How the goods travel has to be one of: ${MODES.join(", ")}.`,
+    });
+  }
+
   next();
 };
 

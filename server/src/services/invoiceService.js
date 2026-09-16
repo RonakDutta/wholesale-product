@@ -3,7 +3,9 @@ const invoiceRepository = require("../repositories/invoiceRepository");
 const invoiceNumberService = require("./invoiceNumberService");
 const gstService = require("./gstService");
 const challanService = require("./challanService");
-const { placeOfSupply } = require("./placeOfSupply");
+const { placeOfSupply, stateCode } = require("./placeOfSupply");
+const { checkHsn, minHsnDigits } = require("./hsnService");
+const { clean } = require("../utils/money");
 const pdfService = require("./pdfService");
 const emailService = require("./emailService");
 
@@ -543,6 +545,17 @@ class InvoiceService {
       if (!buyerId || items.length === 0) {
         throw new Error("Buyer ID and at least one item are required.");
       }
+
+      // The HSN was not checked on this path at all, so a manual bill could go
+      // out with a three digit code on it while the same code was refused on a
+      // sale. Same check, same setting, same message.
+      const minDigits = await minHsnDigits();
+      for (const item of items) {
+        const hsn = checkHsn(item.hsnCode ?? item.hsn_code, { minDigits });
+        if (!hsn.ok) {
+          throw new Error(`${hsn.reason} Check the HSN for ${item.productName || "this line"}.`);
+        }
+      }
       // A tax invoice needs two parties. Ordering already blocks buying your
       // own stock; this closes the same hole on the manual path.
       if (String(buyerId) === String(supplierId)) {
@@ -629,9 +642,63 @@ class InvoiceService {
           : new Date(Date.now() + settings.dueDays * 86400000),
         notes: notes || settings.defaultNotes,
         termsConditions: termsConditions || settings.defaultTerms,
+
+        /**
+         * The document block, as typed on the form.
+         *
+         * State CODES are derived here rather than asked for. The form offers a
+         * state by name, because that is what somebody knows, and the two digit
+         * code is looked up from it. Asking a wholesaler to type 27 beside
+         * Maharashtra is asking them to get it wrong on a tax document, and it
+         * is the one number that decides CGST and SGST against IGST.
+         *
+         * The seller block and the bank details are NOT here. createInvoice
+         * copies those from the profile itself, so they cannot be forgotten
+         * and cannot be forged from the request body.
+         */
+        recipientState: pos.state,
+        recipientStateCode: pos.code,
+
+        dispatchFromName: clean(payload.dispatchFromName),
+        dispatchFromAddress: clean(payload.dispatchFromAddress),
+        dispatchFromCity: clean(payload.dispatchFromCity),
+        dispatchFromState: clean(payload.dispatchFromState),
+        dispatchFromStateCode: stateCode(payload.dispatchFromState),
+        dispatchFromPincode: clean(payload.dispatchFromPincode),
+
+        shipToName: clean(payload.shipToName),
+        shipToGstin: clean(payload.shipToGstin),
+        shipToAddress: clean(payload.shipToAddress),
+        shipToCity: clean(payload.shipToCity),
+        shipToState: clean(payload.shipToState),
+        shipToStateCode: stateCode(payload.shipToState),
+        shipToPincode: clean(payload.shipToPincode),
+
+        grNumber: clean(payload.grNumber),
+        grDate: payload.grDate || null,
+
+        transporterName: clean(payload.transporterName),
+        transporterId: clean(payload.transporterId),
+        transportMode: clean(payload.transportMode),
+        vehicleNumber: clean(payload.vehicleNumber),
+        transportDocNumber: clean(payload.transportDocNumber),
+        transportDocDate: payload.transportDocDate || null,
       };
 
-      const invoice = await invoiceRepository.createInvoice(invoiceData, gstCalculation.items, client);
+      /**
+       * The UQC each line is filed under, carried across from the form.
+       *
+       * gstService rebuilds the items as it prices them and knows nothing about
+       * units, so the code is put back afterwards, matched by position. Absent
+       * when the wholesaler has not picked a unit, which is honest: a made up
+       * UQC is a wrong declaration on an e-invoice.
+       */
+      const pricedItems = gstCalculation.items.map((priced, i) => ({
+        ...priced,
+        uqc: clean(items[i]?.uqc) || null,
+      }));
+
+      const invoice = await invoiceRepository.createInvoice(invoiceData, pricedItems, client);
 
       await invoiceRepository.addLog(
         {

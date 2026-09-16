@@ -1,14 +1,70 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Plus, Trash2, ArrowLeft, Save, Users, Calculator } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Save, Users, Calculator, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import axios from "../../utils/axios";
 import { rupees } from "../../utils/money";
+import { useMasters } from "../../hooks/useMasters";
 
 // Document precision, the same as the bill this form is about to produce.
 // These totals used to be hard coded to two decimals with no grouping, so a
 // wholesaler read 1500.00 here and 1,500 everywhere else.
 const inr = (value) => rupees(value, { document: true });
+
+/**
+ * One labelled box on the dispatch section.
+ *
+ * Pulled out because there are eighteen of them and eighteen copies of the
+ * same three class names is how two of them end up looking different from the
+ * rest. Reads its own value out of the group's state by name, so a field
+ * cannot be wired to the wrong key and still look right.
+ */
+const Field = ({ label, name, value, onChange, type = "text", placeholder }) => (
+  <div>
+    <label className="mb-1 block text-xs font-semibold text-espresso/70">{label}</label>
+    <input
+      type={type}
+      value={value[name] || ""}
+      placeholder={placeholder}
+      onChange={(e) => onChange(name, e.target.value)}
+      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-espresso placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-clay/20"
+    />
+  </div>
+);
+
+/**
+ * A state, picked by name.
+ *
+ * The two digit GST code is NOT asked for. It is looked up from the name on
+ * the server, because it is the number that decides CGST and SGST against
+ * IGST, and asking somebody to type 27 next to Maharashtra is asking them to
+ * get it wrong on a tax document.
+ *
+ * Falls back to a plain box if the state master has not been loaded, so the
+ * field still works rather than offering an empty list.
+ */
+const StateField = ({ label, name, value, onChange, states }) => {
+  if (!states?.length) {
+    return <Field label={label} name={name} value={value} onChange={onChange} />;
+  }
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-semibold text-espresso/70">{label}</label>
+      <select
+        value={value[name] || ""}
+        onChange={(e) => onChange(name, e.target.value)}
+        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-espresso focus:outline-none focus:ring-2 focus:ring-clay/20"
+      >
+        <option value="">Not stated</option>
+        {states.map((s) => (
+          <option key={s.code} value={s.name}>
+            {s.name} ({s.code})
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+};
 
 export default function CreateInvoice() {
   const navigate = useNavigate();
@@ -22,6 +78,43 @@ export default function CreateInvoice() {
   const [notes, setNotes] = useState("");
   const [termsConditions, setTermsConditions] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { units, states } = useMasters();
+
+  /**
+   * Dispatch, delivery and transport.
+   *
+   * One piece of state rather than eighteen, because they are filled in
+   * together or not at all, and eighteen setters is eighteen chances to wire
+   * one to the wrong field.
+   *
+   * Collapsed by default. Most bills go from the registered address to the
+   * registered address with no lorry to record, and opening the form on
+   * eighteen empty boxes makes the common case look like work.
+   */
+  const [showDespatch, setShowDespatch] = useState(false);
+  const [despatch, setDespatch] = useState({
+    dispatchFromName: "",
+    dispatchFromAddress: "",
+    dispatchFromCity: "",
+    dispatchFromState: "",
+    dispatchFromPincode: "",
+    shipToName: "",
+    shipToGstin: "",
+    shipToAddress: "",
+    shipToCity: "",
+    shipToState: "",
+    shipToPincode: "",
+    grNumber: "",
+    grDate: "",
+    transporterName: "",
+    transporterId: "",
+    transportMode: "",
+    vehicleNumber: "",
+    transportDocNumber: "",
+    transportDocDate: "",
+  });
+  const setField = (name, value) =>
+    setDespatch((prev) => ({ ...prev, [name]: value }));
 
   const [items, setItems] = useState([
     {
@@ -152,12 +245,17 @@ export default function CreateInvoice() {
           quantity: Number(i.quantity),
           unitPrice: Number(i.unitPrice),
           gstPercent: Number(i.gstPercent),
+          // The GST code the chosen unit is filed under, looked up from the
+          // units master. Absent when the unit has no UQC decided yet, because
+          // a made up code is a wrong declaration on an e-invoice.
+          uqc: units.find((u) => u.code === i.unit)?.uqc || null,
         })),
         discount: Number(discount),
         shippingCharge: Number(shippingCharge),
         dueDate: dueDate || null,
         notes,
         termsConditions,
+        ...despatch,
       });
 
       if (res.data.success) {
@@ -301,7 +399,7 @@ export default function CreateInvoice() {
                 key={idx}
                 className="grid grid-cols-12 gap-3 items-center p-3 bg-slate-50 rounded-xl border border-slate-200"
               >
-                <div className="col-span-12 sm:col-span-4">
+                <div className="col-span-12 sm:col-span-3">
                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">
                     Product Description *
                   </label>
@@ -331,7 +429,7 @@ export default function CreateInvoice() {
                   />
                 </div>
 
-                <div className="col-span-4 sm:col-span-2">
+                <div className="col-span-4 sm:col-span-1">
                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">
                     Qty *
                   </label>
@@ -345,6 +443,35 @@ export default function CreateInvoice() {
                     className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-center text-espresso"
                     required
                   />
+                </div>
+
+                {/*
+                  The unit, which is also how the line gets its UQC.
+
+                  The wholesaler picks the word they use, Metre or Bundle, and
+                  the GST code it is filed under comes from the units master.
+                  Nobody should be asked to know that Bundle is BDL. A unit with
+                  no UQC decided yet is still offered and still perfectly
+                  usable; the line simply goes out without one, which is the
+                  honest state of it.
+                */}
+                <div className="col-span-4 sm:col-span-2">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">
+                    Unit
+                  </label>
+                  <select
+                    value={item.unit || ""}
+                    onChange={(e) => handleItemChange(idx, "unit", e.target.value)}
+                    className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-espresso"
+                  >
+                    <option value="">--</option>
+                    {units.map((u) => (
+                      <option key={u.code} value={u.code}>
+                        {u.name}
+                        {u.uqc ? ` (${u.uqc})` : ""}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="col-span-4 sm:col-span-2">
@@ -395,6 +522,103 @@ export default function CreateInvoice() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/*
+          Dispatch, delivery and transport.
+
+          Everything here is optional and everything here is frozen onto the
+          bill once it is raised. Left empty, the registered addresses already
+          on the invoice are the answer and none of this prints, which is why
+          the section starts closed rather than showing eighteen empty boxes.
+        */}
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-xs">
+          <button
+            type="button"
+            onClick={() => setShowDespatch((open) => !open)}
+            aria-expanded={showDespatch}
+            className="flex w-full items-center justify-between gap-3 p-6 text-left"
+          >
+            <span>
+              <span className="block text-sm font-bold text-espresso">
+                Dispatch, delivery and transport
+              </span>
+              <span className="mt-0.5 block text-xs text-espresso/60">
+                Only if the goods leave from somewhere other than your
+                registered address, go somewhere other than the billing address,
+                or travel with a transporter. These are the e-way bill details.
+              </span>
+            </span>
+            <ChevronDown
+              className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${
+                showDespatch ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+
+          {showDespatch && (
+            <div className="space-y-6 border-t border-slate-100 p-6 pt-5">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <fieldset className="space-y-3">
+                  <legend className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Dispatched from
+                  </legend>
+                  <Field label="Name of the place" name="dispatchFromName" value={despatch} onChange={setField} placeholder="Bhiwandi godown" />
+                  <Field label="Address" name="dispatchFromAddress" value={despatch} onChange={setField} />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="City" name="dispatchFromCity" value={despatch} onChange={setField} />
+                    <Field label="Pincode" name="dispatchFromPincode" value={despatch} onChange={setField} />
+                  </div>
+                  <StateField label="State" name="dispatchFromState" value={despatch} onChange={setField} states={states} />
+                </fieldset>
+
+                <fieldset className="space-y-3">
+                  <legend className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Shipped to
+                  </legend>
+                  <Field label="Name" name="shipToName" value={despatch} onChange={setField} placeholder="Unit 2, or the buyer's godown" />
+                  <Field label="GSTIN" name="shipToGstin" value={despatch} onChange={setField} />
+                  <Field label="Address" name="shipToAddress" value={despatch} onChange={setField} />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="City" name="shipToCity" value={despatch} onChange={setField} />
+                    <Field label="Pincode" name="shipToPincode" value={despatch} onChange={setField} />
+                  </div>
+                  <StateField label="State" name="shipToState" value={despatch} onChange={setField} states={states} />
+                </fieldset>
+              </div>
+
+              <fieldset className="space-y-3 border-t border-slate-100 pt-5">
+                <legend className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Transport
+                </legend>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <Field label="Transporter" name="transporterName" value={despatch} onChange={setField} placeholder="Maruti Roadlines" />
+                  <Field label="Transporter ID or GSTIN" name="transporterId" value={despatch} onChange={setField} />
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-espresso/70">
+                      How it travels
+                    </label>
+                    <select
+                      value={despatch.transportMode}
+                      onChange={(e) => setField("transportMode", e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-espresso focus:outline-none focus:ring-2 focus:ring-clay/20"
+                    >
+                      <option value="">Not stated</option>
+                      <option value="road">By road</option>
+                      <option value="rail">By rail</option>
+                      <option value="air">By air</option>
+                      <option value="ship">By ship</option>
+                    </select>
+                  </div>
+                  <Field label="Vehicle number" name="vehicleNumber" value={despatch} onChange={setField} placeholder="MH04AB1234" />
+                  <Field label="LR or RR number" name="transportDocNumber" value={despatch} onChange={setField} />
+                  <Field label="LR or RR date" name="transportDocDate" value={despatch} onChange={setField} type="date" />
+                  <Field label="GR number" name="grNumber" value={despatch} onChange={setField} />
+                  <Field label="GR date" name="grDate" value={despatch} onChange={setField} type="date" />
+                </div>
+              </fieldset>
+            </div>
+          )}
         </div>
 
         {/* Financial Totals & Terms Card */}

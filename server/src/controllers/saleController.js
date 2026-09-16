@@ -4,7 +4,7 @@ const saleInvoiceService = require("../services/saleInvoiceService");
 const creditNoteService = require("../services/creditNoteService");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const gstService = require("../services/gstService");
-const { checkHsn } = require("../services/hsnService");
+const { checkHsn, minHsnDigits } = require("../services/hsnService");
 const challanService = require("../services/challanService");
 const { receivedExpression } = require("../services/saleSettlement");
 const { nextSaleNumber } = require("../services/seriesNumbers");
@@ -102,7 +102,7 @@ const resolveRates = async (client, wholesalerId, lines) => {
  * Validates and normalises the lines on a sale. Returns either an error
  * message or the cleaned lines with their amounts already worked out.
  */
-const buildLines = (rawLines) => {
+const buildLines = (rawLines, minHsn = 4) => {
   if (!Array.isArray(rawLines) || rawLines.length === 0) {
     return { error: "Add at least one item to this sale" };
   }
@@ -137,7 +137,7 @@ const buildLines = (rawLines) => {
     // common; a code of the wrong length is a slipped keystroke, and letting
     // it through prints a false description on a bill the customer claims their
     // input credit against.
-    const hsn = checkHsn(raw.hsnCode ?? raw.hsn_code);
+    const hsn = checkHsn(raw.hsnCode ?? raw.hsn_code, { minDigits: minHsn });
     if (!hsn.ok) return { error: `${hsn.reason} Check the HSN for ${itemName}.` };
 
     lines.push({
@@ -173,7 +173,7 @@ exports.createSale = async (req, res) => {
     return res.status(400).json({ message: "Choose a customer" });
   }
 
-  const { lines, error } = buildLines(rawLines);
+  const { lines, error } = buildLines(rawLines, await minHsnDigits());
   if (error) return res.status(400).json({ message: error });
 
   const saleStatus = status || "confirmed";
@@ -627,7 +627,7 @@ exports.updateSale = async (req, res) => {
   const { id } = req.params;
   const { saleDate, discount, notes, lines: rawLines } = req.body;
 
-  const { lines, error } = buildLines(rawLines);
+  const { lines, error } = buildLines(rawLines, await minHsnDigits());
   if (error) return res.status(400).json({ message: error });
 
   const subtotalPaise = lines.reduce((sum, line) => sum + line.amountPaise, 0);

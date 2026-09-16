@@ -1,7 +1,7 @@
 const pool = require("../config/db");
 const { clean, fromPaise, toPaise } = require("../utils/money");
 const gstService = require("../services/gstService");
-const { checkHsn } = require("../services/hsnService");
+const { checkHsn, minHsnDigits } = require("../services/hsnService");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const { nextPurchaseNumber } = require("../services/seriesNumbers");
 const { businessId } = require("../middlewares/businessContext");
@@ -76,7 +76,7 @@ const pricePurchase = (lines, discountPaise) =>
  * document they did not write. A line with no rate stated is taxed at zero and
  * says so on the screen.
  */
-const buildLines = (rawLines) => {
+const buildLines = (rawLines, minHsn = 4) => {
   if (!Array.isArray(rawLines) || rawLines.length === 0) {
     return { error: "Add at least one item to this purchase" };
   }
@@ -105,7 +105,7 @@ const buildLines = (rawLines) => {
       }
     }
 
-    const hsn = checkHsn(raw.hsnCode ?? raw.hsn_code);
+    const hsn = checkHsn(raw.hsnCode ?? raw.hsn_code, { minDigits: minHsn });
     if (!hsn.ok) return { error: `${hsn.reason} Check the HSN for ${itemName}.` };
 
     // Defaults to claimable, because the great majority of a wholesaler's
@@ -166,7 +166,7 @@ exports.createPurchase = async (req, res) => {
     return res.status(400).json({ message: "Choose a supplier" });
   }
 
-  const { lines, error } = buildLines(rawLines);
+  const { lines, error } = buildLines(rawLines, await minHsnDigits());
   if (error) return res.status(400).json({ message: error });
 
   const purchaseStatus = status || "received";
@@ -536,7 +536,7 @@ exports.updatePurchase = async (req, res) => {
     lines: rawLines,
   } = req.body;
 
-  const { lines, error } = buildLines(rawLines);
+  const { lines, error } = buildLines(rawLines, await minHsnDigits());
   if (error) return res.status(400).json({ message: error });
 
   const subtotalPaise = lines.reduce((sum, line) => sum + line.amountPaise, 0);

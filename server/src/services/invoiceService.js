@@ -936,10 +936,21 @@ class InvoiceService {
   }
 
   /**
-   * Returns the GSTR-1 Table 12 compliant HSN summary for an invoice.
+   * The HSN summary for the foot of a bill, and for GSTR-1 Table 12.
+   *
+   * The wholesaler is required, not optional. Passing it on from the caller's
+   * token is what keeps one wholesaler out of another's invoices, and a default
+   * here would quietly remove that.
+   *
+   * An HSN of null means the line was billed without one. Show it as not set.
+   * Do not print a stand in code, because a made up HSN on a tax document is a
+   * false statement, and a real looking one is worse than a blank.
    */
-  async getHsnSummary(invoiceId) {
-    return invoiceRepository.getHsnSummary(invoiceId);
+  async getHsnSummary(invoiceId, wholesalerId) {
+    if (!wholesalerId) {
+      throw new Error("getHsnSummary needs the wholesaler it is reading for");
+    }
+    return invoiceRepository.getHsnSummary(invoiceId, wholesalerId);
   }
 }
 

@@ -309,6 +309,12 @@ exports.createSale = async (req, res) => {
     });
   } catch (err) {
     await client.query("ROLLBACK");
+    // A refusal that carries its own status is a rule the sale broke, not a
+    // fault. Pass the reason on, or the wholesaler is left with "Server error"
+    // and no idea that their number series has outgrown what GST allows.
+    if (err.status) {
+      return res.status(err.status).json({ message: err.message, code: err.code });
+    }
     console.error("Error recording sale:", err);
     res.status(500).json({ message: "Server error" });
   } finally {

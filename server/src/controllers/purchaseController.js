@@ -298,6 +298,11 @@ exports.createPurchase = async (req, res) => {
   } catch (err) {
     await client.query("ROLLBACK");
     if (duplicateBill(err, res, clean(supplierInvoiceNumber))) return;
+    // A refusal that carries its own status is a rule the purchase broke, not
+    // a fault. Pass the reason on rather than flattening it to "Server error".
+    if (err.status) {
+      return res.status(err.status).json({ message: err.message, code: err.code });
+    }
     console.error("Error recording purchase:", err);
     res.status(500).json({ message: "Server error" });
   } finally {

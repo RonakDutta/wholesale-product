@@ -553,25 +553,41 @@ class InvoiceRepository {
   }
 
   /**
-   * Aggregates line items for an invoice grouped by HSN code and GST rate.
-   * Direct SQL aggregation with ROUND(..., 2) to maintain GSTR-1 Table 12
-   * compliance without JS floating-point rounding errors.
+   * The HSN summary that goes at the foot of the bill, and that GSTR-1 Table 12
+   * is filled in from. One row per HSN and rate.
+   *
+   * The taxable value is the line total MINUS its tax, never quantity times
+   * unit price. A shop order is priced tax inclusive, so its `unit_price` is
+   * what the customer paid with the tax already inside it. Multiplying that out
+   * and calling it the taxable value overstates the taxable value by the tax,
+   * and then adding the tax again overstates the total by the same amount. On a
+   * 1180 rupee line at 18 per cent it declares 1180 taxable and a 1360 total
+   * against a bill that says 1000 and 1180.
+   *
+   * `total - tax_amount` is right in both pricing modes, because gstService
+   * writes `total` as the gross either way. Summing the stored `total` rather
+   * than recomputing it is what makes this table tie back to the bill it sits
+   * on, which is the only property that matters here.
+   *
+   * Scoped by wholesaler. This reads a whole invoice by id, so without the
+   * owner check it is a way to read somebody else's book.
    */
-  async getHsnSummary(invoiceId) {
+  async getHsnSummary(invoiceId, wholesalerId) {
     await ensureSchema();
     const query = `
       SELECT
-        COALESCE(NULLIF(TRIM(hsn_code), ''), 'N/A') AS hsn_code,
-        ROUND(COALESCE(gst_percent, 0)::numeric, 2)::numeric AS gst_percent,
-        ROUND(SUM(quantity * unit_price)::numeric, 2)::numeric AS taxable_amount,
-        ROUND(SUM(tax_amount)::numeric, 2)::numeric AS gst_amount,
-        ROUND(SUM((quantity * unit_price) + tax_amount)::numeric, 2)::numeric AS total_amount
-      FROM invoice_items
-      WHERE invoice_id = $1
-      GROUP BY COALESCE(NULLIF(TRIM(hsn_code), ''), 'N/A'), gst_percent
-      ORDER BY hsn_code, gst_percent
+        NULLIF(TRIM(i.hsn_code), '') AS hsn_code,
+        ROUND(COALESCE(i.gst_percent, 0)::numeric, 2) AS gst_percent,
+        ROUND(SUM(i.total - i.tax_amount)::numeric, 2) AS taxable_amount,
+        ROUND(SUM(i.tax_amount)::numeric, 2) AS gst_amount,
+        ROUND(SUM(i.total)::numeric, 2) AS total_amount
+      FROM invoice_items i
+      JOIN invoices inv ON inv.id = i.invoice_id
+      WHERE i.invoice_id = $1 AND inv.supplier_id = $2
+      GROUP BY NULLIF(TRIM(i.hsn_code), ''), i.gst_percent
+      ORDER BY 1 NULLS LAST, 2
     `;
-    const result = await pool.query(query, [invoiceId]);
+    const result = await pool.query(query, [invoiceId, wholesalerId]);
     return result.rows;
   }
 

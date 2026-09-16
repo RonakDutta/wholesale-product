@@ -1948,6 +1948,71 @@ invoice still agree.
 
 ---
 
+## 16 Sept: the wholesaler can take his book and leave
+
+Phase 8. `GET /api/exports/zip` hands back one zip holding nine spreadsheets,
+one per list, plus the bills as PDFs and a readme in plain English. The button
+is on Settings, with a second one for the figures alone when somebody does not
+want to wait for the bills to draw.
+
+**The whole point of the feature is to hand over a file, which is what makes
+getting the scope wrong so bad.** So the owner comes from the token and there
+is no id in the route, no `/:id` and no `?wholesaler=`. Child tables join up to
+their parent rather than being queried on their own, so a purchase line is
+reached through its purchase and a missing WHERE cannot leak a table.
+`buildZip` takes the owner as a required argument with no default and throws
+without one.
+
+**Owner only, and that was a change from the plan.** The roadmap said gate it
+on a permission. Every other seller route is gated on the one list it touches,
+but this route is the whole book at once: customers, sales, money received,
+suppliers, purchases and every bill. Gating it on `invoices` would have quietly
+widened that permission into all the others and let an employee walk out of the
+shop with the customer list. It sits with the GST number and the UPI id, behind
+`requireOwner`, which is deliberately not grantable.
+
+**The zip is written by hand**, `services/zipWriter.js`, stored rather than
+deflated. About eighty lines against a dependency to keep updated, audit and
+carry on every deploy, on a server whose package list is fourteen entries long.
+The CRC table is written out rather than taken from `zlib`, because
+`zlib.crc32` only arrived in Node 20.15. Names are stored as UTF-8 with the
+flag at bit 11 set, so a Devanagari filename does not arrive as mojibake.
+
+**A customer name is somewhere a person types free text, and a spreadsheet runs
+what it opens.** A cell starting with `=`, `+`, `-` or `@` is prefixed with an
+apostrophe before it is quoted, in that order, because prefixing after quoting
+leaves the formula sitting inside a quoted field where Excel still evaluates
+it. This is the one place in the product where another program runs our data.
+The readme explains the apostrophe rather than leaving it looking like a bug.
+
+The PDFs stop at 200, newest first, because each one is drawn on the spot and
+the archive is built in memory. The readme says how many were left out. The
+spreadsheets always carry every row, however many there are.
+
+**Verified.** `server/scripts/export_check.js`, 82 checks against a local
+Postgres built from the migrations, with two wholesalers in one database. The
+route was driven as wholesaler A with B's id set in the query string under six
+different names, in the params, in the body and in a header at the same time:
+the file that came back contained none of B's rows, none of B's ids, and none
+of B's bills. The archive is read back by a parser written from the ZIP format
+rather than out of `zipWriter`, because a reader built on the writer's own
+assumptions would agree with it about a malformed file, and real `unzip` gets a
+look at it too. Staff holding every permission there is were refused 403, and
+so was a turned off employee. Then the button was clicked in a real browser
+against the real route, and the zip that landed in the downloads folder opened
+clean.
+
+Three things the suite caught that reading would not have. A cell holding a
+line break made a naive line count read 412 records for 206 bills, which was
+the quoting working correctly. The readme originally said "1 invoice PDFs
+included". And the first fixture paid a sale in part, so with
+`CHALLAN_WHEN_UNPAID` on, which is the default, every sale got a delivery
+challan and no bill was ever raised to export.
+
+**Migration to run:** none. Phase 8 adds no columns.
+
+---
+
 ## Left to do
 
 Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.
@@ -1995,9 +2060,35 @@ for many taxpayers. That is a commercial decision and it shapes the schema.
 
 ## Known problems, not yet fixed
 
+### The tax terms list on Administration looks plain. Asked for 16 Sept.
+
+Not a fault, a look. The list currently gives every term the same weight: a
+bold title, one grey line of `GST 18% | CGST 9% + SGST 9% within a state | no
+cess`, and Edit and Off on the right. Eight rows of that read as a wall,
+because the only thing that differs between them is a number buried in the
+middle of a sentence that repeats itself.
+
+What it should probably do, for whoever picks this up:
+
+- Lead with the rate as a figure, not as part of a sentence. The rate IS the
+  identity of the row and it is what somebody scans for.
+- Stop repeating the split. CGST plus SGST is always half and half, so writing
+  it out on every row is eight copies of a rule, not eight facts. Show the
+  halves quietly, or only on the rows where something is unusual.
+- "no cess" is on almost every row. An absence does not need saying eight
+  times. Mark the row that HAS cess instead, which is the one that is unusual
+  and the one that is dangerous to get wrong.
+- Off is a destructive-ish action sitting in the same weight as Edit.
+
+Care needed on two points. `GST28_CESS12` is a shipped example rather than a
+verified rate, and is on the list below to remove or zero before a real
+customer, so do not make it look more authoritative while making it prettier.
+And no row may show a rate the system does not actually hold: the rates come
+from the tax terms master, and nothing here may infer one from an HSN code.
+
 ## Testing
 
-Twenty four suites in `server/scripts/*_check.js`. They drive the real
+Thirty four suites in `server/scripts/*_check.js`. They drive the real
 controllers against a local Postgres, so they catch schema drift that reading
 the code does not.
 
@@ -2012,6 +2103,9 @@ things the others cannot:
   against every settlement state, and the order lifecycle driven through the
   CONTROLLER rather than the service. Two faults hid in exactly that gap.
 - `credit_check.js` covers a customer's money being held and then spent.
+- `export_check.js` puts two wholesalers in one database and asks one of them
+  for his export. Everything else in the product leaks a row onto a screen when
+  the scope is wrong. This one leaks a whole book into a file somebody keeps.
 
 **Drive the route the screens use, not the service behind it.** Both faults
 found on 11 Sept had a passing suite standing next to them, because the suite
@@ -2020,7 +2114,12 @@ asked `orderStatusService` and the button asks `PATCH /orders/:id/status`.
 ```bash
 # once
 su postgres -c "initdb -D /var/tmp/pgt/data"        # see CLAUDE.md for why
-createdb qa0 && npm run migrate                      # DATABASE_URL at qa0
+createdb qa0
+
+# src/config/db.js hardcodes ssl, which a local server does not offer, and the
+# connection string is the one place that overrides it. Without sslmode=disable
+# the run stops at "The server does not support SSL connections".
+DATABASE_URL="postgres://postgres@127.0.0.1:5433/qa0?sslmode=disable" npm run migrate
 
 # each suite takes a database name
 node scripts/overview_check.js qa_overview

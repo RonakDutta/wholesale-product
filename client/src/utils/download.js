@@ -7,9 +7,17 @@ import api from "./axios";
  * origin rather than the API base URL, and it carries no Authorization header,
  * so every export it opened came back as a 404 page or a 401.
  */
-export const downloadFile = async (url, filename, { params } = {}) => {
+export const downloadFile = async (url, filename, { params, timeout } = {}) => {
   try {
-    const response = await api.get(url, { params, responseType: "blob" });
+    // A timeout is worth overriding for anything the server has to build
+    // rather than read. The instance default is ten seconds, which is right
+    // for a page of rows and far too short for a whole book with its bills
+    // rendered one by one.
+    const response = await api.get(url, {
+      params,
+      responseType: "blob",
+      ...(timeout ? { timeout } : {}),
+    });
     if (!response?.data) {
       throw new Error("No data received for file download");
     }

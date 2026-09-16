@@ -4,7 +4,7 @@ Agreed 15 Sept 2026. Nine items. Work started 16 Sept.
 
 `PROGRESS.md` is the record of what HAS been built. This is the record of what
 has been decided, and how much of it is done, so the two do not get mixed up.
-Phases 0 to 7 are finished. Phase 8, the ZIP export, is next.
+Phases 0 to 8 are finished. Phase 9, the e-invoice payload, is next.
 
 Read the assessment at the bottom before promising a date on any of this. Two
 of these nine cannot be finished by writing code alone.
@@ -621,19 +621,44 @@ their APIs, which need a developer account and a seller authorisation that
 cannot be arranged from inside this codebase. Worth its own phase once you know
 which report you actually get.
 
-## Phase 8. Export. NEXT
+## Phase 8. Export. DONE
 
-- [ ] ZIP: a CSV per table plus the invoice PDFs (12)
+- [x] ZIP: a CSV per table plus the invoice PDFs (12)
+
+`GET /api/exports/zip`. Nine CSVs, the bills as PDFs, and a readme in plain
+English. Settings carries the button.
 
 Scoped by `businessId`, taken from the token and never from the query string.
-Verified by signing in as one wholesaler and asking for another's export by
-every route the endpoint allows.
+Verified by putting two wholesalers in one database and driving the route as
+one of them with the other's id set in the query string, the params, the body
+and a header at once: the file that came back had none of the other's rows,
+none of their ids and none of their bills.
+
+It ended up OWNER ONLY rather than behind a permission, which was a change from
+the plan. Every other seller route is gated on the one list it touches, but
+this route is the whole book at once, so gating it on `invoices` would have
+quietly widened that permission into all of them and let an employee walk out
+with the customer list. It sits with the GST number and the UPI id.
+
+The ZIP is written by hand, stored rather than deflated, in
+`services/zipWriter.js`. Eighty lines against a dependency to keep updated on
+a server whose package list is fourteen entries long. Checked against the
+standard CRC vector and against real `unzip`.
+
+CSV cells starting with `=`, `+`, `-` or `@` are prefixed with an apostrophe.
+Excel and Sheets run those as formulas on open, and a customer name is
+somewhere a person types free text, so this is the one place in the product
+where another program runs our data. The readme says why the apostrophe is
+there.
+
+The PDFs stop at 200, newest first, and the readme says how many were left out
+rather than handing over a quiet partial set. The CSVs always carry every row.
 
 Google Sheets is NOT in this phase. It needs a Google Cloud project, OAuth
 consent and a per-wholesaler token store, and first a decision about who owns
 the project.
 
-## Phase 9. e-invoice payload
+## Phase 9. e-invoice payload. NEXT
 
 - [ ] The JSON builder, the validator, IRN and acknowledgement storage, the
       retry and cancellation flow, and the QR slot filled (13)

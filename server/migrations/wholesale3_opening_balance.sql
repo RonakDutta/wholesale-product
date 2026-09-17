@@ -40,22 +40,23 @@ COMMENT ON COLUMN parties.opening_balance_on IS
 -- everywhere else on that side: POSITIVE is money YOU owe the supplier, which
 -- is how supplierBalance already reads a balance.
 --
--- GUARDED, because `suppliers` arrives with wholesale3_purchases.sql and the
--- runner applies these files in alphabetical order, which puts this one FIRST.
--- An unguarded ALTER here would abort the whole run on a fresh database and
--- take the parties half with it. This way the file is safe in either order:
--- run before purchases it does the customer side and skips the rest, and
--- running it again afterwards picks the supplier side up.
-DO $$
-BEGIN
-  IF to_regclass('public.suppliers') IS NOT NULL THEN
-    ALTER TABLE suppliers
-        ADD COLUMN IF NOT EXISTS opening_balance NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
-        ADD COLUMN IF NOT EXISTS opening_balance_on DATE;
+-- `suppliers` arrives with wholesale3_purchases.sql and the runner applies
+-- these files in alphabetical order, which puts this one FIRST. So on a fresh
+-- database this ALTER fails on pass 1, and the runner retries it on pass 2
+-- once purchases has created the table. That retry is what run_migrations.js
+-- is built around: a file that is not ready yet fails, and a file that fails
+-- for a real reason fails on every pass and is reported at the end.
+--
+-- It used to be a DO block that asked `to_regclass` first and raised a NOTICE
+-- when the table was missing. That turned "not ready yet" into SUCCESS, so the
+-- runner marked the file applied on pass 1 and never came back to it, and a
+-- database built from these migrations had no suppliers.opening_balance at
+-- all. Adding a supplier answered 500 on a schema the runner called complete.
+-- ALTER TABLE IF EXISTS has the same fault for the same reason. A guard that
+-- turns a missing prerequisite into a quiet success defeats the retry.
+ALTER TABLE suppliers
+    ADD COLUMN IF NOT EXISTS opening_balance NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    ADD COLUMN IF NOT EXISTS opening_balance_on DATE;
 
-    COMMENT ON COLUMN suppliers.opening_balance IS
-        'What you owed this supplier on opening_balance_on, before anything in this product. Positive: you owe him. Negative: he is holding your money.';
-  ELSE
-    RAISE NOTICE 'suppliers does not exist yet. Run wholesale3_purchases.sql, then this file again for the purchase side.';
-  END IF;
-END $$;
+COMMENT ON COLUMN suppliers.opening_balance IS
+    'What you owed this supplier on opening_balance_on, before anything in this product. Positive: you owe him. Negative: he is holding your money.';

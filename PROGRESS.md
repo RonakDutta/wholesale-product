@@ -33,9 +33,25 @@ cd server && npm run migrate
 | `wholesale3_series_financial_year.sql` | Sale and challan numbers restart each financial year | run 12 Sept, confirmed by a sale coming out `S/10/26-27` |
 | `wholesale3_purchases.sql` | Suppliers, purchases, purchase lines, money paid out, purchase numbering | run 14 Sept |
 | `wholesale3_master_settings.sql` | Platform formatting: decimals, digit grouping, currency, date format | run 14 Sept |
-| `wholesale3_opening_balance.sql` | What a customer or supplier already owed before this product | run 14 Sept |
+| `wholesale3_opening_balance.sql` | What a customer or supplier already owed before this product | run 14 Sept, **RUN IT AGAIN**: its supplier half never applied, see 17 Sept below |
 | `wholesale3_party_state.sql` | The customer's declared state, which decides CGST plus SGST against IGST | **NOT RUN** |
 | `wholesale3_razorpay_route.sql` | Linked accounts, transfers and webhook deliveries, so a buyer's money reaches the wholesaler | run 14 Sept |
+| `wholesale3_challans_two_kinds.sql` | Sale and purchase challans, each with its own run of numbers, and a billed status | **NOT RUN** |
+
+**Three outstanding as of 17 Sept**, the two marked NOT RUN above and the
+opening balance one, which needs running a second time. Everything else in
+this table is done.
+
+`wholesale3_challans_two_kinds.sql` is what the challan rework needs. Until it
+is run the challan screens behave as they did before purchase challans
+existed, which was checked rather than assumed: three suites run against
+databases WITHOUT it. What does not work until it is run is the second kind,
+the billed status, and so the Make the bill button, which reads that status.
+
+`wholesale3_opening_balance.sql` needs running again because its supplier half
+never applied on any database built by the runner. Re-running it is safe and
+changes nothing if the columns are already there. Until it is run, adding a
+supplier answers 500.
 
 **One outstanding as of 14 Sept.**
 
@@ -2404,6 +2420,62 @@ remaining `SellerLayout` error pre-dating this and confirmed by stashing.
 `npx vite build` green.
 
 **Migration to run:** none.
+
+---
+
+## 17 Sept: a guard that hid a missing column, found by running all 37 suites
+
+Found while checking whether the branch was fit to merge. Ran every suite in
+`server/scripts` against databases built from the migrations. Three failed.
+Two of them, `opening_balance_check` and `purchase_check`, were one bug:
+
+```
+column "opening_balance" of relation "suppliers" does not exist
+```
+
+**A database built from these migrations had no `suppliers.opening_balance`,
+and the runner reported 57 of 57 applied.** Adding a supplier answered 500 on
+a schema the runner called complete.
+
+`wholesale3_opening_balance.sql` sorts alphabetically BEFORE
+`wholesale3_purchases.sql`, which is the file that creates `suppliers`. It
+knew that, and guarded the supplier half in a `DO $$` block that asked
+`to_regclass` first and raised a NOTICE when the table was missing.
+
+That guard is what broke it. `run_migrations.js` makes up to five passes and
+retries any file that FAILED, precisely so a file that arrives before its
+prerequisite can succeed on the next pass. The DO block turned "not ready yet"
+into SUCCESS, so the file was marked applied on pass 1 and never revisited.
+The parties half ran; the suppliers half never did, on any pass, ever.
+`ALTER TABLE IF EXISTS` would have had the identical fault. **A guard that
+turns a missing prerequisite into a quiet success defeats the retry.**
+
+Fixed by deleting the DO block and letting the plain `ALTER TABLE suppliers`
+fail on pass 1 and be retried on pass 2, which is the mechanism the runner is
+built around. Now reads `3 file(s) not ready on pass 1, retrying` and
+`58 of 58 migrations applied`, with both columns present.
+
+There is no migrations table. Every run replays every file and leans on
+idempotency, so this repairs a database that already exists rather than only
+helping fresh ones. Confirmed by running the corrected file against a schema
+built from `main` and watching the columns appear.
+
+Checked the way CLAUDE.md asks: split on semicolons and ran the five pieces
+one at a time, against a database that already had the columns and against one
+that did not. 5 of 5 both times. No semicolon inside any comment, no DO block
+left in the file.
+
+The third failure, `scale_check`, is not a failure. It is a performance
+benchmark that reads an already seeded database and divides by what it finds,
+so on an empty one it throws on `typical.n`. Nothing to fix. It needs a seeded
+database, and it is the one suite not in the count below.
+
+**36 of 36 suites green** on databases rebuilt from the corrected migrations.
+
+**Migration to run:** `wholesale3_opening_balance.sql`, again. It is
+idempotent and safe to re-run. If `suppliers.opening_balance` already exists
+on Neon, because the file was pasted by hand after the purchases one, it
+changes nothing.
 
 ---
 

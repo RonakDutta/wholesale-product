@@ -2157,6 +2157,43 @@ unchanged. All four were rendered to confirm it.
 
 ---
 
+## 17 Sept: an empty date box refused a whole sale
+
+Reported from the running app: recording a sale failed with
+
+    invalid input syntax for type date: ""   on parameter $18
+
+$18 was `transport_doc_date`. The two dates in the transport block were the
+only fields in it that skipped `clean`, on the reasoning written into the
+comment above them: a date should reach Postgres exactly as it was typed
+rather than being half parsed here, because a guess is worse than a refusal.
+
+That reasoning is right. The code did not follow it. An untouched date input
+posts an EMPTY STRING, `"" ?? null` is `""`, and an empty string is not a date
+somebody typed, it is the absence of one. `clean` only trims and nulls an
+empty string, so using it keeps the rule intact: a real date still goes
+through untouched.
+
+Both dates now use the same `pick` as every other field in the block. Checked
+the rest of the codebase for the same shape: every other date path already
+uses `clean` or `|| null`, so these two were the only ones.
+
+**Why nothing caught it.** Every suite either left the field out, which
+arrives as undefined and becomes null, or sent a real date. A browser form
+sends neither. `scripts/transport_check.js` now sends exactly what a browser
+sends, which was the missing case, and 24 checks cover the rest of the block:
+a typed date surviving as typed, an invented mode getting a 400 rather than a
+500, an empty block not claiming a transporter on a bill, the lorry carrying
+across to the invoice raised from the sale, and all eight columns existing on
+sales, invoices and orders.
+
+Confirmed the suite fails on the old code and passes on the new, rather than
+assuming it would.
+
+**Migration to run:** none.
+
+---
+
 ## Left to do
 
 Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.
@@ -2206,7 +2243,7 @@ for many taxpayers. That is a commercial decision and it shapes the schema.
 
 ## Testing
 
-Thirty five suites in `server/scripts/*_check.js`. They drive the real
+Thirty six suites in `server/scripts/*_check.js`. They drive the real
 controllers against a local Postgres, so they catch schema drift that reading
 the code does not.
 
@@ -2228,6 +2265,10 @@ things the others cannot:
   way, which is worse, because this side writes. The checks that matter are
   that the same file sent twice writes nothing the second time, and that a
   failure partway through leaves not one row behind.
+- `transport_check.js` posts what a BROWSER posts, empty strings and all. It
+  exists because a suite that omits an optional field tests undefined, and a
+  form sends "". That gap refused every sale with the transport section on
+  screen.
 
 **Drive the route the screens use, not the service behind it.** Both faults
 found on 11 Sept had a passing suite standing next to them, because the suite

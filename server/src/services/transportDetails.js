@@ -45,6 +45,14 @@ const TRANSPORT_COLUMNS = [
  * A date is passed through as whatever was sent, or null. Postgres parses it,
  * and a half parsed date guessed at here is worse than one the database
  * refuses outright.
+ *
+ * But BLANK IS NOT A DATE SOMEBODY SENT, it is the absence of one, and the two
+ * dates used to be the only fields here that skipped `clean`. An untouched date
+ * input posts an empty string, `"" ?? null` is `""`, and Postgres answered
+ * `invalid input syntax for type date: ""` on parameter $18, which refused the
+ * whole sale. `clean` only trims and nulls an empty string. It never parses or
+ * reformats, so the rule above still holds: a real date still goes to Postgres
+ * exactly as it was typed.
  */
 const parseTransport = (body = {}) => {
   const pick = (camel, snake) => clean(body[camel] ?? body[snake]);
@@ -63,9 +71,9 @@ const parseTransport = (body = {}) => {
       transport_mode: mode || null,
       vehicle_number: pick("vehicleNumber", "vehicle_number"),
       transport_doc_number: pick("transportDocNumber", "transport_doc_number"),
-      transport_doc_date: body.transportDocDate ?? body.transport_doc_date ?? null,
+      transport_doc_date: pick("transportDocDate", "transport_doc_date"),
       gr_number: pick("grNumber", "gr_number"),
-      gr_date: body.grDate ?? body.gr_date ?? null,
+      gr_date: pick("grDate", "gr_date"),
     },
   };
 };

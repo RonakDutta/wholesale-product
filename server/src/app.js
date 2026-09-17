@@ -20,6 +20,8 @@ const staffRoutes = require("./routes/staffRoutes");
 const hsnRoutes = require("./routes/hsnRoutes");
 const challanRoutes = require("./routes/challanRoutes");
 const masterRoutes = require("./routes/masterRoutes");
+const exportRoutes = require("./routes/exportRoutes");
+const importRoutes = require("./routes/importRoutes");
 const supplierRoutes = require("./routes/supplierRoutes");
 const purchaseRoutes = require("./routes/purchaseRoutes");
 const routeRoutes = require("./routes/routeRoutes");
@@ -73,6 +75,12 @@ app.use("/api/hsn", hsnRoutes);
 app.use("/api/challans", challanRoutes);
 // The platform administrations: states, units, tax slabs, HSN codes.
 app.use("/api/masters", masterRoutes);
+// A wholesaler's own data, out as a zip. No id in the route, on purpose:
+// see exportRoutes for why.
+app.use("/api/exports", exportRoutes);
+// And the other direction: a book coming in from a spreadsheet. No id in
+// these routes either, and this side writes.
+app.use("/api/imports", importRoutes);
 // The other direction: goods coming in, who they came from, and what is owed
 // for them. See services/supplierBalance.js for why this is not the party book.
 app.use("/api/suppliers", supplierRoutes);

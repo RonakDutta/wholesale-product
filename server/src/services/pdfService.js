@@ -625,6 +625,11 @@ class PDFService {
         if (Number(invoice.igst) > 0) addTotalRow("IGST:", invoice.igst);
 
         addTotalRow("Total Tax:", invoice.total_tax || 0);
+        // Its own line, because it is its own levy. It does not come out of
+        // the GST above it and it is not part of that figure.
+        if (Number(invoice.total_cess) > 0) {
+          addTotalRow("Cess:", invoice.total_cess);
+        }
         // Rounding, shown rather than swallowed, so taxable + tax + round off
         // visibly equals the grand total. Busy prints it as "Less: Rounded
         // Off"; gstService has returned it all along and nothing showed it.
@@ -660,17 +665,24 @@ class PDFService {
         // marketplace bill. total - tax is right whichever way the line was
         // priced, and it makes this table tie to the total above it.
         const byHsn = new Map();
+        const anyCess = items.some((i) => Number(i.cess_amount) > 0);
         for (const item of items) {
           const key = `${item.hsn_code || "-"}|${Number(item.gst_percent ?? 18)}`;
-          const taxable = Number(item.total || 0) - Number(item.tax_amount || 0);
+          // Less BOTH levies. Subtracting only the GST would overstate the
+          // taxable value by the cess, which is the same fault this table was
+          // fixed for once already.
+          const taxable =
+            Number(item.total || 0) - Number(item.tax_amount || 0) - Number(item.cess_amount || 0);
           const row = byHsn.get(key) || {
             hsn: item.hsn_code || "-",
             rate: Number(item.gst_percent ?? 18),
             taxable: 0,
             tax: 0,
+            cess: 0,
           };
           row.taxable += taxable;
           row.tax += Number(item.tax_amount || 0);
+          row.cess += Number(item.cess_amount || 0);
           byHsn.set(key, row);
         }
 
@@ -681,32 +693,42 @@ class PDFService {
 
         if (byHsn.size > 0) {
           let hy = boxY + 4;
+          // Narrower money columns when a cess column has to fit beside them.
+          const tW = anyCess ? 56 : 80;
+          const xTaxable = anyCess ? 148 : 156;
+          const xTax = xTaxable + tW + 4;
+          const xCess = xTax + tW + 4;
           doc.rect(36, hy, 300, 16).fill("#0f172a");
           doc.fillColor("#ffffff").fontSize(7).font("Helvetica-Bold");
-          doc.text("HSN/SAC", 42, hy + 5, { width: 70 });
-          doc.text("RATE", 116, hy + 5, { width: 34, align: "right" });
-          doc.text("TAXABLE", 156, hy + 5, { width: 80, align: "right" });
-          doc.text("TAX", 240, hy + 5, { width: 90, align: "right" });
+          doc.text("HSN/SAC", 42, hy + 5, { width: 66 });
+          doc.text("RATE", 110, hy + 5, { width: 34, align: "right" });
+          doc.text("TAXABLE", xTaxable, hy + 5, { width: tW, align: "right" });
+          doc.text("TAX", xTax, hy + 5, { width: tW, align: "right" });
+          if (anyCess) doc.text("CESS", xCess, hy + 5, { width: tW, align: "right" });
           hy += 16;
 
           let sumTaxable = 0;
           let sumTax = 0;
+          let sumCess = 0;
           for (const row of byHsn.values()) {
             doc.fillColor("#1e293b").fontSize(7).font("Helvetica");
-            doc.text(row.hsn, 42, hy + 4, { width: 70 });
-            doc.text(`${row.rate}%`, 116, hy + 4, { width: 34, align: "right" });
-            doc.text(rupees(row.taxable), 156, hy + 4, { width: 80, align: "right" });
-            doc.text(rupees(row.tax), 240, hy + 4, { width: 90, align: "right" });
+            doc.text(row.hsn, 42, hy + 4, { width: 66 });
+            doc.text(`${row.rate}%`, 110, hy + 4, { width: 34, align: "right" });
+            doc.text(rupees(row.taxable), xTaxable, hy + 4, { width: tW, align: "right" });
+            doc.text(rupees(row.tax), xTax, hy + 4, { width: tW, align: "right" });
+            if (anyCess) doc.text(rupees(row.cess), xCess, hy + 4, { width: tW, align: "right" });
             sumTaxable += row.taxable;
             sumTax += row.tax;
+            sumCess += row.cess;
             hy += 13;
           }
           doc.rect(36, hy, 300, 1).fill("#cbd5e1");
           hy += 3;
           doc.fillColor("#0f172a").fontSize(7).font("Helvetica-Bold");
-          doc.text("Total", 42, hy + 3, { width: 70 });
-          doc.text(rupees(sumTaxable), 156, hy + 3, { width: 80, align: "right" });
-          doc.text(rupees(sumTax), 240, hy + 3, { width: 90, align: "right" });
+          doc.text("Total", 42, hy + 3, { width: 66 });
+          doc.text(rupees(sumTaxable), xTaxable, hy + 3, { width: tW, align: "right" });
+          doc.text(rupees(sumTax), xTax, hy + 3, { width: tW, align: "right" });
+          if (anyCess) doc.text(rupees(sumCess), xCess, hy + 3, { width: tW, align: "right" });
         }
 
         // ----------------------------------------------------

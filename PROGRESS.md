@@ -1859,6 +1859,304 @@ Re-run after the fix: all three agree on every field.
 
 ---
 
+## 16 Sept: tax terms, and cess into the money path
+
+Phase 6, the one where a mistake lands in somebody's ledger rather than on a
+screen. The audit came before the code.
+
+**What the audit found.** Every reader of a total was mapped first, and it
+turned up the thing that would have broken this. `orders.total_amount` is the
+CART GROSS, written at checkout, and it never goes through `gstService` at all.
+The bill for an order derives its tax out of that same gross, which is why the
+two agree today. Add cess ON TOP for that path and the buyer agrees one figure
+at checkout, the bill says a second, and the khata says a third.
+
+**So cess follows the pricing mode, exactly as the GST already does.** On a
+counter sale the rate quoted is before tax, so every levy goes on top and the
+total grows. On a shop order the price on the page is what the customer pays,
+so the cess comes out of it beside the GST and the total does not move. That is
+what keeps the money path together by construction instead of by remembering to
+update a second place.
+
+Cess is its own levy throughout: its own rate per line, its own total on the
+sale and on the bill, its own column in the HSN summary, its own line in the
+totals. It is never a share of the GST. Eighteen plus twelve is thirty per cent
+of the taxable value, not eighteen split three ways.
+
+**Tax terms.** A named combination a line can be billed under, in Administration
+at `/administration/tax-terms`. Entering the GST derives CGST and SGST as half
+each. Those halves are not stored: two stored halves are two things that can
+disagree with the whole.
+
+**A second fault found while doing it.** The HSN summary's taxable value
+subtracted only the GST from the line total. With cess in the total that
+overstates it again, the same shape of fault the table was fixed for this
+morning. It now subtracts both levies.
+
+**The twelve per cent is a test default.** `GST28_CESS12` is seeded so the
+arithmetic can be tested end to end. Nothing carries cess unless a line says so,
+so no existing bill changes. Real cess is commodity specific and a blanket rate
+on a live bill is a wrong number on a legal document. Remove that term, or set
+its cess to zero, before this goes near a real customer.
+
+**Verified.** 24 arithmetic checks with no database, then 17 against a local
+Postgres: the sale total, the customer's khata, the invoice grand total and the
+invoice line all carry the same cess to the paisa, a bill raised from a sale
+equals the sale, a sale without cess is exactly what it always was, and a
+billed sale still cannot be edited. Every earlier suite was re-run, 107 checks
+in all, and the three ways of raising an invoice still agree on every field.
+
+**Migration to run:** `wholesale3_tax_terms_and_cess.sql`
+
+---
+
+## 16 Sept: a run of invoice numbers per sales channel
+
+Phase 7. Four books: counter, this shop, Flipkart, Amazon. Each keeps a run of
+invoice numbers that is consecutive in ITSELF, which is what Rule 46(b) asks
+for and what lets a marketplace settlement report be matched against ours. One
+shared counter gave Flipkart a run reading 4, 9, 11, with the gaps filled by
+counter sales.
+
+A dropdown on the sale form says which book a sale belongs to, and the bill
+raised from it draws on that run. An order placed on this marketplace is the
+shop channel by definition rather than by choosing.
+
+**Nothing was renumbered.** The counter channel keeps the wholesaler's own
+configured prefix, so a firm numbering OM/1/26-27 carries straight on, and the
+three new channels start their own run at 1. Renumbering a bill already handed
+over would break the customer's GSTR-2B against ours, and the instrument for
+correcting an issued invoice is a credit note.
+
+**It is not an import.** Choosing Flipkart records where a sale came from. It
+fetches nothing from Flipkart, and the hint under the field says so rather than
+letting anybody expect an integration that does not exist. Pulling orders out
+of those marketplaces needs a developer account and a seller authorisation, and
+is its own piece of work.
+
+An unknown channel is refused rather than quietly filed under the default,
+because a sale in the wrong book is a run of numbers nobody can reconcile.
+
+**Verified.** 16 checks against a local Postgres, including that four channels
+billed in turn each produce their own consecutive run, that the counter keeps
+the wholesaler's prefix, that Flipkart starts at 1, that every number is inside
+Rule 46(b)'s sixteen characters, and that the counters really are separate
+rows. Every earlier suite re-run, 123 checks, and the three ways of raising an
+invoice still agree.
+
+**Migration to run:** `wholesale3_sales_channels.sql`
+
+---
+
+## 16 Sept: the wholesaler can take his book and leave
+
+Phase 8. `GET /api/exports/zip` hands back one zip holding nine spreadsheets,
+one per list, plus the bills as PDFs and a readme in plain English. The button
+is on Settings, with a second one for the figures alone when somebody does not
+want to wait for the bills to draw.
+
+**The whole point of the feature is to hand over a file, which is what makes
+getting the scope wrong so bad.** So the owner comes from the token and there
+is no id in the route, no `/:id` and no `?wholesaler=`. Child tables join up to
+their parent rather than being queried on their own, so a purchase line is
+reached through its purchase and a missing WHERE cannot leak a table.
+`buildZip` takes the owner as a required argument with no default and throws
+without one.
+
+**Owner only, and that was a change from the plan.** The roadmap said gate it
+on a permission. Every other seller route is gated on the one list it touches,
+but this route is the whole book at once: customers, sales, money received,
+suppliers, purchases and every bill. Gating it on `invoices` would have quietly
+widened that permission into all the others and let an employee walk out of the
+shop with the customer list. It sits with the GST number and the UPI id, behind
+`requireOwner`, which is deliberately not grantable.
+
+**The zip is written by hand**, `services/zipWriter.js`, stored rather than
+deflated. About eighty lines against a dependency to keep updated, audit and
+carry on every deploy, on a server whose package list is fourteen entries long.
+The CRC table is written out rather than taken from `zlib`, because
+`zlib.crc32` only arrived in Node 20.15. Names are stored as UTF-8 with the
+flag at bit 11 set, so a Devanagari filename does not arrive as mojibake.
+
+**A customer name is somewhere a person types free text, and a spreadsheet runs
+what it opens.** A cell starting with `=`, `+`, `-` or `@` is prefixed with an
+apostrophe before it is quoted, in that order, because prefixing after quoting
+leaves the formula sitting inside a quoted field where Excel still evaluates
+it. This is the one place in the product where another program runs our data.
+The readme explains the apostrophe rather than leaving it looking like a bug.
+
+The PDFs stop at 200, newest first, because each one is drawn on the spot and
+the archive is built in memory. The readme says how many were left out. The
+spreadsheets always carry every row, however many there are.
+
+**Verified.** `server/scripts/export_check.js`, 82 checks against a local
+Postgres built from the migrations, with two wholesalers in one database. The
+route was driven as wholesaler A with B's id set in the query string under six
+different names, in the params, in the body and in a header at the same time:
+the file that came back contained none of B's rows, none of B's ids, and none
+of B's bills. The archive is read back by a parser written from the ZIP format
+rather than out of `zipWriter`, because a reader built on the writer's own
+assumptions would agree with it about a malformed file, and real `unzip` gets a
+look at it too. Staff holding every permission there is were refused 403, and
+so was a turned off employee. Then the button was clicked in a real browser
+against the real route, and the zip that landed in the downloads folder opened
+clean.
+
+Three things the suite caught that reading would not have. A cell holding a
+line break made a naive line count read 412 records for 206 bills, which was
+the quoting working correctly. The readme originally said "1 invoice PDFs
+included". And the first fixture paid a sale in part, so with
+`CHALLAN_WHEN_UNPAID` on, which is the default, every sale got a delivery
+challan and no bill was ever raised to export.
+
+**Migration to run:** none. Phase 8 adds no columns.
+
+---
+
+## 17 Sept: and the other direction, a book coming in
+
+Phase 8.5, which was not on the roadmap. It got added when the question "where
+is the option to upload a zip for invoices, sales and so on" turned out to
+have the answer "there isn't one, anywhere". The only file inputs in the whole
+product were message attachments, review photos and product images. The export
+had been built first and went one way, which is the wrong half to have on its
+own: a wholesaler with a year of sales in a spreadsheet cannot start using
+this at all until he can get them in.
+
+`POST /api/imports/preview`, `POST /api/imports/commit`,
+`GET /api/imports/template`. Customers, suppliers, purchases, sales and old
+bills, with their line items. A zip of CSVs, so the export round-trips, or one
+CSV on its own. Owner only and scoped by the token, same as the export and for
+a stronger reason: this side writes.
+
+**Three rules hold it up.** Nothing is overwritten, ever: a row already in the
+book is skipped and counted, because a merge done wrong replaces a figure a
+customer agreed to with one out of a spreadsheet. It is all or nothing, one
+transaction, because half a year in a book with no way to tell which half is
+worse than a failed upload. And you see it before it happens: preview does
+every read and every check and writes nothing.
+
+**The figure on the paper wins.** If the file gives a total, that is the
+total, even when the lines add up to something else. An old bill was handed to
+a customer who paid what it said, and recomputing it here would move the debt
+away from the figure he agreed to. The same reasoning the sale side already
+uses when a sale follows an order. Only when there is no total at all are the
+lines added up.
+
+**Old bills are records of bills issued elsewhere.** They keep their own
+numbers, carry `import_batch_id` so nothing can re-issue them, and a bill
+carrying an IRN is refused, because an IRN is issued by the IRP against a
+submission and cannot be checked from a spreadsheet.
+
+**The counter has to move past them, which is the opposite of what it sounds
+like.** Import KT/000001 to KT/000400 with the counter at zero and the next
+bill raised here is numbered KT/000001, hits the unique index on
+(supplier, invoice_number) and fails. The wholesaler could not raise a bill at
+all, and the error would say nothing about the import. So the run is advanced
+past the imported numbers and the preview says what the next bill will be
+called. Nothing is renumbered: every imported bill keeps the number it was
+issued under, and the run carries on after them. The suite proves it by
+importing five bills, then recording a sale and raising a bill the ordinary
+way, and checking it comes out numbered 000006.
+
+**Dates are read day first, as a rule rather than a guess**, and it says so on
+the template and on the screen. 03/04/2026 is the third of April. This is the
+one place in the import where a wrong guess is invisible: both readings are
+real dates, nothing errors, and a bill silently moves into a different month
+and therefore a different GST return.
+
+**A value that cannot be read is an error, not a zero.** "N/A", "see note" and
+"-" in an amount column are named with their line number and their column
+rather than quietly becoming nothing. A book built out of best efforts is
+worse than no book, because it looks finished.
+
+Two readers were written for this, both deliberately not sharing a line with
+`zipWriter` or `exportService`. `csvReader` handles quoted cells with line
+breaks in them, doubled quotes, CRLF, Excel's byte order mark, and takes back
+off the apostrophe our own exporter adds to defuse a formula. `zipReader`
+handles DEFLATE as well as stored, because every zip made by Windows, macOS or
+7-Zip is deflated and a reader that only understood our own would reject
+almost every real file.
+
+**Verified.** `server/scripts/import_check.js`, 76 checks, and
+`format_check` covered the pure half with 70 more. A file sent twice writes
+nothing the second time and leaves exactly one copy of everything. A failure
+partway through leaves not one row, proved by standing a constraint in the way
+of a row the plan could not have known would fail. Staff holding every
+permission are refused. The route driven as one wholesaler with another's id
+in the query string, the params, the body and a header at once still wrote
+only to the caller's own book. Then a real deflated zip made by the `zip`
+command was uploaded through a real browser, and the two bad rows in it came
+back named by line and column while the good ones went in.
+
+The tax split is worth seeing: a bill with one tax figure of 100 to a Gujarat
+customer came out as IGST 100, and the same bill to a Maharashtra customer as
+CGST 25 plus SGST 25. That question is asked of `placeOfSupply` and of nothing
+else, the same as everywhere else.
+
+Two bugs the tests found that reading would not have. `COALESCE($10, 0)` makes
+Postgres infer the parameter as an INTEGER, so an opening balance of 123456.78
+failed on insert while a whole number passed. And a `.xlsx` IS a zip, so it
+went down the zip path and came back "nothing in that file is a list this
+recognises", which is true and useless to the person who uploaded the most
+likely wrong file in the world. It is now checked for by name, before
+anything else, and told which button to press.
+
+Products and stock are not in this phase. They were not asked for.
+
+**Migration to run:** `wholesale3_imports.sql`
+
+---
+
+## 17 Sept: where the import lives, and the tax terms list
+
+Two things from looking at the screens rather than the code.
+
+**"Where is the option to import a zip?"** Asked twice, about a card that was
+on the screen the whole time. It sat at the bottom of Settings, below a Save
+button that reads like the end of the page, under a long form. So import and
+export now have their own sidebar entry, **Your data**, between Staff and
+Settings, with the import first because somebody arriving there for the first
+time is bringing a book in rather than taking one out. The page also lists
+what has been brought in before, so it is possible to tell whether a file has
+already been sent. Settings keeps a one line link to it, the way it already
+links to Bill numbering and terms. Owner only, and the server refuses an
+employee on every one of the routes rather than trusting the screen to hide
+the buttons.
+
+**The tax terms list on Administration.**
+
+Not a fault, a look. Every row had the same weight: a bold title and one grey
+line reading `GST 18% | CGST 9% + SGST 9% within a state | no cess`. Eight of
+those read as a wall, because the only thing that differed between them was a
+number buried in the middle of a sentence that repeated itself.
+
+What changed, and why each one:
+
+- **The rate leads, as a figure in a chip on the left.** A tax term IS a
+  number, and the number is what somebody scans for.
+- **The split is said once, quietly.** CGST and SGST are always half each, so
+  spelling both halves out on every row was one rule written eight times.
+- **"no cess" is gone.** It was on seven rows out of eight. An absence said
+  seven times is not seven facts. The row that HAS cess now carries a mark
+  instead, because that is the unusual one and the dangerous one to pick by
+  mistake, and its chip shows `+12` under the rate.
+- **Off is lighter than Edit.** Withdrawing a rate and editing one are not the
+  same weight of action and used to look identical.
+- **The row wraps on a phone**, so a name is never truncated to "GS...".
+
+Two faults the render caught that reading did not. Computing the halves as
+`igstPercent / 2` printed `0.125% + 0.125%` for the 0.25 per cent term, when
+the stored split is 0.13 and 0.12: half of a quarter per cent does not land on
+a figure a bill can carry. The halves now come from the row. And "Nil rated"
+read "Splits 0% + 0% inside one state", which says nothing.
+
+`lead` and `tag` are optional hooks on the list spec rather than a special
+case inside `MasterList`, so States, Units, Tax rates and HSN codes are
+unchanged. All four were rendered to confirm it.
+
+---
+
 ## Left to do
 
 Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.
@@ -1908,7 +2206,7 @@ for many taxpayers. That is a commercial decision and it shapes the schema.
 
 ## Testing
 
-Twenty four suites in `server/scripts/*_check.js`. They drive the real
+Thirty five suites in `server/scripts/*_check.js`. They drive the real
 controllers against a local Postgres, so they catch schema drift that reading
 the code does not.
 
@@ -1923,6 +2221,13 @@ things the others cannot:
   against every settlement state, and the order lifecycle driven through the
   CONTROLLER rather than the service. Two faults hid in exactly that gap.
 - `credit_check.js` covers a customer's money being held and then spent.
+- `export_check.js` puts two wholesalers in one database and asks one of them
+  for his export. Everything else in the product leaks a row onto a screen when
+  the scope is wrong. This one leaks a whole book into a file somebody keeps.
+- `import_check.js` is the same two wholesalers with the file going the other
+  way, which is worse, because this side writes. The checks that matter are
+  that the same file sent twice writes nothing the second time, and that a
+  failure partway through leaves not one row behind.
 
 **Drive the route the screens use, not the service behind it.** Both faults
 found on 11 Sept had a passing suite standing next to them, because the suite
@@ -1931,7 +2236,12 @@ asked `orderStatusService` and the button asks `PATCH /orders/:id/status`.
 ```bash
 # once
 su postgres -c "initdb -D /var/tmp/pgt/data"        # see CLAUDE.md for why
-createdb qa0 && npm run migrate                      # DATABASE_URL at qa0
+createdb qa0
+
+# src/config/db.js hardcodes ssl, which a local server does not offer, and the
+# connection string is the one place that overrides it. Without sslmode=disable
+# the run stops at "The server does not support SSL connections".
+DATABASE_URL="postgres://postgres@127.0.0.1:5433/qa0?sslmode=disable" npm run migrate
 
 # each suite takes a database name
 node scripts/overview_check.js qa_overview

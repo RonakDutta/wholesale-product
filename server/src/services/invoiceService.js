@@ -28,6 +28,7 @@ const addressLine = (address) => {
   return parts.length ? parts.join(", ") : null;
 };
 const { toInvoiceFields } = require("./transportDetails");
+const { parseChannel } = require("./salesChannels");
 const pdfService = require("./pdfService");
 const emailService = require("./emailService");
 
@@ -248,7 +249,9 @@ class InvoiceService {
         settings.prefix,
         null,
         order.supplier_id,
-        { suffix: settings.numberSuffix, padTo: settings.numberPadTo },
+        // An order placed on this marketplace is the shop channel, by
+        // definition. Nobody chooses it.
+        { suffix: settings.numberSuffix, padTo: settings.numberPadTo, channel: "shop" },
       );
 
       const issueDate = new Date();
@@ -273,6 +276,7 @@ class InvoiceService {
         igst: gstCalculation.igst,
         totalTax: gstCalculation.totalTax,
         grandTotal: gstCalculation.grandTotal,
+        totalCess: gstCalculation.totalCess,
         placeOfSupply: pos.state,
         placeOfSupplyCode: pos.code,
         supplierState: gstCalculation.supplierState,
@@ -314,6 +318,7 @@ class InvoiceService {
         // so this path behaves the same as the sale path rather than being the
         // one that quietly drops it.
         ...toInvoiceFields(order),
+        channel: "shop",
       };
 
       const createdInvoice = await invoiceRepository.createInvoice(
@@ -611,6 +616,12 @@ class InvoiceService {
       // The HSN was not checked on this path at all, so a manual bill could go
       // out with a three digit code on it while the same code was refused on a
       // sale. Same check, same setting, same message.
+      // Which book this bill belongs to. Refused rather than defaulted on a
+      // bad value, because a bill filed in the wrong run is a set of numbers
+      // nobody can reconcile.
+      const { channel, error: channelError } = parseChannel(payload.channel);
+      if (channelError) throw new Error(channelError);
+
       const minDigits = await minHsnDigits();
       for (const item of items) {
         const hsn = checkHsn(item.hsnCode ?? item.hsn_code, { minDigits });
@@ -676,7 +687,10 @@ class InvoiceService {
         settings.prefix,
         null,
         supplierId,
-        { suffix: settings.numberSuffix, padTo: settings.numberPadTo },
+        // A bill typed by hand, so it belongs to whichever book the wholesaler
+        // says. Defaults to the counter, which is where a typed bill usually
+        // comes from.
+        { suffix: settings.numberSuffix, padTo: settings.numberPadTo, channel },
       );
 
       const invoiceData = {
@@ -693,6 +707,8 @@ class InvoiceService {
         igst: gstCalculation.igst,
         totalTax: gstCalculation.totalTax,
         grandTotal: gstCalculation.grandTotal,
+        totalCess: gstCalculation.totalCess,
+        channel,
         placeOfSupply: pos.state,
         placeOfSupplyCode: pos.code,
         supplierState: gstCalculation.supplierState,

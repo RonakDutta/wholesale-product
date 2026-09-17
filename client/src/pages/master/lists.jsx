@@ -66,6 +66,83 @@ const SPECS = {
       ].join("  |  "),
   },
 
+  "tax-terms": {
+    list: "tax-terms",
+    field: "taxTerms",
+    key: "code",
+    title: "Tax terms",
+    singular: "Tax term",
+    blurb:
+      "A named combination a bill line can be charged under, so nobody types a rate. Enter the GST and CGST and SGST are half of it each, which is what happens inside one state. Cess is separate: it is charged on the same taxable value, ON TOP of the GST, not out of it.",
+    columns: [{ field: "code" }, { field: "label" }],
+    fields: [
+      { name: "code", label: "Code", hint: "Short and fixed, like GST18. Used by the system, not shown on a bill.", fixedOnEdit: true },
+      { name: "label", label: "Name", hint: "What a person picks from a list." },
+      { name: "igstPercent", label: "GST (%)", type: "number", hint: "The full rate. Inside one state it splits into CGST and SGST, half each." },
+      {
+        name: "cessPercent",
+        label: "Cess (%)",
+        type: "number",
+        hint: "On top of the GST, on the same value. Leave blank for the great majority of goods, which carry none. 18 plus 12 means the customer pays 30 per cent, not 18 split three ways.",
+      },
+      { name: "sortOrder", label: "Order in the list", type: "number", hint: "Lower comes first." },
+    ],
+    blank: () => ({ code: "", label: "", igstPercent: 18, cessPercent: "", sortOrder: 0, active: true }),
+    toDraft: (r) => ({
+      code: r.code,
+      label: r.label,
+      igstPercent: r.igstPercent,
+      cessPercent: r.cessPercent ? r.cessPercent : "",
+      sortOrder: 0,
+      active: r.active !== false,
+    }),
+    primary: (r) => r.label || r.code,
+
+    /**
+     * The rate, as a figure, on the left.
+     *
+     * A tax term IS a number. Eight of them written as "GST 0.25% | CGST
+     * 0.13% + SGST 0.12% within a state | no cess" read as a wall, because the
+     * only thing that differs between the rows is buried in the middle of a
+     * sentence that repeats itself. The figure is what somebody scans for.
+     */
+    lead: (r) => ({
+      value: `${r.igstPercent}%`,
+      note: Number(r.cessPercent) > 0 ? `+${r.cessPercent}` : null,
+    }),
+
+    /**
+     * Cess is marked, its absence is not.
+     *
+     * Almost every term carries none, so "no cess" on every row is one rule
+     * written out eight times rather than eight facts. The row that HAS cess
+     * is the unusual one and the one that is dangerous to pick by mistake, so
+     * that is the one that gets a mark.
+     */
+    tag: (r) => (Number(r.cessPercent) > 0 ? `+ ${r.cessPercent}% cess` : null),
+
+    /**
+     * The quiet line. What the rate does, not a restatement of the rate.
+     *
+     * The halves come from the ROW, not from dividing by two. They are usually
+     * the same thing and at 0.25 per cent they are not: the stored split is
+     * 0.13 and 0.12, because a half of a quarter per cent does not land on a
+     * figure a bill can carry. Computing it here printed 0.125 and 0.125,
+     * which adds up correctly and is not what the system charges.
+     */
+    secondary: (r) => {
+      const cgst = r.cgstPercent ?? r.igstPercent / 2;
+      const sgst = r.sgstPercent ?? r.igstPercent / 2;
+      if (!Number(r.igstPercent) && !Number(r.cessPercent)) {
+        return "No tax is charged on a line at this rate";
+      }
+      const split = `Splits ${cgst}% + ${sgst}% inside one state`;
+      return Number(r.cessPercent) > 0
+        ? `${split}. The cess is on top, so the customer pays ${Number(r.igstPercent) + Number(r.cessPercent)}%.`
+        : split;
+    },
+  },
+
   "tax-rates": {
     list: "tax-rates",
     field: "taxRates",
@@ -108,6 +185,7 @@ const SPECS = {
 export const MasterStates = () => <MasterList spec={SPECS.states} />;
 export const MasterUnits = () => <MasterList spec={SPECS.units} />;
 export const MasterTaxRates = () => <MasterList spec={SPECS["tax-rates"]} />;
+export const MasterTaxTerms = () => <MasterList spec={SPECS["tax-terms"]} />;
 export const MasterHsn = () => <MasterList spec={SPECS.hsn} />;
 
 export default SPECS;

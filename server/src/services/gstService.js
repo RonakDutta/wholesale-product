@@ -57,6 +57,7 @@ class GSTService {
     const intraState = this.isIntraState(supplierLocation, buyerLocation);
     let subtotal = 0;
     let totalTax = 0;
+    let totalCess = 0;
 
     // A discount reduces the taxable value, so it has to reduce the tax with
     // it. The tax used to be worked out line by line on the full amount and
@@ -71,8 +72,13 @@ class GSTService {
       const qty = Number(item.quantity) || 1;
       const unitPrice = Number(item.unitPrice) || 0;
       const gstPercent = Number(item.gstPercent ?? 18.0);
+      const cessPercent = Number(item.cessPercent ?? 0);
       const line = unitPrice * qty;
-      return sum + (isTaxInclusive ? line / (1 + gstPercent / 100) : line);
+      // Both levies come out of a tax inclusive price, not just the GST. Divide
+      // by the GST alone and the taxable value lands high, the cess is charged
+      // on a figure that was never the taxable value, and the gross the
+      // customer agreed to moves.
+      return sum + (isTaxInclusive ? line / (1 + (gstPercent + cessPercent) / 100) : line);
     }, 0);
     const netDiscountRequested = Math.max(0, Number(discount) || 0);
     const taxedShare =
@@ -90,8 +96,28 @@ class GSTService {
       // the wholesaler can fill in; a wrong one is a false statement.
       const hsnCode = item.hsnCode || null;
 
+      /**
+       * Cess is an ADDITIONAL LEVY on the same taxable value as the GST, not a
+       * share of it. 18 per cent GST plus 12 per cent cess is 30 per cent of
+       * the taxable value.
+       *
+       * It follows the pricing mode exactly as the GST does, and that is the
+       * whole reason the money path does not come apart:
+       *
+       *   tax exclusive, a counter sale. The rate quoted is before tax, so
+       *   every levy goes on top and the line total grows by the cess.
+       *
+       *   tax inclusive, a shop order. The price on the shop page is what the
+       *   customer pays, so the cess comes OUT of it alongside the GST and the
+       *   line total does not move. If cess were added on top here, the buyer
+       *   would have agreed one figure at checkout, the bill would say another,
+       *   and the khata would say a third.
+       */
+      const cessPercent = Number(item.cessPercent ?? 0);
+
       let lineTaxable = 0;
       let lineTaxAmount = 0;
+      let lineCessAmount = 0;
       let lineTotal = 0;
 
       if (isTaxInclusive) {
@@ -100,18 +126,33 @@ class GSTService {
         // The tax is the remainder, not the rate applied again. Recomputing
         // it left the two halves a paisa short of the price they were split
         // out of, so a sale of 3550 billed at 3549.99.
+        //
+        // With cess the remainder covers both levies, so it is split between
+        // them in proportion to their rates. Taking the GST out first and
+        // calling the rest cess would put the rounding paisa in whichever one
+        // happened to be computed second.
         lineTotal = Number((unitPrice * qty).toFixed(2));
-        lineTaxable = Number((lineTotal / (1 + gstPercent / 100)).toFixed(2));
-        lineTaxAmount = Number(((lineTotal - lineTaxable) * taxedShare).toFixed(2));
+        lineTaxable = Number((lineTotal / (1 + (gstPercent + cessPercent) / 100)).toFixed(2));
+        const levies = Number(((lineTotal - lineTaxable) * taxedShare).toFixed(2));
+        if (cessPercent > 0 && gstPercent + cessPercent > 0) {
+          lineTaxAmount = Number((levies * (gstPercent / (gstPercent + cessPercent))).toFixed(2));
+          // The remainder, so the two always add back to the levies exactly.
+          lineCessAmount = Number((levies - lineTaxAmount).toFixed(2));
+        } else {
+          lineTaxAmount = levies;
+          lineCessAmount = 0;
+        }
       } else {
         // Price excludes tax: Taxable = UnitPrice * Qty
         lineTaxable = Number((unitPrice * qty).toFixed(2));
         lineTaxAmount = Number(((lineTaxable * taxedShare * gstPercent) / 100).toFixed(2));
-        lineTotal = Number((lineTaxable + lineTaxAmount).toFixed(2));
+        lineCessAmount = Number(((lineTaxable * taxedShare * cessPercent) / 100).toFixed(2));
+        lineTotal = Number((lineTaxable + lineTaxAmount + lineCessAmount).toFixed(2));
       }
 
       subtotal += lineTaxable;
       totalTax += lineTaxAmount;
+      totalCess += lineCessAmount;
 
       return {
         productId: item.productId || item.product_id || null,
@@ -120,7 +161,9 @@ class GSTService {
         quantity: qty,
         unitPrice,
         gstPercent,
+        cessPercent,
         taxAmount: lineTaxAmount,
+        cessAmount: lineCessAmount,
         total: lineTotal,
       };
     });
@@ -131,6 +174,9 @@ class GSTService {
 
     const taxableAmount = Math.max(0, Number((netSubtotal - netDiscount + netShipping).toFixed(2)));
     const netTotalTax = Number(totalTax.toFixed(2));
+    // Its own total, because it is its own levy. It does not come out of the
+    // GST and it is not part of it on the document or in the return.
+    const netTotalCess = Number(totalCess.toFixed(2));
 
     let cgst = 0;
     let sgst = 0;
@@ -148,7 +194,7 @@ class GSTService {
       igst = netTotalTax;
     }
 
-    const rawGrandTotal = taxableAmount + netTotalTax;
+    const rawGrandTotal = taxableAmount + netTotalTax + netTotalCess;
     const roundedGrandTotal = Math.round(rawGrandTotal * 100) / 100;
     const roundOff = Number((roundedGrandTotal - rawGrandTotal).toFixed(2));
 
@@ -161,6 +207,7 @@ class GSTService {
       sgst,
       igst,
       totalTax: netTotalTax,
+      totalCess: netTotalCess,
       roundOff,
       grandTotal: roundedGrandTotal,
       isIntraState: intraState,

@@ -4,8 +4,7 @@ Agreed 15 Sept 2026. Nine items. Work started 16 Sept.
 
 `PROGRESS.md` is the record of what HAS been built. This is the record of what
 has been decided, and how much of it is done, so the two do not get mixed up.
-Phases 0 to 5 are finished. Phase 6, cess into the money path, is next and is
-the one to be careful with.
+Phases 0 to 8.5 are finished. Phase 9, the e-invoice payload, is next.
 
 Read the assessment at the bottom before promising a date on any of this. Two
 of these nine cannot be finished by writing code alone.
@@ -538,54 +537,171 @@ One definition of the block on each side, `services/transportDetails.js` and
 `components/TransportFields.jsx`, because two copies of eight fields is how one
 screen starts offering a mode the other refuses.
 
-## Phase 6. Tax terms and cess. NEXT
+## Phase 6. Tax terms and cess. DONE
 
-### The dangerous one
+The one where a mistake lands in somebody's ledger rather than on a screen.
 
-Alone in its phase on purpose. This is the one that puts a wrong number in
-somebody's ledger rather than on a screen.
+- [x] Migration: `master_tax_terms`, plus cess columns on sale and purchase
+      lines and totals. File: `wholesale3_tax_terms_and_cess.sql`
+- [x] A named combination a line can be billed under. Entering the GST derives
+      CGST and SGST as half each. They are NOT stored: two stored halves are
+      two things that can disagree with the whole.
+- [x] `gstService` treats cess as an additional levy on the same taxable value,
+      never a share of the GST. 18 plus 12 is 30 per cent of the taxable value.
+- [x] **Cess reaches the money path.** Proved, not assumed.
+- [x] The tax terms screen in Administration
+- [x] A cess column in the HSN summary, in SQL and on the PDF, with the taxable
+      value corrected to the line total less BOTH levies
+- [x] A cess line in the totals, on the PDF and in the preview
 
-- [ ] Migration: `master_tax_terms` for the IGST to CGST and SGST grouping (4)
-- [ ] Naming a tax combination so a line can pick it by name (5)
-- [ ] `gstService` treats cess as an additional levy, NOT a share of the rate.
-      18 per cent GST plus 12 per cent cess is 30 per cent of the taxable
-      value, not 18 split three ways (7)
-- [ ] **Cess reaches the money path, not just the bill** (8). Every reader of
-      `grand_total` has to agree: the 50/50 instalment split, `canAcceptPayment`,
-      `reconcileInvoiceForOrder`, and the khata mirror. Miss one and the
-      customer's balance and their bill disagree by exactly the cess.
-- [ ] The tax terms screen in Administration (16, its third screen)
-- [ ] A cess column in the HSN summary grouping (10)
+### How the money path was kept together
 
-Cess is 12 per cent flat and marked in the code as a TEST DEFAULT THAT MUST NOT
-SHIP. Verified by: an order carrying cess, paid in halves, proving the balance
-and the bill agree to the paisa, then reconciled and proved again. In paise.
+The audit came first. Every reader of a total was mapped before a line was
+written, and it turned up the thing that would have broken this:
 
-## Phase 7. A number series per channel
+`orders.total_amount` is the CART GROSS, set at checkout, and never goes
+through `gstService` at all. The bill for an order derives its tax out of that
+same gross. So they agree by construction today. Add cess ON TOP for that path
+and the buyer agrees X at checkout, the bill says X plus cess, and the khata
+says X. Three figures, one order.
 
-- [ ] Migration: `series` key on `invoice_sequences`, unique on (wholesaler,
-      series, financial year) (3)
-- [ ] `seriesNumbers` allocates per series (6). The 16 character refusal is
-      already built and tested, so this phase inherits the guard.
-- [ ] A series picker on the sale form (15 in part)
+So cess follows the pricing mode exactly as the GST already does:
 
-Prefixes `SM`, `SA`, `FK`, `AZ`, fourteen characters each. Verified by:
-allocating concurrently and proving no gap and no duplicate within a series and
-a financial year.
+  - tax exclusive, a counter sale: the rate quoted is before tax, so every levy
+    goes on top and the total grows
+  - tax inclusive, a shop order: the shop price is what the customer pays, so
+    the cess comes OUT of it beside the GST and the total does not move
 
-## Phase 8. Export
+That is what makes the path safe by construction rather than by remembering to
+update a second place. `sales.total` grows because a counter rate is pre-tax,
+and the khata and the bill both read through `gstService`, so they follow
+automatically.
 
-- [ ] ZIP: a CSV per table plus the invoice PDFs (12)
+Verified against a local Postgres: the sale total, the customer's khata, the
+invoice grand total and the invoice line all carry the same cess to the paisa,
+a bill raised from the sale equals the sale, and a sale without cess is exactly
+what it always was.
+
+### The twelve per cent is a test default
+
+`GST28_CESS12` is seeded so the arithmetic can be tested end to end. Nothing is
+charged cess unless a line says so, so no existing bill changes. Real cess is
+commodity specific, and a blanket rate on a live bill is a wrong number on a
+legal document. Take that term out, or set its cess to zero, before this goes
+near a real customer.
+
+## Phase 7. A number series per channel. DONE
+
+- [x] Migration: a `series` key on `invoice_sequences`, unique on (wholesaler,
+      series, year), plus a channel on sales and on invoices. File:
+      `wholesale3_sales_channels.sql`
+- [x] `invoiceNumberService` draws on the run its channel owns
+- [x] A channel dropdown on the sale form and on the manual invoice form, and
+      the channel shown on the sale
+- [x] A bill raised from a sale inherits that sale's channel. An order placed
+      on this marketplace is the shop channel by definition, not by choosing.
+
+Four books: counter, this shop, Flipkart, Amazon. Each keeps a run that is
+consecutive in ITSELF, which is what Rule 46(b) asks and what lets a
+marketplace settlement report be matched against our numbers. One shared
+counter gave Flipkart a run reading 4, 9, 11 with the gaps filled by counter
+sales.
+
+**Nothing renumbered, and the counter channel kept the wholesaler's own
+prefix.** A firm numbering `OM/1/26-27` carries straight on. The three new
+channels start their own run at 1, which is what a new series is allowed to do.
+Renumbering a bill already handed over would break the customer's GSTR-2B
+against ours, and the instrument for correcting an issued invoice is a credit
+note.
+
+**This is not an import.** Choosing Flipkart records where a sale came from. It
+does not fetch anything from Flipkart, and the hint under the field says so.
+Pulling orders out of those marketplaces is a CSV parser per marketplace, or
+their APIs, which need a developer account and a seller authorisation that
+cannot be arranged from inside this codebase. Worth its own phase once you know
+which report you actually get.
+
+## Phase 8. Export. DONE
+
+- [x] ZIP: a CSV per table plus the invoice PDFs (12)
+
+`GET /api/exports/zip`. Nine CSVs, the bills as PDFs, and a readme in plain
+English. Settings carries the button.
 
 Scoped by `businessId`, taken from the token and never from the query string.
-Verified by signing in as one wholesaler and asking for another's export by
-every route the endpoint allows.
+Verified by putting two wholesalers in one database and driving the route as
+one of them with the other's id set in the query string, the params, the body
+and a header at once: the file that came back had none of the other's rows,
+none of their ids and none of their bills.
+
+It ended up OWNER ONLY rather than behind a permission, which was a change from
+the plan. Every other seller route is gated on the one list it touches, but
+this route is the whole book at once, so gating it on `invoices` would have
+quietly widened that permission into all of them and let an employee walk out
+with the customer list. It sits with the GST number and the UPI id.
+
+The ZIP is written by hand, stored rather than deflated, in
+`services/zipWriter.js`. Eighty lines against a dependency to keep updated on
+a server whose package list is fourteen entries long. Checked against the
+standard CRC vector and against real `unzip`.
+
+CSV cells starting with `=`, `+`, `-` or `@` are prefixed with an apostrophe.
+Excel and Sheets run those as formulas on open, and a customer name is
+somewhere a person types free text, so this is the one place in the product
+where another program runs our data. The readme says why the apostrophe is
+there.
+
+The PDFs stop at 200, newest first, and the readme says how many were left out
+rather than handing over a quiet partial set. The CSVs always carry every row.
 
 Google Sheets is NOT in this phase. It needs a Google Cloud project, OAuth
 consent and a per-wholesaler token store, and first a decision about who owns
 the project.
 
-## Phase 9. e-invoice payload
+## Phase 8.5. Import. DONE
+
+Not on the original nine. Added 17 Sept, when the question "where is the
+option to upload a zip" turned out to have the answer "there isn't one".
+The export was built first and only went one way, which is the wrong half to
+have on its own: a wholesaler with a year of sales in a spreadsheet cannot
+start using this product at all until he can get them in.
+
+- [x] `POST /api/imports/preview`, `POST /api/imports/commit`,
+      `GET /api/imports/template`
+
+Customers, suppliers, purchases, sales and old bills, with their line items.
+A zip of CSVs, so the export round-trips, or one CSV on its own. Owner only
+and scoped by the token, same as the export and for a stronger reason: this
+side writes.
+
+Three rules hold the whole thing up. **Nothing is overwritten**, ever: a row
+already in the book is skipped and counted, because a merge done wrong
+replaces a figure a customer agreed to with one out of a spreadsheet. **It is
+all or nothing**, one transaction, because half a year in a book with no way
+to tell which half is worse than a failed upload. **You see it before it
+happens**: preview does every read and every check and writes nothing.
+
+**Old bills come in as records of bills issued elsewhere.** They keep their
+own numbers, are marked with `import_batch_id` so nothing can re-issue them,
+and a bill carrying an IRN is refused outright, because an IRN is issued by
+the IRP against a submission and cannot be checked from a spreadsheet.
+
+**But the counter has to move past them**, and this is the part that is easy
+to get backwards. Import KT/000001 to KT/000400 with the counter at zero and
+the next bill raised here is numbered KT/000001, hits the unique index and
+fails: the wholesaler cannot raise a bill at all. So the run is advanced past
+the imported numbers and the preview says what the next bill will be called.
+Nothing is renumbered by this. Every imported bill keeps the number it was
+issued under and the run simply carries on after them.
+
+Dates are read **day first**, as a rule rather than a guess, and it is written
+on the template and on the screen. 03/04/2026 is the third of April. Both
+readings are real dates, so a wrong guess errors nowhere and silently moves a
+bill into a different GST return.
+
+Products and stock are NOT in this phase. They were not asked for.
+
+## Phase 9. e-invoice payload. NEXT
 
 - [ ] The JSON builder, the validator, IRN and acknowledgement storage, the
       retry and cancellation flow, and the QR slot filled (13)
@@ -601,10 +717,14 @@ Same shape. Fields, validation, the distance and validity rules, storage.
 
 ## Phase 11. The rest
 
-- [ ] A screen that advances an order past `payment_completed` (25). The API is
-      correct and nothing calls it, so orders stall there in practice.
+- [x] ~~A screen that advances an order past `payment_completed` (25)~~. Checked
+      17 Sept: this already exists. `client/src/utils/orderStatus.js` holds the
+      chain through to `completed`, and Orders and SellerOrderDetail both call
+      it. It was carried on this list after it had been built.
 - [ ] Seller-side discovery, "textile wholesalers in Surat" (27)
 - [ ] `README.md` (28)
 - [ ] Mobile OTP (29), still deferred, no genuinely free Indian SMS gateway
 - [ ] Google Sheets export, if the Google project question is answered
+- [ ] Products and stock import (Phase 8.5 covers everything else). Left out
+      because it was not asked for, not because it is hard.
 - [ ] The `razorpay-integration` branch changes, still local on one machine (33)

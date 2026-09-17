@@ -30,6 +30,15 @@ const FALLBACK = {
   })),
   states: [],
   hsn: [],
+  taxTerms: [],
+  // The floor, so a sale form still offers the four books if the request for
+  // them fails. The server is the authority and this matches it.
+  salesChannels: [
+    { code: "counter", label: "Counter or phone" },
+    { code: "shop", label: "This shop" },
+    { code: "flipkart", label: "Flipkart" },
+    { code: "amazon", label: "Amazon" },
+  ],
   // The shipped conventions, so a screen rendering before this resolves
   // formats the way the product always has rather than with nothing.
   settings: moneySettings(),
@@ -61,6 +70,10 @@ const fetchMasters = () => {
         taxRates: data?.taxRates?.length ? data.taxRates : FALLBACK.taxRates,
         states: data?.states?.length ? data.states : FALLBACK.states,
         hsn: data?.hsn?.length ? data.hsn : FALLBACK.hsn,
+        taxTerms: data?.taxTerms || [],
+        salesChannels: data?.salesChannels?.length
+          ? data.salesChannels
+          : FALLBACK.salesChannels,
         settings: data?.settings || FALLBACK.settings,
         fromMasters: Boolean(data?.fromMasters),
         isPlatformAdmin: Boolean(data?.isPlatformAdmin),

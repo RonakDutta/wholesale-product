@@ -187,6 +187,15 @@ async function schemaExtras(db = pool) {
         -- The transport block on a sale, from wholesale3_sale_transport.sql.
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'sales' AND column_name = 'transport_mode') AS has_sale_transport,
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'invoices' AND column_name = 'channel') AS has_invoice_channel,
+        -- Which book a sale belongs to, from wholesale3_sales_channels.sql.
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'sales' AND column_name = 'channel') AS has_sale_channel,
+        -- Cess, from wholesale3_tax_terms_and_cess.sql. Probed on the sale
+        -- line, because that is the one the money path reads through.
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'sale_lines' AND column_name = 'cess_percent') AS has_cess,
         -- And on an order, from wholesale3_order_transport.sql.
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'orders' AND column_name = 'transport_mode') AS has_order_transport,
@@ -220,6 +229,10 @@ async function schemaExtras(db = pool) {
         EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name = 'invoice_sequences'
                    AND column_name = 'wholesaler_id') AS has_invoice_sequence_owner,
+        -- A run of numbers per sales channel, from wholesale3_sales_channels.sql.
+        EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'invoice_sequences'
+                   AND column_name = 'series') AS has_invoice_series,
         -- Sale and challan numbers restart each financial year, which needs a
         -- financial_year column on both counters. Until then both fall back to
         -- their old shapes, S-0001 and DC-0001.
@@ -251,6 +264,10 @@ async function schemaExtras(db = pool) {
       has_sale_tax: false,
       has_sale_transport: false,
       has_order_transport: false,
+      has_cess: false,
+      has_invoice_series: false,
+      has_sale_channel: false,
+      has_invoice_channel: false,
       has_sale_order_id: false,
       has_number_format: false,
       has_series_fy: false,
@@ -297,10 +314,30 @@ class InvoiceRepository {
    * been run, because an invoice that cannot be numbered is an invoice that
    * cannot be raised.
    */
-  async getNextSequenceNumber(client, year, wholesalerId = null) {
+  async getNextSequenceNumber(client, year, wholesalerId = null, series = "counter") {
     await ensureSchema(client);
     const dbClient = client || pool;
     const has = await schemaExtras();
+
+    /**
+     * One run per wholesaler, per channel, per year.
+     *
+     * Until wholesale3_sales_channels.sql has been run there is one run per
+     * wholesaler and every channel shares it, which is exactly what the
+     * product did before. That is the right fallback: a wholesaler on an
+     * unmigrated database keeps numbering bills rather than being refused.
+     */
+    if (has.has_invoice_sequence_owner && has.has_invoice_series && wholesalerId) {
+      const result = await dbClient.query(
+        `INSERT INTO invoice_sequences (wholesaler_id, series, year, last_number)
+         VALUES ($1, $2, $3, 1)
+         ON CONFLICT (wholesaler_id, series, year)
+         DO UPDATE SET last_number = invoice_sequences.last_number + 1
+         RETURNING last_number`,
+        [wholesalerId, series || "counter", year],
+      );
+      return result.rows[0].last_number;
+    }
 
     if (!has.has_invoice_sequence_owner || !wholesalerId) {
       const result = await dbClient.query(
@@ -450,6 +487,17 @@ class InvoiceRepository {
         ["recipient_address", recipientAddress],
         ["recipient_phone", recipientPhone],
       );
+    }
+
+    // Its own total on the bill, because it is its own levy. Gated on the
+    // document block, which is the migration that added the column.
+    if (has.has_document_block) {
+      columns.push(["total_cess", invoiceData.totalCess ?? 0]);
+    }
+
+    // So a number can always be explained later: which run it came from.
+    if (has.has_invoice_channel && invoiceData.channel) {
+      columns.push(["channel", invoiceData.channel]);
     }
 
     if (has.has_document_block) {
@@ -700,12 +748,17 @@ class InvoiceRepository {
    */
   async getHsnSummary(invoiceId, wholesalerId) {
     await ensureSchema();
+    const has = await schemaExtras();
     const query = `
       SELECT
         NULLIF(TRIM(i.hsn_code), '') AS hsn_code,
         ROUND(COALESCE(i.gst_percent, 0)::numeric, 2) AS gst_percent,
-        ROUND(SUM(i.total - i.tax_amount)::numeric, 2) AS taxable_amount,
+        -- The taxable value is the line total less BOTH levies, because the
+        -- total carries both. Subtracting only the GST would overstate it by
+        -- the cess, which is the same fault this query was fixed for once.
+        ROUND(SUM(i.total - i.tax_amount - ${has.has_document_block ? "i.cess_amount" : "0"})::numeric, 2) AS taxable_amount,
         ROUND(SUM(i.tax_amount)::numeric, 2) AS gst_amount,
+        ${has.has_document_block ? "ROUND(SUM(i.cess_amount)::numeric, 2)" : "0"} AS cess_amount,
         ROUND(SUM(i.total)::numeric, 2) AS total_amount
       FROM invoice_items i
       JOIN invoices inv ON inv.id = i.invoice_id

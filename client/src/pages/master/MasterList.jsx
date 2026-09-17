@@ -292,12 +292,46 @@ const MasterList = ({ spec }) => {
                   key={String(row[spec.key])}
                   className={`flex flex-wrap items-center gap-3 px-4 py-3 sm:px-6 ${off ? "bg-slate-50" : ""}`}
                 >
-                  <div className="min-w-0 flex-1">
-                    <p className={`truncate text-sm font-bold ${off ? "text-slate-400" : "text-espresso"}`}>
+                  {/* An optional figure on the left, for a list whose rows
+                      ARE a number. Eight tax terms reading "GST 0.25%",
+                      "GST 3%", "GST 5%" are eight rows whose only difference
+                      is buried in the middle of a repeated sentence, and the
+                      number is what somebody scans for. Lists that are not
+                      numbers do not define this and are unchanged. */}
+                  {spec.lead && (
+                    <div
+                      className={`flex w-16 shrink-0 flex-col items-center justify-center rounded-lg border py-1.5 ${
+                        off
+                          ? "border-slate-200 bg-slate-100 text-slate-400"
+                          : "border-slate-200 bg-slate-50 text-espresso"
+                      }`}
+                    >
+                      <span className="text-sm font-black leading-none">
+                        {spec.lead(row).value}
+                      </span>
+                      {spec.lead(row).note && (
+                        <span className="mt-0.5 text-[10px] font-bold leading-none text-clay">
+                          {spec.lead(row).note}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {/* basis-full on a phone, so the buttons and any badge drop
+                      to their own line rather than squeezing the name down to
+                      "GS...". Back to sharing the row from sm upwards. */}
+                  <div className="min-w-0 flex-1 basis-[60%] sm:basis-0">
+                    <p className={`text-sm font-bold ${off ? "text-slate-400" : "text-espresso"}`}>
                       {spec.primary(row)}
                     </p>
-                    <p className="truncate text-xs text-slate-500">{spec.secondary(row)}</p>
+                    <p className="text-xs text-slate-500">{spec.secondary(row)}</p>
                   </div>
+                  {/* Marks what is UNUSUAL about a row. An absence, said on
+                      every row, is not a fact eight times over. */}
+                  {spec.tag?.(row) && !off && (
+                    <span className="shrink-0 rounded-full bg-clay/10 px-2.5 py-1 text-[11px] font-bold text-clay">
+                      {spec.tag(row)}
+                    </span>
+                  )}
                   {off && (
                     <span className="rounded-full bg-slate-200 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">
                       Switched off
@@ -307,18 +341,21 @@ const MasterList = ({ spec }) => {
                     <button
                       onClick={() => setDraft(spec.toDraft(row))}
                       disabled={!fromMasters}
-                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-40"
+                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-espresso transition-colors hover:bg-slate-50 disabled:opacity-40"
                     >
                       Edit
                     </button>
+                    {/* Lighter than Edit on purpose. Editing a rate and
+                        withdrawing one are not the same weight of action, and
+                        they used to look identical. */}
                     <button
                       onClick={() => setActive(row, off)}
                       disabled={!fromMasters}
                       title={off ? "Offer this again" : "Stop offering this. The row is kept."}
-                      className={`flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors disabled:opacity-40 ${
+                      className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors disabled:opacity-40 ${
                         off
-                          ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                          ? "border border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                          : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
                       }`}
                     >
                       {off ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}

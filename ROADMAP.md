@@ -717,10 +717,14 @@ Same shape. Fields, validation, the distance and validity rules, storage.
 
 ## Phase 11. The rest
 
-- [ ] A screen that advances an order past `payment_completed` (25). The API is
-      correct and nothing calls it, so orders stall there in practice.
+- [x] ~~A screen that advances an order past `payment_completed` (25)~~. Checked
+      17 Sept: this already exists. `client/src/utils/orderStatus.js` holds the
+      chain through to `completed`, and Orders and SellerOrderDetail both call
+      it. It was carried on this list after it had been built.
 - [ ] Seller-side discovery, "textile wholesalers in Surat" (27)
 - [ ] `README.md` (28)
 - [ ] Mobile OTP (29), still deferred, no genuinely free Indian SMS gateway
 - [ ] Google Sheets export, if the Google project question is answered
+- [ ] Products and stock import (Phase 8.5 covers everything else). Left out
+      because it was not asked for, not because it is hard.
 - [ ] The `razorpay-integration` branch changes, still local on one machine (33)

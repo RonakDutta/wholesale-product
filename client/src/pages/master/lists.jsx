@@ -97,12 +97,50 @@ const SPECS = {
       active: r.active !== false,
     }),
     primary: (r) => r.label || r.code,
-    secondary: (r) =>
-      [
-        `GST ${r.igstPercent}%`,
-        `CGST ${r.cgstPercent ?? r.igstPercent / 2}% + SGST ${r.sgstPercent ?? r.igstPercent / 2}% within a state`,
-        Number(r.cessPercent) > 0 ? `plus cess ${r.cessPercent}%` : "no cess",
-      ].join("  |  "),
+
+    /**
+     * The rate, as a figure, on the left.
+     *
+     * A tax term IS a number. Eight of them written as "GST 0.25% | CGST
+     * 0.13% + SGST 0.12% within a state | no cess" read as a wall, because the
+     * only thing that differs between the rows is buried in the middle of a
+     * sentence that repeats itself. The figure is what somebody scans for.
+     */
+    lead: (r) => ({
+      value: `${r.igstPercent}%`,
+      note: Number(r.cessPercent) > 0 ? `+${r.cessPercent}` : null,
+    }),
+
+    /**
+     * Cess is marked, its absence is not.
+     *
+     * Almost every term carries none, so "no cess" on every row is one rule
+     * written out eight times rather than eight facts. The row that HAS cess
+     * is the unusual one and the one that is dangerous to pick by mistake, so
+     * that is the one that gets a mark.
+     */
+    tag: (r) => (Number(r.cessPercent) > 0 ? `+ ${r.cessPercent}% cess` : null),
+
+    /**
+     * The quiet line. What the rate does, not a restatement of the rate.
+     *
+     * The halves come from the ROW, not from dividing by two. They are usually
+     * the same thing and at 0.25 per cent they are not: the stored split is
+     * 0.13 and 0.12, because a half of a quarter per cent does not land on a
+     * figure a bill can carry. Computing it here printed 0.125 and 0.125,
+     * which adds up correctly and is not what the system charges.
+     */
+    secondary: (r) => {
+      const cgst = r.cgstPercent ?? r.igstPercent / 2;
+      const sgst = r.sgstPercent ?? r.igstPercent / 2;
+      if (!Number(r.igstPercent) && !Number(r.cessPercent)) {
+        return "No tax is charged on a line at this rate";
+      }
+      const split = `Splits ${cgst}% + ${sgst}% inside one state`;
+      return Number(r.cessPercent) > 0
+        ? `${split}. The cess is on top, so the customer pays ${Number(r.igstPercent) + Number(r.cessPercent)}%.`
+        : split;
+    },
   },
 
   "tax-rates": {

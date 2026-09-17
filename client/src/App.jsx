@@ -76,6 +76,7 @@ const Overview = lazy(() => import("./pages/dashboard/Overview"));
 const MoneyBreakdown = lazy(() => import("./pages/dashboard/MoneyBreakdown"));
 const SellerOrderDetail = lazy(() => import("./pages/dashboard/SellerOrderDetail"));
 const Staff = lazy(() => import("./pages/dashboard/Staff"));
+const YourData = lazy(() => import("./pages/dashboard/YourData"));
 const Challans = lazy(() => import("./pages/dashboard/Challans"));
 const ChallanDetail = lazy(() => import("./pages/dashboard/ChallanDetail"));
 // The purchase side: goods coming in, who they came from, what is owed.
@@ -198,6 +199,9 @@ const router = createBrowserRouter([
       { path: "settings/payments", element: <PaymentSetup /> },
       // Owner only, and the server refuses an employee outright.
       { path: "staff", element: <Staff /> },
+      // Import and export. Both of these used to sit under the Save button at
+      // the bottom of Settings, where nobody found them.
+      { path: "data", element: <YourData /> },
     ],
   },
   // Old dashboard links and bookmarks keep working.

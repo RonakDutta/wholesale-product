@@ -2108,6 +2108,55 @@ Products and stock are not in this phase. They were not asked for.
 
 ---
 
+## 17 Sept: where the import lives, and the tax terms list
+
+Two things from looking at the screens rather than the code.
+
+**"Where is the option to import a zip?"** Asked twice, about a card that was
+on the screen the whole time. It sat at the bottom of Settings, below a Save
+button that reads like the end of the page, under a long form. So import and
+export now have their own sidebar entry, **Your data**, between Staff and
+Settings, with the import first because somebody arriving there for the first
+time is bringing a book in rather than taking one out. The page also lists
+what has been brought in before, so it is possible to tell whether a file has
+already been sent. Settings keeps a one line link to it, the way it already
+links to Bill numbering and terms. Owner only, and the server refuses an
+employee on every one of the routes rather than trusting the screen to hide
+the buttons.
+
+**The tax terms list on Administration.**
+
+Not a fault, a look. Every row had the same weight: a bold title and one grey
+line reading `GST 18% | CGST 9% + SGST 9% within a state | no cess`. Eight of
+those read as a wall, because the only thing that differed between them was a
+number buried in the middle of a sentence that repeated itself.
+
+What changed, and why each one:
+
+- **The rate leads, as a figure in a chip on the left.** A tax term IS a
+  number, and the number is what somebody scans for.
+- **The split is said once, quietly.** CGST and SGST are always half each, so
+  spelling both halves out on every row was one rule written eight times.
+- **"no cess" is gone.** It was on seven rows out of eight. An absence said
+  seven times is not seven facts. The row that HAS cess now carries a mark
+  instead, because that is the unusual one and the dangerous one to pick by
+  mistake, and its chip shows `+12` under the rate.
+- **Off is lighter than Edit.** Withdrawing a rate and editing one are not the
+  same weight of action and used to look identical.
+- **The row wraps on a phone**, so a name is never truncated to "GS...".
+
+Two faults the render caught that reading did not. Computing the halves as
+`igstPercent / 2` printed `0.125% + 0.125%` for the 0.25 per cent term, when
+the stored split is 0.13 and 0.12: half of a quarter per cent does not land on
+a figure a bill can carry. The halves now come from the row. And "Nil rated"
+read "Splits 0% + 0% inside one state", which says nothing.
+
+`lead` and `tag` are optional hooks on the list spec rather than a special
+case inside `MasterList`, so States, Units, Tax rates and HSN codes are
+unchanged. All four were rendered to confirm it.
+
+---
+
 ## Left to do
 
 Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.
@@ -2154,32 +2203,6 @@ for many taxpayers. That is a commercial decision and it shapes the schema.
 ---
 
 ## Known problems, not yet fixed
-
-### The tax terms list on Administration looks plain. Asked for 16 Sept.
-
-Not a fault, a look. The list currently gives every term the same weight: a
-bold title, one grey line of `GST 18% | CGST 9% + SGST 9% within a state | no
-cess`, and Edit and Off on the right. Eight rows of that read as a wall,
-because the only thing that differs between them is a number buried in the
-middle of a sentence that repeats itself.
-
-What it should probably do, for whoever picks this up:
-
-- Lead with the rate as a figure, not as part of a sentence. The rate IS the
-  identity of the row and it is what somebody scans for.
-- Stop repeating the split. CGST plus SGST is always half and half, so writing
-  it out on every row is eight copies of a rule, not eight facts. Show the
-  halves quietly, or only on the rows where something is unusual.
-- "no cess" is on almost every row. An absence does not need saying eight
-  times. Mark the row that HAS cess instead, which is the one that is unusual
-  and the one that is dangerous to get wrong.
-- Off is a destructive-ish action sitting in the same weight as Edit.
-
-Care needed on two points. `GST28_CESS12` is a shipped example rather than a
-verified rate, and is on the list below to remove or zero before a real
-customer, so do not make it look more authoritative while making it prettier.
-And no row may show a rate the system does not actually hold: the rates come
-from the tax terms master, and nothing here may infer one from an HSN code.
 
 ## Testing
 

@@ -10,6 +10,7 @@ import {
   MessageSquare,
   FileText,
   Truck,
+  Database,
   Settings,
   UserCog,
   Sparkles,
@@ -78,6 +79,10 @@ const NAV = [
     flag: "ANALYTICS",
   },
   { path: "/seller/staff", label: "Staff", icon: UserCog, ownerOnly: true },
+  // Bringing an old book in, and taking a copy out. Its own entry rather than
+  // a section of Settings: it sat below the Save button there and was asked
+  // for twice by somebody who could not find it.
+  { path: "/seller/data", label: "Your data", icon: Database, ownerOnly: true },
   { path: "/seller/settings", label: "Settings", icon: Settings, ownerOnly: true },
 ].filter((item) => !item.flag || FEATURES[item.flag]);
 

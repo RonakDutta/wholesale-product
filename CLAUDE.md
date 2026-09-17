@@ -215,17 +215,31 @@ credentials and a GSP, and the roadmap says which half is ours.
 
 ## Known gaps, as of this writing
 
-- No screen advances an order past `payment_completed`. The API exists and is
-  correct, but nothing calls it, so orders stall there in practice.
-- No admin console. Flash sale creation is admin-only and unreachable.
+Checked 17 Sept. Three entries that used to be on this list were repeated into
+a session summary without being checked and turned out to be false, so check
+before repeating any of these.
+
 - Seller-side search ("textile wholesalers in Surat") is not built. The shop
   page exists; discovery of it does not.
-- `README.md` is substantially out of date.
+- `README.md` is substantially out of date. It still describes the marketplace
+  and does not mention the khata, GST invoicing, or import and export.
 - Git history contains a committed password and an invoice PDF. The credential
   has been rotated; rewriting history is outstanding.
-- The home page falls back to invented demo products when the catalogue fails
-  to load, and search invents a 4.5 star rating for a wholesaler who has none.
-  Both are on the list to delete.
+- Products and stock cannot be imported. Everything else can, see
+  `services/importService.js`. It was left out because it was not asked for,
+  not because it is hard.
+- `GST28_CESS12` in `wholesale3_tax_terms_and_cess.sql` is a shipped example
+  with an unverified 12 per cent cess. Remove it or zero it before a real
+  customer sees it.
+
+Fixed, and no longer gaps, listed because the old wording of this file said
+otherwise:
+
+- An order CAN be advanced past `payment_completed`. The whole chain through to
+  `completed` is in `client/src/utils/orderStatus.js`, and `Orders.jsx` and
+  `SellerOrderDetail.jsx` both call it.
+- There IS an admin console, `/administration`, built in Phase 1.
+- The invented demo products and the 4.5 star rating were deleted on 14 Sept.
 
 ## Working style expected here
 

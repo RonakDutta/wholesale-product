@@ -1,12 +1,11 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import LocationPicker from "../../components/LocationPicker";
-import DownloadYourData from "../../components/DownloadYourData";
-import BringYourBookIn from "../../components/BringYourBookIn";
 import {
   Building2,
   ChevronRight,
   CreditCard,
+  Database,
   FileText,
   Mail,
   MapPin,
@@ -440,6 +439,26 @@ const Settings = () => {
         <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
       </Link>
 
+      {/* Import and export live on their own page in the sidebar. They were
+          cards down here once, below the Save button, and were asked for twice
+          by somebody looking straight at them. A link is enough. */}
+      <Link
+        to="/seller/data"
+        className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:bg-slate-50"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <Database className="h-5 w-5 shrink-0 text-slate-500" />
+          <div className="min-w-0">
+            <p className="font-bold text-espresso">Your data</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Bring an old book in from a spreadsheet, or take a copy of
+              everything in this one.
+            </p>
+          </div>
+        </div>
+        <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
+      </Link>
+
       <div className="flex justify-end pt-2">
         <button
           onClick={handleSave}
@@ -451,10 +470,6 @@ const Settings = () => {
         </button>
       </div>
 
-      {/* Below Save on purpose. Nothing on it is a field, and putting it above
-          left the Save button sitting under somebody else's buttons. */}
-      <BringYourBookIn />
-      <DownloadYourData />
     </div>
   );
 };

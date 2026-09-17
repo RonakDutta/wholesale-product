@@ -261,7 +261,7 @@ class SaleInvoiceService {
        * CHALLAN_WHEN_UNPAID=false restores the old behaviour, where a bill
        * could be raised whenever it was asked for.
        */
-      if (challanService.challanEnabled() && await challanService.challanTablesExist(client)) {
+      if (challanService.invoiceWaitsForPayment() && await challanService.challanTablesExist(client)) {
         const money = await challanService.settlementOf(client, sale);
         if (!money.settled) {
           await client.query("ROLLBACK");

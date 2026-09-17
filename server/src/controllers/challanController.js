@@ -148,3 +148,98 @@ exports.getChallanPdf = async (req, res) => {
     if (!res.headersSent) res.status(500).json({ message: "Server error" });
   }
 };
+
+// ---------------------------------------------------------------------------
+// The challan as a document in its own right. See services/challanBook.js.
+// ---------------------------------------------------------------------------
+const challanBook = require("../services/challanBook");
+
+/** Record a challan. Goods moved, no bill yet, either direction. */
+exports.recordChallan = async (req, res) => {
+  try {
+    const result = await challanBook.create(businessId(req), req.body || {});
+    if (result.error) return res.status(400).json({ success: false, message: result.error });
+    res.status(201).json({ success: true, challan: result.challan });
+  } catch (err) {
+    console.error("Could not record the challan:", err);
+    res.status(500).json({ success: false, message: "Could not record that challan." });
+  }
+};
+
+/** Change one that has not been billed. */
+exports.editChallan = async (req, res) => {
+  try {
+    const result = await challanBook.update(req.params.id, businessId(req), req.body || {});
+    if (result.error === "notFound") {
+      return res.status(404).json({ success: false, message: "That challan is not in your book." });
+    }
+    if (result.error) return res.status(400).json({ success: false, message: result.error });
+    res.json({ success: true, challan: result.challan });
+  } catch (err) {
+    console.error("Could not change the challan:", err);
+    res.status(500).json({ success: false, message: "Could not change that challan." });
+  }
+};
+
+/** Close one raised in error. Cancelled, never deleted. */
+exports.cancelChallan = async (req, res) => {
+  try {
+    const result = await challanBook.cancel(
+      req.params.id, businessId(req), req.body?.reason);
+    if (result.error === "notFound") {
+      return res.status(404).json({ success: false, message: "That challan is not in your book." });
+    }
+    if (result.error) return res.status(400).json({ success: false, message: result.error });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Could not cancel the challan:", err);
+    res.status(500).json({ success: false, message: "Could not cancel that challan." });
+  }
+};
+
+/**
+ * One kind's list, for the two tabs.
+ *
+ * `kind` defaults to sale, so an older client that does not send one sees
+ * what it always saw rather than an empty screen.
+ */
+exports.listByKind = async (req, res) => {
+  try {
+    const rows = await challanBook.list(
+      businessId(req),
+      req.query.kind === "purchase" ? "purchase" : "sale",
+      ["pending", "billed", "cancelled"].includes(req.query.status) ? req.query.status : null,
+    );
+    res.json({ success: true, challans: rows });
+  } catch (err) {
+    console.error("Could not list challans:", err);
+    res.status(500).json({ success: false, message: "Could not load your challans." });
+  }
+};
+
+/**
+ * What is still waiting to be billed for one customer or supplier.
+ *
+ * The sale and purchase forms call this the moment a party is picked, which
+ * is the whole point of the feature: a wholesaler who sent goods out three
+ * times last week should not have to remember that when he comes to bill.
+ */
+exports.pendingForParty = async (req, res) => {
+  try {
+    const kind = req.query.kind === "purchase" ? "purchase" : "sale";
+    const rows = await challanBook.pendingFor(businessId(req), kind, req.params.id);
+    res.json({ success: true, challans: rows });
+  } catch (err) {
+    console.error("Could not list pending challans:", err);
+    res.status(500).json({ success: false, message: "Could not load pending challans." });
+  }
+};
+
+/** The reasons a challan can give, for the dropdown. */
+exports.challanReasons = (req, res) => {
+  const kind = req.query.kind === "purchase" ? "purchase" : "sale";
+  res.json({
+    success: true,
+    reasons: challanBook.REASONS.filter((r) => r.forKind === "both" || r.forKind === kind),
+  });
+};

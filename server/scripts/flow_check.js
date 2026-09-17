@@ -360,10 +360,14 @@ const settle = () => new Promise((r) => setTimeout(r, 400));
   );
 
   // ---------------------------------------------------------------
-  console.log("\nGoods go out on a challan, because the money is not all in");
+  console.log("\nGoods go out on a challan, whatever the money has done");
   // ---------------------------------------------------------------
+  // Reversed 17 Sept. This used to expect code UNPAID: an unpaid sale was
+  // refused its bill. Section 31(1) ties the invoice to removal of the goods,
+  // not to payment, so the refusal understated outward supply in GSTR-1.
   const noBillYet = await call(sales.createInvoiceForSale, { ...asSeller, params: { id: sale.id } });
-  check(noBillYet.body?.code === "UNPAID", "the bill will not be raised yet", {
+  check(noBillYet.statusCode === 200 || noBillYet.statusCode === 201,
+    "the bill is raised even though money is still owed", {
     code: noBillYet.body?.code, outstanding: noBillYet.body?.outstanding,
   });
 
@@ -378,10 +382,15 @@ const settle = () => new Promise((r) => setTimeout(r, 400));
     "carrying the value of the goods and what has come in",
     { value: dc.body?.total_value, paid: dc.body?.amount_paid },
   );
+  // No tax AMOUNT, which is the rule. gst_percent and cess_percent arrived on
+  // 17 Sept carrying the rate the line WILL be billed at, so the sale form
+  // does not have to be retyped off the challan. Nothing sums them and the
+  // document still charges nothing.
   const dcTax = await testPool.query(
     `SELECT column_name FROM information_schema.columns
-      WHERE table_name = 'delivery_challan_items' AND column_name LIKE '%gst%'`);
-  check(dcTax.rows.length === 0, "and no tax on it, as specified", {
+      WHERE table_name = 'delivery_challan_items'
+        AND column_name IN ('tax_amount', 'cess_amount', 'gst_amount')`);
+  check(dcTax.rows.length === 0, "and nothing on it can charge tax", {
     columns: dcTax.rows.length,
   });
 

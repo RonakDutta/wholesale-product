@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import LocationPicker from "../../components/LocationPicker";
 import DownloadYourData from "../../components/DownloadYourData";
+import BringYourBookIn from "../../components/BringYourBookIn";
 import {
   Building2,
   ChevronRight,
@@ -452,6 +453,7 @@ const Settings = () => {
 
       {/* Below Save on purpose. Nothing on it is a field, and putting it above
           left the Save button sitting under somebody else's buttons. */}
+      <BringYourBookIn />
       <DownloadYourData />
     </div>
   );

@@ -2013,6 +2013,101 @@ challan and no bill was ever raised to export.
 
 ---
 
+## 17 Sept: and the other direction, a book coming in
+
+Phase 8.5, which was not on the roadmap. It got added when the question "where
+is the option to upload a zip for invoices, sales and so on" turned out to
+have the answer "there isn't one, anywhere". The only file inputs in the whole
+product were message attachments, review photos and product images. The export
+had been built first and went one way, which is the wrong half to have on its
+own: a wholesaler with a year of sales in a spreadsheet cannot start using
+this at all until he can get them in.
+
+`POST /api/imports/preview`, `POST /api/imports/commit`,
+`GET /api/imports/template`. Customers, suppliers, purchases, sales and old
+bills, with their line items. A zip of CSVs, so the export round-trips, or one
+CSV on its own. Owner only and scoped by the token, same as the export and for
+a stronger reason: this side writes.
+
+**Three rules hold it up.** Nothing is overwritten, ever: a row already in the
+book is skipped and counted, because a merge done wrong replaces a figure a
+customer agreed to with one out of a spreadsheet. It is all or nothing, one
+transaction, because half a year in a book with no way to tell which half is
+worse than a failed upload. And you see it before it happens: preview does
+every read and every check and writes nothing.
+
+**The figure on the paper wins.** If the file gives a total, that is the
+total, even when the lines add up to something else. An old bill was handed to
+a customer who paid what it said, and recomputing it here would move the debt
+away from the figure he agreed to. The same reasoning the sale side already
+uses when a sale follows an order. Only when there is no total at all are the
+lines added up.
+
+**Old bills are records of bills issued elsewhere.** They keep their own
+numbers, carry `import_batch_id` so nothing can re-issue them, and a bill
+carrying an IRN is refused, because an IRN is issued by the IRP against a
+submission and cannot be checked from a spreadsheet.
+
+**The counter has to move past them, which is the opposite of what it sounds
+like.** Import KT/000001 to KT/000400 with the counter at zero and the next
+bill raised here is numbered KT/000001, hits the unique index on
+(supplier, invoice_number) and fails. The wholesaler could not raise a bill at
+all, and the error would say nothing about the import. So the run is advanced
+past the imported numbers and the preview says what the next bill will be
+called. Nothing is renumbered: every imported bill keeps the number it was
+issued under, and the run carries on after them. The suite proves it by
+importing five bills, then recording a sale and raising a bill the ordinary
+way, and checking it comes out numbered 000006.
+
+**Dates are read day first, as a rule rather than a guess**, and it says so on
+the template and on the screen. 03/04/2026 is the third of April. This is the
+one place in the import where a wrong guess is invisible: both readings are
+real dates, nothing errors, and a bill silently moves into a different month
+and therefore a different GST return.
+
+**A value that cannot be read is an error, not a zero.** "N/A", "see note" and
+"-" in an amount column are named with their line number and their column
+rather than quietly becoming nothing. A book built out of best efforts is
+worse than no book, because it looks finished.
+
+Two readers were written for this, both deliberately not sharing a line with
+`zipWriter` or `exportService`. `csvReader` handles quoted cells with line
+breaks in them, doubled quotes, CRLF, Excel's byte order mark, and takes back
+off the apostrophe our own exporter adds to defuse a formula. `zipReader`
+handles DEFLATE as well as stored, because every zip made by Windows, macOS or
+7-Zip is deflated and a reader that only understood our own would reject
+almost every real file.
+
+**Verified.** `server/scripts/import_check.js`, 76 checks, and
+`format_check` covered the pure half with 70 more. A file sent twice writes
+nothing the second time and leaves exactly one copy of everything. A failure
+partway through leaves not one row, proved by standing a constraint in the way
+of a row the plan could not have known would fail. Staff holding every
+permission are refused. The route driven as one wholesaler with another's id
+in the query string, the params, the body and a header at once still wrote
+only to the caller's own book. Then a real deflated zip made by the `zip`
+command was uploaded through a real browser, and the two bad rows in it came
+back named by line and column while the good ones went in.
+
+The tax split is worth seeing: a bill with one tax figure of 100 to a Gujarat
+customer came out as IGST 100, and the same bill to a Maharashtra customer as
+CGST 25 plus SGST 25. That question is asked of `placeOfSupply` and of nothing
+else, the same as everywhere else.
+
+Two bugs the tests found that reading would not have. `COALESCE($10, 0)` makes
+Postgres infer the parameter as an INTEGER, so an opening balance of 123456.78
+failed on insert while a whole number passed. And a `.xlsx` IS a zip, so it
+went down the zip path and came back "nothing in that file is a list this
+recognises", which is true and useless to the person who uploaded the most
+likely wrong file in the world. It is now checked for by name, before
+anything else, and told which button to press.
+
+Products and stock are not in this phase. They were not asked for.
+
+**Migration to run:** `wholesale3_imports.sql`
+
+---
+
 ## Left to do
 
 Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.
@@ -2088,7 +2183,7 @@ from the tax terms master, and nothing here may infer one from an HSN code.
 
 ## Testing
 
-Thirty four suites in `server/scripts/*_check.js`. They drive the real
+Thirty five suites in `server/scripts/*_check.js`. They drive the real
 controllers against a local Postgres, so they catch schema drift that reading
 the code does not.
 
@@ -2106,6 +2201,10 @@ things the others cannot:
 - `export_check.js` puts two wholesalers in one database and asks one of them
   for his export. Everything else in the product leaks a row onto a screen when
   the scope is wrong. This one leaks a whole book into a file somebody keeps.
+- `import_check.js` is the same two wholesalers with the file going the other
+  way, which is worse, because this side writes. The checks that matter are
+  that the same file sent twice writes nothing the second time, and that a
+  failure partway through leaves not one row behind.
 
 **Drive the route the screens use, not the service behind it.** Both faults
 found on 11 Sept had a passing suite standing next to them, because the suite

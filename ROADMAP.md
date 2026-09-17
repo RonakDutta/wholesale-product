@@ -4,7 +4,7 @@ Agreed 15 Sept 2026. Nine items. Work started 16 Sept.
 
 `PROGRESS.md` is the record of what HAS been built. This is the record of what
 has been decided, and how much of it is done, so the two do not get mixed up.
-Phases 0 to 8 are finished. Phase 9, the e-invoice payload, is next.
+Phases 0 to 8.5 are finished. Phase 9, the e-invoice payload, is next.
 
 Read the assessment at the bottom before promising a date on any of this. Two
 of these nine cannot be finished by writing code alone.
@@ -657,6 +657,49 @@ rather than handing over a quiet partial set. The CSVs always carry every row.
 Google Sheets is NOT in this phase. It needs a Google Cloud project, OAuth
 consent and a per-wholesaler token store, and first a decision about who owns
 the project.
+
+## Phase 8.5. Import. DONE
+
+Not on the original nine. Added 17 Sept, when the question "where is the
+option to upload a zip" turned out to have the answer "there isn't one".
+The export was built first and only went one way, which is the wrong half to
+have on its own: a wholesaler with a year of sales in a spreadsheet cannot
+start using this product at all until he can get them in.
+
+- [x] `POST /api/imports/preview`, `POST /api/imports/commit`,
+      `GET /api/imports/template`
+
+Customers, suppliers, purchases, sales and old bills, with their line items.
+A zip of CSVs, so the export round-trips, or one CSV on its own. Owner only
+and scoped by the token, same as the export and for a stronger reason: this
+side writes.
+
+Three rules hold the whole thing up. **Nothing is overwritten**, ever: a row
+already in the book is skipped and counted, because a merge done wrong
+replaces a figure a customer agreed to with one out of a spreadsheet. **It is
+all or nothing**, one transaction, because half a year in a book with no way
+to tell which half is worse than a failed upload. **You see it before it
+happens**: preview does every read and every check and writes nothing.
+
+**Old bills come in as records of bills issued elsewhere.** They keep their
+own numbers, are marked with `import_batch_id` so nothing can re-issue them,
+and a bill carrying an IRN is refused outright, because an IRN is issued by
+the IRP against a submission and cannot be checked from a spreadsheet.
+
+**But the counter has to move past them**, and this is the part that is easy
+to get backwards. Import KT/000001 to KT/000400 with the counter at zero and
+the next bill raised here is numbered KT/000001, hits the unique index and
+fails: the wholesaler cannot raise a bill at all. So the run is advanced past
+the imported numbers and the preview says what the next bill will be called.
+Nothing is renumbered by this. Every imported bill keeps the number it was
+issued under and the run simply carries on after them.
+
+Dates are read **day first**, as a rule rather than a guess, and it is written
+on the template and on the screen. 03/04/2026 is the third of April. Both
+readings are real dates, so a wrong guess errors nowhere and silently moves a
+bill into a different GST return.
+
+Products and stock are NOT in this phase. They were not asked for.
 
 ## Phase 9. e-invoice payload. NEXT
 

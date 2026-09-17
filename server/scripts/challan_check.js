@@ -223,6 +223,37 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
     { rows: stamped.rows.length, stamped: stamped.rows.filter((r) => r.invoice_id).length },
   );
 
+  /**
+   * And their money stays exactly as it was on the day they went out.
+   *
+   * total_value and amount_paid are written once, when the challan is raised,
+   * and nothing updates them. That is right: a challan left the gate with the
+   * goods and its figures are what the driver carried on the paper. Anything
+   * that started refreshing them would be rewriting a document already handed
+   * over, which is the thing this codebase refuses to do everywhere else.
+   *
+   * It is pinned here because the frozen figure is also confusing, and the
+   * obvious wrong fix is to make it live. A wholesaler asked why a challan
+   * said "Outstanding 1600" while the invoice it linked to said Paid and zero.
+   * Both were right. The answer was to say on the SCREEN that the figure is
+   * from that day, not to move the figure.
+   */
+  const frozen = await testPool.query(
+    `SELECT dc.total_value, dc.amount_paid, i.grand_total, i.payment_status
+       FROM delivery_challans dc JOIN invoices i ON i.id = dc.invoice_id
+      WHERE dc.sale_id = $1 ORDER BY dc.created_at LIMIT 1`, [half.id]);
+  const snap = frozen.rows[0];
+  check(
+    Number(snap.amount_paid) < Number(snap.total_value),
+    "the challan still shows what was owed on the day, after the bill is raised",
+    { value: snap.total_value, receivedThen: snap.amount_paid },
+  );
+  check(
+    snap.payment_status === "Paid",
+    "while the bill it points at is settled",
+    { status: snap.payment_status, total: snap.grand_total },
+  );
+
   // ---------------------------------------------------------------
   console.log("\nThe bill raises itself once the sale is settled");
   // ---------------------------------------------------------------

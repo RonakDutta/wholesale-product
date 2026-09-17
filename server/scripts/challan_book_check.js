@@ -19,6 +19,10 @@
  *     DATABASE_URL="postgres://postgres@127.0.0.1:5433/qa_cbook?sslmode=disable" npm run migrate
  *     node scripts/challan_book_check.js qa_cbook
  */
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const { execFileSync } = require("child_process");
 const Module = require("module");
 const { Pool } = require("pg");
 
@@ -32,6 +36,7 @@ require.cache[dbPath] = stub;
 
 const challanBook = require("../src/services/challanBook");
 const challanService = require("../src/services/challanService");
+const pdfService = require("../src/services/pdfService");
 const saleController = require("../src/controllers/saleController");
 const purchaseController = require("../src/controllers/purchaseController");
 const saleInvoiceService = require("../src/services/saleInvoiceService");
@@ -312,6 +317,107 @@ const mk = () => {
   const notTheirs = await challanBook.update(spare.challan.id, other, {
     lines: [{ itemName: "x", quantity: 1, rate: 1 }] });
   check(notTheirs.error === "notFound", "nor can they edit one", notTheirs.error);
+
+  // ------------------------------------------------------------------
+  console.log("\nThe things a sweep found after the first build");
+  // ------------------------------------------------------------------
+  // A BILLED PURCHASE CHALLAN reads as billed. It points at a purchase and
+  // never at an invoice, and the screen used to test invoice_id alone, so a
+  // billed purchase challan showed "Not billed".
+  const billedBuy = (await testPool.query(
+    `SELECT status, invoice_id, purchase_id FROM delivery_challans WHERE id = $1`,
+    [inward.challan.id])).rows[0];
+  check(billedBuy.status === "billed" && !billedBuy.invoice_id && !!billedBuy.purchase_id,
+    "a billed purchase challan carries purchase_id and no invoice_id, so status is the only honest test",
+    billedBuy);
+
+  /**
+   * THE PDF POINTS THE RIGHT WAY. An inward challan came FROM the supplier,
+   * so printing "FROM <us>" on it reads exactly backwards.
+   *
+   * Read through pdftotext, not by searching the bytes. pdfkit compresses the
+   * content stream, so `buffer.includes("DELIVER TO")` is false on a PDF that
+   * says it in letters an inch high, and an assertion written that way passes
+   * and fails for reasons that have nothing to do with the document.
+   */
+  const textOf = async (challanId) => {
+    const full = await challanService.findById(challanId, owner);
+    const file = path.join(os.tmpdir(), `challan-${challanId}.pdf`);
+    fs.writeFileSync(file, await pdfService.generateChallanPDF(full));
+    try {
+      return { full, text: execFileSync("pdftotext", [file, "-"], { encoding: "utf8" }) };
+    } finally {
+      fs.rmSync(file, { force: true });
+    }
+  };
+
+  const buy = await textOf(inward.challan.id);
+  check(buy.text.includes("RECEIVED FROM") && !buy.text.includes("DELIVER TO"),
+    "a purchase challan prints RECEIVED FROM, not DELIVER TO");
+  const sell = await textOf(out.challan.id);
+  check(sell.text.includes("DELIVER TO") && !sell.text.includes("RECEIVED FROM"),
+    "and a sale challan prints DELIVER TO");
+  const sellFull = sell.full;
+
+  // NO INVENTED DEBT. amount_paid is zero on a movement challan because
+  // nothing was ever paid against a challan, not because the whole value is
+  // owed. The money block used to key off sale_id, which stampBilled sets, so
+  // it came back the moment a challan was used.
+  check(Number(sellFull.amount_paid) === 0 && !!sellFull.sale_id,
+    "a billed movement challan has a sale_id and no money on it, which is the trap",
+    { paid: sellFull.amount_paid, sale: !!sellFull.sale_id });
+  check(!sell.text.includes("Balance on this date"),
+    "so its PDF states no balance at all");
+
+  // And the old part paid snapshot still prints, because that one is real.
+  await testPool.query(
+    `UPDATE delivery_challans SET amount_paid = 500 WHERE id = $1`, [in2.challan.id]);
+  const snap = await textOf(in2.challan.id);
+  check(snap.text.includes("Balance on this date"),
+    "while a challan that really did receive money still shows what it received");
+  await testPool.query(
+    `UPDATE delivery_challans SET amount_paid = 0 WHERE id = $1`, [in2.challan.id]);
+
+  // ------------------------------------------------------------------
+  console.log("\nA database that has NOT had the migration still works");
+  // ------------------------------------------------------------------
+  /**
+   * Migrations here are applied by hand, so between a deploy and somebody
+   * pasting the SQL there is a live database on the new code without the new
+   * columns. That window broke once already: the stampers guarded `status`
+   * with `SET status = CASE WHEN $3 ...`, which reads like a guard and is
+   * not, because Postgres parses the whole statement before running it. Every
+   * sale that billed a challan answered `column "status" does not exist`.
+   *
+   * Simulated by hiding the column rather than by dropping it, so the suite
+   * does not have to tear down and rebuild a second database.
+   */
+  await testPool.query(`ALTER TABLE delivery_challans RENAME COLUMN status TO status_hidden`);
+  challanService.resetChallanTables?.();
+  try {
+    const legacySale = mk();
+    await saleController.createSale({
+      user: { id: owner, role: "seller" },
+      body: { partyId: party, amountPaid: 0, paymentMethod: "cash",
+              lines: [{ itemName: "Old way", quantity: 1, rate: 100, gstPercent: 5 }] },
+    }, legacySale);
+    check(legacySale.statusCode === 201,
+      "a sale can still be recorded without the challan columns", legacySale.body);
+
+    const total2 = (await testPool.query(
+      `SELECT total FROM sales WHERE id=$1`, [legacySale.body.id])).rows[0].total;
+    await testPool.query(
+      `INSERT INTO party_payments (wholesaler_id, party_id, sale_id, amount, method)
+       VALUES ($1,$2,$3,$4,'cash')`, [owner, party, legacySale.body.id, total2]);
+    const legacyBill = await saleInvoiceService.createInvoiceFromSale(legacySale.body.id, owner);
+    check(!!legacyBill.invoice,
+      "and a bill raised for it, which is where the parse error used to land",
+      legacyBill.error || legacyBill);
+  } finally {
+    await testPool.query(
+      `ALTER TABLE delivery_challans RENAME COLUMN status_hidden TO status`);
+    challanService.resetChallanTables?.();
+  }
 
   console.log(fails ? `\n${fails} FAILED\n` : "\nall good\n");
   await testPool.end();

@@ -3,14 +3,14 @@ const pdfService = require("../services/pdfService");
 const { businessId } = require("../middlewares/businessContext");
 
 /**
- * Delivery challans.
+ * Challans.
  *
  * See challanService.js for what this document is, what it is not, and why
  * the rule behind it is expected to change.
  */
 
 const REASONS = {
-  disabled: [409, "Delivery challans are switched off."],
+  disabled: [409, "Challans are switched off."],
   notReady: [409, "This feature needs its migration run first."],
   notFound: [404, "Sale not found"],
   cancelled: [400, "A cancelled sale has nothing to send out"],
@@ -41,7 +41,7 @@ exports.createForSale = async (req, res) => {
 
     res.status(201).json(result.challan);
   } catch (err) {
-    console.error("Error making a delivery challan:", err);
+    console.error("Error making a challan:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -73,7 +73,7 @@ exports.createForOrder = async (req, res) => {
 
     res.status(201).json(result.challan);
   } catch (err) {
-    console.error("Error making a delivery challan for an order:", err);
+    console.error("Error making a challan for an order:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -105,7 +105,7 @@ exports.listChallans = async (req, res) => {
   try {
     res.status(200).json(await challanService.list(businessId(req)));
   } catch (err) {
-    console.error("Error listing delivery challans:", err);
+    console.error("Error listing challans:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -127,7 +127,7 @@ exports.getChallan = async (req, res) => {
     if (!challan) return res.status(404).json({ message: "Challan not found" });
     res.status(200).json(challan);
   } catch (err) {
-    console.error("Error reading a delivery challan:", err);
+    console.error("Error reading a challan:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

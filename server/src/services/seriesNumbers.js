@@ -2,7 +2,7 @@ const invoiceRepository = require("../repositories/invoiceRepository");
 const { financialYear } = require("./invoiceNumberService");
 
 /**
- * Sale and delivery challan numbers, in one place.
+ * Sale and challan numbers, in one place.
  *
  * There were two copies of the sale numbering, one in saleController for a
  * sale the wholesaler types and one in orderSaleService for a sale written

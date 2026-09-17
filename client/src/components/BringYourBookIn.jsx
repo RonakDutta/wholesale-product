@@ -134,8 +134,7 @@ const BringYourBookIn = () => {
         <div>
           <h3 className="font-bold text-espresso">Bring your old book in</h3>
           <p className="mt-0.5 text-xs text-slate-500">
-            Customers, suppliers, purchases, sales and old bills, from a
-            spreadsheet you already have.
+            From a spreadsheet you already have.
           </p>
         </div>
       </div>
@@ -144,17 +143,17 @@ const BringYourBookIn = () => {
         {/* ---------------------------------------------------------- */}
         {!plan && !done && (
           <>
-            <div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+            <div className="space-y-1.5 text-sm text-slate-600">
               <p>
-                Send a zip of spreadsheets, or one spreadsheet on its own. Save
-                them as CSV, not as an Excel workbook.
+                Customers, suppliers, purchases, sales and old bills. Save as
+                CSV, then send a zip or one file.
               </p>
-              <p className="mt-2">
-                Nothing is written until you have seen the list of what will
-                happen. Anything already in your book is left exactly as it is.
+              <p>
+                You see what will happen before anything is written. Nothing
+                already in your book is changed.
               </p>
-              <p className="mt-2 font-semibold text-espresso">
-                Dates are read day first. 03/04/2026 is the third of April.
+              <p className="font-semibold text-espresso">
+                Dates read day first. 03/04/2026 is 3 April.
               </p>
             </div>
 
@@ -243,8 +242,7 @@ const BringYourBookIn = () => {
                   brought in
                 </p>
                 <p className="mt-1 text-xs text-rose-700">
-                  Everything else still can. Fix these in your spreadsheet and send it
-                  again, and the rows that came in this time will be left alone.
+                  The rest still can. Fix these and send the file again.
                 </p>
                 <ul className="mt-3 space-y-1.5 text-xs text-rose-800">
                   {problems.slice(0, 15).map((p, i) => (

@@ -432,13 +432,25 @@ class ChallanService {
    */
   async markInvoiced(client, saleId, invoiceId) {
     if (!(await challanTablesExist(client))) return 0;
+    /**
+     * Two statements, not one with a CASE.
+     *
+     * `SET status = CASE WHEN $3 THEN ... END` looks like it guards the column
+     * but does not: Postgres PARSES the whole statement before it runs, so a
+     * database without wholesale3_challans_two_kinds.sql answered
+     * `column "status" does not exist` however the flag was set. Migrations
+     * here are applied by hand, so degrading properly is not optional.
+     */
+    const withStatus = await hasStatus(client);
     const done = await client.query(
-      `UPDATE delivery_challans
-          SET invoice_id = $2,
-              status = CASE WHEN $3 THEN 'billed' ELSE status END,
-              updated_at = CURRENT_TIMESTAMP
-        WHERE sale_id = $1 AND invoice_id IS NULL`,
-      [saleId, invoiceId, await hasStatus(client)],
+      withStatus
+        ? `UPDATE delivery_challans
+              SET invoice_id = $2, status = 'billed', updated_at = CURRENT_TIMESTAMP
+            WHERE sale_id = $1 AND invoice_id IS NULL`
+        : `UPDATE delivery_challans
+              SET invoice_id = $2, updated_at = CURRENT_TIMESTAMP
+            WHERE sale_id = $1 AND invoice_id IS NULL`,
+      [saleId, invoiceId],
     );
     return done.rowCount;
   }
@@ -459,15 +471,21 @@ class ChallanService {
   async markInvoicedForOrder(client, orderId, invoiceId) {
     if (!orderId || !invoiceId) return 0;
     if (!(await challanTablesExist(client))) return 0;
+    // Two statements for the same reason as markInvoiced above.
+    const withStatus = await hasStatus(client);
     const done = await client.query(
-      `UPDATE delivery_challans
-          SET invoice_id = $2,
-              status = CASE WHEN $3 THEN 'billed' ELSE status END,
-              updated_at = CURRENT_TIMESTAMP
-        WHERE invoice_id IS NULL
-          AND (order_id = $1
-               OR sale_id IN (SELECT id FROM sales WHERE order_id = $1))`,
-      [orderId, invoiceId, await hasStatus(client)],
+      withStatus
+        ? `UPDATE delivery_challans
+              SET invoice_id = $2, status = 'billed', updated_at = CURRENT_TIMESTAMP
+            WHERE invoice_id IS NULL
+              AND (order_id = $1
+                   OR sale_id IN (SELECT id FROM sales WHERE order_id = $1))`
+        : `UPDATE delivery_challans
+              SET invoice_id = $2, updated_at = CURRENT_TIMESTAMP
+            WHERE invoice_id IS NULL
+              AND (order_id = $1
+                   OR sale_id IN (SELECT id FROM sales WHERE order_id = $1))`,
+      [orderId, invoiceId],
     );
     return done.rowCount;
   }

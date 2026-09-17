@@ -641,7 +641,7 @@ exports.createInvoiceForSale = async (req, res) => {
     draft: [400, "Confirm this sale before raising a bill"],
     empty: [400, "This sale has no items to bill"],
     // Not a failure so much as "not yet". The screen turns this into an
-    // offer to send the goods out on a delivery challan instead.
+    // offer to send the goods out on a challan instead.
     unpaid: [409, "This sale is not fully paid yet, so the bill waits"],
   };
 

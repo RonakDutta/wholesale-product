@@ -206,18 +206,17 @@ const RecordChallan = () => {
           {editing ? `Edit ${number}` : "Record a challan"}
         </h2>
         <p className="mt-1 text-sm text-slate-500">
-          Goods have moved and the bill comes later. No GST on this document,
-          and nothing is added to anybody's account until you raise the bill.
+          Goods moved, bill later. No GST here, and nothing is owed yet.
         </p>
       </div>
 
-      {/* Which direction. Fixed once it exists: a challan out and a challan in
-          are different documents in different runs of numbers. */}
+      {/* Which book it belongs to. Fixed once it exists: a sale challan and a
+          purchase challan are different documents in different runs. */}
       {!editing && (
         <div className="flex gap-2">
           {[
-            { code: "sale", label: "Goods going out" },
-            { code: "purchase", label: "Goods coming in" },
+            { code: "sale", label: "Sales" },
+            { code: "purchase", label: "Purchases" },
           ].map((k) => (
             <button
               key={k.code}
@@ -262,7 +261,7 @@ const RecordChallan = () => {
 
           <div>
             <label htmlFor="ch-date" className="mb-1.5 block text-xs font-semibold text-slate-600">
-              Date the goods moved
+              Date
             </label>
             <input
               id="ch-date"
@@ -275,7 +274,7 @@ const RecordChallan = () => {
 
           <div>
             <label htmlFor="ch-reason" className="mb-1.5 block text-xs font-semibold text-slate-600">
-              Why they moved without a bill
+              Why no bill yet
             </label>
             <select
               id="ch-reason"
@@ -308,7 +307,7 @@ const RecordChallan = () => {
                 id="ch-theirs"
                 value={supplierChallanNumber}
                 onChange={(e) => setSupplierChallanNumber(e.target.value)}
-                placeholder="As written on the paper that came with the goods"
+                placeholder="On the paper that came with the goods"
                 className={field}
               />
             </div>
@@ -323,7 +322,7 @@ const RecordChallan = () => {
             id="ch-note"
             value={reasonNote}
             onChange={(e) => setReasonNote(e.target.value)}
-            placeholder="Anything the person receiving these should know"
+            placeholder="Optional"
             className={field}
           />
         </div>
@@ -445,7 +444,7 @@ const RecordChallan = () => {
               <span className="text-base">₹{money(total)}</span>
             </div>
             <p className="mt-1 text-right text-xs text-slate-500">
-              No GST on a challan. The tax is worked out on the bill.
+              Tax is worked out on the bill.
             </p>
           </div>
         </div>

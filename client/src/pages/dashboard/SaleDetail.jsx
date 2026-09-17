@@ -177,7 +177,7 @@ const SaleDetail = () => {
       toast.success(`Invoice ${raised.invoice_number} is ready.`);
     } catch (error) {
       // Not paid in full is not a failure, it is "not yet". The panel turns
-      // it into an offer to send the goods out on a delivery challan.
+      // it into an offer to send the goods out on a challan.
       if (error.response?.data?.code === "UNPAID") {
         setUnpaid(error.response.data);
       } else {
@@ -194,10 +194,10 @@ const SaleDetail = () => {
     try {
       const { data } = await api.post(`/api/challans/sale/${id}`, {});
       setChallans((prev) => [data, ...prev]);
-      toast.success(`Delivery challan ${data.challan_number} is ready.`);
+      toast.success(`Challan ${data.challan_number} is ready.`);
     } catch (error) {
       toast.error(
-        error.response?.data?.message || "Could not make the delivery challan.",
+        error.response?.data?.message || "Could not make the challan.",
       );
     }
     setMakingChallan(false);
@@ -599,8 +599,8 @@ const SaleDetail = () => {
                 {makingChallan
                   ? "Making challan..."
                   : challans.length > 0
-                    ? "Make another delivery challan"
-                    : "Make delivery challan"}
+                    ? "Make another challan"
+                    : "Make challan"}
               </button>
             </div>
           )}
@@ -608,7 +608,7 @@ const SaleDetail = () => {
           {challans.length > 0 && (
             <div className="mt-4 border-t border-slate-100 pt-4">
               <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-                Delivery challans
+                Challans
               </p>
               <ul className="space-y-1.5">
                 {challans.map((c) => (

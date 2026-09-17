@@ -2237,6 +2237,103 @@ was owed on the day, while the invoice it points at is settled.
 
 ---
 
+## 17 Sept: the challan becomes a document in its own right
+
+Asked for after looking at how Marg, Tally and Busy actually do it, and the
+research settled the design. All three have the same pair. Marg: Sale Challan
+and Purchase Challan under Transactions, converted into a Sale Bill or a
+Purchase Bill afterwards, with `Daily Working > Challan To Bill` for several at
+once. Tally: Delivery Note and Receipt Note, linked to the invoice by a
+Tracking Number. Busy: Material Issued to Party and Material Received from
+Party.
+
+**In all three the challan is MOVEMENT driven.** It exists because goods moved,
+before any bill, and it does not care whether anybody has paid.
+
+Ours was payment driven. It was raised BECAUSE a sale was unpaid and it held
+the tax invoice back until the money came in, which conflated two different
+documents. That waiting was also the part that was never compliant: section
+31(1) ties the invoice to REMOVAL of the goods, not to payment, so holding it
+back understated outward supply in GSTR-1 and left the customer unable to claim
+input credit.
+
+So there are two kinds now, `kind = sale` and `kind = purchase`, each with its
+own run of numbers. `SC/` and `PC/` replace `DC/`, and the counter was NOT
+reset: a wholesaler at DC/5 gets SC/6 next and no number is reused.
+
+**THE RULE THE WHOLE THING RESTS ON.** A challan moves stock and nothing else.
+It never touches the party balance and it carries no GST. A challan that also
+moved the ledger would have every sale counted twice in the khata, once when
+the goods left and again when the bill went out, and the error would be
+invisible because both entries would look correct on their own. The lines carry
+`gst_percent`, which is the rate the line WILL be billed at so the sale form
+need not be retyped, and nothing sums it.
+
+**A bill is not converted server side.** The challan loads INTO the sale or
+purchase form, where it can be adjusted, and the ordinary path prices it. That
+is Marg's flow: modify the challan, press F7, it loads into the bill screen.
+Converting server side would mean a second copy of the GST, cess, channel and
+transport logic, and two copies of money arithmetic is how the khata and the
+bill start disagreeing. The form posts back the challan ids and they are
+stamped in the same transaction that writes the bill, so the same goods cannot
+be billed twice: a request naming four challans that closes three gets a 409
+rather than a quiet partial bill.
+
+`CHALLAN_WHEN_UNPAID` now decides ONE thing, whether an unpaid sale holds its
+bill back, and defaults OFF. Challans exist either way. Setting it true
+restores the old behaviour exactly, for a wholesaler who has not re-trained
+their counter.
+
+**Taking money moved onto the sale.** It used to mean leaving the sale, opening
+Customers, finding the customer and picking the sale back out of a list. Four
+steps to answer a question the screen was already showing. The customer page
+keeps its own version for a round sum against several old bills at once, which
+is real and does not belong on one sale.
+
+### What a sweep of the new system found
+
+Ten faults, all fixed, all now pinned in `challan_book_check.js`:
+
+- **The sequence key.** Widening it to (wholesaler, kind) dropped the unique
+  constraint the allocator upserts on. The next challan of any kind would have
+  failed outright. The financial year has to stay in the key.
+- **`SET status = CASE WHEN $3 ...` is not a guard.** Postgres parses the whole
+  statement before running it, so a database without the migration answered
+  `column "status" does not exist` on every sale that billed a challan.
+  Migrations here are applied by hand, so the window between a deploy and
+  somebody pasting the SQL is real. Two statements now, and the suite hides the
+  column to prove it.
+- **A challan raised against an already billed sale** sat pending for ever and
+  would have been offered for billing a second time. Born billed now.
+- **A billed purchase challan read "Not billed"**, because the screen tested
+  `invoice_id` and a purchase challan points at a purchase.
+- **The PDF pointed the wrong way on a purchase challan**: FROM us, DELIVER TO
+  the supplier the goods came from.
+- **The money block invented a debt.** `amount_paid` is zero on a movement
+  challan because nothing was ever paid against a challan, not because the
+  whole value is owed. Keyed off money actually received, not off `sale_id`,
+  which `stampBilled` sets and which therefore came back the moment a challan
+  was used.
+- **Three wording faults on a purchase challan**: "your customer cannot claim
+  input credit" when it is us, "What went out" when it came in, and a link to a
+  tax invoice that does not exist, which went to `/seller/invoices/null`.
+- **A false probe result was cached**, so running the migration on a live
+  server would not take effect until a restart. Only a true is cached now.
+
+The PDF assertions were also wrong at first: pdfkit compresses the content
+stream, so searching the buffer for "DELIVER TO" is false on a document that
+says it in letters an inch high. They go through `pdftotext` now.
+
+**Verified.** `challan_book_check.js`, 52 checks. `challan_check`,
+`challan_matrix_check` and `flow_check` rewritten where they pinned the old
+rule, each change explained at the assertion. Nine suites green, including the
+three that run on databases WITHOUT the new migration. Both PDF directions and
+the challan screens rendered and read.
+
+**Migration to run:** `wholesale3_challans_two_kinds.sql`
+
+---
+
 ## Left to do
 
 Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.
@@ -2286,7 +2383,7 @@ for many taxpayers. That is a commercial decision and it shapes the schema.
 
 ## Testing
 
-Thirty six suites in `server/scripts/*_check.js`. They drive the real
+Thirty seven suites in `server/scripts/*_check.js`. They drive the real
 controllers against a local Postgres, so they catch schema drift that reading
 the code does not.
 

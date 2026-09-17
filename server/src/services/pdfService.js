@@ -1032,7 +1032,7 @@ class PDFService {
    */
 
   /**
-   * A delivery challan.
+   * A challan.
    *
    * Deliberately does NOT look like a tax invoice, because it is not one and
    * the person receiving it has to be able to tell at a glance. No tax
@@ -1066,7 +1066,7 @@ class PDFService {
         // documents are told apart across a desk.
         doc.rect(36, 36, 523, 62).fill("#4b5563");
         doc.fillColor("#ffffff").fontSize(18).font("Helvetica-Bold");
-        doc.text("DELIVERY CHALLAN", 50, 52);
+        doc.text("CHALLAN", 50, 52);
         doc.fontSize(8).font("Helvetica").fillColor("#e5e7eb");
         doc.text("Not a tax invoice. No input tax credit against this document.", 50, 76);
         doc.fillColor("#ffffff").fontSize(12).font("Helvetica-Bold");
@@ -1078,13 +1078,26 @@ class PDFService {
 
         // Who sent it, and who it went to.
         doc.rect(36, y, 255, 18).fill("#f3f4f6");
-        doc.fillColor("#374151").fontSize(8).font("Helvetica-Bold").text("FROM", 44, y + 5);
+        /**
+         * The two halves swap by direction.
+         *
+         * A purchase challan came FROM the supplier TO us, so printing "FROM
+         * <us>" and "DELIVER TO <supplier>" on it reads exactly backwards and
+         * the paper would contradict the goods it went with.
+         */
+        const inward = challan.kind === "purchase";
+        doc.fillColor("#374151").fontSize(8).font("Helvetica-Bold")
+          .text(inward ? "RECEIVED FROM" : "FROM", 44, y + 5);
         doc.rect(304, y, 255, 18).fill("#f3f4f6");
-        doc.fillColor("#374151").fontSize(8).font("Helvetica-Bold").text("DELIVER TO", 312, y + 5);
+        doc.fillColor("#374151").fontSize(8).font("Helvetica-Bold")
+          .text(inward ? "RECEIVED BY" : "DELIVER TO", 312, y + 5);
 
         doc.fillColor("#111827").fontSize(9).font("Helvetica-Bold");
-        doc.text(supplier.company_name || fullName(supplier.first_name, supplier.last_name) || "Supplier", 44, y + 24, { width: 240 });
-        doc.text(challan.recipient_name || "Customer", 312, y + 24, { width: 240 });
+        const usName =
+          supplier.company_name || fullName(supplier.first_name, supplier.last_name) || "Supplier";
+        const themName = challan.recipient_name || (inward ? "Supplier" : "Customer");
+        doc.text(inward ? themName : usName, 44, y + 24, { width: 240 });
+        doc.text(inward ? usName : themName, 312, y + 24, { width: 240 });
 
         doc.fontSize(8).font("Helvetica").fillColor("#4b5563");
         const fromLines = [
@@ -1092,22 +1105,26 @@ class PDFService {
           supplier.gstin ? `GSTIN: ${supplier.gstin}` : "",
           supplier.contact_phone || supplier.phone || "",
         ].filter(Boolean);
-        doc.text(fromLines.join("\n"), 44, y + 38, { width: 240 });
-
         const toLines = [
           challan.recipient_address || "",
           challan.recipient_city || "",
           challan.recipient_gstin ? `GSTIN: ${challan.recipient_gstin}` : "",
           challan.recipient_phone || "",
         ].filter(Boolean);
-        doc.text(toLines.join("\n"), 312, y + 38, { width: 240 });
+        // The addresses follow the names above, or the paper would name one
+        // party and give the other one's address underneath it.
+        doc.text((inward ? toLines : fromLines).join("\n"), 44, y + 38, { width: 240 });
+        doc.text((inward ? fromLines : toLines).join("\n"), 312, y + 38, { width: 240 });
 
         y += 96;
 
         // What it came from, so the goods can be traced back.
         const against = [
           challan.sale_number ? `Sale: ${challan.sale_number}` : "",
+          challan.purchase_number ? `Purchase: ${challan.purchase_number}` : "",
           challan.order_number ? `Order: ${challan.order_number}` : "",
+          challan.supplier_challan_number
+            ? `Their challan: ${challan.supplier_challan_number}` : "",
         ].filter(Boolean).join("    ");
         if (against) {
           doc.fontSize(8).font("Helvetica").fillColor("#4b5563").text(against, 36, y);
@@ -1168,15 +1185,31 @@ class PDFService {
           y += bold ? 16 : 13;
         };
         rowRight("Value of goods (before tax):", goodsValue, true);
-        rowRight("Sale total, tax included:", owed);
-        // Anchored to the date of the challan, not to now. These two figures
-        // are frozen at the moment the challan was raised and nothing updates
-        // them, which is right for a document that went out with the goods.
-        // "Received so far" and "Outstanding" read as live, so a challan
-        // printed a year after the money came in said the customer still owed
-        // it. Same numbers, said as of the day on the paper.
-        rowRight("Received by this date:", paid);
-        rowRight("Balance on this date:", due, true);
+
+        /**
+         * The money block, only where money was actually received.
+         *
+         * `amount_paid > 0` and NOT "was it raised from a sale". The sale link
+         * is not the marker it looks like: stampBilled sets sale_id when a
+         * challan is billed, so a movement challan acquires one the moment it
+         * is used, and the block came back with "Received 0, Balance 2,000" on
+         * a document whose whole point is that nothing is owed until the bill.
+         *
+         * A part paid challan from the old payment-driven rule still carries a
+         * real snapshot and still prints it. One with nothing received has
+         * nothing to say: "Received 0, Balance the lot" is the invented-debt
+         * reading whichever rule raised it.
+         */
+        if (paid > 0) {
+          rowRight("Sale total, tax included:", owed);
+          // Anchored to the date of the challan, not to now. Both figures are
+          // frozen when it is raised and nothing updates them, which is right
+          // for a document that went out with the goods. "Received so far"
+          // and "Outstanding" read as live, so a challan printed a year after
+          // the money came in said the customer still owed it.
+          rowRight("Received by this date:", paid);
+          rowRight("Balance on this date:", due, true);
+        }
 
         y += 6;
         doc.fontSize(8).font("Helvetica-Oblique").fillColor("#4b5563");
@@ -1186,16 +1219,23 @@ class PDFService {
         // The whole point of the document, said plainly.
         doc.rect(36, y, 523, 40).fill("#fef3c7");
         doc.fillColor("#92400e").fontSize(8).font("Helvetica-Bold");
-        doc.text("Delivery challan, not a tax invoice.", 44, y + 8);
+        doc.text("Challan, not a tax invoice.", 44, y + 8);
         doc.font("Helvetica").fontSize(7.5);
+        // Rewritten 17 Sept. It used to say the goods went out "while payment
+        // is outstanding" and that the invoice follows "once the balance is
+        // settled", which was the old payment-driven rule. It is wrong twice
+        // over now: the bill no longer waits for money, and on an inward
+        // challan nothing was sent out by us at all.
         doc.text(
-          "Goods sent out while payment is outstanding. A tax invoice follows once the balance is settled. Do not claim input tax credit against this document.",
+          inward
+            ? "Goods received before the supplier's bill. The purchase is entered when that bill arrives. Do not claim input tax credit against this document."
+            : "Goods sent out before the bill. The tax invoice follows. Do not claim input tax credit against this document.",
           44, y + 20, { width: 500 },
         );
         y += 56;
 
         doc.fontSize(8).font("Helvetica").fillColor("#6b7280");
-        doc.text("Receiver's signature", 36, y + 30);
+        doc.text(inward ? "Checked in by" : "Receiver's signature", 36, y + 30);
         doc.text(`For ${supplier.company_name || "Supplier"}`, 360, y + 30, { align: "right", width: 199 });
 
         doc.end();

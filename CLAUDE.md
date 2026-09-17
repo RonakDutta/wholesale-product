@@ -168,6 +168,24 @@ ARE the state), then the city. Do not add a fourth chain of COALESCEs, and do
 not default an unknown location to a real place: `null` means "not told", which
 the service reads as the same state so a local sale bills correctly.
 
+**A challan moves stock, never the ledger.** `services/challanBook.js` holds
+the two kinds, `sale` for goods out and `purchase` for goods in, each with its
+own run of numbers. A challan exists because goods MOVED, not because anybody
+has or has not paid, it carries no GST, and it never touches the party balance.
+One that also moved the ledger would have every sale counted twice in the
+khata, once when the goods left and again when the bill went out, and both
+entries would look correct on their own. `delivery_challan_items.gst_percent`
+is the rate the line WILL be billed at, and nothing sums it.
+
+The bill is NOT converted server side. The challan loads into the sale or
+purchase form and the ordinary path prices it, then `stampBilled` closes the
+challans in the same transaction that writes the bill. A second copy of the
+money arithmetic is what that avoids.
+
+`CHALLAN_WHEN_UNPAID` defaults OFF since 17 Sept and now decides only whether
+an unpaid sale holds its invoice back. It used to default on, which was never
+what section 31(1) says.
+
 **A sale from a shop order follows that order.** Accepting an order writes a
 sale, and the order lifecycle is the authority over both. Its status and its
 amounts cannot be changed from the sale side, which returns 409 with

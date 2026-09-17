@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Download, FileText, Truck } from "lucide-react";
+import { ArrowLeft, Download, FileText, Pencil, Truck, XCircle } from "lucide-react";
 import api from "../../utils/axios";
 import { downloadFile } from "../../utils/download";
 import { toast } from "sonner";
 import { rupees, trimmed, dateLabel } from "../../utils/money";
 
 /**
- * One delivery challan in full.
+ * One challan in full.
  *
  * The list could only be downloaded from, so the only way to read what was
  * actually sent out was to open a PDF. That is a poor way to answer "what did
@@ -31,6 +31,27 @@ const ChallanDetail = () => {
   const [challan, setChallan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  /**
+   * Cancelled, never deleted. The paper went out of the gate and somebody may
+   * still be holding it, so the record of what was sent has to survive being
+   * wrong.
+   */
+  const cancelChallan = async () => {
+    const reason = window.prompt("Why is this being cancelled?");
+    if (reason === null) return;
+    setCancelling(true);
+    try {
+      await api.post(`/api/challans/${challanId}/cancel`, { reason });
+      toast.success("Cancelled. The record is kept.");
+      navigate("/seller/challans");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Could not cancel it.");
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -95,7 +116,27 @@ const ChallanDetail = () => {
   const total = Number(challan.total_value || 0);
   const paid = Number(challan.amount_paid || 0);
   const due = Math.max(total - paid, 0);
-  const billed = Boolean(challan.invoice_id);
+
+  const isPurchase = challan.kind === "purchase";
+  // status is the authority. invoice_id alone said "not billed" on a billed
+  // PURCHASE challan, which points at a purchase and never at an invoice.
+  const billed =
+    challan.status === "billed" || Boolean(challan.invoice_id || challan.purchase_id);
+  const cancelled = challan.status === "cancelled";
+
+  /**
+   * Does this challan carry a money snapshot at all?
+   *
+   * Money having been RECEIVED, not "was it raised from a sale". The sale link
+   * is not the marker it looks like: the server sets sale_id when a challan is
+   * billed, so a movement challan acquires one the moment it is used, and the
+   * block then reads "Received 0, Outstanding the lot" on a document whose
+   * whole point is that nothing is owed until the bill.
+   *
+   * A part paid challan from the old payment-driven rule carries a real
+   * snapshot and still shows it. One with nothing received has nothing to say.
+   */
+  const hasMoneySnapshot = paid > 0;
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
@@ -114,20 +155,26 @@ const ChallanDetail = () => {
           </h2>
           <span
             className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
-              billed
-                ? "bg-emerald-50 text-emerald-700"
-                : "bg-amber-50 text-amber-700"
+              cancelled
+                ? "bg-slate-100 text-slate-500"
+                : billed
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "bg-amber-50 text-amber-700"
             }`}
           >
-            {billed ? "Billed" : "Not billed"}
+            {cancelled ? "Cancelled" : billed ? "Billed" : "Not billed"}
           </span>
         </div>
 
         <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-slate-500">
-            Sent out {dateLabel(challan.issue_date)}
+            {isPurchase ? "Received" : "Sent out"} {dateLabel(challan.issue_date)}
             {challan.sale_number ? ` · sale ${challan.sale_number}` : ""}
+            {challan.purchase_number ? ` · purchase ${challan.purchase_number}` : ""}
             {challan.order_number ? ` · order ${challan.order_number}` : ""}
+            {challan.supplier_challan_number
+              ? ` · their challan ${challan.supplier_challan_number}`
+              : ""}
           </p>
           <button
             onClick={download}
@@ -144,13 +191,18 @@ const ChallanDetail = () => {
           HSN column looks like a bill, and this one is not. */}
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
         <p className="text-xs font-bold text-amber-900">
-          This is a delivery challan, not a tax invoice.
+          This is a challan, not a tax invoice.
         </p>
         <p className="mt-0.5 text-xs text-amber-800">
-          It carries no GST and your customer cannot claim input credit on it.
+          It carries no GST, so {isPurchase ? "you cannot" : "your customer cannot"}{" "}
+          claim input credit on it.
           {billed
-            ? " The tax invoice for these goods has since been raised."
-            : " Raise the tax invoice once the money is in."}
+            ? isPurchase
+              ? " The purchase for these goods has been entered."
+              : " The bill for these goods has been raised."
+            : isPurchase
+              ? " Enter the purchase from it when the supplier's bill comes."
+              : " Raise the bill from it when you are ready."}
         </p>
       </div>
 
@@ -158,7 +210,7 @@ const ChallanDetail = () => {
         {/* Sent to. Frozen on the document, not joined from the customer. */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            Sent to
+            {isPurchase ? "Received from" : "Sent to"}
           </h3>
           <p className="mt-2 font-bold text-espresso">
             {challan.recipient_name || "Customer"}
@@ -182,14 +234,14 @@ const ChallanDetail = () => {
             </p>
           )}
           <p className="mt-3 text-[11px] text-slate-400">
-            As it was written on the day the goods went out.
+            As it was written on the day the goods moved.
           </p>
         </div>
 
         {/* Sent by. */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            Sent by
+            {isPurchase ? "Received by" : "Sent by"}
           </h3>
           <p className="mt-2 font-bold text-espresso">
             {challan.supplier?.company_name ||
@@ -221,10 +273,12 @@ const ChallanDetail = () => {
         </div>
       </div>
 
-      {/* What went out */}
+      {/* What moved */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 px-5 py-4">
-          <h3 className="text-sm font-bold text-espresso">What went out</h3>
+          <h3 className="text-sm font-bold text-espresso">
+            {isPurchase ? "What came in" : "What went out"}
+          </h3>
         </div>
 
         {items.length === 0 ? (
@@ -289,52 +343,114 @@ const ChallanDetail = () => {
             after. */}
         <div className="border-t border-slate-100 bg-slate-50 px-5 py-4">
           <div className="ml-auto w-full max-w-xs space-y-1.5 text-sm">
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              {billed ? "On the day the goods left" : "Money on this sale"}
-            </p>
-            <div className="flex justify-between text-slate-600">
-              <span>Value of goods</span>
-              <span>{rupees(total, { document: true })}</span>
-            </div>
-            <div className="flex justify-between text-slate-600">
-              <span>Received by then</span>
-              <span>{rupees(paid, { document: true })}</span>
-            </div>
-            <div
-              className={`flex items-baseline justify-between border-t border-slate-200 pt-1.5 font-black ${
-                billed ? "text-slate-500" : "text-espresso"
-              }`}
-            >
-              <span className="text-xs uppercase tracking-wider">
-                {billed ? "Owing then" : "Outstanding"}
-              </span>
-              <span className="text-base">
-                {rupees(due, { document: true })}
-              </span>
-            </div>
-            {billed && due > 0 && (
-              <p className="border-t border-slate-200 pt-2 text-xs font-bold text-sage">
-                Settled since. The tax invoice below is what the customer owes
-                against now.
-              </p>
+            {hasMoneySnapshot ? (
+              <>
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  {billed ? "On the day the goods left" : "Money on this sale"}
+                </p>
+                <div className="flex justify-between text-slate-600">
+                  <span>Value of goods</span>
+                  <span>{rupees(total, { document: true })}</span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Received by then</span>
+                  <span>{rupees(paid, { document: true })}</span>
+                </div>
+                <div
+                  className={`flex items-baseline justify-between border-t border-slate-200 pt-1.5 font-black ${
+                    billed ? "text-slate-500" : "text-espresso"
+                  }`}
+                >
+                  <span className="text-xs uppercase tracking-wider">
+                    {billed ? "Owing then" : "Outstanding"}
+                  </span>
+                  <span className="text-base">
+                    {rupees(due, { document: true })}
+                  </span>
+                </div>
+                {billed && due > 0 && (
+                  <p className="border-t border-slate-200 pt-2 text-xs font-bold text-sage">
+                    Settled since. The bill below is what the customer owes
+                    against now.
+                  </p>
+                )}
+              </>
+            ) : (
+              /* A challan recorded in its own right. No money on it at all,
+                 which is the point of the document: nothing is owed until the
+                 bill is raised. Showing "Received 0, Outstanding 9,000" here
+                 would invent a debt that does not exist yet. */
+              <>
+                <div className="flex items-baseline justify-between font-black text-espresso">
+                  <span className="text-xs uppercase tracking-wider">
+                    Value of goods
+                  </span>
+                  <span className="text-base">
+                    {rupees(total, { document: true })}
+                  </span>
+                </div>
+                <p className="text-right text-xs text-slate-500">
+                  No GST on a challan. Nothing is owed until the bill.
+                </p>
+              </>
             )}
           </div>
         </div>
       </div>
 
-      {billed && (
+      {/* Changing or dropping one, while it is still open. A billed challan is
+          closed: a bill stands on it and editing it would make the two
+          disagree with nothing to say which is right. */}
+      {!billed && !cancelled && (
+        <div className="flex flex-wrap gap-3">
+          <Link
+            to={`/seller/challans/${challanId}/edit`}
+            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-espresso transition-colors hover:bg-slate-50"
+          >
+            <Pencil className="h-4 w-4" />
+            Edit
+          </Link>
+          <button
+            onClick={cancelChallan}
+            disabled={cancelling}
+            className="flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+          >
+            <XCircle className="h-4 w-4" />
+            {cancelling ? "Cancelling..." : "Cancel this challan"}
+          </button>
+        </div>
+      )}
+
+      {cancelled && challan.cancelled_reason && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <p className="text-xs font-bold text-slate-500">Cancelled</p>
+          <p className="mt-0.5 text-sm text-slate-600">{challan.cancelled_reason}</p>
+        </div>
+      )}
+
+      {/* Where the bill for these goods lives. A purchase challan points at a
+          PURCHASE and has no invoice_id at all, so following invoice_id here
+          sent it to /seller/invoices/null. */}
+      {billed && (challan.invoice_id || challan.purchase_id) && (
         <Link
-          to={`/seller/invoices/${challan.invoice_id}`}
+          to={
+            isPurchase
+              ? `/seller/purchases/${challan.purchase_id}`
+              : `/seller/invoices/${challan.invoice_id}`
+          }
           className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm transition-colors hover:border-clay"
         >
           <FileText className="h-5 w-5 shrink-0 text-clay" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold text-espresso">
-              The tax invoice for these goods
+              {isPurchase
+                ? "The purchase for these goods"
+                : "The tax invoice for these goods"}
             </p>
             <p className="text-xs text-slate-500">
-              Raised once the money came in. That is the document with the GST
-              on it.
+              {isPurchase
+                ? "Entered when the supplier's bill arrived. That is where the GST is."
+                : "Raised from this challan. That is the document with the GST on it."}
             </p>
           </div>
         </Link>

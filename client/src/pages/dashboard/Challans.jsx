@@ -13,7 +13,7 @@ const FILTERS = [
 ];
 
 /**
- * Every delivery challan, so they can be found and downloaded together.
+ * Every challan, sales and purchases, so they can be found together.
  *
  * A challan records goods sent out while payment was outstanding. It is not a
  * tax invoice and it says so on its own face; see challanService.js on the
@@ -93,8 +93,7 @@ const Challans = () => {
         <div>
           <h2 className="text-2xl font-black text-espresso">Challans</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Goods that moved before the bill. No GST on a challan, and nothing
-            is owed until you raise the bill from it.
+            Goods sent or received before the bill. No GST on a challan.
           </p>
         </div>
         <Link
@@ -109,8 +108,8 @@ const Challans = () => {
       {/* The two directions. */}
       <div className="flex gap-2 border-b border-slate-200">
         {[
-          { code: "sale", label: "Goods going out" },
-          { code: "purchase", label: "Goods coming in" },
+          { code: "sale", label: "Sales" },
+          { code: "purchase", label: "Purchases" },
         ].map((k) => (
           <button
             key={k.code}
@@ -156,15 +155,15 @@ const Challans = () => {
                 : filter === "billed"
                   ? "None billed yet"
                   : kind === "purchase"
-                    ? "No goods-in challans yet"
-                    : "No goods-out challans yet"}
+                    ? "No purchase challans yet"
+                    : "No sale challans yet"}
             </p>
             <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
               {filter
                 ? "Try a different filter."
                 : kind === "purchase"
-                  ? "Record one when goods arrive and the supplier's bill has not."
-                  : "Record one when goods leave and the bill follows after."}
+                  ? "Record one when goods arrive before the supplier's bill."
+                  : "Record one when goods go out before the bill."}
             </p>
             {!filter && (
               <Link

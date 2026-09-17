@@ -184,7 +184,7 @@ const SellerLayout = () => {
     "/seller/purchases": "bill purchase inward buying",
     "/seller/sales": "sale outward selling kaata",
     "/seller/invoices": "bill tax gst invoice",
-    "/seller/challans": "delivery challan goods out",
+    "/seller/challans": "challan sales purchases goods out in",
     "/seller/products": "item stock rate list",
     "/seller/settings": "profile gst upi shop details",
     "/seller/staff": "employee worker munim",

@@ -253,7 +253,7 @@ class SaleInvoiceService {
        * A tax invoice only once the money is in.
        *
        * Asked for on 10 Sept: while a sale is part paid or unpaid the
-       * wholesaler gets a delivery challan instead, and the bill waits.
+       * wholesaler gets a challan instead, and the bill waits.
        *
        * This is not what section 31(1) says, which ties the invoice to
        * removal of the goods rather than to payment. See the header of

@@ -68,9 +68,18 @@ const REASONS = [
 
 const REASON_CODES = new Set(REASONS.map((r) => r.code));
 
-let ready = null;
+/**
+ * ONLY A TRUE RESULT IS CACHED, and that is the point.
+ *
+ * Migrations here are run by hand against a live database. Caching a false
+ * would mean a wholesaler runs wholesale3_challans_two_kinds.sql, comes back
+ * to the screen, and is still told to run the migration until somebody
+ * restarts the server. Once it is true it can never become false without a
+ * deploy, so the cache still does its job of keeping this off the hot path.
+ */
+let ready = false;
 const tablesExist = async (db = pool) => {
-  if (ready !== null) return ready;
+  if (ready) return true;
   try {
     const { rows } = await db.query(
       `SELECT to_regclass('public.delivery_challans') IS NOT NULL AS yes`);
@@ -80,12 +89,14 @@ const tablesExist = async (db = pool) => {
   }
   return ready;
 };
-const resetTables = () => { ready = null; };
+const resetTables = () => { ready = false; };
 
 /** Does this database have the two-kind columns yet? Cached, like every probe. */
-let twoKinds = null;
+let twoKinds = false;
 const hasTwoKinds = async (db = pool) => {
-  if (twoKinds !== null) return twoKinds;
+  // Same rule as above: a false is never cached, so running the migration
+  // takes effect without a restart.
+  if (twoKinds) return true;
   try {
     const { rows } = await db.query(
       `SELECT COUNT(*)::int n FROM information_schema.columns
@@ -97,7 +108,7 @@ const hasTwoKinds = async (db = pool) => {
   }
   return twoKinds;
 };
-const resetTwoKinds = () => { twoKinds = null; };
+const resetTwoKinds = () => { twoKinds = false; };
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 

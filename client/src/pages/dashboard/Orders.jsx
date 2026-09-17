@@ -26,7 +26,7 @@ import {
 } from "../../utils/orderStatus";
 
 /**
- * Goods already out on a delivery challan against this order.
+ * Goods already out on a challan against this order.
  *
  * Sits next to the product line so they can see at a glance which orders have
  * stock away from the godown while money is still owed, without opening each

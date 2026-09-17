@@ -2,7 +2,7 @@ const invoiceRepository = require("../repositories/invoiceRepository");
 const { financialYear } = require("./invoiceNumberService");
 
 /**
- * Sale and delivery challan numbers, in one place.
+ * Sale and challan numbers, in one place.
  *
  * There were two copies of the sale numbering, one in saleController for a
  * sale the wholesaler types and one in orderSaleService for a sale written
@@ -128,9 +128,82 @@ const take = async (client, wholesalerId, table, legacyPrefix, prefix, opts = {}
 const nextSaleNumber = (client, wholesalerId) =>
   take(client, wholesalerId, "sale_sequences", "S-", "S/");
 
-/** DC/1/26-27, or DC-0001 before the migration. */
-const nextChallanNumber = (client, wholesalerId) =>
-  take(client, wholesalerId, "delivery_challan_sequences", "DC-", "DC/");
+/**
+ * SC/1/26-27 for a sale challan, PC/1/26-27 for a purchase challan.
+ *
+ * Its own allocator rather than `take`, because this is the only counter with
+ * a KIND in its key: goods going out and goods coming in are two runs, for
+ * the same reason a Flipkart bill and a counter bill are. take() upserts on
+ * (wholesaler_id, financial_year) and cannot carry a third column without
+ * every other caller growing one it has no use for.
+ *
+ * The prefix changed from DC. The document is a challan, not specifically a
+ * delivery note, and it now comes in two directions, so one prefix could not
+ * name both. The COUNTER is untouched: the sale row keeps its number, so a
+ * wholesaler who had reached DC/5/26-27 gets SC/6/26-27 next and no number is
+ * reused.
+ *
+ * Not statutory. A challan number is our own reference, so Rule 46(b)'s
+ * sixteen characters are not imposed, only the character set.
+ *
+ * Must be called inside a transaction: the upsert locks the row until commit.
+ */
+const CHALLAN_PREFIX = { sale: "SC/", purchase: "PC/" };
+const CHALLAN_LEGACY = { sale: "SC-", purchase: "PC-" };
+
+const nextChallanNumber = async (client, wholesalerId, kind = "sale") => {
+  const key = CHALLAN_PREFIX[kind] ? kind : "sale";
+  const has = await invoiceRepository.schemaExtras();
+
+  if (!has.has_series_fy) {
+    const legacy = await client.query(
+      `INSERT INTO delivery_challan_sequences (wholesaler_id, last_number)
+       VALUES ($1, 1)
+       ON CONFLICT (wholesaler_id)
+       DO UPDATE SET last_number = delivery_challan_sequences.last_number + 1
+       RETURNING last_number`,
+      [wholesalerId],
+    );
+    const generated =
+      `${CHALLAN_LEGACY[key]}${String(legacy.rows[0].last_number).padStart(4, "0")}`;
+    validateSequenceNumber(generated, { statutory: false });
+    return generated;
+  }
+
+  const fy = financialYear();
+  // The kind column arrives with wholesale3_challans_two_kinds.sql. Without
+  // it there is one run, which is exactly how the product behaved before
+  // purchase challans existed, rather than a refusal to number anything.
+  const hasKind = await client
+    .query(
+      `SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'delivery_challan_sequences' AND column_name = 'kind'`,
+    )
+    .then((r) => r.rows.length > 0)
+    .catch(() => false);
+
+  const result = hasKind
+    ? await client.query(
+        `INSERT INTO delivery_challan_sequences (wholesaler_id, financial_year, kind, last_number)
+         VALUES ($1, $2, $3, 1)
+         ON CONFLICT (wholesaler_id, financial_year, kind)
+         DO UPDATE SET last_number = delivery_challan_sequences.last_number + 1
+         RETURNING last_number`,
+        [wholesalerId, fy, key],
+      )
+    : await client.query(
+        `INSERT INTO delivery_challan_sequences (wholesaler_id, financial_year, last_number)
+         VALUES ($1, $2, 1)
+         ON CONFLICT (wholesaler_id, financial_year)
+         DO UPDATE SET last_number = delivery_challan_sequences.last_number + 1
+         RETURNING last_number`,
+        [wholesalerId, fy],
+      );
+
+  const generated = `${CHALLAN_PREFIX[key]}${result.rows[0].last_number}/${fy}`;
+  validateSequenceNumber(generated, { statutory: false });
+  return generated;
+};
 
 /**
  * PUR/1/26-27.

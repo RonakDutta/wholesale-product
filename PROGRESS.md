@@ -33,9 +33,25 @@ cd server && npm run migrate
 | `wholesale3_series_financial_year.sql` | Sale and challan numbers restart each financial year | run 12 Sept, confirmed by a sale coming out `S/10/26-27` |
 | `wholesale3_purchases.sql` | Suppliers, purchases, purchase lines, money paid out, purchase numbering | run 14 Sept |
 | `wholesale3_master_settings.sql` | Platform formatting: decimals, digit grouping, currency, date format | run 14 Sept |
-| `wholesale3_opening_balance.sql` | What a customer or supplier already owed before this product | run 14 Sept |
+| `wholesale3_opening_balance.sql` | What a customer or supplier already owed before this product | run 14 Sept, **RUN IT AGAIN**: its supplier half never applied, see 17 Sept below |
 | `wholesale3_party_state.sql` | The customer's declared state, which decides CGST plus SGST against IGST | **NOT RUN** |
 | `wholesale3_razorpay_route.sql` | Linked accounts, transfers and webhook deliveries, so a buyer's money reaches the wholesaler | run 14 Sept |
+| `wholesale3_challans_two_kinds.sql` | Sale and purchase challans, each with its own run of numbers, and a billed status | **NOT RUN** |
+
+**Three outstanding as of 17 Sept**, the two marked NOT RUN above and the
+opening balance one, which needs running a second time. Everything else in
+this table is done.
+
+`wholesale3_challans_two_kinds.sql` is what the challan rework needs. Until it
+is run the challan screens behave as they did before purchase challans
+existed, which was checked rather than assumed: three suites run against
+databases WITHOUT it. What does not work until it is run is the second kind,
+the billed status, and so the Make the bill button, which reads that status.
+
+`wholesale3_opening_balance.sql` needs running again because its supplier half
+never applied on any database built by the runner. Re-running it is safe and
+changes nothing if the columns are already there. Until it is run, adding a
+supplier answers 500.
 
 **One outstanding as of 14 Sept.**
 
@@ -2237,6 +2253,232 @@ was owed on the day, while the invoice it points at is settled.
 
 ---
 
+## 17 Sept: the challan becomes a document in its own right
+
+Asked for after looking at how Marg, Tally and Busy actually do it, and the
+research settled the design. All three have the same pair. Marg: Sale Challan
+and Purchase Challan under Transactions, converted into a Sale Bill or a
+Purchase Bill afterwards, with `Daily Working > Challan To Bill` for several at
+once. Tally: Delivery Note and Receipt Note, linked to the invoice by a
+Tracking Number. Busy: Material Issued to Party and Material Received from
+Party.
+
+**In all three the challan is MOVEMENT driven.** It exists because goods moved,
+before any bill, and it does not care whether anybody has paid.
+
+Ours was payment driven. It was raised BECAUSE a sale was unpaid and it held
+the tax invoice back until the money came in, which conflated two different
+documents. That waiting was also the part that was never compliant: section
+31(1) ties the invoice to REMOVAL of the goods, not to payment, so holding it
+back understated outward supply in GSTR-1 and left the customer unable to claim
+input credit.
+
+So there are two kinds now, `kind = sale` and `kind = purchase`, each with its
+own run of numbers. `SC/` and `PC/` replace `DC/`, and the counter was NOT
+reset: a wholesaler at DC/5 gets SC/6 next and no number is reused.
+
+**THE RULE THE WHOLE THING RESTS ON.** A challan moves stock and nothing else.
+It never touches the party balance and it carries no GST. A challan that also
+moved the ledger would have every sale counted twice in the khata, once when
+the goods left and again when the bill went out, and the error would be
+invisible because both entries would look correct on their own. The lines carry
+`gst_percent`, which is the rate the line WILL be billed at so the sale form
+need not be retyped, and nothing sums it.
+
+**A bill is not converted server side.** The challan loads INTO the sale or
+purchase form, where it can be adjusted, and the ordinary path prices it. That
+is Marg's flow: modify the challan, press F7, it loads into the bill screen.
+Converting server side would mean a second copy of the GST, cess, channel and
+transport logic, and two copies of money arithmetic is how the khata and the
+bill start disagreeing. The form posts back the challan ids and they are
+stamped in the same transaction that writes the bill, so the same goods cannot
+be billed twice: a request naming four challans that closes three gets a 409
+rather than a quiet partial bill.
+
+`CHALLAN_WHEN_UNPAID` now decides ONE thing, whether an unpaid sale holds its
+bill back, and defaults OFF. Challans exist either way. Setting it true
+restores the old behaviour exactly, for a wholesaler who has not re-trained
+their counter.
+
+**Taking money moved onto the sale.** It used to mean leaving the sale, opening
+Customers, finding the customer and picking the sale back out of a list. Four
+steps to answer a question the screen was already showing. The customer page
+keeps its own version for a round sum against several old bills at once, which
+is real and does not belong on one sale.
+
+### What a sweep of the new system found
+
+Ten faults, all fixed, all now pinned in `challan_book_check.js`:
+
+- **The sequence key.** Widening it to (wholesaler, kind) dropped the unique
+  constraint the allocator upserts on. The next challan of any kind would have
+  failed outright. The financial year has to stay in the key.
+- **`SET status = CASE WHEN $3 ...` is not a guard.** Postgres parses the whole
+  statement before running it, so a database without the migration answered
+  `column "status" does not exist` on every sale that billed a challan.
+  Migrations here are applied by hand, so the window between a deploy and
+  somebody pasting the SQL is real. Two statements now, and the suite hides the
+  column to prove it.
+- **A challan raised against an already billed sale** sat pending for ever and
+  would have been offered for billing a second time. Born billed now.
+- **A billed purchase challan read "Not billed"**, because the screen tested
+  `invoice_id` and a purchase challan points at a purchase.
+- **The PDF pointed the wrong way on a purchase challan**: FROM us, DELIVER TO
+  the supplier the goods came from.
+- **The money block invented a debt.** `amount_paid` is zero on a movement
+  challan because nothing was ever paid against a challan, not because the
+  whole value is owed. Keyed off money actually received, not off `sale_id`,
+  which `stampBilled` sets and which therefore came back the moment a challan
+  was used.
+- **Three wording faults on a purchase challan**: "your customer cannot claim
+  input credit" when it is us, "What went out" when it came in, and a link to a
+  tax invoice that does not exist, which went to `/seller/invoices/null`.
+- **A false probe result was cached**, so running the migration on a live
+  server would not take effect until a restart. Only a true is cached now.
+
+The PDF assertions were also wrong at first: pdfkit compresses the content
+stream, so searching the buffer for "DELIVER TO" is false on a document that
+says it in letters an inch high. They go through `pdftotext` now.
+
+**Verified.** `challan_book_check.js`, 52 checks. `challan_check`,
+`challan_matrix_check` and `flow_check` rewritten where they pinned the old
+rule, each change explained at the assertion. Nine suites green, including the
+three that run on databases WITHOUT the new migration. Both PDF directions and
+the challan screens rendered and read.
+
+**Migration to run:** `wholesale3_challans_two_kinds.sql`
+
+---
+
+## 17 Sept: the two books made to match, and a challan that makes its own bill
+
+Reported: "the sales and purchases arent symmetric, purchases have add a bill
+add a supplier but not sales", the Record sale button should come off the top
+bar "since its not primary anymore", and "how does sale get added when we
+create a challan".
+
+**The asymmetry was real and it had a cause.** Purchases carried Add supplier
+and Enter a bill at the top of its list, and a `+ New` beside the supplier
+dropdown inside the bill form. Sales carried neither. Not an oversight: there
+is a comment in `Sales.jsx` and another in `Overview.jsx` saying the workspace
+header already had a Record sale button on every screen, so a second one on
+the list looked like a mistake. That reasoning was sound while the header
+button existed. Taking it away makes the two books read the same way round:
+add the party, then write the document, on whichever side you are on.
+
+Done:
+- the header Record sale link is gone from `SellerLayout`, and the `Plus`
+  import with it. The comment left in its place says why, so it does not get
+  put back.
+- `Sales.jsx` gained Add customer and Record a sale, the same pair Purchases
+  has, in the same order and the same two styles.
+- `RecordSale.jsx` gained the `+ New` beside the customer dropdown, and the
+  `PartyFormModal` behind it, mirroring what `RecordPurchase` has done since a
+  bill from a new mill meant abandoning what was typed.
+- the stale comments on `Sales.jsx` and `Overview.jsx` were rewritten rather
+  than left to mislead the next session.
+
+**How a sale gets added when a challan is created: it does not, and that is
+deliberate.** A challan moves stock. It carries no GST, touches no balance,
+and creates nothing on the money side. The bill is a separate act, which is
+the whole point of having two documents and is how Marg, Tally and Busy all
+work. What WAS missing is the road between them.
+
+Until now the only road was: remember the challan, open Record a sale, pick
+the customer, find the challan in the panel, tick it. The wholesaler standing
+on the challan had no way forward from the document in front of him.
+
+So an unbilled challan now carries **Make the bill** (a sale challan) or
+**Enter the bill for this** (a purchase challan), linking to
+`/seller/sales/new?party=<id>&challan=<id>` or the purchase equivalent.
+`PendingChallans` takes an `autoSelect` prop and ticks that row the moment the
+list lands, which runs the same `pullChallan` a human tick runs: the items
+load, priced by the form's one GST path, and the ids ride along so
+`stampBilled` closes the challan in the transaction that writes the bill.
+Nothing new on the server. The button only appears where there is a party to
+bill, because an old challan raised against an order can carry none, and a
+link to `?party=null` opens a form that cannot be saved.
+
+**A bug found while mirroring the pattern.** `PartyFormModal` and
+`SupplierFormModal` open from inside the sale and purchase forms. A React
+portal puts them outside that `<form>` in the DOM but still bubbles their
+submit up the REACT tree to it, and `preventDefault` does not stop that: it
+stops the browser navigating, not the event travelling. So adding a supplier
+mid-bill also tried to save the bill. Rendered it and watched it happen: a
+green "Supplier added" toast with a red "Choose a supplier" behind it, and on
+the sale side "Choose a customer." over the customer that had just been added.
+Pre-existing on the purchase side; both now call `stopPropagation`.
+
+**Verified in a browser, not by reading.** A mock API on 5000 and Playwright
+against both directions. Sale challan SC/4/26-27 to Make the bill: form opens
+with the customer chosen, the challan ticked, two lines at 30 mtr x 88 and
+10 mtr x 90, total 3540 plus 5 per cent GST reading 3717. Purchase challan
+PC/2/26-27 the same way into Enter a supplier's bill. Confirmed the header
+Record sale link is absent and that the leaked submit fires once before the
+fix and not after. `npm run lint` clean on every touched file, the one
+remaining `SellerLayout` error pre-dating this and confirmed by stashing.
+`npx vite build` green.
+
+**Migration to run:** none.
+
+---
+
+## 17 Sept: a guard that hid a missing column, found by running all 37 suites
+
+Found while checking whether the branch was fit to merge. Ran every suite in
+`server/scripts` against databases built from the migrations. Three failed.
+Two of them, `opening_balance_check` and `purchase_check`, were one bug:
+
+```
+column "opening_balance" of relation "suppliers" does not exist
+```
+
+**A database built from these migrations had no `suppliers.opening_balance`,
+and the runner reported 57 of 57 applied.** Adding a supplier answered 500 on
+a schema the runner called complete.
+
+`wholesale3_opening_balance.sql` sorts alphabetically BEFORE
+`wholesale3_purchases.sql`, which is the file that creates `suppliers`. It
+knew that, and guarded the supplier half in a `DO $$` block that asked
+`to_regclass` first and raised a NOTICE when the table was missing.
+
+That guard is what broke it. `run_migrations.js` makes up to five passes and
+retries any file that FAILED, precisely so a file that arrives before its
+prerequisite can succeed on the next pass. The DO block turned "not ready yet"
+into SUCCESS, so the file was marked applied on pass 1 and never revisited.
+The parties half ran; the suppliers half never did, on any pass, ever.
+`ALTER TABLE IF EXISTS` would have had the identical fault. **A guard that
+turns a missing prerequisite into a quiet success defeats the retry.**
+
+Fixed by deleting the DO block and letting the plain `ALTER TABLE suppliers`
+fail on pass 1 and be retried on pass 2, which is the mechanism the runner is
+built around. Now reads `3 file(s) not ready on pass 1, retrying` and
+`58 of 58 migrations applied`, with both columns present.
+
+There is no migrations table. Every run replays every file and leans on
+idempotency, so this repairs a database that already exists rather than only
+helping fresh ones. Confirmed by running the corrected file against a schema
+built from `main` and watching the columns appear.
+
+Checked the way CLAUDE.md asks: split on semicolons and ran the five pieces
+one at a time, against a database that already had the columns and against one
+that did not. 5 of 5 both times. No semicolon inside any comment, no DO block
+left in the file.
+
+The third failure, `scale_check`, is not a failure. It is a performance
+benchmark that reads an already seeded database and divides by what it finds,
+so on an empty one it throws on `typical.n`. Nothing to fix. It needs a seeded
+database, and it is the one suite not in the count below.
+
+**36 of 36 suites green** on databases rebuilt from the corrected migrations.
+
+**Migration to run:** `wholesale3_opening_balance.sql`, again. It is
+idempotent and safe to re-run. If `suppliers.opening_balance` already exists
+on Neon, because the file was pasted by hand after the purchases one, it
+changes nothing.
+
+---
+
 ## Left to do
 
 Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.
@@ -2286,7 +2528,7 @@ for many taxpayers. That is a commercial decision and it shapes the schema.
 
 ## Testing
 
-Thirty six suites in `server/scripts/*_check.js`. They drive the real
+Thirty seven suites in `server/scripts/*_check.js`. They drive the real
 controllers against a local Postgres, so they catch schema drift that reading
 the code does not.
 

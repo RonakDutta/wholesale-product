@@ -3,6 +3,8 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
+import PendingChallans from "../../components/PendingChallans";
+import PartyFormModal from "../../components/PartyFormModal";
 import { useHotkey } from "../../hooks/useHotkey";
 import ItemPicker from "../../components/ItemPicker";
 import TransportCard from "../../components/TransportFields";
@@ -67,10 +69,14 @@ const RecordSale = () => {
   const [saving, setSaving] = useState(false);
 
   const [partyId, setPartyId] = useState(searchParams.get("party") || "");
+  const [addingParty, setAddingParty] = useState(false);
   const [saleDate, setSaleDate] = useState(
     () => new Date().toISOString().slice(0, 10),
   );
   const [lines, setLines] = useState([blankLine()]);
+  // Challans this customer has waiting. Ticking one loads its items in, and
+  // the ids ride along so the server closes them with the sale.
+  const [challanIds, setChallanIds] = useState([]);
   const [discount, setDiscount] = useState("");
   const [amountPaid, setAmountPaid] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
@@ -287,6 +293,41 @@ const RecordSale = () => {
    * and a bare letter would land in the item name. Adding a line is the most
    * repeated action in this form by a wide margin.
    */
+  /**
+   * A challan ticked or unticked on the panel above.
+   *
+   * Ticking appends its items, tagged with the challan they came from.
+   * Unticking removes exactly those, so a mis-tick is one click to undo
+   * rather than hunting for the rows it added. Anything typed by hand has no
+   * tag and is never touched.
+   */
+  const pullChallan = (ids, challan, added) => {
+    setChallanIds(ids);
+    if (added) {
+      setLines((prev) => {
+        const typed = prev.filter((l) => l.itemName || l.fromChallan);
+        return [
+          ...typed,
+          ...(challan.lines || []).map((l) => ({
+            ...blankLine(),
+            fromChallan: challan.id,
+            itemName: l.itemName || "",
+            quantity: l.quantity ?? "",
+            unit: l.unit || "pcs",
+            rate: l.rate ?? "",
+            hsnCode: l.hsnCode || null,
+            gstPercent: l.gstPercent ?? null,
+          })),
+        ];
+      });
+    } else {
+      setLines((prev) => {
+        const kept = prev.filter((l) => l.fromChallan !== challan.id);
+        return kept.length ? kept : [blankLine()];
+      });
+    }
+  };
+
   const addLine = () => setLines((prev) => [...prev, blankLine()]);
 
   useHotkey("alt+n", addLine, {
@@ -350,6 +391,7 @@ const RecordSale = () => {
             partyId,
             amountPaid: amountPaid || 0,
             paymentMethod,
+            challanIds,
           });
       toast.success(
         editing ? `${data.sale_number} saved.` : `${data.sale_number} recorded.`,
@@ -433,20 +475,34 @@ const RecordSale = () => {
               </p>
             </>
           ) : (
-            <select
-              id="sale-party"
-              value={partyId}
-              onChange={(e) => setPartyId(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
-            >
-              <option value="">Choose a customer</option>
-              {parties.map((party) => (
-                <option key={party.id} value={party.id}>
-                  {party.name}
-                  {party.business_name ? ` (${party.business_name})` : ""}
-                </option>
-              ))}
-            </select>
+            /* The list, and a way out of it. Same as the purchase form, which
+               has had this since a bill from a new mill meant abandoning what
+               was typed, walking to Suppliers, and starting again. A sale to a
+               customer who is not in the book yet is the identical problem. */
+            <div className="flex gap-2">
+              <select
+                id="sale-party"
+                value={partyId}
+                onChange={(e) => setPartyId(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+              >
+                <option value="">Choose a customer</option>
+                {parties.map((party) => (
+                  <option key={party.id} value={party.id}>
+                    {party.name}
+                    {party.business_name ? ` (${party.business_name})` : ""}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setAddingParty(true)}
+                className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2.5 text-xs font-bold text-espresso transition-colors hover:border-clay hover:text-clay"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New
+              </button>
+            </div>
           )}
         </div>
 
@@ -491,6 +547,19 @@ const RecordSale = () => {
           </p>
         </div>
       </div>
+
+      {/* Anything already sent to this customer and not yet billed. Above the
+          items, because ticking one fills them in. Nothing shows when there is
+          nothing waiting, which is the usual case. */}
+      {!editing && (
+        <PendingChallans
+          kind="sale"
+          otherId={partyId}
+          selected={challanIds}
+          onChange={pullChallan}
+          autoSelect={searchParams.get("challan") || ""}
+        />
+      )}
 
       {/* The lines. Dense on purpose: this is a bill book, not a shopping cart. */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -774,6 +843,26 @@ const RecordSale = () => {
           </button>
         </div>
       </div>
+
+      {/* Adding the customer without losing the sale being typed. The list is
+          reloaded from the server rather than patched locally, so the new row
+          is exactly what every other row is. */}
+      {addingParty && (
+        <PartyFormModal
+          onClose={() => setAddingParty(false)}
+          onSaved={async (created) => {
+            setAddingParty(false);
+            try {
+              const { data } = await api.get("/api/parties");
+              setParties(Array.isArray(data) ? data : []);
+            } catch {
+              // The customer was created either way. A stale list is better
+              // than losing the sale being typed.
+            }
+            if (created?.id) setPartyId(created.id);
+          }}
+        />
+      )}
     </form>
   );
 };

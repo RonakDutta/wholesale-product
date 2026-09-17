@@ -44,6 +44,13 @@ const PartyFormModal = ({ party, onClose, onSaved }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // The modal is opened from inside the sale form, and a React portal
+    // still bubbles this submit up the React tree to that form's onSubmit.
+    // Without this, adding a customer mid-sale also tried to save the sale,
+    // which answered "Choose a customer" over the top of the customer just
+    // being added. preventDefault does not stop that: it stops the browser
+    // navigating, not the event travelling.
+    e.stopPropagation();
     if (!form.name.trim()) {
       toast.error("Please enter a name.");
       return;

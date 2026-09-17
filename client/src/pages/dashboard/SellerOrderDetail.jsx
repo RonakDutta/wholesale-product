@@ -62,7 +62,7 @@ const worthShowing = (remark) =>
 
 /**
  * Statuses where nothing is going out of the godown any more, so there is
- * nothing to write a delivery challan for. Everything else, including a
+ * nothing to write a challan for. Everything else, including a
  * refused return, still has goods with the customer against money owed.
  */
 const DEAD = ["cancelled", "refunded", "payment_failed"];
@@ -175,10 +175,10 @@ const SellerOrderDetail = () => {
         ...(prev || {}),
         challans: [made, ...(prev?.challans || [])],
       }));
-      toast.success(`Delivery challan ${made.challan_number} is ready.`);
+      toast.success(`Challan ${made.challan_number} is ready.`);
     } catch (err) {
       toast.error(
-        err.response?.data?.message || "Could not make the delivery challan.",
+        err.response?.data?.message || "Could not make the challan.",
       );
     }
     setMakingChallan(false);
@@ -476,8 +476,8 @@ const SellerOrderDetail = () => {
                 {makingChallan
                   ? "Making challan..."
                   : challans.length > 0
-                    ? "Make another delivery challan"
-                    : "Make delivery challan"}
+                    ? "Make another challan"
+                    : "Make challan"}
               </button>
             </div>
           )}
@@ -485,7 +485,7 @@ const SellerOrderDetail = () => {
           {challans.length > 0 && (
             <div className={canChallan ? "mt-4 border-t border-slate-100 pt-4" : ""}>
               <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-                Delivery challans
+                Challans
               </p>
               <ul className="space-y-1.5">
                 {challans.map((c) => (

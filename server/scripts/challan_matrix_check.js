@@ -123,12 +123,18 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
     // status      paid   challan      bill
     ["draft",         0, "draft",     "draft"],
     ["draft",       500, "draft",     "draft"],
-    ["confirmed",     0, "ok",        "UNPAID"],
-    ["confirmed",   500, "ok",        "UNPAID"],
-    ["confirmed",  1050, "settled",   "ok"],
-    ["delivered",     0, "ok",        "UNPAID"],
-    ["delivered",   500, "ok",        "UNPAID"],
-    ["delivered",  1050, "settled",   "ok"],
+    // Rewritten 17 Sept. Every one of these six used to depend on the money:
+    // the bill was refused UNPAID until it was settled, and the challan was
+    // refused "settled" once it was. Both rules are gone. A challan is about
+    // goods moving and a bill is about a supply having happened, and neither
+    // question is answered by the balance, so the whole settlement column
+    // stopped mattering to this grid.
+    ["confirmed",     0, "ok",        "ok"],
+    ["confirmed",   500, "ok",        "ok"],
+    ["confirmed",  1050, "ok",        "ok"],
+    ["delivered",     0, "ok",        "ok"],
+    ["delivered",   500, "ok",        "ok"],
+    ["delivered",  1050, "ok",        "ok"],
     ["cancelled",     0, "cancelled", "cancelled"],
     ["cancelled",   500, "cancelled", "cancelled"],
   ];
@@ -251,25 +257,35 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   // ---------------------------------------------------------------
   console.log("\nThe switches around the feature");
   // ---------------------------------------------------------------
+  /**
+   * CHALLAN_WHEN_UNPAID now decides ONE thing and defaults OFF.
+   *
+   * It used to gate the whole feature: off meant no challans at all. It now
+   * only answers "does an unpaid sale hold its bill back", and challans exist
+   * either way, because they are about goods moving. The old behaviour is
+   * still reachable for a wholesaler who has not re-trained their counter.
+   */
   const flagged = await makeSale({ paid: 0 });
-  process.env.CHALLAN_WHEN_UNPAID = "false";
-  const offChallan = await challanFor(flagged.id);
-  check(offChallan.body?.code === "disabled", "flag off: no challan is made", {
-    code: offChallan.body?.code,
-  });
+  const alwaysChallan = await challanFor(flagged.id);
+  check(alwaysChallan.statusCode === 201,
+    "challans are made whatever the flag says, because goods moved",
+    { s: alwaysChallan.statusCode });
   const offBill = await billFor(flagged.id);
-  check(offBill.statusCode === 201, "flag off: an unpaid sale bills, as it used to", {
+  check(offBill.statusCode === 201, "and by default an unpaid sale bills", {
     s: offBill.statusCode,
   });
-  delete process.env.CHALLAN_WHEN_UNPAID;
 
   const onAgain = await makeSale({ paid: 0 });
-  const backOn = await challanFor(onAgain.id);
-  check(backOn.statusCode === 201, "flag back on: challans again", { s: backOn.statusCode });
+  process.env.CHALLAN_WHEN_UNPAID = "true";
   const backOnBill = await billFor(onAgain.id);
-  check(backOnBill.body?.code === "UNPAID", "and the bill waits again", {
+  check(backOnBill.body?.code === "UNPAID",
+    "turning it on puts the old waiting behaviour back exactly", {
     code: backOnBill.body?.code,
   });
+  const stillChallans = await challanFor(onAgain.id);
+  check(stillChallans.statusCode === 201,
+    "and challans are unaffected by it either way", { s: stillChallans.statusCode });
+  delete process.env.CHALLAN_WHEN_UNPAID;
 
   // The migration not run. Probed once and cached, so the cache is what has
   // to be poisoned to simulate it.
@@ -406,7 +422,9 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   const paidChallan = await call(challans.createForOrder, {
     ...asOwner, params: { id: paidOrder }, body: {},
   });
-  check(paidChallan.body?.code === "settled", "a fully paid order is billed, not challaned", {
+  // Was "settled": a fully paid order refused a challan. Goods leaving has
+  // nothing to do with the money, so it is allowed now.
+  check(paidChallan.statusCode === 201, "a fully paid order can still send goods out", {
     code: paidChallan.body?.code,
   });
   const paidView = await call(challans.listForOrder, { ...asOwner, params: { id: paidOrder } });

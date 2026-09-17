@@ -21,7 +21,6 @@ import {
   Home,
   Users,
   BarChart3,
-  Plus,
   ShieldCheck,
   Search,
 } from "lucide-react";
@@ -184,7 +183,7 @@ const SellerLayout = () => {
     "/seller/purchases": "bill purchase inward buying",
     "/seller/sales": "sale outward selling kaata",
     "/seller/invoices": "bill tax gst invoice",
-    "/seller/challans": "delivery challan goods out",
+    "/seller/challans": "challan sales purchases goods out in",
     "/seller/products": "item stock rate list",
     "/seller/settings": "profile gst upi shop details",
     "/seller/staff": "employee worker munim",
@@ -411,15 +410,13 @@ const SellerLayout = () => {
               </Link>
             )}
 
-            {/* Recording a sale is the thing a wholesaler does every day, so it
-                is one tap away from every screen. */}
-            <Link
-              to="/seller/sales/new"
-              className="flex shrink-0 items-center gap-2 rounded-lg bg-espresso px-3 py-2 text-xs font-bold text-cream transition-colors hover:bg-clay"
-            >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Record sale</span>
-            </Link>
+            {/* There used to be a Record sale button here, on every screen.
+                It was right when a sale was the only thing this book wrote.
+                It is not any more: a challan comes first, and the sale is
+                raised from it. One of four daily actions does not belong in
+                the header above the other three, so it now lives on the Sales
+                screen beside Add customer, exactly as Enter a bill lives on
+                Purchases. */}
           </div>
         </header>
 

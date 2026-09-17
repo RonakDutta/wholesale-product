@@ -48,25 +48,17 @@ const DownloadYourData = () => {
         <div>
           <h3 className="font-bold text-espresso">Take a copy of your data</h3>
           <p className="mt-0.5 text-xs text-slate-500">
-            Your customers, sales, payments, suppliers, purchases and bills, in
-            one file.
+            Everything in your book, in one file.
           </p>
         </div>
       </div>
 
       <div className="space-y-4 p-5 sm:p-6">
-        <div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
-          <p>
-            You get a zip file. Inside it, one spreadsheet for each list, which
-            opens in Excel, in Google Sheets or in anything your accountant
-            uses, and a folder holding your bills exactly as they print.
-          </p>
-          <p className="mt-2">
-            It has your book in it and nobody else's. The most recent 200 bills
-            are included as PDFs. Every bill you have ever raised is in the
-            spreadsheet either way.
-          </p>
-        </div>
+        <p className="text-sm text-slate-600">
+          A zip with one spreadsheet per list, plus your bills as PDFs. Opens in
+          Excel or Google Sheets. The last 200 bills come as PDFs; all of them
+          are in the spreadsheet.
+        </p>
 
         <div className="flex flex-col gap-3 sm:flex-row">
           <button
@@ -98,8 +90,7 @@ const DownloadYourData = () => {
 
         {busy === "all" && (
           <p className="text-xs text-slate-500">
-            Your bills are being drawn one at a time, so this can take a minute
-            or two. Leave the page open.
+            This can take a minute. Leave the page open.
           </p>
         )}
       </div>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Download, Truck } from "lucide-react";
+import { Download, Plus, Truck } from "lucide-react";
 import api from "../../utils/axios";
 import { downloadFile } from "../../utils/download";
 import { toast } from "sonner";
@@ -13,7 +13,7 @@ const FILTERS = [
 ];
 
 /**
- * Every delivery challan, so they can be found and downloaded together.
+ * Every challan, sales and purchases, so they can be found together.
  *
  * A challan records goods sent out while payment was outstanding. It is not a
  * tax invoice and it says so on its own face; see challanService.js on the
@@ -28,17 +28,32 @@ const Challans = () => {
   const [challans, setChallans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
+  // Which direction. Two tabs rather than one mixed list, because goods out
+  // and goods in are different documents in different runs of numbers, and
+  // Marg, Tally and Busy all separate them the same way.
+  const [kind, setKind] = useState("sale");
+  // Which tab the rows in hand belong to. Derived rather than a setLoading in
+  // the effect body: switching tab must show the spinner, not the other tab's
+  // rows relabelled, and setting state synchronously in an effect is the
+  // cascading-render pattern the linter rightly refuses.
+  const [loadedKind, setLoadedKind] = useState(null);
   const [downloading, setDownloading] = useState("");
 
   useEffect(() => {
     let alive = true;
     const load = async () => {
       try {
-        const { data } = await api.get("/api/challans");
-        if (alive) setChallans(Array.isArray(data) ? data : []);
+        const { data } = await api.get(`/api/challans?kind=${kind}`);
+        // The kind-aware route answers { challans }, the older one a bare
+        // array. Both are read, so a client ahead of its server still works.
+        const rows = Array.isArray(data) ? data : data?.challans || [];
+        if (alive) {
+          setChallans(rows);
+          setLoadedKind(kind);
+        }
       } catch (error) {
-        console.error("Failed to load delivery challans", error);
-        if (alive) toast.error("Could not load your delivery challans.");
+        console.error("Failed to load challans", error);
+        if (alive) toast.error("Could not load your challans.");
       }
       if (alive) setLoading(false);
     };
@@ -46,7 +61,7 @@ const Challans = () => {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [kind]);
 
   const download = async (challan) => {
     setDownloading(challan.id);
@@ -62,18 +77,52 @@ const Challans = () => {
   };
 
   const shown = challans.filter((c) => {
-    if (filter === "open") return !c.invoice_id;
-    if (filter === "billed") return Boolean(c.invoice_id);
+    // status is the authority where the migration has run. invoice_id is the
+    // fallback for a database that has not had it, where every challan is a
+    // sale challan and "billed" means an invoice is attached.
+    const billed = c.status ? c.status === "billed" : Boolean(c.invoice_id || c.purchase_id);
+    const cancelled = c.status === "cancelled";
+    if (filter === "open") return !billed && !cancelled;
+    if (filter === "billed") return billed;
     return true;
   });
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div>
-        <h2 className="text-2xl font-black text-espresso">Delivery challans</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Goods sent out before the money came in. Not a tax invoice, no GST.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-black text-espresso">Challans</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Goods sent or received before the bill. No GST on a challan.
+          </p>
+        </div>
+        <Link
+          to={`/seller/challans/new?kind=${kind}`}
+          className="flex items-center gap-2 rounded-lg bg-espresso px-4 py-2.5 text-sm font-bold text-cream shadow-sm transition-colors hover:bg-clay"
+        >
+          <Plus className="h-4 w-4" />
+          Record challan
+        </Link>
+      </div>
+
+      {/* The two directions. */}
+      <div className="flex gap-2 border-b border-slate-200">
+        {[
+          { code: "sale", label: "Sales" },
+          { code: "purchase", label: "Purchases" },
+        ].map((k) => (
+          <button
+            key={k.code}
+            onClick={() => setKind(k.code)}
+            className={`-mb-px cursor-pointer border-b-2 px-4 py-2.5 text-sm font-bold transition-colors ${
+              kind === k.code
+                ? "border-clay text-espresso"
+                : "border-transparent text-slate-500 hover:text-espresso"
+            }`}
+          >
+            {k.label}
+          </button>
+        ))}
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -93,7 +142,7 @@ const Challans = () => {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        {loading ? (
+        {loading || loadedKind !== kind ? (
           <div className="flex justify-center py-20">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-clay border-t-transparent" />
           </div>
@@ -105,19 +154,23 @@ const Challans = () => {
                 ? "Nothing waiting to be billed"
                 : filter === "billed"
                   ? "None billed yet"
-                  : "No delivery challans yet"}
+                  : kind === "purchase"
+                    ? "No purchase challans yet"
+                    : "No sale challans yet"}
             </p>
             <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
               {filter
                 ? "Try a different filter."
-                : "Open a sale that is not fully paid to send goods out on a challan."}
+                : kind === "purchase"
+                  ? "Record one when goods arrive before the supplier's bill."
+                  : "Record one when goods go out before the bill."}
             </p>
             {!filter && (
               <Link
-                to="/seller/sales"
+                to={`/seller/challans/new?kind=${kind}`}
                 className="mt-5 inline-block rounded-lg bg-clay px-5 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso"
               >
-                Go to sales
+                Record a challan
               </Link>
             )}
           </div>
@@ -146,18 +199,28 @@ const Challans = () => {
                       <p className="truncate text-xs font-medium text-slate-500">
                         {c.challan_number} · {dateLabel(c.issue_date)}
                         {c.sale_number ? ` · ${c.sale_number}` : ""}
+                        {c.purchase_number ? ` · ${c.purchase_number}` : ""}
                         {c.order_number ? ` · ${c.order_number}` : ""}
+                        {c.supplier_challan_number
+                          ? ` · theirs ${c.supplier_challan_number}`
+                          : ""}
                       </p>
                     </div>
 
                     <span
                       className={`hidden shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider sm:inline ${
-                        c.invoice_id
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-amber-50 text-amber-700"
+                        c.status === "cancelled"
+                          ? "bg-slate-100 text-slate-500"
+                          : c.status === "billed" || c.invoice_id || c.purchase_id
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-amber-50 text-amber-700"
                       }`}
                     >
-                      {c.invoice_id ? "Billed" : "Not billed"}
+                      {c.status === "cancelled"
+                        ? "Cancelled"
+                        : c.status === "billed" || c.invoice_id || c.purchase_id
+                          ? "Billed"
+                          : "Not billed"}
                     </span>
 
                     <div className="w-28 shrink-0 text-right">
@@ -170,7 +233,7 @@ const Challans = () => {
                           balance as it stood that day, not a balance. It used
                           to print "1600 due" in clay beside a green "Billed"
                           badge, which is the same row saying both things. */}
-                      {due > 0 && !c.invoice_id && (
+                      {due > 0 && !c.invoice_id && !c.purchase_id && (
                         <p className="text-[11px] font-bold text-clay">
                           {rupees(due)} due
                         </p>

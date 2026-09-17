@@ -89,14 +89,20 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   const unpaid = await makeSale(0);
   check(Number(unpaid.total) === 1050, "a 1050 sale, nothing received", { total: unpaid.total });
 
-  const refused = await call(sales.createInvoiceForSale, { ...asOwner, params: { id: unpaid.id } });
-  check(refused.statusCode === 409, "the bill is refused", { s: refused.statusCode });
-  check(refused.body?.code === "UNPAID", "with a code the screen can act on");
-  check(
-    Number(refused.body?.outstanding) === 1050,
-    "and how much is left, so it need not go and look",
-    { outstanding: refused.body?.outstanding },
-  );
+  /**
+   * REVERSED 17 SEPT. This block used to check that the bill was REFUSED with
+   * 409 UNPAID and the outstanding figure attached.
+   *
+   * The rule was dropped. Section 31(1) ties the tax invoice to removal of the
+   * goods, not to payment, so holding it back understated outward supply in
+   * GSTR-1 and left the customer unable to claim input credit. Setting
+   * CHALLAN_WHEN_UNPAID=true puts the old behaviour back, which is why the
+   * refusal path is still in the code.
+   */
+  const billedUnpaid = await call(sales.createInvoiceForSale, { ...asOwner, params: { id: unpaid.id } });
+  check(billedUnpaid.statusCode === 200 || billedUnpaid.statusCode === 201,
+    "a wholly unpaid sale CAN be billed, which section 31(1) requires",
+    { s: billedUnpaid.statusCode });
 
   const madeOne = await call(challans.createForSale, { ...asOwner, params: { id: unpaid.id }, body: {} });
   check(madeOne.statusCode === 201, "a challan can be made instead", { s: madeOne.statusCode });
@@ -105,14 +111,17 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   // S-0001 and DC-0001, three shapes with three padding widths and no year on
   // any of them. Falls back to DC-0001 until the series migration is run, so
   // both shapes are accepted here and the suite runs on either database.
+  // SC since 17 Sept, and PC for the goods-in run. The prefix was DC while
+  // there was only one kind of challan and it was specifically a delivery
+  // note. The counter was not reset, so no number was reused.
   check(
-    /^DC[-/]/.test(String(madeOne.body?.challan_number || "")),
+    /^SC[-/]/.test(String(madeOne.body?.challan_number || "")),
     "in its own number run, not the invoice run",
     { number: madeOne.body?.challan_number },
   );
   if (String(madeOne.body?.challan_number || "").includes("/")) {
     check(
-      /^DC\/\d+\/\d\d-\d\d$/.test(madeOne.body.challan_number),
+      /^SC\/\d+\/\d\d-\d\d$/.test(madeOne.body.challan_number),
       "carrying the financial year, like the invoice and the sale",
       { number: madeOne.body.challan_number },
     );
@@ -135,23 +144,35 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
   const lines = await testPool.query(
     "SELECT * FROM delivery_challan_items WHERE challan_id = $1", [madeOne.body.id]);
   check(lines.rows.length === 1, "with its lines copied", { n: lines.rows.length });
+  /**
+   * No tax is CHARGED on a challan, which is the rule that matters.
+   *
+   * gst_percent and cess_percent were added on 17 Sept and are not a
+   * softening of it: they carry the rate the line WILL be billed at, so the
+   * sale form does not have to be retyped from the challan. Nothing sums
+   * them, and there is still no tax AMOUNT anywhere on the document.
+   */
   check(
-    !("tax_amount" in lines.rows[0]) && !("gst_percent" in lines.rows[0]),
-    "and no tax columns at all, as specified",
+    !("tax_amount" in lines.rows[0]) && !("cess_amount" in lines.rows[0]),
+    "and no tax AMOUNT columns, so nothing on it can charge tax",
     { columns: Object.keys(lines.rows[0]).join(",") },
+  );
+  const challanTotal = await testPool.query(
+    "SELECT total_value FROM delivery_challans WHERE id = $1", [madeOne.body.id]);
+  check(
+    Number(challanTotal.rows[0].total_value) === Number(unpaid.total),
+    "and its value is the goods, never a taxed figure of its own",
+    { challan: challanTotal.rows[0].total_value, sale: unpaid.total },
   );
 
   // ---------------------------------------------------------------
   console.log("\nHalf paid");
   // ---------------------------------------------------------------
   const half = await makeSale(500);
-  const stillRefused = await call(sales.createInvoiceForSale, { ...asOwner, params: { id: half.id } });
-  check(stillRefused.statusCode === 409, "half paid is still not billed", { s: stillRefused.statusCode });
-  check(
-    Number(stillRefused.body?.outstanding) === 550,
-    "and the outstanding figure is right",
-    { outstanding: stillRefused.body?.outstanding },
-  );
+  // Also reversed. A part paid sale bills like any other now.
+  const halfBilled = await call(sales.createInvoiceForSale, { ...asOwner, params: { id: half.id } });
+  check(halfBilled.statusCode === 200 || halfBilled.statusCode === 201,
+    "a part paid sale bills too", { s: halfBilled.statusCode });
 
   const halfChallan = await call(challans.createForSale, { ...asOwner, params: { id: half.id }, body: {} });
   check(
@@ -186,11 +207,24 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
     { s: billed.statusCode, number: billed.body?.invoice_number },
   );
 
-  const noChallan = await call(challans.createForSale, { ...asOwner, params: { id: settled.id }, body: {} });
-  check(noChallan.statusCode === 400, "and a challan is refused on a settled sale", {
-    s: noChallan.statusCode,
-    m: noChallan.body?.message,
+  /**
+   * Also reversed. This used to refuse a challan on a settled sale, under the
+   * rule that a challan was what an UNPAID sale got instead of a bill. Goods
+   * leaving the gate has nothing to do with whether they have been paid for,
+   * and a wholesaler who takes the money on Monday and sends the lorry on
+   * Thursday still needs a note to send with it.
+   */
+  const lateChallan = await call(challans.createForSale, { ...asOwner, params: { id: settled.id }, body: {} });
+  check(lateChallan.statusCode === 201, "a challan CAN go out against a settled sale", {
+    s: lateChallan.statusCode, m: lateChallan.body?.message,
   });
+  const bornBilled = await testPool.query(
+    "SELECT status, invoice_id FROM delivery_challans WHERE id = $1", [lateChallan.body?.id]);
+  check(
+    bornBilled.rows[0]?.status === "billed" && !!bornBilled.rows[0]?.invoice_id,
+    "and it is born billed, pointing at the bill that already covers it",
+    bornBilled.rows[0],
+  );
 
   // The money arriving on the half paid sale should let it bill, and stamp
   // both its challans with the invoice that superseded them.
@@ -366,18 +400,20 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
     { got: unpaidRow?.challan_count },
   );
   const settledRow = (listed.body || []).find((r) => r.id === settled.id);
+  // One since 17 Sept: goods can now go out against a settled sale, and the
+  // block above sends some.
   check(
-    Number(settledRow?.challan_count) === 0,
-    "and shows zero where none went out",
+    Number(settledRow?.challan_count) === 1,
+    "and counts the one that went out after the sale was settled",
     { got: settledRow?.challan_count },
   );
 
   const all = await call(challans.listChallans, asOwner);
-  // Three by this point: one on the unpaid sale and two on the half paid one.
-  // The settled sale was refused, and the old-invoice case below adds a
-  // fourth after this.
+  // Four by this point: one on the unpaid sale, two on the half paid one, and
+  // one that went out against the settled sale after it was billed. That last
+  // one used to be refused. The old-invoice case below adds a fifth.
   check(
-    (all.body || []).length === 3,
+    (all.body || []).length === 4,
     "the challans screen lists every one of them",
     { n: (all.body || []).length },
   );
@@ -385,9 +421,17 @@ const uniq = () => String(Date.now()) + Math.floor(Math.random() * 1000);
     (all.body || []).every((c) => c.challan_number && c.recipient_name),
     "each carrying its number and who it went to",
   );
+  /**
+   * All four, which is the shape of the new rule rather than a coincidence.
+   *
+   * Every sale in this suite is now billed BEFORE its goods go out, because
+   * the bill no longer waits for the money. A challan raised against a sale
+   * that already has a bill is born billed and points at it. Under the old
+   * rule two of these were pending, waiting for money that had not arrived.
+   */
   check(
-    (all.body || []).filter((c) => c.invoice_id).length === 2,
-    "two of which are now billed",
+    (all.body || []).filter((c) => c.invoice_id).length === 4,
+    "and every one is billed, because the bill no longer waits",
     { billed: (all.body || []).filter((c) => c.invoice_id).length },
   );
 

@@ -253,7 +253,7 @@ class SaleInvoiceService {
        * A tax invoice only once the money is in.
        *
        * Asked for on 10 Sept: while a sale is part paid or unpaid the
-       * wholesaler gets a delivery challan instead, and the bill waits.
+       * wholesaler gets a challan instead, and the bill waits.
        *
        * This is not what section 31(1) says, which ties the invoice to
        * removal of the goods rather than to payment. See the header of
@@ -261,7 +261,7 @@ class SaleInvoiceService {
        * CHALLAN_WHEN_UNPAID=false restores the old behaviour, where a bill
        * could be raised whenever it was asked for.
        */
-      if (challanService.challanEnabled() && await challanService.challanTablesExist(client)) {
+      if (challanService.invoiceWaitsForPayment() && await challanService.challanTablesExist(client)) {
         const money = await challanService.settlementOf(client, sale);
         if (!money.settled) {
           await client.query("ROLLBACK");

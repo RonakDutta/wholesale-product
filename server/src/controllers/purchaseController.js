@@ -2,6 +2,7 @@ const pool = require("../config/db");
 const { clean, fromPaise, toPaise } = require("../utils/money");
 const gstService = require("../services/gstService");
 const { checkHsn, minHsnDigits } = require("../services/hsnService");
+const challanBook = require("../services/challanBook");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const { nextPurchaseNumber } = require("../services/seriesNumbers");
 const { businessId } = require("../middlewares/businessContext");
@@ -286,6 +287,32 @@ exports.createPurchase = async (req, res) => {
           purchase.rows[0].purchase_date,
         ],
       );
+    }
+
+    /**
+     * Close the challans this was billed from, in the same transaction.
+     *
+     * The form loads pending challans into itself and posts their ids back.
+     * Stamping here rather than after the commit means a bill and the
+     * challans it came from land together or not at all: a bill raised
+     * against challans that stayed open would let the same goods be billed
+     * twice, and the second bill would look perfectly normal.
+     *
+     * A count that falls short means one was taken by another screen in
+     * between, and billing the rest quietly is worse than refusing.
+     */
+    const challanIds = Array.isArray(req.body.challanIds) ? req.body.challanIds : [];
+    if (challanIds.length > 0) {
+      const closed = await challanBook.stampBilled(
+        client, wholesalerId, "purchase", challanIds, purchaseId);
+      if (closed !== challanIds.length) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({
+          message:
+            "One of those challans was billed on another screen while this was open. Open the form again to see what is still pending.",
+          code: "CHALLAN_TAKEN",
+        });
+      }
     }
 
     await client.query("COMMIT");

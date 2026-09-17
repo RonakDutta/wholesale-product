@@ -60,8 +60,7 @@ const YourData = () => {
           Your data
         </h2>
         <p className="mt-1 text-sm text-slate-500">
-          Bring an old book in from a spreadsheet, or take a copy of everything
-          in this one.
+          Bring an old book in, or take a copy of this one.
         </p>
       </div>
 
@@ -75,7 +74,7 @@ const YourData = () => {
             <div>
               <h3 className="font-bold text-espresso">What you have brought in before</h3>
               <p className="mt-0.5 text-xs text-slate-500">
-                So you can tell whether a file has already been sent.
+                So you can tell if a file has already been sent.
               </p>
             </div>
           </div>

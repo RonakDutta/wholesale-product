@@ -5,6 +5,7 @@ import {
   Check,
   Download,
   FileText,
+  IndianRupee,
   Package,
   Pencil,
   RotateCcw,
@@ -14,6 +15,7 @@ import {
 import api from "../../utils/axios";
 import { downloadFile } from "../../utils/download";
 import { toast } from "sonner";
+import RecordPaymentModal from "../../components/RecordPaymentModal";
 import { amount as money, dateLabel } from "../../utils/money";
 
 // Which book a sale belongs to. Shown so a wholesaler can see why its bill
@@ -79,6 +81,10 @@ const SaleDetail = () => {
   // Carries the figures, so the panel can say how much is left.
   const [unpaid, setUnpaid] = useState(null);
   const [challans, setChallans] = useState([]);
+  const [paying, setPaying] = useState(false);
+  // Bumped to re-run the loader below. Simpler than hoisting it out of its
+  // effect, and the effect already owns the "is this still mounted" guard.
+  const [refresh, setRefresh] = useState(0);
   const [makingChallan, setMakingChallan] = useState(false);
 
   const handleDownloadInvoice = async () => {
@@ -160,7 +166,7 @@ const SaleDetail = () => {
     return () => {
       alive = false;
     };
-  }, [id]);
+  }, [id, refresh]);
 
   const makeBill = async () => {
     setBilling(true);
@@ -171,7 +177,7 @@ const SaleDetail = () => {
       toast.success(`Invoice ${raised.invoice_number} is ready.`);
     } catch (error) {
       // Not paid in full is not a failure, it is "not yet". The panel turns
-      // it into an offer to send the goods out on a delivery challan.
+      // it into an offer to send the goods out on a challan.
       if (error.response?.data?.code === "UNPAID") {
         setUnpaid(error.response.data);
       } else {
@@ -188,10 +194,10 @@ const SaleDetail = () => {
     try {
       const { data } = await api.post(`/api/challans/sale/${id}`, {});
       setChallans((prev) => [data, ...prev]);
-      toast.success(`Delivery challan ${data.challan_number} is ready.`);
+      toast.success(`Challan ${data.challan_number} is ready.`);
     } catch (error) {
       toast.error(
-        error.response?.data?.message || "Could not make the delivery challan.",
+        error.response?.data?.message || "Could not make the challan.",
       );
     }
     setMakingChallan(false);
@@ -516,17 +522,16 @@ const SaleDetail = () => {
                 <p className="mt-1 text-xs text-slate-500">
                   {sale.status === "draft"
                     ? "Confirm the sale first."
-                    : settled
-                      ? "Raise it once. The number is then fixed."
-                      : "The bill is raised on its own once this sale is paid in full."}
+                    : "Raise it once. The number is then fixed."}
                 </p>
               </div>
-              {/* Only offered when the sale is settled. It used to show while
-                  money was still due, where pressing it got a refusal and
-                  changed nothing on screen: the wrong button sitting next to
-                  the right one. The bill normally raises itself now, so this
-                  is the fallback for a sale settled before that landed. */}
-              {settled && sale.status !== "cancelled" && (
+              {/* No longer gated on the sale being settled. It used to be,
+                  under the rule that an unpaid sale got a challan instead of
+                  a bill. That rule was dropped on 17 Sept: section 31(1) ties
+                  the invoice to removal of the goods, not to payment, so
+                  holding it back understated outward supply and left the
+                  customer unable to claim input credit. */}
+              {sale.status !== "cancelled" && sale.status !== "draft" && (
                 <button
                   onClick={makeBill}
                   disabled={billing}
@@ -536,6 +541,35 @@ const SaleDetail = () => {
                   {billing ? "Making..." : "Make invoice"}
                 </button>
               )}
+            </div>
+          )}
+
+          {/* Taking the money, on the sale it is for.
+              
+              This used to mean leaving the sale, opening Customers, finding
+              the customer, pressing Record payment and picking this sale back
+              out of a list. Four steps to answer a question the screen was
+              already showing. The customer page keeps its own version, which
+              is the one to use for a round sum paid against several old bills
+              at once: that is a real thing and it does not belong on one
+              sale. */}
+          {outstanding > 0 && sale.status !== "cancelled" && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-4">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-espresso">
+                  ₹{money(outstanding)} still to come in
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Record it here. It lands on the customer's account either way.
+                </p>
+              </div>
+              <button
+                onClick={() => setPaying(true)}
+                className="flex items-center gap-2 rounded-lg bg-espresso px-4 py-2 text-sm font-bold text-cream transition-colors hover:bg-clay"
+              >
+                <IndianRupee className="h-4 w-4" />
+                Record payment
+              </button>
             </div>
           )}
 
@@ -565,8 +599,8 @@ const SaleDetail = () => {
                 {makingChallan
                   ? "Making challan..."
                   : challans.length > 0
-                    ? "Make another delivery challan"
-                    : "Make delivery challan"}
+                    ? "Make another challan"
+                    : "Make challan"}
               </button>
             </div>
           )}
@@ -574,7 +608,7 @@ const SaleDetail = () => {
           {challans.length > 0 && (
             <div className="mt-4 border-t border-slate-100 pt-4">
               <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-                Delivery challans
+                Challans
               </p>
               <ul className="space-y-1.5">
                 {challans.map((c) => (
@@ -775,6 +809,20 @@ const SaleDetail = () => {
             {sale.notes}
           </p>
         </div>
+      )}
+
+      {paying && (
+        <RecordPaymentModal
+          partyId={sale.party_id}
+          partyName={sale.party_name}
+          outstanding={outstanding}
+          forSale={sale}
+          onClose={() => setPaying(false)}
+          onSaved={() => {
+            setPaying(false);
+            setRefresh((n) => n + 1);
+          }}
+        />
       )}
     </div>
   );

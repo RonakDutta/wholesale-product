@@ -5,34 +5,30 @@ const { nextChallanNumber } = require("./seriesNumbers");
 const { fromPaise } = require("../utils/money");
 
 /**
- * Delivery challans, as specified on 10 Sept 2026.
+ * Raising a challan FROM a sale that is already in the book.
  *
- * The rule asked for: when goods go out and the full amount has NOT been
- * received, the wholesaler raises a delivery challan rather than a tax
- * invoice, and the invoice waits until the money is in. The challan carries
- * no tax.
+ * SUPERSEDED IN PART, 17 SEPT 2026. This file was built on 10 Sept around a
+ * rule that no longer holds: that an unpaid sale gets a challan INSTEAD of a
+ * tax invoice, and the invoice waits for the money. The challan has since
+ * been rebuilt as a movement document in services/challanBook.js, the way
+ * Marg, Tally and Busy all have it, and `invoiceWaitsForPayment()` below now
+ * defaults OFF.
  *
- * READ THIS BEFORE BUILDING ON IT. That rule is not what the CGST Act says,
- * and the wholesaler who asked for it knows: it is going to a legal advisor
- * before production and is expected to change.
+ * That reversal also fixed the part that was never compliant. Section 31(1)
+ * ties the tax invoice to REMOVAL of the goods, not to payment, so holding it
+ * back understated outward supply in GSTR-1 and left the customer unable to
+ * claim input credit.
  *
- *   Section 31(1) ties the tax invoice to REMOVAL of the goods, not to
- *   payment. On a credit sale the invoice is due before or at the time the
- *   goods leave. A challan in its place understates outward supply in GSTR-1
- *   and leaves the customer unable to claim their input credit.
+ * WHAT IS STILL LIVE HERE, and why it was not deleted: sending goods out
+ * against a sale that has ALREADY been recorded. That is a real thing and the
+ * order screen reaches it too. It just no longer asks whether anybody has
+ * paid. A new challan typed from scratch, in either direction, goes through
+ * challanBook instead.
  *
- *   Rule 55 challans cover movement that is NOT a supply: job work, goods on
- *   approval, quantity unknown at removal. Nothing here is a Rule 55 challan,
- *   which is why every row is written with is_rule_55 false and the printed
- *   document says in plain words that it is not a tax invoice.
- *
- * The whole feature is behind a flag, `challanEnabled()`. Switching it off
- * restores the old behaviour exactly: invoices raise whenever they are asked
- * for, paid or not.
- *
- * What it does NOT do, by instruction on 10 Sept: Rule 55's three copies, the
- * provisional quantity, tax where the movement is a supply, and the six month
- * approval window. Those were explicitly deferred.
+ * Rule 55 challans cover movement that is NOT a supply: job work, goods on
+ * approval, quantity unknown at removal. Nothing here is written as one,
+ * which is why every row carries is_rule_55 false and the printed document
+ * says in plain words that it is not a tax invoice.
  */
 
 const REASONS = new Set([
@@ -44,14 +40,34 @@ const REASONS = new Set([
 ]);
 
 /**
- * Is the challan rule switched on?
+ * Does an unpaid sale HOLD BACK its tax invoice?
  *
- * Env, so it can be turned off in production without a deploy of the client.
- * Defaults ON, because it is the behaviour that was asked for; setting
- * CHALLAN_WHEN_UNPAID=false puts invoicing back the way it was.
+ * DEFAULTS OFF SINCE 17 SEPT 2026, which is a reversal of what this file was
+ * built for. The challan was rebuilt as a movement document, the way Marg,
+ * Tally and Busy all have it: goods moved, so a challan exists, and whether
+ * anybody has paid has nothing to do with it. See services/challanBook.js.
+ *
+ * Holding the invoice back was also the part that was never compliant.
+ * Section 31(1) ties the invoice to REMOVAL of the goods, not to payment, so
+ * waiting for money understated outward supply in GSTR-1 and left the
+ * customer unable to claim input credit. Defaulting it off fixes that.
+ *
+ * Kept as a flag rather than deleted because a wholesaler already running
+ * this way may want the old behaviour until they have re-trained their
+ * counter: CHALLAN_WHEN_UNPAID=true restores it exactly.
+ *
+ * NOTE the name. This decides ONE thing, whether the invoice waits. It no
+ * longer decides whether challans exist at all, which is why challanBook
+ * checks nothing.
  */
-const challanEnabled = () =>
-  String(process.env.CHALLAN_WHEN_UNPAID ?? "true").toLowerCase() !== "false";
+const invoiceWaitsForPayment = () =>
+  String(process.env.CHALLAN_WHEN_UNPAID ?? "false").toLowerCase() === "true";
+
+/**
+ * Kept under its old name for the callers that ask "are challans available",
+ * which is a different question and is now answered by the tables existing.
+ */
+const challanEnabled = () => true;
 
 /** Does this database have the tables yet? Cached, like every other probe. */
 let ready = null;
@@ -67,7 +83,28 @@ const challanTablesExist = async (db = pool) => {
   }
   return ready;
 };
-const resetChallanTables = () => { ready = null; };
+const resetChallanTables = () => { ready = null; hasStatusColumn = null; };
+
+/**
+ * Does this database have delivery_challans.status yet?
+ *
+ * It arrives with wholesale3_challans_two_kinds.sql. Without it the stampers
+ * set invoice_id alone, exactly as they did before, rather than failing on a
+ * column that is not there.
+ */
+let hasStatusColumn = null;
+const hasStatus = async (db = pool) => {
+  if (hasStatusColumn !== null) return hasStatusColumn;
+  try {
+    const { rows } = await db.query(
+      `SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'delivery_challans' AND column_name = 'status'`);
+    hasStatusColumn = rows.length > 0;
+  } catch {
+    hasStatusColumn = false;
+  }
+  return hasStatusColumn;
+};
 
 /**
  * The next number in this wholesaler's own challan run.
@@ -100,17 +137,14 @@ class ChallanService {
    * Raise a challan for a sale whose money has not fully arrived.
    *
    * Returns { challan, created } or { error } with one of:
-   *   disabled   the rule is switched off
    *   notReady   the migration has not been run
    *   notFound   the sale is not this wholesaler's
    *   cancelled  a cancelled sale has nothing to send out
    *   draft      confirm it first, same rule as billing
    *   empty      no lines
-   *   settled    it is fully paid, so it should be invoiced instead
    *   reason     the reason given is not one this module knows
    */
   async createChallanForSale(saleId, wholesalerId, reason = "payment_pending", reasonNote = null) {
-    if (!challanEnabled()) return { error: "disabled" };
     if (!(await challanTablesExist())) return { error: "notReady" };
     if (!REASONS.has(reason)) return { error: "reason" };
 
@@ -152,11 +186,13 @@ class ChallanService {
         return { error: "empty" };
       }
 
+      // The money is read for the SNAPSHOT the document carries, not as a
+      // gate. It used to refuse a settled sale, on the old rule that a
+      // challan was what an unpaid sale got instead of a bill. Goods going
+      // out of the gate has nothing to do with whether they have been paid
+      // for, and a wholesaler who takes the money and then sends the lorry
+      // still needs a note to send with it.
       const money = await settlementOf(client, sale);
-      if (money.settled) {
-        await client.query("ROLLBACK");
-        return { error: "settled" };
-      }
 
       const challanNumber = await nextChallanNumber(client, wholesalerId);
 
@@ -206,6 +242,25 @@ class ChallanService {
         );
       }
 
+      /**
+       * Goods going out against a sale that has ALREADY been billed.
+       *
+       * Ordinary now that the invoice no longer waits for payment: a sale is
+       * recorded and billed at the counter, and the lorry leaves on Thursday.
+       * Such a challan is born billed, pointing at the bill that already
+       * covers it. Left pending it would sit in "not billed yet" for ever and,
+       * worse, be offered up for billing a second time on the sale form.
+       */
+      const already = await client.query(
+        `SELECT id FROM invoices WHERE sale_id = $1 LIMIT 1`, [sale.id]);
+      if (already.rows.length > 0 && (await hasStatus(client))) {
+        await client.query(
+          `UPDATE delivery_challans SET invoice_id = $2, status = 'billed'
+            WHERE id = $1`, [challan.id, already.rows[0].id]);
+        challan.invoice_id = already.rows[0].id;
+        challan.status = "billed";
+      }
+
       await client.query("COMMIT");
       return { challan, created: true };
     } catch (err) {
@@ -228,7 +283,6 @@ class ChallanService {
    * has nothing in the book to send out against.
    */
   async createChallanForOrder(orderId, wholesalerId, reason = "payment_pending", reasonNote = null) {
-    if (!challanEnabled()) return { error: "disabled" };
     if (!(await challanTablesExist())) return { error: "notReady" };
 
     const saleId = await this.saleIdForOrder(orderId, wholesalerId);
@@ -378,10 +432,24 @@ class ChallanService {
    */
   async markInvoiced(client, saleId, invoiceId) {
     if (!(await challanTablesExist(client))) return 0;
+    /**
+     * Two statements, not one with a CASE.
+     *
+     * `SET status = CASE WHEN $3 THEN ... END` looks like it guards the column
+     * but does not: Postgres PARSES the whole statement before it runs, so a
+     * database without wholesale3_challans_two_kinds.sql answered
+     * `column "status" does not exist` however the flag was set. Migrations
+     * here are applied by hand, so degrading properly is not optional.
+     */
+    const withStatus = await hasStatus(client);
     const done = await client.query(
-      `UPDATE delivery_challans
-          SET invoice_id = $2, updated_at = CURRENT_TIMESTAMP
-        WHERE sale_id = $1 AND invoice_id IS NULL`,
+      withStatus
+        ? `UPDATE delivery_challans
+              SET invoice_id = $2, status = 'billed', updated_at = CURRENT_TIMESTAMP
+            WHERE sale_id = $1 AND invoice_id IS NULL`
+        : `UPDATE delivery_challans
+              SET invoice_id = $2, updated_at = CURRENT_TIMESTAMP
+            WHERE sale_id = $1 AND invoice_id IS NULL`,
       [saleId, invoiceId],
     );
     return done.rowCount;
@@ -403,12 +471,20 @@ class ChallanService {
   async markInvoicedForOrder(client, orderId, invoiceId) {
     if (!orderId || !invoiceId) return 0;
     if (!(await challanTablesExist(client))) return 0;
+    // Two statements for the same reason as markInvoiced above.
+    const withStatus = await hasStatus(client);
     const done = await client.query(
-      `UPDATE delivery_challans
-          SET invoice_id = $2, updated_at = CURRENT_TIMESTAMP
-        WHERE invoice_id IS NULL
-          AND (order_id = $1
-               OR sale_id IN (SELECT id FROM sales WHERE order_id = $1))`,
+      withStatus
+        ? `UPDATE delivery_challans
+              SET invoice_id = $2, status = 'billed', updated_at = CURRENT_TIMESTAMP
+            WHERE invoice_id IS NULL
+              AND (order_id = $1
+                   OR sale_id IN (SELECT id FROM sales WHERE order_id = $1))`
+        : `UPDATE delivery_challans
+              SET invoice_id = $2, updated_at = CURRENT_TIMESTAMP
+            WHERE invoice_id IS NULL
+              AND (order_id = $1
+                   OR sale_id IN (SELECT id FROM sales WHERE order_id = $1))`,
       [orderId, invoiceId],
     );
     return done.rowCount;
@@ -417,6 +493,7 @@ class ChallanService {
 
 module.exports = new ChallanService();
 module.exports.challanEnabled = challanEnabled;
+module.exports.invoiceWaitsForPayment = invoiceWaitsForPayment;
 module.exports.challanTablesExist = challanTablesExist;
 module.exports.resetChallanTables = resetChallanTables;
 module.exports.settlementOf = settlementOf;

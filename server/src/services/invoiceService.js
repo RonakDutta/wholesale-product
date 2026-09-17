@@ -158,7 +158,7 @@ class InvoiceService {
        * Behind the same flag. See challanService.js for why this rule is not
        * what section 31(1) says.
        */
-      if (challanService.challanEnabled() && await challanService.challanTablesExist(client)) {
+      if (challanService.invoiceWaitsForPayment() && await challanService.challanTablesExist(client)) {
         const total = Number(order.total_amount || 0);
         const paid = Number(order.amount_paid || 0);
         if (total > 0 && paid < total - 0.01) {

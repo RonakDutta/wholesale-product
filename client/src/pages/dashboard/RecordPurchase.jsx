@@ -4,6 +4,7 @@ import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import api from "../../utils/axios";
 import PaidInFull from "../../components/PaidInFull";
 import { toast } from "sonner";
+import PendingChallans from "../../components/PendingChallans";
 import { useHotkey } from "../../hooks/useHotkey";
 import { useMasters } from "../../hooks/useMasters";
 import { money, toPaise, fromPaise } from "../../utils/money";
@@ -58,6 +59,8 @@ const RecordPurchase = () => {
   const [billNumber, setBillNumber] = useState("");
   const [billDate, setBillDate] = useState("");
   const [lines, setLines] = useState([blankLine()]);
+  // Goods received from this supplier that his bill has not caught up with.
+  const [challanIds, setChallanIds] = useState([]);
   const [discount, setDiscount] = useState("");
   const [amountPaid, setAmountPaid] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
@@ -190,6 +193,38 @@ const RecordPurchase = () => {
    * and a bare letter would land in the item name. Adding a line is the most
    * repeated action in this form by a wide margin.
    */
+  /**
+   * A challan ticked or unticked above. Same shape as the sale form: ticking
+   * appends its items tagged with the challan, unticking removes exactly
+   * those, and anything typed by hand carries no tag and is left alone.
+   */
+  const pullChallan = (ids, challan, added) => {
+    setChallanIds(ids);
+    if (added) {
+      setLines((prev) => {
+        const typed = prev.filter((l) => l.itemName || l.fromChallan);
+        return [
+          ...typed,
+          ...(challan.lines || []).map((l) => ({
+            ...blankLine(),
+            fromChallan: challan.id,
+            itemName: l.itemName || "",
+            quantity: l.quantity ?? "",
+            unit: l.unit || "pcs",
+            rate: l.rate ?? "",
+            hsnCode: l.hsnCode || "",
+            gstPercent: l.gstPercent ?? "",
+          })),
+        ];
+      });
+    } else {
+      setLines((prev) => {
+        const kept = prev.filter((l) => l.fromChallan !== challan.id);
+        return kept.length ? kept : [blankLine()];
+      });
+    }
+  };
+
   const addLine = () => setLines((prev) => [...prev, blankLine()]);
 
   useHotkey("alt+n", addLine, {
@@ -254,6 +289,7 @@ const RecordPurchase = () => {
             supplierId,
             amountPaid: amountPaid || 0,
             paymentMethod,
+            challanIds,
           });
       toast.success(
         editing
@@ -443,6 +479,17 @@ const RecordPurchase = () => {
           </p>
         </div>
       </div>
+
+      {/* Goods already received from this supplier, waiting on his bill. */}
+      {!editing && (
+        <PendingChallans
+          kind="purchase"
+          otherId={supplierId}
+          selected={challanIds}
+          onChange={pullChallan}
+          autoSelect={searchParams.get("challan") || ""}
+        />
+      )}
 
       {/* The lines */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">

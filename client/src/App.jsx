@@ -78,6 +78,7 @@ const SellerOrderDetail = lazy(() => import("./pages/dashboard/SellerOrderDetail
 const Staff = lazy(() => import("./pages/dashboard/Staff"));
 const YourData = lazy(() => import("./pages/dashboard/YourData"));
 const Challans = lazy(() => import("./pages/dashboard/Challans"));
+const RecordChallan = lazy(() => import("./pages/dashboard/RecordChallan"));
 const ChallanDetail = lazy(() => import("./pages/dashboard/ChallanDetail"));
 // The purchase side: goods coming in, who they came from, what is owed.
 const Purchases = lazy(() => import("./pages/dashboard/Purchases"));
@@ -179,6 +180,9 @@ const router = createBrowserRouter([
       { path: "challans", element: <Challans /> },
       // One challan in full. The list could only be downloaded from, so the
       // only way to read what was sent was to open a PDF.
+      // new BEFORE :challanId, or "new" is read as an id.
+      { path: "challans/new", element: <RecordChallan /> },
+      { path: "challans/:id/edit", element: <RecordChallan /> },
       { path: "challans/:challanId", element: <ChallanDetail /> },
       { path: "invoices/create", element: <CreateInvoice /> },
       { path: "invoices/reports", element: <InvoiceReports /> },

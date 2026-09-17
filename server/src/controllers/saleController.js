@@ -6,6 +6,7 @@ const invoiceRepository = require("../repositories/invoiceRepository");
 const gstService = require("../services/gstService");
 const { checkHsn, minHsnDigits } = require("../services/hsnService");
 const challanService = require("../services/challanService");
+const challanBook = require("../services/challanBook");
 const { receivedExpression } = require("../services/saleSettlement");
 const { nextSaleNumber } = require("../services/seriesNumbers");
 const { businessId } = require("../middlewares/businessContext");
@@ -342,6 +343,32 @@ exports.createSale = async (req, res) => {
       );
     }
 
+    /**
+     * Close the challans this was billed from, in the same transaction.
+     *
+     * The form loads pending challans into itself and posts their ids back.
+     * Stamping here rather than after the commit means a bill and the
+     * challans it came from land together or not at all: a bill raised
+     * against challans that stayed open would let the same goods be billed
+     * twice, and the second bill would look perfectly normal.
+     *
+     * A count that falls short means one was taken by another screen in
+     * between, and billing the rest quietly is worse than refusing.
+     */
+    const challanIds = Array.isArray(req.body.challanIds) ? req.body.challanIds : [];
+    if (challanIds.length > 0) {
+      const closed = await challanBook.stampBilled(
+        client, wholesalerId, "sale", challanIds, saleId);
+      if (closed !== challanIds.length) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({
+          message:
+            "One of those challans was billed on another screen while this was open. Open the form again to see what is still pending.",
+          code: "CHALLAN_TAKEN",
+        });
+      }
+    }
+
     await client.query("COMMIT");
 
     // A cash sale settled at the counter is settled the moment it is written
@@ -614,7 +641,7 @@ exports.createInvoiceForSale = async (req, res) => {
     draft: [400, "Confirm this sale before raising a bill"],
     empty: [400, "This sale has no items to bill"],
     // Not a failure so much as "not yet". The screen turns this into an
-    // offer to send the goods out on a delivery challan instead.
+    // offer to send the goods out on a challan instead.
     unpaid: [409, "This sale is not fully paid yet, so the bill waits"],
   };
 

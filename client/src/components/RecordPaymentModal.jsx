@@ -8,14 +8,22 @@ import { toast } from "sonner";
  * Money coming in from a customer. Naming a specific bill is optional on
  * purpose: a trader usually hands over a round sum against whatever is
  * outstanding, without saying which bill it settles.
+ *
+ * `forSale` opens it against ONE sale, which is how the sale screen reaches
+ * it. Taking money used to mean leaving the sale, opening Customers, finding
+ * the customer and picking the sale back out of a list, which is four steps
+ * to answer a question the screen already knew the answer to. With forSale
+ * set the picker is gone and the payment is attached to that sale.
  */
-const RecordPaymentModal = ({ partyId, partyName, outstanding, sales = [], onClose, onSaved }) => {
+const RecordPaymentModal = ({
+  partyId, partyName, outstanding, sales = [], forSale = null, onClose, onSaved,
+}) => {
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("cash");
   const [paidOn, setPaidOn] = useState(() =>
     new Date().toISOString().slice(0, 10),
   );
-  const [saleId, setSaleId] = useState("");
+  const [saleId, setSaleId] = useState(forSale?.id || "");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -161,7 +169,19 @@ const RecordPaymentModal = ({ partyId, partyName, outstanding, sales = [], onClo
             </div>
           </div>
 
-          {openSales.length > 0 && (
+          {/* Opened from one sale, so there is nothing to choose. Said out
+              loud rather than hidden, because the money is being attached to
+              a particular bill and that is worth seeing. */}
+          {forSale && (
+            <div className="rounded-xl bg-slate-50 px-4 py-3">
+              <p className="text-xs font-semibold text-slate-500">Against</p>
+              <p className="text-sm font-bold text-espresso">
+                {forSale.sale_number}
+              </p>
+            </div>
+          )}
+
+          {!forSale && openSales.length > 0 && (
             <div>
               <label
                 htmlFor="pay-sale"

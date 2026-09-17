@@ -272,9 +272,26 @@ const ChallanDetail = () => {
         )}
 
         {/* The money as it stood when the goods left, which is the whole
-            reason a challan rather than an invoice was raised. */}
+            reason a challan rather than an invoice was raised.
+
+            These three figures are FROZEN. `amount_paid` is written once, when
+            the challan is created, and nothing updates it, which is right: a
+            challan went out of the gate with the goods and its figures are
+            what they were on the paper the driver carried.
+
+            What was wrong was calling a frozen figure "Outstanding" for ever.
+            A challan raised on a part paid sale still read "Outstanding 1600"
+            months after the money came in and the bill was raised, sitting
+            directly above a link that said the invoice was "raised once the
+            money came in". Both were true and together they read as a
+            contradiction. So once it is billed the block says plainly that
+            these are the figures from that day and the balance came in
+            after. */}
         <div className="border-t border-slate-100 bg-slate-50 px-5 py-4">
           <div className="ml-auto w-full max-w-xs space-y-1.5 text-sm">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              {billed ? "On the day the goods left" : "Money on this sale"}
+            </p>
             <div className="flex justify-between text-slate-600">
               <span>Value of goods</span>
               <span>{rupees(total, { document: true })}</span>
@@ -283,14 +300,24 @@ const ChallanDetail = () => {
               <span>Received by then</span>
               <span>{rupees(paid, { document: true })}</span>
             </div>
-            <div className="flex items-baseline justify-between border-t border-slate-200 pt-1.5 font-black text-espresso">
+            <div
+              className={`flex items-baseline justify-between border-t border-slate-200 pt-1.5 font-black ${
+                billed ? "text-slate-500" : "text-espresso"
+              }`}
+            >
               <span className="text-xs uppercase tracking-wider">
-                Outstanding
+                {billed ? "Owing then" : "Outstanding"}
               </span>
               <span className="text-base">
                 {rupees(due, { document: true })}
               </span>
             </div>
+            {billed && due > 0 && (
+              <p className="border-t border-slate-200 pt-2 text-xs font-bold text-sage">
+                Settled since. The tax invoice below is what the customer owes
+                against now.
+              </p>
+            )}
           </div>
         </div>
       </div>

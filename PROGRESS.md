@@ -2194,6 +2194,49 @@ assuming it would.
 
 ---
 
+## 17 Sept: a challan said Outstanding, the bill it linked to said Paid
+
+Reported from the running app: a delivery challan on a part paid sale showed
+an outstanding balance, and clicking through to its tax invoice showed
+Generated, Paid, nothing owing.
+
+**Both were right, and neither number was wrong.** `delivery_challans.total_value`
+and `amount_paid` are written once, when the challan is raised, and nothing
+updates them. That is correct and must stay that way: a challan left the gate
+with the goods, and its figures are what the driver carried on the paper.
+Refreshing them would be rewriting a document already handed over, which is
+the thing this codebase refuses to do everywhere else.
+
+The fault was the SCREEN calling a frozen figure "Outstanding" for ever.
+Reproduced against a local Postgres by walking the whole journey:
+
+    goods out, part paid   CHALLAN  outstanding 1600   INVOICE  no link yet
+    money in, bill raised  CHALLAN  outstanding 1600   INVOICE  Paid, owing 0
+
+That ₹1600 sat directly above a link reading "Raised once the money came in".
+Two true statements that read as a contradiction.
+
+Fixed on the screens, with the data left frozen:
+
+- The challan detail money block is headed "On the day the goods left" once
+  billed, the last line becomes "Owing then" in muted grey rather than
+  "Outstanding" in black, and a line underneath says the balance was settled
+  since and points at the invoice.
+- The challan LIST no longer prints "1600 due" in clay beside a green "Billed"
+  badge. That figure now shows only while the challan is unbilled.
+- The challan PDF said "Received so far" and "Outstanding", both of which read
+  as live. Now "Received by this date" and "Balance on this date", anchored to
+  the date printed on the paper. Same figures, printed truthfully whether the
+  document is printed that day or a year later.
+
+`challan_check.js` gained the invariant, because the obvious wrong fix is to
+make the snapshot live: after the bill is raised the challan still shows what
+was owed on the day, while the invoice it points at is settled.
+
+**Migration to run:** none.
+
+---
+
 ## Left to do
 
 Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.

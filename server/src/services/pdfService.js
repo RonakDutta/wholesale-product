@@ -1169,8 +1169,14 @@ class PDFService {
         };
         rowRight("Value of goods (before tax):", goodsValue, true);
         rowRight("Sale total, tax included:", owed);
-        rowRight("Received so far:", paid);
-        rowRight("Outstanding:", due, true);
+        // Anchored to the date of the challan, not to now. These two figures
+        // are frozen at the moment the challan was raised and nothing updates
+        // them, which is right for a document that went out with the goods.
+        // "Received so far" and "Outstanding" read as live, so a challan
+        // printed a year after the money came in said the customer still owed
+        // it. Same numbers, said as of the day on the paper.
+        rowRight("Received by this date:", paid);
+        rowRight("Balance on this date:", due, true);
 
         y += 6;
         doc.fontSize(8).font("Helvetica-Oblique").fillColor("#4b5563");

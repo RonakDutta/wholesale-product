@@ -164,7 +164,13 @@ const Challans = () => {
                       <p className="text-sm font-black text-espresso">
                         {rupees(c.total_value)}
                       </p>
-                      {due > 0 && (
+                      {/* Only while it is unbilled. total_value and
+                          amount_paid are frozen at the moment the challan was
+                          created, so on a billed challan this figure is the
+                          balance as it stood that day, not a balance. It used
+                          to print "1600 due" in clay beside a green "Billed"
+                          badge, which is the same row saying both things. */}
+                      {due > 0 && !c.invoice_id && (
                         <p className="text-[11px] font-bold text-clay">
                           {rupees(due)} due
                         </p>

@@ -95,7 +95,7 @@ const Purchases = () => {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setAddingSupplier(true)}
-            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-espresso transition-colors hover:border-clay hover:text-clay"
+            className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-espresso transition-colors hover:border-clay hover:text-clay"
           >
             <Plus className="h-4 w-4" />
             Add supplier

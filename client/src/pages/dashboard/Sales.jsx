@@ -1,9 +1,21 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Receipt, Truck } from "lucide-react";
+import { Plus, Receipt, Truck } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
 import { money, dateLabel } from "../../utils/money";
+import PartyFormModal from "../../components/PartyFormModal";
+
+/**
+ * The sales book: what has been sold, newest first.
+ *
+ * Deliberately the same shape as the Purchases list, down to the two header
+ * buttons. The two screens had drifted: Purchases carried Add supplier and
+ * Enter a bill, Sales carried nothing at all, because the workspace header
+ * used to hold a Record sale button on every screen. That button is gone, so
+ * the pair reads the same way round now. Add the party, then write the
+ * document, on whichever side of the book you are on.
+ */
 
 const STATUS_STYLES = {
   draft: "bg-slate-100 text-slate-600",
@@ -23,6 +35,10 @@ const Sales = () => {
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
+  // Adding a customer from here, as well as from inside the sale form. Same
+  // reason Purchases does it: somebody working through a stack adds the new
+  // name once and gets on with it.
+  const [addingParty, setAddingParty] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -46,14 +62,37 @@ const Sales = () => {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      {/* Same reason as the Overview: the workspace header already carries a
-          Record sale button on every screen. */}
-      <div>
-        <h2 className="text-2xl font-black text-espresso">Sales</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Everything you have sold, newest first.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-black text-espresso">Sales</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Everything you have sold, newest first.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setAddingParty(true)}
+            className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-espresso transition-colors hover:border-clay hover:text-clay"
+          >
+            <Plus className="h-4 w-4" />
+            Add customer
+          </button>
+          <Link
+            to="/seller/sales/new"
+            className="flex items-center gap-2 rounded-lg bg-clay px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso"
+          >
+            <Plus className="h-4 w-4" />
+            Record a sale
+          </Link>
+        </div>
       </div>
+
+      {addingParty && (
+        <PartyFormModal
+          onClose={() => setAddingParty(false)}
+          onSaved={() => setAddingParty(false)}
+        />
+      )}
 
       <div className="flex flex-wrap gap-2">
         {FILTERS.map((filter) => (

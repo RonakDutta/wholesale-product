@@ -487,6 +487,7 @@ const RecordPurchase = () => {
           otherId={supplierId}
           selected={challanIds}
           onChange={pullChallan}
+          autoSelect={searchParams.get("challan") || ""}
         />
       )}
 

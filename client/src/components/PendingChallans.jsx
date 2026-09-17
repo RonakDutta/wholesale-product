@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Truck } from "lucide-react";
 import api from "../utils/axios";
 import { amount as money, dateLabel } from "../utils/money";
@@ -17,10 +17,28 @@ import { amount as money, dateLabel } from "../utils/money";
  *
  * Nothing here prices anything. The form does that, through the one path that
  * already knows about GST, cess and the rest.
+ *
+ * `autoSelect` is a challan id arriving from the URL, which is what the Make
+ * the bill button on a challan sends. It ticks that one row the moment the
+ * list lands, so the wholesaler arrives at a form already filled in rather
+ * than at a form where he has to find and tick the challan he just came from.
+ * It fires once per form: after that the ticks are his.
  */
-const PendingChallans = ({ kind, otherId, selected = [], onChange }) => {
+const PendingChallans = ({ kind, otherId, selected = [], onChange, autoSelect }) => {
   const [challans, setChallans] = useState([]);
   const [loadedFor, setLoadedFor] = useState(null);
+  // The tick is fired from inside the fetch, not from an effect watching the
+  // rows, so it cannot run twice and cannot set state during a render. The
+  // ref holds the newest onChange so a fetch that started a render ago does
+  // not call a stale one.
+  const latestChange = useRef(onChange);
+  const autoFired = useRef(false);
+  // Written in an effect, never during a render: the parent rebuilds
+  // pullChallan every render and touching a ref in the render body is the
+  // thing React tells you not to do.
+  useEffect(() => {
+    latestChange.current = onChange;
+  }, [onChange]);
 
   useEffect(() => {
     let alive = true;
@@ -32,8 +50,18 @@ const PendingChallans = ({ kind, otherId, selected = [], onChange }) => {
       .get(`/api/challans/pending/${otherId}?kind=${kind}`)
       .then(({ data }) => {
         if (!alive) return;
-        setChallans(data.challans || []);
+        const rows = data.challans || [];
+        setChallans(rows);
         setLoadedFor(otherId);
+
+        if (!autoSelect || autoFired.current) return;
+        const wanted = rows.find((c) => String(c.id) === String(autoSelect));
+        // Not in the list means it is billed, cancelled, or belongs to
+        // somebody else. Silently nothing: the form still works, it just has
+        // not been filled in, which is better than an error about a shortcut.
+        if (!wanted) return;
+        autoFired.current = true;
+        latestChange.current([wanted.id], wanted, true);
       })
       // Silent. A database without the challan migration answers an error, and
       // a form that shouts about it would be worse than one that simply does
@@ -46,6 +74,10 @@ const PendingChallans = ({ kind, otherId, selected = [], onChange }) => {
     return () => {
       alive = false;
     };
+    // autoSelect is read through the fetch and guarded by a ref, so it is not
+    // a dependency: adding it would refetch the list when the URL is cleaned
+    // up and nothing about the party had changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, otherId]);
 
   if (loadedFor !== otherId || challans.length === 0) return null;

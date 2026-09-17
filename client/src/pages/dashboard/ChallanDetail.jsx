@@ -400,9 +400,33 @@ const ChallanDetail = () => {
 
       {/* Changing or dropping one, while it is still open. A billed challan is
           closed: a bill stands on it and editing it would make the two
-          disagree with nothing to say which is right. */}
+          disagree with nothing to say which is right.
+
+          The first button is the point of the whole document. A challan moves
+          the goods, the bill charges for them, and the wholesaler standing on
+          this screen should not have to remember which screen turns one into
+          the other. It carries the party and this challan's id, so the form
+          opens with the customer picked and these items already in it, ready
+          to be changed. Nothing is written until he saves that form, and it
+          is that save which marks this challan billed. */}
       {!billed && !cancelled && (
         <div className="flex flex-wrap gap-3">
+          {/* Only with somebody to bill. A challan written against an order
+              before this screen existed can carry no party row, and a link to
+              /seller/sales/new?party=null opens a form that cannot be saved. */}
+          {(isPurchase ? challan.supplier_id : challan.party_id) && (
+            <Link
+              to={
+                isPurchase
+                  ? `/seller/purchases/new?supplier=${challan.supplier_id}&challan=${challanId}`
+                  : `/seller/sales/new?party=${challan.party_id}&challan=${challanId}`
+              }
+              className="flex items-center gap-2 rounded-lg bg-clay px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso"
+            >
+              <FileText className="h-4 w-4" />
+              {isPurchase ? "Enter the bill for this" : "Make the bill"}
+            </Link>
+          )}
           <Link
             to={`/seller/challans/${challanId}/edit`}
             className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-espresso transition-colors hover:bg-slate-50"

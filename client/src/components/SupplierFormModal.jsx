@@ -48,6 +48,11 @@ const SupplierFormModal = ({ supplier, onClose, onSaved }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Same as PartyFormModal: this opens from inside the purchase form, and
+    // a React portal still carries the submit up the React tree to it. Adding
+    // a supplier mid-bill was also trying to save the bill, and answering
+    // "Choose a supplier" behind the toast saying the supplier was added.
+    e.stopPropagation();
     if (!form.name.trim()) {
       toast.error("Give this supplier a name.");
       return;

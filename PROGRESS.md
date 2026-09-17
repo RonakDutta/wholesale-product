@@ -2334,6 +2334,79 @@ the challan screens rendered and read.
 
 ---
 
+## 17 Sept: the two books made to match, and a challan that makes its own bill
+
+Reported: "the sales and purchases arent symmetric, purchases have add a bill
+add a supplier but not sales", the Record sale button should come off the top
+bar "since its not primary anymore", and "how does sale get added when we
+create a challan".
+
+**The asymmetry was real and it had a cause.** Purchases carried Add supplier
+and Enter a bill at the top of its list, and a `+ New` beside the supplier
+dropdown inside the bill form. Sales carried neither. Not an oversight: there
+is a comment in `Sales.jsx` and another in `Overview.jsx` saying the workspace
+header already had a Record sale button on every screen, so a second one on
+the list looked like a mistake. That reasoning was sound while the header
+button existed. Taking it away makes the two books read the same way round:
+add the party, then write the document, on whichever side you are on.
+
+Done:
+- the header Record sale link is gone from `SellerLayout`, and the `Plus`
+  import with it. The comment left in its place says why, so it does not get
+  put back.
+- `Sales.jsx` gained Add customer and Record a sale, the same pair Purchases
+  has, in the same order and the same two styles.
+- `RecordSale.jsx` gained the `+ New` beside the customer dropdown, and the
+  `PartyFormModal` behind it, mirroring what `RecordPurchase` has done since a
+  bill from a new mill meant abandoning what was typed.
+- the stale comments on `Sales.jsx` and `Overview.jsx` were rewritten rather
+  than left to mislead the next session.
+
+**How a sale gets added when a challan is created: it does not, and that is
+deliberate.** A challan moves stock. It carries no GST, touches no balance,
+and creates nothing on the money side. The bill is a separate act, which is
+the whole point of having two documents and is how Marg, Tally and Busy all
+work. What WAS missing is the road between them.
+
+Until now the only road was: remember the challan, open Record a sale, pick
+the customer, find the challan in the panel, tick it. The wholesaler standing
+on the challan had no way forward from the document in front of him.
+
+So an unbilled challan now carries **Make the bill** (a sale challan) or
+**Enter the bill for this** (a purchase challan), linking to
+`/seller/sales/new?party=<id>&challan=<id>` or the purchase equivalent.
+`PendingChallans` takes an `autoSelect` prop and ticks that row the moment the
+list lands, which runs the same `pullChallan` a human tick runs: the items
+load, priced by the form's one GST path, and the ids ride along so
+`stampBilled` closes the challan in the transaction that writes the bill.
+Nothing new on the server. The button only appears where there is a party to
+bill, because an old challan raised against an order can carry none, and a
+link to `?party=null` opens a form that cannot be saved.
+
+**A bug found while mirroring the pattern.** `PartyFormModal` and
+`SupplierFormModal` open from inside the sale and purchase forms. A React
+portal puts them outside that `<form>` in the DOM but still bubbles their
+submit up the REACT tree to it, and `preventDefault` does not stop that: it
+stops the browser navigating, not the event travelling. So adding a supplier
+mid-bill also tried to save the bill. Rendered it and watched it happen: a
+green "Supplier added" toast with a red "Choose a supplier" behind it, and on
+the sale side "Choose a customer." over the customer that had just been added.
+Pre-existing on the purchase side; both now call `stopPropagation`.
+
+**Verified in a browser, not by reading.** A mock API on 5000 and Playwright
+against both directions. Sale challan SC/4/26-27 to Make the bill: form opens
+with the customer chosen, the challan ticked, two lines at 30 mtr x 88 and
+10 mtr x 90, total 3540 plus 5 per cent GST reading 3717. Purchase challan
+PC/2/26-27 the same way into Enter a supplier's bill. Confirmed the header
+Record sale link is absent and that the leaked submit fires once before the
+fix and not after. `npm run lint` clean on every touched file, the one
+remaining `SellerLayout` error pre-dating this and confirmed by stashing.
+`npx vite build` green.
+
+**Migration to run:** none.
+
+---
+
 ## Left to do
 
 Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.

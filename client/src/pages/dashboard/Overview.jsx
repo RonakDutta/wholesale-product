@@ -196,9 +196,10 @@ const Overview = () => {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      {/* No Record a sale button here. The workspace header carries one on
-          every screen, and two of them side by side on this one looked like
-          a mistake. */}
+      {/* No Record a sale button here, and no Enter a bill either. This screen
+          reports, it does not write. Each book carries its own two buttons at
+          the top of its own list, and a wholesaler with nothing recorded yet
+          gets the steps below. */}
       <div>
         <h2 className="text-2xl font-black text-espresso">Overview</h2>
         <p className="mt-1 text-sm text-slate-500">

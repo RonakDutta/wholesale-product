@@ -4,6 +4,7 @@ import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
 import PendingChallans from "../../components/PendingChallans";
+import PartyFormModal from "../../components/PartyFormModal";
 import { useHotkey } from "../../hooks/useHotkey";
 import ItemPicker from "../../components/ItemPicker";
 import TransportCard from "../../components/TransportFields";
@@ -68,6 +69,7 @@ const RecordSale = () => {
   const [saving, setSaving] = useState(false);
 
   const [partyId, setPartyId] = useState(searchParams.get("party") || "");
+  const [addingParty, setAddingParty] = useState(false);
   const [saleDate, setSaleDate] = useState(
     () => new Date().toISOString().slice(0, 10),
   );
@@ -473,20 +475,34 @@ const RecordSale = () => {
               </p>
             </>
           ) : (
-            <select
-              id="sale-party"
-              value={partyId}
-              onChange={(e) => setPartyId(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
-            >
-              <option value="">Choose a customer</option>
-              {parties.map((party) => (
-                <option key={party.id} value={party.id}>
-                  {party.name}
-                  {party.business_name ? ` (${party.business_name})` : ""}
-                </option>
-              ))}
-            </select>
+            /* The list, and a way out of it. Same as the purchase form, which
+               has had this since a bill from a new mill meant abandoning what
+               was typed, walking to Suppliers, and starting again. A sale to a
+               customer who is not in the book yet is the identical problem. */
+            <div className="flex gap-2">
+              <select
+                id="sale-party"
+                value={partyId}
+                onChange={(e) => setPartyId(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+              >
+                <option value="">Choose a customer</option>
+                {parties.map((party) => (
+                  <option key={party.id} value={party.id}>
+                    {party.name}
+                    {party.business_name ? ` (${party.business_name})` : ""}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setAddingParty(true)}
+                className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2.5 text-xs font-bold text-espresso transition-colors hover:border-clay hover:text-clay"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New
+              </button>
+            </div>
           )}
         </div>
 
@@ -541,6 +557,7 @@ const RecordSale = () => {
           otherId={partyId}
           selected={challanIds}
           onChange={pullChallan}
+          autoSelect={searchParams.get("challan") || ""}
         />
       )}
 
@@ -826,6 +843,26 @@ const RecordSale = () => {
           </button>
         </div>
       </div>
+
+      {/* Adding the customer without losing the sale being typed. The list is
+          reloaded from the server rather than patched locally, so the new row
+          is exactly what every other row is. */}
+      {addingParty && (
+        <PartyFormModal
+          onClose={() => setAddingParty(false)}
+          onSaved={async (created) => {
+            setAddingParty(false);
+            try {
+              const { data } = await api.get("/api/parties");
+              setParties(Array.isArray(data) ? data : []);
+            } catch {
+              // The customer was created either way. A stale list is better
+              // than losing the sale being typed.
+            }
+            if (created?.id) setPartyId(created.id);
+          }}
+        />
+      )}
     </form>
   );
 };

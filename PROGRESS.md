@@ -33,26 +33,21 @@ cd server && npm run migrate
 | `wholesale3_series_financial_year.sql` | Sale and challan numbers restart each financial year | run 12 Sept, confirmed by a sale coming out `S/10/26-27` |
 | `wholesale3_purchases.sql` | Suppliers, purchases, purchase lines, money paid out, purchase numbering | run 14 Sept |
 | `wholesale3_master_settings.sql` | Platform formatting: decimals, digit grouping, currency, date format | run 14 Sept |
-| `wholesale3_opening_balance.sql` | What a customer or supplier already owed before this product | run 14 Sept, **RUN IT AGAIN**: its supplier half never applied, see 17 Sept below |
+| `wholesale3_opening_balance.sql` | What a customer or supplier already owed before this product | run 14 Sept, re-run 18 Sept for the supplier half |
 | `wholesale3_party_state.sql` | The customer's declared state, which decides CGST plus SGST against IGST | **NOT RUN** |
 | `wholesale3_razorpay_route.sql` | Linked accounts, transfers and webhook deliveries, so a buyer's money reaches the wholesaler | run 14 Sept |
-| `wholesale3_challans_two_kinds.sql` | Sale and purchase challans, each with its own run of numbers, and a billed status | **NOT RUN** |
-| `wholesale3_stock_ledger.sql` | The stock ledger, and the product and challan links on a sale or purchase line | **NOT RUN** |
+| `wholesale3_challans_two_kinds.sql` | Sale and purchase challans, each with its own run of numbers, and a billed status | run 18 Sept |
+| `wholesale3_stock_ledger.sql` | The stock ledger, and the product and challan links on a sale or purchase line | run 18 Sept |
 
-**Three outstanding as of 17 Sept**, the two marked NOT RUN above and the
-opening balance one, which needs running a second time. Everything else in
-this table is done.
+**Nothing outstanding as of 18 Sept**, except the party state file below.
+Everything else in this table has been run.
 
-`wholesale3_challans_two_kinds.sql` is what the challan rework needs. Until it
-is run the challan screens behave as they did before purchase challans
-existed, which was checked rather than assumed: three suites run against
-databases WITHOUT it. What does not work until it is run is the second kind,
-the billed status, and so the Make the bill button, which reads that status.
-
-`wholesale3_opening_balance.sql` needs running again because its supplier half
-never applied on any database built by the runner. Re-running it is safe and
-changes nothing if the columns are already there. Until it is run, adding a
-supplier answers 500.
+The three that were outstanding, the two challan kinds, the stock ledger and
+the opening balance re-run, all went in on 18 Sept. No restart was needed with
+any of them: every schema probe in this codebase caches only a TRUE answer, so
+running a migration takes effect on the next request. That rule was put in
+after `hasStatus` cached a false and would have pinned "the column is not
+there" for the life of the process.
 
 **One outstanding as of 14 Sept.**
 

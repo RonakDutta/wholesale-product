@@ -710,6 +710,8 @@ exports.updateInventoryItem = async (req, res) => {
     if (sent("bulkPrice")) put("discount_price", bulkPrice);
     if (sent("moq")) put("moq", moq);
     if (sent("stock")) put("stock", stock);
+    // Remembered so the ledger can be told by how much, below.
+    const stockEdited = sent("stock");
     if (sent("shippingDays")) put("shipping_days", shippingDays);
     if (sent("imageUrl")) put("image_url", imageUrl);
     if (sent("status")) put("status", status);
@@ -732,18 +734,87 @@ exports.updateInventoryItem = async (req, res) => {
     }
 
     params.push(id, supplierId);
-    const result = await pool.query(
-      `UPDATE supplier_inventory
-          SET ${sets.join(", ")}
-        WHERE id = $${params.length - 1} AND supplier_id = $${params.length}
-        RETURNING *`,
-      params,
-    );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: "Listing not found or you don't have permission to edit it",
-      });
+    /**
+     * ONE TRANSACTION, because editing the stock figure by hand is a stock
+     * movement and the ledger has to hear about it.
+     *
+     * It did not before: the catalogue number changed and the register had no
+     * record of who changed it or when, so the two numbers drifted apart with
+     * nothing to explain the gap. A correction IS a real event, which is why
+     * the ledger has an 'adjustment' kind, and writing the difference rather
+     * than the new total keeps the register a list of movements rather than a
+     * list of overwrites.
+     */
+    const client = await pool.connect();
+    let result;
+    try {
+      await client.query("BEGIN");
+
+      /**
+       * The figure he types means "this is what I have NOW", so the
+       * adjustment is whatever it takes to make the BOOK say that.
+       *
+       * Not the change to supplier_inventory.stock, which was the first
+       * attempt and is wrong: that column is the shop offer and the two
+       * numbers are deliberately allowed to differ, so a wholesaler
+       * correcting a count to 400 would have got a book of 370 because the
+       * offer happened to be 30 ahead. Counting the shelf and typing the
+       * answer has to leave the book agreeing with the shelf.
+       */
+      const before = stockEdited
+        ? (await client.query(
+            `SELECT COALESCE(p.name, 'Product') AS name, si.unit,
+                    COALESCE((SELECT SUM(l.quantity) FROM stock_ledger l
+                               WHERE l.wholesaler_id = si.supplier_id
+                                 AND l.product_id = si.id), 0) AS book
+               FROM supplier_inventory si
+               LEFT JOIN products p ON p.id = si.product_id
+              WHERE si.id = $1 AND si.supplier_id = $2`,
+            [id, supplierId])).rows[0]
+        : null;
+
+      result = await client.query(
+        `UPDATE supplier_inventory
+            SET ${sets.join(", ")}
+          WHERE id = $${params.length - 1} AND supplier_id = $${params.length}
+          RETURNING *`,
+        params,
+      );
+
+      if (result.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({
+          message: "Listing not found or you don't have permission to edit it",
+        });
+      }
+
+      if (before) {
+        const delta =
+          Number(result.rows[0].stock || 0) - Number(before.book || 0);
+        if (delta !== 0) {
+          await stockLedger.record(client, supplierId, {
+            kind: "adjustment",
+            documentId: id,
+            documentNumber: null,
+            direction: delta > 0 ? "in" : "out",
+            note: "Stock corrected by hand on the product",
+            lines: [{
+              itemName: before.name,
+              productId: id,
+              quantity: Math.abs(delta),
+              unit: result.rows[0].unit || before.unit || null,
+            }],
+          });
+        }
+      }
+
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw err;
+    } finally {
+      client.release();
     }
 
     res.status(200).json(result.rows[0]);
@@ -804,9 +875,29 @@ exports.deleteInventoryItem = async (req, res) => {
       });
     }
 
+    /**
+     * Two bugs lived in this query.
+     *
+     * The statuses are lowercase everywhere, and the CHECK constraint on
+     * `orders` proves it, but this tested 'Delivered' and 'Cancelled'
+     * capitalised. `'delivered' NOT IN ('Delivered','Cancelled')` is TRUE, so
+     * every listing that had ever been delivered counted as having a live
+     * order and could never be deleted.
+     *
+     * And it read `orders.inventory_item_id` only, which is the single item
+     * leftover. An order placed through the cart keeps its contents in
+     * `order_items`, so a listing with a genuinely live cart order was not
+     * protected at all and got hard deleted. That is the trap CLAUDE.md warns
+     * about, and it was here, failing in BOTH directions at once.
+     */
     const activeOrders = await pool.query(
-      `SELECT id FROM orders
-       WHERE inventory_item_id = $1 AND status NOT IN ('Delivered', 'Cancelled')`,
+      `SELECT o.id FROM orders o
+        WHERE LOWER(o.status) NOT IN ('delivered', 'cancelled', 'refunded')
+          AND (o.inventory_item_id = $1
+               OR EXISTS (SELECT 1 FROM order_items oi
+                           WHERE oi.order_id = o.id
+                             AND oi.inventory_item_id = $1))
+        LIMIT 1`,
       [id],
     );
 

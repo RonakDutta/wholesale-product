@@ -475,6 +475,9 @@ const ChallanDetail = () => {
               {isPurchase
                 ? "Entered when the supplier's bill arrived. That is where the GST is."
                 : "Raised from this challan. That is the document with the GST on it."}
+              {" "}This challan is finished: it will not appear again when you
+              record another one, so the same goods cannot be billed twice.
+              Goods going out again need a new challan.
             </p>
           </div>
         </Link>

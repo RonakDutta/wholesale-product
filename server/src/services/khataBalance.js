@@ -119,6 +119,21 @@ const openingTerm = (hasOpening, ref) =>
     ? `COALESCE((SELECT p2.opening_balance FROM parties p2 WHERE p2.id = ${ref}), 0) +`
     : "";
 
+/**
+ * CREDIT NOTES COME OFF, and until 18 Sept they did not.
+ *
+ * A credit note is raised when goods come back, a rate is cut, or a sale is
+ * cancelled after billing. It is the instrument that reverses a bill. Nothing
+ * here subtracted it, so a customer who returned fifty thousand rupees of
+ * cloth went on showing as owing that fifty thousand, on his page, on the
+ * dashboard total, and on the statement the wholesaler sent him asking to be
+ * paid. The note existed, had its own number and its own PDF, and changed no
+ * figure anywhere.
+ *
+ * ONLY WHERE THE BILL IT REVERSES IS STILL STANDING. A cancelled sale has
+ * already left the billed sum above, so subtracting its note as well takes
+ * the same money off twice. flow_check caught exactly that.
+ */
 const balanceExpression = ({ hasOrderParty, hasBridge, hasOpening = false, partyRef = "pt.id" }) => `
   ${openingTerm(hasOpening, partyRef)}
   COALESCE((
@@ -137,6 +152,15 @@ const balanceExpression = ({ hasOrderParty, hasBridge, hasOpening = false, party
   -
   COALESCE((
     SELECT SUM(pp.amount) FROM party_payments pp WHERE pp.party_id = ${partyRef}
+  ), 0)
+  -
+  COALESCE((
+    SELECT SUM(cn.grand_total) FROM credit_notes cn
+     WHERE cn.party_id = ${partyRef}
+       AND (cn.sale_id IS NULL
+            OR EXISTS (SELECT 1 FROM sales s2
+                        WHERE s2.id = cn.sale_id
+                          AND s2.status IN ${BILLED_SALE_STATUSES}))
   ), 0)
   ${hasOrderParty ? `+ COALESCE((${refundedBack(partyRef)}), 0)` : ""}
 `;

@@ -14,6 +14,7 @@
  */
 const { clean, fromPaise, toPaise } = require("../utils/money");
 const { nextSaleNumber } = require("./seriesNumbers");
+const stockLedger = require("./stockLedger");
 
 /**
  * Is this database ready to link a sale to an order?
@@ -86,6 +87,7 @@ const createSaleFromOrder = async (client, orderId) => {
   const lines = await client.query(
     `SELECT oi.product_name, oi.quantity, oi.total_price,
             COALESCE(oi.unit_price, 0) AS unit_price,
+            oi.inventory_item_id,
             si.unit, si.hsn_code, si.gst_percent
        FROM order_items oi
        LEFT JOIN supplier_inventory si ON si.id = oi.inventory_item_id
@@ -149,6 +151,36 @@ const createSaleFromOrder = async (client, orderId) => {
       ],
     );
   }
+
+  /**
+   * THE GOODS LEAVE, and until 18 Sept this path did not say so.
+   *
+   * stockLedger's own header claimed accepting a shop order moved stock
+   * "through the ordinary sale path". It does not: this function writes raw
+   * SQL into `sales` and `sale_lines` rather than going through
+   * saleController, so every marketplace order left the book stock untouched
+   * while supplier_inventory.stock went down. The two numbers drifted apart
+   * permanently and the register had no row to explain the gap.
+   *
+   * No double counting. supplier_inventory.stock is the marketplace
+   * RESERVATION, decremented when the order was placed. The ledger is book
+   * stock, and this is the first and only time these goods are taken out of
+   * it, because the sale that would otherwise have done it is this one.
+   */
+  await stockLedger.record(client, order.supplier_id, {
+    kind: "sale",
+    documentId: saleId,
+    documentNumber: saleNumber,
+    movedOn: new Date(order.created_at).toISOString().slice(0, 10),
+    direction: "out",
+    note: `Shop order ${order.order_number || orderId}`,
+    lines: lines.rows.map((line) => ({
+      itemName: clean(line.product_name) || "Item",
+      productId: line.inventory_item_id || null,
+      quantity: Number(line.quantity) || 1,
+      unit: clean(line.unit) || null,
+    })),
+  });
 
   return sale.rows[0];
 };

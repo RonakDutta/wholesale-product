@@ -191,6 +191,18 @@ const RecordPurchase = () => {
       ),
     );
 
+  /**
+   * What he already owed this supplier, off the list already fetched for the
+   * dropdown. Zero while editing, because this bill's own total is already
+   * inside that figure.
+   */
+  const owedBefore = editing
+    ? 0
+    : Math.max(
+        0,
+        Number(suppliers.find((x) => x.id === supplierId)?.balance || 0),
+      );
+
   const removeLine = (key) =>
     setLines((prev) =>
       prev.length === 1 ? prev : prev.filter((line) => line.key !== key),
@@ -767,6 +779,24 @@ const RecordPurchase = () => {
               Leave this empty if you will pay later. Whatever is left shows on
               their account.
             </p>
+
+            {/* What he already owed this mill, before this bill. Same reason
+                as the sale form: the tick below settles THIS bill only, and a
+                wholesaler on a supplier he already owes 40,000 reads it as
+                being square. Read off the supplier list already loaded for
+                the dropdown. */}
+            {owedBefore > 0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-xs font-bold text-amber-900">
+                  You already owe{" "}
+                  {suppliers.find((x) => x.id === supplierId)?.name || "this supplier"}{" "}
+                  ₹{money(owedBefore)}
+                </p>
+                <p className="mt-0.5 text-[11px] text-amber-800">
+                  From earlier bills. The tick below settles this bill only.
+                </p>
+              </div>
+            )}
 
             <PaidInFull
               id="purchase-paid-in-full"

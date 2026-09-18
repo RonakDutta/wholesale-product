@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Hash, MapPin, Percent, Ruler } from "lucide-react";
+import { ArrowRight, Hash, MapPin, Percent, Ruler, Receipt, Settings } from "lucide-react";
 import api from "../../utils/axios";
 
 /**
@@ -39,6 +39,21 @@ const CARDS = [
     icon: Hash,
     title: "HSN codes",
     note: "What the goods are. Codes and descriptions, never a rate.",
+  },
+  // Both of these had pages already and nothing linked to them, so the only
+  // way in was to know the URL. `field` is left off because neither is a
+  // counted list.
+  {
+    to: "/administration/tax-terms",
+    icon: Receipt,
+    title: "Tax terms",
+    note: "Named GST and cess combinations a wholesaler can put on a line.",
+  },
+  {
+    to: "/administration/settings",
+    icon: Settings,
+    title: "Platform settings",
+    note: "Decimals, digit grouping, currency words, date format, HSN digits.",
   },
 ];
 
@@ -83,9 +98,14 @@ const MasterOverview = () => {
           >
             <div className="flex items-start justify-between gap-3">
               <card.icon className="h-5 w-5 shrink-0 text-clay" />
-              <span className="text-2xl font-black text-espresso">
-                {counts ? counts[card.field] : "-"}
-              </span>
+              {/* Only the counted lists show a number. The two cards without
+                  a `field` are screens rather than lists, and a "-" where a
+                  count belongs reads as a list that failed to load. */}
+              {card.field && (
+                <span className="text-2xl font-black text-espresso">
+                  {counts ? counts[card.field] : "-"}
+                </span>
+              )}
             </div>
             <p className="mt-3 flex items-center gap-1.5 text-sm font-bold text-espresso">
               {card.title}

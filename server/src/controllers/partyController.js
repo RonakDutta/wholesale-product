@@ -613,16 +613,39 @@ const buildStatement = async (id, wholesalerId, rawFrom, rawTo) => {
              } AS billed,
              COALESCE((SELECT SUM(pp.amount) FROM party_payments pp
                         WHERE pp.party_id = $1 AND pp.wholesaler_id = $2
-                          AND pp.paid_on < $3::date), 0) AS received`,
+                          AND pp.paid_on < $3::date), 0) AS received,
+             COALESCE((SELECT SUM(cn.grand_total) FROM credit_notes cn
+                        WHERE cn.party_id = $1 AND cn.wholesaler_id = $2
+                          AND cn.issue_date < $3::date
+                          AND (cn.sale_id IS NULL OR EXISTS (
+                                SELECT 1 FROM sales s2 WHERE s2.id = cn.sale_id
+                                  AND s2.status IN ('confirmed', 'delivered')))
+                       ), 0) AS credited`,
           [id, wholesalerId, from],
         )
       : null;
 
+    /**
+     * What he owed when the window opens.
+     *
+     * Two things were missing and both made the statement disagree with the
+     * customer's own page, which is the one thing a statement must never do.
+     *
+     * The party's OPENING BALANCE, what he already owed before this book
+     * began, was left out entirely, so a customer carried over from an old
+     * ledger got a statement short by that amount.
+     *
+     * And CREDIT NOTES before the window were not deducted, for the same
+     * reason they were missing from the balance itself.
+     */
     const openingPaise = opening
-      ? toPaise(opening.rows[0].billed) - toPaise(opening.rows[0].received)
-      : 0;
+      ? toPaise(opening.rows[0].billed)
+        - toPaise(opening.rows[0].received)
+        - toPaise(opening.rows[0].credited || 0)
+        + (hasOpening ? toPaise(party.rows[0].opening_balance || 0) : 0)
+      : (hasOpening ? toPaise(party.rows[0].opening_balance || 0) : 0);
 
-    const [sales, payments, marketOrders] = await Promise.all([
+    const [sales, payments, creditNotes, marketOrders] = await Promise.all([
       pool.query(
         `SELECT s.id, s.sale_number, s.sale_date AS on_date, s.total, s.created_at,
                 (SELECT COUNT(*) FROM sale_lines sl WHERE sl.sale_id = s.id) AS line_count
@@ -643,6 +666,26 @@ const buildStatement = async (id, wholesalerId, rawFrom, rawTo) => {
             AND ($3::date IS NULL OR pp.paid_on >= $3::date)
             AND ($4::date IS NULL OR pp.paid_on <= $4::date)
           ORDER BY pp.paid_on ASC, pp.created_at ASC`,
+        [id, wholesalerId, from, to],
+      ),
+      // Credit notes inside the window, which reduce what he owes. Listed as
+      // their own kind rather than folded into payments, because returned
+      // goods and cash handed over are different events and a customer
+      // reading his own statement needs to tell them apart.
+      pool.query(
+        `SELECT cn.id, cn.note_number, cn.issue_date AS on_date,
+                cn.grand_total, cn.reason, cn.created_at
+           FROM credit_notes cn
+          WHERE cn.party_id = $1 AND cn.wholesaler_id = $2
+            -- A note against a cancelled sale is left off, because that sale
+            -- is not on the statement either: listing the reversal of a bill
+            -- the customer was never shown reads as a credit from nowhere.
+            AND (cn.sale_id IS NULL OR EXISTS (
+                  SELECT 1 FROM sales s2 WHERE s2.id = cn.sale_id
+                    AND s2.status IN ('confirmed', 'delivered')))
+            AND ($3::date IS NULL OR cn.issue_date >= $3::date)
+            AND ($4::date IS NULL OR cn.issue_date <= $4::date)
+          ORDER BY cn.issue_date ASC, cn.created_at ASC`,
         [id, wholesalerId, from, to],
       ),
       // Orders the customer placed through the shop. They read as a line on
@@ -690,6 +733,16 @@ const buildStatement = async (id, wholesalerId, rawFrom, rawTo) => {
         lineCount: Number(row.line_count),
         debitPaise: toPaise(row.total),
         creditPaise: 0,
+      })),
+      ...creditNotes.rows.map((row) => ({
+        kind: "credit_note",
+        id: row.id,
+        date: row.on_date,
+        createdAt: row.created_at,
+        ref: row.note_number,
+        note: row.reason,
+        debitPaise: 0,
+        creditPaise: toPaise(row.grand_total),
       })),
       ...payments.rows.map((row) => ({
         kind: "payment",

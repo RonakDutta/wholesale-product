@@ -20,8 +20,17 @@ import { money, dateLabel } from "../../utils/money";
 const KINDS = {
   sale: { label: "Sale", tone: "bg-sky-50 text-sky-700", to: (r) => `/seller/sales/${r.id}` },
   purchase: { label: "Purchase", tone: "bg-amber-50 text-amber-700", to: (r) => `/seller/purchases/${r.id}` },
-  payment_in: { label: "Money in", tone: "bg-emerald-50 text-emerald-700", to: () => null },
-  payment_out: { label: "Money out", tone: "bg-rose-50 text-rose-700", to: () => null },
+  // Payments link to the party whose account they landed on, which is where
+  // the voucher and the running balance live. They went nowhere before, which
+  // stranded anybody who clicked one wanting to check it.
+  payment_in: { label: "Money in", tone: "bg-emerald-50 text-emerald-700",
+    to: (r) => (r.link_id ? `/seller/customers/${r.link_id}` : null) },
+  payment_out: { label: "Money out", tone: "bg-rose-50 text-rose-700",
+    to: (r) => (r.link_id ? `/seller/suppliers/${r.link_id}` : null) },
+  // There is no credit note screen of its own: a note is shown on the bill it
+  // reverses, which is also where somebody checking one wants to be.
+  credit_note: { label: "Credit note", tone: "bg-orange-50 text-orange-700",
+    to: (r) => (r.link_id ? `/seller/invoices/${r.link_id}` : null) },
   invoice: { label: "Bill", tone: "bg-violet-50 text-violet-700", to: (r) => `/seller/invoices/${r.id}` },
   sale_challan: { label: "Sale challan", tone: "bg-slate-100 text-slate-600", to: (r) => `/seller/challans/${r.id}` },
   purchase_challan: { label: "Purchase challan", tone: "bg-slate-100 text-slate-600", to: (r) => `/seller/challans/${r.id}` },

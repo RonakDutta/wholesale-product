@@ -78,6 +78,7 @@ const SellerOrderDetail = lazy(() => import("./pages/dashboard/SellerOrderDetail
 const Staff = lazy(() => import("./pages/dashboard/Staff"));
 const YourData = lazy(() => import("./pages/dashboard/YourData"));
 const Challans = lazy(() => import("./pages/dashboard/Challans"));
+const Stock = lazy(() => import("./pages/dashboard/Stock"));
 const RecordChallan = lazy(() => import("./pages/dashboard/RecordChallan"));
 const ChallanDetail = lazy(() => import("./pages/dashboard/ChallanDetail"));
 // The purchase side: goods coming in, who they came from, what is owed.
@@ -177,6 +178,7 @@ const router = createBrowserRouter([
       { path: "money/:metric", element: <MoneyBreakdown /> },
       { path: "invoices", element: <Invoices /> },
       // Goods sent out before the money came in. Not a tax document.
+      { path: "stock", element: <Stock /> },
       { path: "challans", element: <Challans /> },
       // One challan in full. The list could only be downloaded from, so the
       // only way to read what was sent was to open a PDF.

@@ -37,6 +37,7 @@ const blankLine = () => ({
   gstPercent: "",
   hsnCode: "",
   itcEligible: true,
+  productId: null,
 });
 
 const RecordPurchase = () => {
@@ -178,6 +179,7 @@ const RecordPurchase = () => {
           ? {
               ...line,
               itemName: product.name,
+              productId: product.id,
               unit: unitCodes.includes(product.unit) ? product.unit : line.unit,
               hsnCode: product.hsn_code || line.hsnCode,
               gstPercent:
@@ -257,6 +259,7 @@ const RecordPurchase = () => {
             ...blankLine(),
             fromChallan: challan.id,
             itemName: l.itemName || "",
+            productId: l.productId || null,
             quantity: l.quantity ?? "",
             unit: l.unit || "pcs",
             rate: l.rate ?? "",
@@ -325,6 +328,10 @@ const RecordPurchase = () => {
         gstPercent: line.gstPercent === "" ? undefined : line.gstPercent,
         hsnCode: line.hsnCode || undefined,
         itcEligible: line.itcEligible,
+        // The listing, and the challan the goods already arrived on. The
+        // second is what stops the stock ledger bringing them in twice.
+        productId: line.productId || undefined,
+        fromChallan: line.fromChallan || undefined,
       })),
     };
 
@@ -570,7 +577,15 @@ const RecordPurchase = () => {
                       value={line.itemName}
                       items={products}
                       placeholder="Item name"
-                      onChange={(name) => setLine(line.key, "itemName", name)}
+                      onChange={(name) =>
+                        setLines((prev) =>
+                          prev.map((l) =>
+                            l.key === line.key
+                              ? { ...l, itemName: name, productId: null }
+                              : l,
+                          ),
+                        )
+                      }
                       onPick={(product) => fillFromProduct(line.key, product)}
                     />
 

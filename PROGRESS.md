@@ -37,6 +37,7 @@ cd server && npm run migrate
 | `wholesale3_party_state.sql` | The customer's declared state, which decides CGST plus SGST against IGST | **NOT RUN** |
 | `wholesale3_razorpay_route.sql` | Linked accounts, transfers and webhook deliveries, so a buyer's money reaches the wholesaler | run 14 Sept |
 | `wholesale3_challans_two_kinds.sql` | Sale and purchase challans, each with its own run of numbers, and a billed status | **NOT RUN** |
+| `wholesale3_stock_ledger.sql` | The stock ledger, and the product and challan links on a sale or purchase line | **NOT RUN** |
 
 **Three outstanding as of 17 Sept**, the two marked NOT RUN above and the
 opening balance one, which needs running a second time. Everything else in
@@ -2532,6 +2533,83 @@ and GST 5 on a pick; the purchase picker fills HSN 5515 and GST 12 and leaves
 the rate empty.
 
 **Migration to run:** none.
+
+---
+
+## 18 Sept: the stock ledger, and a credit limit that is no longer a lie
+
+Asked for straight off the 18 Sept survey: "do this one and the other stuff
+that can be easily done".
+
+**Nothing in the khata moved stock before this.** `supplier_inventory.stock`
+was written in exactly two files, both on the marketplace order path. A sale
+did not lower it, a purchase did not raise it, and a challan did not touch it,
+so the figure meant nothing to a wholesaler working from the sales book.
+
+`stock_ledger` is a LEDGER, not a counter. Quantity on hand is the SUM of its
+rows. A stored number written from six documents is how a figure drifts with
+nothing to say which write was wrong, and this product already had one of
+those. Every row names the document that caused it, so the register answers
+not just what the figure is but why.
+
+**The two numbers are kept apart, on purpose.** `supplier_inventory.stock` is
+what he OFFERS on the shop page, a reservation the marketplace decrements when
+an order is placed. The ledger is his own book stock. The Stock screen shows
+both side by side under "In your book" and "On your shop page" and explains
+the difference at the bottom, because a trader seeing two numbers for the same
+cloth will otherwise assume one is broken.
+
+**The double counting problem, which is the whole difficulty.** Goods leave on
+a sale challan and the bill is raised from that challan afterwards. If both
+move stock the goods leave twice, and each row looks correct on its own. Tally
+ties the two together with a Tracking Number; the same idea here is
+`sale_lines.from_challan_id`. The challan moves the goods. The bill raised
+from it moves nothing. A line typed straight onto a bill has no challan and
+moves the goods itself. The client had tracked this per line since the challan
+rework and simply never sent it.
+
+Who writes to it: sale (out), purchase (in), sale challan (out), purchase
+challan (in), and a reversing row on any cancel. Orders need no hook of their
+own, because accepting an order writes a sale and that sale moves the stock
+through the ordinary path. A hook here would double count for the same reason
+as above.
+
+**Reversal, never deletion.** Cancelling writes an opposite row pointing at
+the one it undoes. A cancelled document still happened and the register says
+so, greyed rather than hidden. Reversing twice is a no op, because cancel is
+exactly the button somebody presses twice on a slow connection.
+
+Two transactions had to grow to take this. `saleController.updateSaleStatus`
+was a bare `pool.query` and could stay one while cancelling moved only a
+status; it cannot now, because a cancel that marked the sale dead and then
+failed to give the goods back would leave stock permanently short.
+`challanBook.cancel` was the same.
+
+**The credit limit stops being a lie.** `parties.credit_limit` has existed
+since the opening balance migration, has been importable all along, and was
+read by no controller anywhere: a field that looked like a control and was
+not. It now warns, and deliberately does not block. Marg and Busy both offer a
+hard block, and both are entered at the counter BEFORE the goods move, which
+is the case where a block means something. Here the wholesaler is writing down
+a sale whose goods have already gone, and refusing it would not undo the sale,
+it would only leave the sale missing from the khata. There is a box for it on
+the customer form now too, since there was none.
+
+**Verified.** `stock_check.js`, a new suite, 30 checks. The one that matters
+is billing a challan and asserting the figure does NOT move again: 50, not 30,
+and three ledger rows rather than four. Also the purchase direction, editing a
+challan down from 20 to 15 giving 5 back rather than sending 15 out again,
+cancelling twice, and the whole thing running on a database where the ledger
+table is hidden. **37 of 37 suites green** on databases rebuilt from the
+migrations. Migration checked against a semicolon splitter, both on a database
+that had it and one that did not.
+
+Rendered the Stock screen, which caught a bug lint and the build both missed:
+the `Boxes` icon was used in the nav and never imported, so every seller screen
+threw `Boxes is not defined`. The guard in my own edit script had matched the
+line it had just written. Nothing but rendering would have found it.
+
+**Migration to run:** `wholesale3_stock_ledger.sql`
 
 ---
 

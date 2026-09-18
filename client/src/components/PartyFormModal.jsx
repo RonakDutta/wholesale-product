@@ -33,6 +33,12 @@ const PartyFormModal = ({ party, onClose, onSaved }) => {
     openingBalanceOn: party?.opening_balance_on
       ? String(party.opening_balance_on).slice(0, 10)
       : "",
+    // How much you are willing to let this customer owe. Blank means no
+    // limit, which is what almost every customer has.
+    creditLimit:
+      party?.credit_limit && Number(party.credit_limit) !== 0
+        ? String(Number(party.credit_limit))
+        : "",
   });
   const [status, setStatus] = useState(party?.status || "active");
   const [saving, setSaving] = useState(false);
@@ -301,6 +307,32 @@ const PartyFormModal = ({ party, onClose, onSaved }) => {
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* How far you will let them run. Nothing is ever refused on it: the
+              sale form says something after the fact, because by the time a
+              wholesaler is writing a sale down the goods have usually already
+              gone and refusing to record it would only lose the sale from the
+              khata. */}
+          <div>
+            <label
+              htmlFor="party-credit-limit"
+              className="mb-1.5 block text-sm font-bold text-espresso"
+            >
+              Credit limit
+            </label>
+            <input
+              id="party-credit-limit"
+              value={form.creditLimit}
+              onChange={set("creditLimit")}
+              inputMode="decimal"
+              placeholder="No limit"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Leave it empty for no limit. If they go past it you get a warning
+              when you record a sale. Nothing is ever blocked.
+            </p>
           </div>
 
           <div>

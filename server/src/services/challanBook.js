@@ -2,6 +2,7 @@ const pool = require("../config/db");
 const { nextChallanNumber } = require("./seriesNumbers");
 const { clean, optionalNumber } = require("../utils/money");
 const { checkHsn, minHsnDigits } = require("./hsnService");
+const stockLedger = require("./stockLedger");
 
 /**
  * The challan as a document in its own right, in two directions.
@@ -26,19 +27,22 @@ const { checkHsn, minHsnDigits } = require("./hsnService");
  * the bill went out, and the error would be invisible because both entries
  * would look correct on their own.
  *
- * IT DOES NOT MOVE STOCK EITHER, AND THAT IS NOT THE INTENT. This header used
- * to read "a challan moves STOCK and nothing else", which was the design and
- * never the code. Nothing in this product moves stock except the marketplace
- * order path: `supplier_inventory.stock` is written only by orderController
- * and orderStatusService, so a sale does not lower it and a purchase does not
- * raise it. Making a challan the one khata document that moved stock would
- * have made the figure wrong in a new direction rather than right.
+ * IT DOES MOVE STOCK, since 18 Sept, and that is the only thing besides the
+ * document itself that it moves. For most of this file's life the header
+ * claimed this and the code did not do it: nothing in the khata moved stock at
+ * all. `services/stockLedger.js` is the ledger it writes to now, and the
+ * quantity on hand is the SUM of those rows rather than a stored counter.
  *
- * The real fix is a stock ledger every goods document writes to, with the
- * current figure derived from it. That is on ROADMAP.md, in the 18 Sept
- * survey, and is the largest thing this product is missing. Until it exists,
- * this file deliberately leaves stock alone, and this comment says so rather
- * than describing an intention as a fact.
+ * WHICH IS NOT `supplier_inventory.stock`. That column is the marketplace
+ * reservation counter, decremented when a shop order is placed, and it is left
+ * alone here. The two numbers answer different questions and the screens that
+ * show both say which is which.
+ *
+ * A BILL RAISED FROM A CHALLAN MOVES NOTHING. The goods left when the challan
+ * was written, so the sale line carries `from_challan_id` and the ledger skips
+ * those lines. Without that the goods leave twice and both rows look correct
+ * on their own. Tally ties the two together the same way, with a Tracking
+ * Number.
  *
  * HOW A BILL COMES OUT OF ONE, and why it is not done here. The challan is
  * loaded INTO the sale or purchase form, where the wholesaler can adjust it,
@@ -268,6 +272,18 @@ class ChallanBook {
         );
       }
 
+      // The goods moved, so the stock moved. This is the point the challan
+      // exists to record. The bill raised from it later moves nothing, because
+      // the sale line carries from_challan_id and the ledger skips those.
+      await stockLedger.record(client, wholesalerId, {
+        kind: kind === "sale" ? "sale_challan" : "purchase_challan",
+        documentId: challan.id,
+        documentNumber: challan.challan_number,
+        movedOn: challan.issue_date,
+        direction: kind === "sale" ? "out" : "in",
+        lines: read.lines,
+      });
+
       await client.query("COMMIT");
       return { challan };
     } catch (err) {
@@ -291,7 +307,7 @@ class ChallanBook {
     if (!(await hasTwoKinds())) return { error: "Run the challan migration first." };
 
     const existing = (await pool.query(
-      `SELECT id, kind, status FROM delivery_challans
+      `SELECT id, kind, status, challan_number FROM delivery_challans
         WHERE id = $1 AND wholesaler_id = $2`, [challanId, wholesalerId])).rows[0];
     if (!existing) return { error: "notFound" };
     if (existing.status === "billed") {
@@ -300,6 +316,9 @@ class ChallanBook {
     if (existing.status === "cancelled") {
       return { error: "This challan was cancelled." };
     }
+    // The document kind the ledger files this under. Taken from the row, not
+    // from the body: the kind is what the document IS and cannot be edited.
+    const kindOf = existing.kind === "purchase" ? "purchase_challan" : "sale_challan";
 
     const read = await readLines(body.lines);
     if (read.error) return { error: read.error };
@@ -340,6 +359,22 @@ class ChallanBook {
         );
       }
 
+      // The lines were replaced wholesale, so the movements are too: reverse
+      // what this challan moved before, then record what it moves now. Editing
+      // 20 metres down to 15 has to give 5 back, and a diff that tried to work
+      // out the difference per line would have to solve the same matching
+      // problem the line replacement above deliberately refuses to solve.
+      await stockLedger.reverse(client, wholesalerId, kindOf, challanId,
+        "Challan edited");
+      await stockLedger.record(client, wholesalerId, {
+        kind: kindOf,
+        documentId: challanId,
+        documentNumber: existing.challan_number,
+        movedOn: clean(body.issueDate ?? body.issue_date),
+        direction: existing.kind === "sale" ? "out" : "in",
+        lines: read.lines,
+      });
+
       await client.query("COMMIT");
       const fresh = (await pool.query(
         `SELECT * FROM delivery_challans WHERE id = $1`, [challanId])).rows[0];
@@ -363,18 +398,36 @@ class ChallanBook {
   async cancel(challanId, wholesalerId, reason) {
     if (!(await hasTwoKinds())) return { error: "Run the challan migration first." };
     const found = (await pool.query(
-      `SELECT status FROM delivery_challans WHERE id = $1 AND wholesaler_id = $2`,
+      `SELECT status, kind FROM delivery_challans WHERE id = $1 AND wholesaler_id = $2`,
       [challanId, wholesalerId])).rows[0];
     if (!found) return { error: "notFound" };
     if (found.status === "billed") {
       return { error: "A challan that has been billed cannot be cancelled. Deal with the bill first." };
     }
-    await pool.query(
-      `UPDATE delivery_challans
-          SET status = 'cancelled', cancelled_reason = $3, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1 AND wholesaler_id = $2`,
-      [challanId, wholesalerId, clean(reason)],
-    );
+    // The status change and the stock coming back are one act. A cancel that
+    // committed the status and then failed on the ledger would leave goods
+    // permanently out of the book with no document accounting for them, so
+    // this took a transaction the moment it started touching stock.
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `UPDATE delivery_challans
+            SET status = 'cancelled', cancelled_reason = $3, updated_at = CURRENT_TIMESTAMP
+          WHERE id = $1 AND wholesaler_id = $2`,
+        [challanId, wholesalerId, clean(reason)],
+      );
+      await stockLedger.reverse(
+        client, wholesalerId,
+        found.kind === "purchase" ? "purchase_challan" : "sale_challan",
+        challanId, "Challan cancelled");
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
     return { cancelled: true };
   }
 

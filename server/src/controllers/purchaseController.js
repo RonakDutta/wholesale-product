@@ -1,6 +1,7 @@
 const pool = require("../config/db");
 const { clean, fromPaise, toPaise } = require("../utils/money");
 const gstService = require("../services/gstService");
+const stockLedger = require("../services/stockLedger");
 const { checkHsn, minHsnDigits } = require("../services/hsnService");
 const challanBook = require("../services/challanBook");
 const invoiceRepository = require("../repositories/invoiceRepository");
@@ -20,9 +21,12 @@ const { receivedExpression } = require("../services/supplierBalance");
  *      twice. See the migration for why that matters more than it looks.
  *   2. Each line says whether input tax credit may be claimed on it.
  *   3. There is no invoice. The bill is the supplier's document, not ours.
- *   4. Nothing touches stock. See the note on the migration: a sale does not
- *      lower stock, so a purchase must not raise it or the figure only ever
- *      climbs.
+ *   4. It raises stock, through services/stockLedger.js, since 18 Sept. This
+ *      line used to say nothing here touches stock, and that was right at the
+ *      time: a sale did not lower it, so a purchase raising it would have made
+ *      the figure climb for ever. Both move it now, in the one ledger, and a
+ *      line that arrived on a purchase challan is skipped because the challan
+ *      already brought it in.
  */
 
 const purchasesReady = async (res) => {
@@ -125,6 +129,12 @@ const buildLines = (rawLines, minHsn = 4) => {
       hsnCode: hsn.hsn,
       itcEligible,
       amountPaise: Math.round(toPaise(rate) * quantity),
+      // Which listing this line is, and which challan the goods already
+      // arrived on. The stock ledger reads both. Same rule as the sale side:
+      // optional, and a bad id costs an unattributed movement rather than
+      // refusing the whole bill.
+      productId: clean(raw.productId ?? raw.product_id) || null,
+      fromChallanId: clean(raw.fromChallan ?? raw.fromChallanId ?? raw.from_challan_id) || null,
     });
   }
 
@@ -250,11 +260,12 @@ exports.createPurchase = async (req, res) => {
     const purchaseId = purchase.rows[0].id;
 
     for (const line of lines) {
-      await client.query(
+      const inserted = await client.query(
         `INSERT INTO purchase_lines
            (purchase_id, item_name, quantity, unit, rate, amount,
             hsn_code, gst_percent, itc_eligible)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING id`,
         [
           purchaseId,
           line.itemName,
@@ -267,7 +278,24 @@ exports.createPurchase = async (req, res) => {
           line.itcEligible,
         ],
       );
+      await stockLedger.stampLine(
+        client, "purchase_lines", inserted.rows[0]?.id, line);
     }
+
+    // The goods arrive. Lines that came off a purchase challan are skipped
+    // inside record(), because they arrived when the challan was written.
+    //
+    // The note at the top of this file used to say nothing here touches
+    // stock, and that was true and correct while a sale did not lower it
+    // either. Both move it now, through the one ledger.
+    await stockLedger.record(client, wholesalerId, {
+      kind: "purchase",
+      documentId: purchaseId,
+      documentNumber: purchaseNumber,
+      movedOn: clean(purchaseDate),
+      direction: "in",
+      lines,
+    });
 
     // Dated with the purchase, not with today, for the same reason the sale
     // side does it: a wholesaler writing up Monday's bills on Thursday would
@@ -513,6 +541,11 @@ exports.updatePurchaseStatus = async (req, res) => {
 
     let releasedToAccount = 0;
     if (status === "cancelled") {
+      // The goods go back out of the book. A reversing row rather than a
+      // delete, so the register still shows they arrived and then did not.
+      await stockLedger.reverse(client, wholesalerId, "purchase", id,
+        `Purchase ${updated.rows[0]?.purchase_number} cancelled`);
+
       const loosened = await client.query(
         `UPDATE supplier_payments SET purchase_id = NULL
           WHERE purchase_id = $1 AND wholesaler_id = $2

@@ -505,6 +505,66 @@ const mk = () => {
     challanService.resetChallanTables?.();
   }
 
+  // ------------------------------------------------------------------
+  console.log("\nA challan billed by a SALE says so on every screen");
+  // ------------------------------------------------------------------
+  /**
+   * Reported from the running app on 18 Sept: a brand new challan showed a
+   * due, and a billed one showed a due under its own Billed badge.
+   *
+   * Two faults, both from reading the wrong column.
+   *
+   * 1. The list worked out `total_value - amount_paid` and called it "due".
+   *    On a movement challan amount_paid is always zero, so every row printed
+   *    the whole value of the goods as a debt, on a document whose entire
+   *    point is that nothing is owed until the bill. The list query did not
+   *    even SELECT amount_paid, so the sum was `total - undefined`.
+   *
+   * 2. Every "is it billed" test outside the challan list read `invoice_id`.
+   *    A challan billed through a SALE gets status 'billed' and a sale_id and
+   *    NEVER an invoice_id, so those screens disagreed with each other about
+   *    the same document.
+   */
+  const forList = await challanBook.create(owner, {
+    kind: "sale", partyId: party,
+    lines: [{ itemName: "List check", quantity: 4, rate: 100 }],
+  });
+
+  const listed = (await challanBook.list(owner, "sale"))
+    .find((c) => c.id === forList.challan.id);
+  check(listed !== undefined, "a new challan appears in the list");
+  check(listed.amount_paid !== undefined,
+    "the list returns amount_paid, so a money test is a real test rather "
+    + "than total minus undefined", { got: listed.amount_paid });
+  check(Number(listed.amount_paid) === 0,
+    "and it is zero, because a challan takes no money", listed.amount_paid);
+
+  const billedBySale = mk();
+  await saleController.createSale({
+    user: { id: owner, role: "seller" },
+    body: { partyId: party, amountPaid: 0, paymentMethod: "cash",
+            challanIds: [forList.challan.id],
+            lines: [{ itemName: "List check", quantity: 4, rate: 100,
+                      gstPercent: 5, fromChallan: forList.challan.id }] },
+  }, billedBySale);
+  check(billedBySale.statusCode === 201, "it is billed from a sale",
+    billedBySale.body);
+
+  const afterBilling = (await challanBook.list(owner, "sale"))
+    .find((c) => c.id === forList.challan.id);
+  check(afterBilling.status === "billed", "the list says billed",
+    afterBilling.status);
+  check(!afterBilling.invoice_id,
+    "and carries NO invoice_id, which is why status has to be the authority",
+    afterBilling.invoice_id);
+
+  const onTheSale = await challanService.listForSale(
+    billedBySale.body.id, owner);
+  check(onTheSale.length === 1, "the sale screen lists it", onTheSale.length);
+  check(onTheSale[0].status === "billed",
+    "and gets the status, so the Billed badge can appear there too",
+    onTheSale[0].status);
+
   console.log(fails ? `\n${fails} FAILED\n` : "\nall good\n");
   await testPool.end();
   process.exit(fails ? 1 : 0);

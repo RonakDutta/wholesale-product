@@ -177,8 +177,31 @@ const Challans = () => {
         ) : (
           <ul className="divide-y divide-slate-100">
             {shown.map((c) => {
-              const due =
-                Number(c.total_value || 0) - Number(c.amount_paid || 0);
+              /**
+               * A CHALLAN OWES NOTHING, so this row does not work out a due.
+               *
+               * It used to read `total_value - amount_paid`, and on a
+               * movement challan `amount_paid` is always zero, so every row
+               * printed the whole value of the goods as "due". A challan
+               * carries no GST and never touches the party balance: nothing
+               * is owed until the bill is raised from it. The list was
+               * inventing a debt on a document whose entire point is that
+               * there is not one yet.
+               *
+               * Worse, the list query did not select amount_paid at all, so
+               * the subtraction was `total - undefined` every time. The
+               * figure could not have been right even for the old
+               * payment-driven challans it was written for.
+               *
+               * The detail screen and the PDF were both fixed on 17 Sept to
+               * key off money actually RECEIVED. This is that same rule,
+               * arriving late: only a challan that really took money has
+               * anything to say, and what it says is a snapshot of that day,
+               * not a live balance.
+               */
+              const received = Number(c.amount_paid || 0);
+              const owedThen =
+                Number(c.total_value || 0) - received;
               return (
                 <li
                   key={c.id}
@@ -227,15 +250,22 @@ const Challans = () => {
                       <p className="text-sm font-black text-espresso">
                         {rupees(c.total_value)}
                       </p>
-                      {/* Only while it is unbilled. total_value and
-                          amount_paid are frozen at the moment the challan was
-                          created, so on a billed challan this figure is the
-                          balance as it stood that day, not a balance. It used
-                          to print "1600 due" in clay beside a green "Billed"
-                          badge, which is the same row saying both things. */}
-                      {due > 0 && !c.invoice_id && !c.purchase_id && (
-                        <p className="text-[11px] font-bold text-clay">
-                          {rupees(due)} due
+                      {/* Only where money genuinely changed hands, which now
+                          means only the old payment-driven challans. Worded
+                          in the past tense because both figures are frozen at
+                          the moment the challan was written: this is what was
+                          outstanding that day, not what is outstanding now.
+
+                          The old test was `!c.invoice_id && !c.purchase_id`,
+                          which ignored `status`. A challan billed through a
+                          SALE gets status 'billed' and a sale_id and never an
+                          invoice_id, so it printed a due in clay directly
+                          under its own green "Billed" badge: the same row
+                          saying both things, which is exactly what the
+                          comment here claimed had been fixed. */}
+                      {received > 0 && owedThen > 0 && (
+                        <p className="text-[11px] font-bold text-slate-500">
+                          {rupees(owedThen)} owing then
                         </p>
                       )}
                     </div>

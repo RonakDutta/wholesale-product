@@ -167,10 +167,18 @@ const DayBook = () => {
               const href = kind.to(row);
               const body = (
                 <div className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
-                  <span
-                    className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-bold ${kind.tone}`}
-                  >
-                    {kind.label}
+                  {/* A FIXED WIDTH COLUMN, not a badge that sizes itself.
+                      The labels run from "Sale" to "Purchase challan", so a
+                      shrink-to-fit badge started every name at a different
+                      place and the list read as ragged down the left. The
+                      badge still sizes to its own text; the column it sits in
+                      does not. */}
+                  <span className="w-[104px] shrink-0">
+                    <span
+                      className={`inline-block whitespace-nowrap rounded-md px-2 py-1 text-[10px] font-bold ${kind.tone}`}
+                    >
+                      {kind.label}
+                    </span>
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold text-espresso">

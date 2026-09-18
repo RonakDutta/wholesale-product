@@ -473,7 +473,7 @@ class ChallanBook {
       if (kind !== "sale") return [];
       const { rows } = await pool.query(
         `SELECT dc.id, dc.challan_number, dc.issue_date, dc.total_value,
-                dc.invoice_id, dc.recipient_name, s.sale_number
+                dc.amount_paid, dc.invoice_id, dc.recipient_name, s.sale_number
            FROM delivery_challans dc
            LEFT JOIN sales s ON s.id = dc.sale_id
           WHERE dc.wholesaler_id = $1
@@ -485,7 +485,7 @@ class ChallanBook {
 
     const { rows } = await pool.query(
       `SELECT dc.id, dc.kind, dc.challan_number, dc.supplier_challan_number,
-              dc.issue_date, dc.total_value, dc.status, dc.reason,
+              dc.issue_date, dc.total_value, dc.amount_paid, dc.status, dc.reason,
               dc.invoice_id, dc.purchase_id, dc.recipient_name,
               s.sale_number, p.purchase_number, o.order_number
          FROM delivery_challans dc

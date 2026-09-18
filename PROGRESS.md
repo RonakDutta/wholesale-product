@@ -2657,6 +2657,59 @@ green.
 
 ---
 
+## 18 Sept: a new challan claimed a debt it did not have
+
+Reported from the running app: "when i created challan, push some sale and
+then made challan again, it showed not billed while the earlier challan showed
+billed, and the new unbilled challan showed wrong due money".
+
+Reproduced by driving the exact sequence. Both halves were real, and both came
+from reading the wrong column on the CHALLAN LIST. The detail screen and the
+PDF had been fixed on 17 Sept; the list was never touched.
+
+**1. Every challan showed its whole value as a debt.** The row worked out
+`total_value - amount_paid` and printed it as "due". On a movement challan
+`amount_paid` is always zero, so a brand new challan for 400 rupees of cloth
+printed "400 due" on a document whose entire point is that nothing is owed
+until the bill. A challan carries no GST and never touches the party balance.
+
+Worse: `challanBook.list` did not SELECT `amount_paid` at all. The subtraction
+was `total - undefined` on every row, so the figure could not have been right
+even for the old payment-driven challans it was written for.
+
+**2. A challan billed by a SALE still printed a due.** The badge tested
+`status === 'billed' || invoice_id || purchase_id` and was right. The due
+beside it tested only `!invoice_id && !purchase_id`. A challan billed through a
+sale gets `status = 'billed'` and a `sale_id` and NEVER an `invoice_id`, so it
+printed a due in clay directly under its own green "Billed" badge. The comment
+sitting above that line claimed this had already been fixed.
+
+Fixed by the same rule the detail screen and the PDF use: only a challan that
+genuinely RECEIVED money has anything to say, and what it says is worded as a
+snapshot, "250 owing then", not a live balance. `amount_paid` is now selected
+by both list queries so the test is a real test.
+
+**The same fault was found on two more screens by sweeping for it.**
+`SaleDetail` and `SellerOrderDetail` both showed their Billed badge on
+`c.invoice_id` alone, so a challan closed by the very sale it was sitting on
+showed no badge at all. `listForSale` and `listForOrder` did not return
+`status`; they do now, probed, as separate SQL strings.
+
+**Verified.** Reproduced before and after: the old code printed "400 due" on
+the new challan and "1000 due" under the billed one, the new code prints
+nothing for either, and a genuine part-paid challan still shows "250 owing
+then" so the fix did not simply delete the figure. Pinned with new assertions
+in `challan_book_check`. 37 of 37 suites green.
+
+**Also, alignment.** The day book sized each kind badge to its own text, so
+"Sale", "Money in" and "Sale challan" started their party names at three
+different places and the list read as ragged. The badge now sits in a fixed
+width column, so every name lines up.
+
+**Migration to run:** none.
+
+---
+
 ## Left to do
 
 Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.

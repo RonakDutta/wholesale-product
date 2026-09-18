@@ -344,9 +344,12 @@ class ChallanService {
   /** Every challan against an order, through its sale. */
   async listForOrder(orderId, wholesalerId) {
     if (!(await challanTablesExist())) return [];
+    // Same reason as listForSale: status is the authority on billed, and
+    // invoice_id alone answers it wrongly for a challan closed by a sale.
+    const withStatus = await hasStatus();
     const rows = await pool.query(
       `SELECT dc.id, dc.challan_number, dc.issue_date, dc.total_value,
-              dc.amount_paid, dc.invoice_id
+              dc.amount_paid, dc.invoice_id${withStatus ? ", dc.status" : ""}
          FROM delivery_challans dc
         WHERE dc.wholesaler_id = $1
           AND (dc.order_id = $2
@@ -423,16 +426,34 @@ class ChallanService {
     };
   }
 
-  /** Every challan raised against one sale, newest first. */
+  /**
+   * Every challan raised against one sale, newest first.
+   *
+   * `status` comes back where the column exists, because invoice_id alone is
+   * not the answer to "is this billed". A challan billed through a SALE gets
+   * status 'billed' and a sale_id and never an invoice_id, so a screen
+   * reading invoice_id showed no badge at all on a challan the sale it is
+   * sitting on had just closed. Two separate strings rather than one with a
+   * conditional column: Postgres parses before it runs.
+   */
   async listForSale(saleId, wholesalerId) {
     if (!(await challanTablesExist())) return [];
-    const rows = await pool.query(
-      `SELECT id, challan_number, issue_date, total_value, amount_paid, invoice_id
-         FROM delivery_challans
-        WHERE sale_id = $1 AND wholesaler_id = $2
-        ORDER BY created_at DESC`,
-      [saleId, wholesalerId],
-    );
+    const rows = (await hasStatus())
+      ? await pool.query(
+          `SELECT id, challan_number, issue_date, total_value, amount_paid,
+                  invoice_id, status
+             FROM delivery_challans
+            WHERE sale_id = $1 AND wholesaler_id = $2
+            ORDER BY created_at DESC`,
+          [saleId, wholesalerId],
+        )
+      : await pool.query(
+          `SELECT id, challan_number, issue_date, total_value, amount_paid, invoice_id
+             FROM delivery_challans
+            WHERE sale_id = $1 AND wholesaler_id = $2
+            ORDER BY created_at DESC`,
+          [saleId, wholesalerId],
+        );
     return rows.rows;
   }
 

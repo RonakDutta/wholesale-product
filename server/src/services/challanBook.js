@@ -19,12 +19,26 @@ const { checkHsn, minHsnDigits } = require("./hsnService");
  * it exists because goods moved, before any bill, and it does not care
  * whether anybody has paid.
  *
- * THE ACCOUNTING RULE THIS FILE EXISTS TO KEEP. A challan moves STOCK and
- * nothing else. It never touches the party's balance and it carries no GST.
- * The money starts existing when the bill is raised from it. A challan that
- * also moved the ledger would have every sale counted twice in the khata,
- * once when the goods left and again when the bill went out, and the error
- * would be invisible because both entries would look correct on their own.
+ * THE ACCOUNTING RULE THIS FILE EXISTS TO KEEP. A challan NEVER touches the
+ * party's balance and carries no GST. The money starts existing when the bill
+ * is raised from it. A challan that also moved the ledger would have every
+ * sale counted twice in the khata, once when the goods left and again when
+ * the bill went out, and the error would be invisible because both entries
+ * would look correct on their own.
+ *
+ * IT DOES NOT MOVE STOCK EITHER, AND THAT IS NOT THE INTENT. This header used
+ * to read "a challan moves STOCK and nothing else", which was the design and
+ * never the code. Nothing in this product moves stock except the marketplace
+ * order path: `supplier_inventory.stock` is written only by orderController
+ * and orderStatusService, so a sale does not lower it and a purchase does not
+ * raise it. Making a challan the one khata document that moved stock would
+ * have made the figure wrong in a new direction rather than right.
+ *
+ * The real fix is a stock ledger every goods document writes to, with the
+ * current figure derived from it. That is on ROADMAP.md, in the 18 Sept
+ * survey, and is the largest thing this product is missing. Until it exists,
+ * this file deliberately leaves stock alone, and this comment says so rather
+ * than describing an intention as a fact.
  *
  * HOW A BILL COMES OUT OF ONE, and why it is not done here. The challan is
  * loaded INTO the sale or purchase form, where the wholesaler can adjust it,

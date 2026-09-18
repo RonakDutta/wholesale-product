@@ -728,3 +728,179 @@ Same shape. Fields, validation, the distance and validity rules, storage.
 - [ ] Products and stock import (Phase 8.5 covers everything else). Left out
       because it was not asked for, not because it is hard.
 - [ ] The `razorpay-integration` branch changes, still local on one machine (33)
+
+---
+
+# 18 Sept: what this is missing against Marg and Busy
+
+**NOTHING HERE IS AGREED.** Everything above this line was decided and then
+built. This section is a survey, asked for on 18 Sept: "find out what our
+project is lacking, that is needed desperately, anything that is there in
+Marg, Busy etc", and "make the master table or dashboard to be similar to
+that of an ERP system as well".
+
+Every claim below was checked against the code, not remembered. Where a thing
+turned out to exist, it is not listed. Where a comment in this repository says
+something the code does not do, that is called out as its own item, because a
+false comment is worse than a missing feature.
+
+## The one that matters most: there is no stock ledger
+
+`supplier_inventory.stock` is written in exactly two files, `orderController.js`
+and `orderStatusService.js`, both on the marketplace order path. Checked by
+grepping every `SET stock` in the server.
+
+**A sale does not lower stock. A purchase does not raise it. A challan does
+not move it either.** So the stock figure on a product is only meaningful for
+a wholesaler who sells through the shop page, and means nothing at all for one
+who uses the khata, which is the product we have been building for a month.
+
+This is deliberate and self-consistent. `purchaseController.js` says so at the
+top: a sale does not lower stock, so a purchase must not raise it, or the
+figure only ever climbs. Given that a sale was never wired up, refusing to
+wire up the purchase was the right call at the time.
+
+But it leaves the comments wrong. `challanBook.js` opens with "A challan moves
+STOCK and nothing else", and `CLAUDE.md` repeats it as "A challan moves stock,
+never the ledger". The ledger half is true and enforced. The stock half is
+aspiration: a challan moves nothing. **Fix the comments in the same change
+that either builds the stock ledger or admits there is not one.**
+
+What Marg and Busy have that this does not follow from:
+- a stock register, item by item, opening plus in minus out equals closing
+- closing stock value, which is the single number a trader needs at year end
+- reorder level and a shortfall list
+- multi godown, and stock transfer between them
+- batch and expiry, which matters enormously in pharma and not much in cloth
+
+The honest sequencing: **one `stock_ledger` table written by every document
+that moves goods (sale, purchase, both challan kinds, order, credit note,
+debit note), with the current figure derived from it rather than stored.** A
+stored counter updated from six places is how the figure silently drifts, and
+this repository already has one of those.
+
+## GSTR-1 and GSTR-3B: nothing comes out of this
+
+`GSTR` appears six times in the server and every one is a comment explaining
+why some other decision was made. There is no return, no JSON, no filing
+export.
+
+What IS built, and is most of the hard part: CGST/SGST/IGST decided properly
+through `placeOfSupply.js`, place of supply and its code on every invoice,
+reverse charge, cess, the HSN summary that is literally GSTR-1 Table 12, and
+an invoice number series that satisfies Rule 46(b).
+
+So the data is there and shaped right. What is missing is the mapping: B2B
+(Table 4), B2C large and small (5, 7), credit and debit notes (9B), HSN (12),
+documents issued (13), and the GSTN JSON schema around them. **This is the
+single most commercially important gap.** A wholesaler files every month. If
+he still has to retype the month into Marg to file, he has not replaced Marg.
+
+## Purchase returns have no document
+
+`credit_notes` exists, with reasons `sale_cancelled`, `goods_returned`,
+`rate_revised`, `other`, its own consecutive run, a snapshot recipient, and a
+PDF. That is the sales side and it is done properly.
+
+**There is no debit note.** Grepped: no `debit note`, no `debit_note`,
+anywhere. So goods sent back to the mill have no document, the supplier
+balance cannot be reduced correctly, and the GST on the return is not
+reversed. On the sales side this was treated as important enough to build a
+whole numbered document type. The purchase side has nothing.
+
+## The purchase side is thinner than the sales side generally
+
+- the ageing report reads the `invoices` table only, which is sales. There is
+  no "what I owe, by age". A wholesaler needs both, and the one that gets him
+  into trouble is the one he owes.
+- no purchase order. A wholesaler orders from a mill, the goods arrive against
+  it, and the bill arrives after that. We have the last two and not the first.
+
+## No day book
+
+Marg has Day Book, Busy and Tally have the same thing. One chronological list
+of every voucher of every type for a date or a range: sales, purchases,
+receipts, payments, challans, notes. It is how a trader checks his day before
+going home.
+
+Everything needed for it exists, spread across six screens. This is a query
+and one page, not a subsystem, and it is the cheapest large win on this list.
+
+## The master area is not what an ERP calls masters
+
+This is the second question asked, and the answer is that the word means two
+different things in the two products.
+
+**Here**, `/administration` is PLATFORM level, guarded by `requirePlatformAdmin`,
+and holds four lookup lists (states, units, tax rates, HSN) plus formatting
+settings: decimals, digit grouping, Indian or western commas, currency words,
+date format, minimum HSN digits. A wholesaler cannot see it and should not.
+That is correct for what it is: it keeps a unit or a tax slab from being a
+deploy.
+
+**In Marg and Busy**, Masters is the WHOLESALER'S own menu, and it is where he
+spends his first day. Item master, Ledger or party master with groups, Unit,
+Tax category, Salesman, Transporter, Godown, Price list, Company.
+
+The wholesaler's masters do exist here, but scattered under separate nav
+entries (Customers, Suppliers, Products) with no shared shape. What is missing
+outright:
+
+| Master | State here |
+|---|---|
+| Price list, rate per customer or per group | nothing. A wholesaler quotes different rates to different buyers, and today every rate is retyped per bill |
+| Transporter | typed free text on every single sale, `transporter_name` and `transporter_id` on the row |
+| Salesman or agent, with commission | nothing. Most wholesalers of this size sell through agents |
+| Party groups | nothing. No way to say "Surat retailers" and act on it |
+| Credit limit | `parties.credit_limit` EXISTS, is importable, and is read by no controller anywhere. A stored field that nothing enforces is worse than no field: it looks like a control and is not |
+| Item groups | only `products.category`, a free text column |
+| Godown | one warehouse on the profile, no second, no transfers |
+
+**Smallest change that is worth doing:** one Masters section in the seller nav
+that gathers Customers, Suppliers, Products and the new ones under a single
+roof, so the wholesaler has one place to set his business up rather than four.
+Then fill the gaps in the table, cheapest first: transporter master, party
+groups, credit limit actually enforced, then price lists.
+
+The credit limit is the one to do first. The field is already there and
+already imported, so the work is a check on the sale form and a line on the
+customer screen, and until it is done the field is a lie.
+
+## The Overview is a summary, not an ERP dashboard
+
+Today: three money cards (still to collect, billed this month, received this
+month), a customer count, an item count, recent sales, top debtors, and a
+three step setup checklist for a new seller. It is clear and honest, and every
+number on it is computed rather than invented, which is the rule here.
+
+What a Marg or Busy dashboard puts next to those, all of which need something
+above to exist first:
+- stock value, and a shortfall list (needs the stock ledger)
+- payable ageing beside receivable ageing (needs the purchase ageing)
+- this month's GST liability, output minus input (needs the GSTR work)
+- cheques due, in and out
+- today's day book, as a strip
+
+## Deliberately NOT recommended
+
+- **Full double entry, trial balance, P&L, balance sheet.** Marg and Busy have
+  them. This product has a khata, which is a running balance per party, and
+  that is what a wholesaler of this size actually reads. Adding account groups
+  and a trial balance is months of work for a screen his accountant already
+  produces from the data we can export. Revisit only if customers ask.
+- **Barcode.** Real in retail and in pharma. In cloth, sold by the metre off a
+  than, it is not.
+- **Batch and expiry.** Same reasoning. Build it when there is a pharma or a
+  food customer, not before.
+
+## If it were one at a time
+
+1. **Day book.** A query and a page. Everything it needs exists.
+2. **Credit limit enforced.** The column is already there and already a lie.
+3. **Debit note.** Mirror `credit_notes`, which is a worked example.
+4. **Purchase ageing**, beside the sales one.
+5. **The Masters section** in the nav, then transporter and party groups.
+6. **The stock ledger.** The largest, and the one everything about inventory
+   waits on. Do the comment correction on the same day, whichever way it goes.
+7. **GSTR-1 JSON.** The most commercially valuable and the one that needs the
+   most care, because it is filed and wrong is expensive.

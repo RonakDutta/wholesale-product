@@ -2479,6 +2479,62 @@ changes nothing.
 
 ---
 
+## 18 Sept: the item box suggests from the product list, everywhere
+
+Asked: "shouldn't when typing product name in challan, a list appear to select
+from our existing products as well?" Yes, and it did not.
+
+`ItemPicker` existed and was wired into ONE screen, the sale form. The challan
+form and the purchase form both had a plain text box, so the item name, the
+HSN and the GST rate were typed by hand on two of the three places a line is
+entered. The server had been ready for this the whole time: `challanBook`
+already reads `productId` off a line and writes `delivery_challan_items.
+product_id`. The client simply never sent it.
+
+Done:
+- the challan form uses `ItemPicker`, filling name, rate, unit, HSN and the
+  GST rate, and sends `productId` so the line remembers what it was picked
+  from. Typing a name that is on no list still works and leaves it null, which
+  is the rule the sale line has always had: the NAME is the content and the
+  product is a reference beside it.
+- typing over a picked name clears the id, so the reference cannot end up
+  pointing at a product whose name has been replaced.
+- the purchase form uses it too, filling name, unit, HSN and the GST rate but
+  DELIBERATELY NOT the rate. On a sale the list price is what he charges. On a
+  purchase the number that matters is what the mill charged, printed on the
+  bill in his hand. Filling it would put a plausible wrong number in a box he
+  might not check.
+
+**Two bugs found underneath it.**
+
+`challanService.findById` is what the edit form reloads, and it selected six
+columns: not `gst_percent`, not `product_id`. So opening a challan and saving
+it again dropped the GST rate off every line that had one, and would have
+dropped the product link with it. Nothing failed and nothing was said: the
+form loaded a blank where a number had been and wrote the blank back. Now
+picks its column list from a probe, as two separate SQL strings rather than
+one with a conditional column, because Postgres parses before it runs.
+
+`hasStatus` cached a FALSE answer. Migrations here are pasted by hand into a
+database the server is already connected to, so caching "the column is not
+there" pinned it for the life of the process: run the migration, see no
+change, with nothing on any screen saying a restart was what was needed. Only
+a true answer is cached now, which is the rule `challanBook` already followed
+and this file did not. The same trap would have bitten on the challan
+migration this week.
+
+**Verified.** `challan_book_check` extended with the round trip: a line saves
+a product, `findById` gives the GST rate and the product back, both survive an
+edit, and the same read works on a database where `product_id` is hidden.
+Seven challan suites green. Rendered all three forms: the challan picker
+filters as you type, excludes an Inactive product, and fills HSN 5208, rate 72
+and GST 5 on a pick; the purchase picker fills HSN 5515 and GST 12 and leaves
+the rate empty.
+
+**Migration to run:** none.
+
+---
+
 ## Left to do
 
 Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.

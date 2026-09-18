@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import api from "../../utils/axios";
 import { useMasters } from "../../hooks/useMasters";
 import { amount as money } from "../../utils/money";
+import ItemPicker from "../../components/ItemPicker";
 
 /**
  * Recording a challan: goods moved, no bill yet.
@@ -28,6 +29,11 @@ const blankLine = () => ({
   unit: "",
   rate: "",
   gstPercent: "",
+  // Set only when the name came off the product list. Typing a name that is
+  // on no list stays allowed, and stays null, which is the same rule the sale
+  // form has always had: the line stores the NAME as text and the product is
+  // a reference alongside it, not instead of it.
+  productId: null,
 });
 
 const RecordChallan = () => {
@@ -48,8 +54,13 @@ const RecordChallan = () => {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(editing);
   const [number, setNumber] = useState("");
+  // The wholesaler's own products, for the item box. Same source the sale
+  // form reads, so a product added on the Products screen can be picked here
+  // without a second list to keep in step.
+  const [products, setProducts] = useState([]);
 
   const { units } = useMasters();
+  const unitCodes = units.map((u) => u.code);
   const isSale = kind === "sale";
 
   // The other party, and the word for them.
@@ -70,6 +81,29 @@ const RecordChallan = () => {
       alive = false;
     };
   }, [who.list]);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .get("/api/dashboard/inventory")
+      .then(({ data }) => {
+        if (!alive) return;
+        setProducts(
+          (data || [])
+            // Something they have stopped selling is noise in a picker.
+            .filter((row) => row.status === "Active")
+            // The listing calls it price, the picker calls it rate, and they
+            // are the same number. The sale form does this same rename.
+            .map((row) => ({ ...row, rate: row.price })),
+        );
+      })
+      // Silent. The box still takes a typed name, which is what it did before
+      // there was a list at all, so a failed lookup is not worth a toast.
+      .catch(() => alive && setProducts([]));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -106,6 +140,10 @@ const RecordChallan = () => {
             unit: i.unit || "",
             rate: i.unit_price ?? "",
             gstPercent: i.gst_percent ?? "",
+            // Carried through an edit. Without this, opening a challan and
+            // saving it again would quietly drop the product link off every
+            // line that was not retyped.
+            productId: i.product_id || null,
           })),
         );
         setLoading(false);
@@ -122,6 +160,37 @@ const RecordChallan = () => {
 
   const setLine = (index, field, value) =>
     setLines((rows) => rows.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
+
+  /**
+   * A product picked off the list fills the rest of the line.
+   *
+   * The rate goes in because a challan states the value of the goods, and the
+   * GST rate goes in because the bill raised from this challan needs it and
+   * nobody wants to type the whole list twice. Neither is charged here.
+   *
+   * Typing over any of it afterwards is fine. A challan for 40 metres at a
+   * price agreed on the phone is an ordinary thing, and the product list is a
+   * starting point, not the authority.
+   */
+  const fillFromProduct = (index, product) =>
+    setLines((rows) =>
+      rows.map((r, i) =>
+        i === index
+          ? {
+              ...r,
+              itemName: product.name,
+              productId: product.id,
+              rate: String(Number(product.rate)),
+              unit: unitCodes.includes(product.unit) ? product.unit : r.unit,
+              hsnCode: product.hsn_code || r.hsnCode,
+              gstPercent:
+                product.gst_percent === null || product.gst_percent === undefined
+                  ? r.gstPercent
+                  : String(Number(product.gst_percent)),
+            }
+          : r,
+      ),
+    );
 
   const total = useMemo(
     () =>
@@ -159,6 +228,7 @@ const RecordChallan = () => {
         unit: l.unit,
         rate: l.rate === "" ? 0 : Number(l.rate),
         gstPercent: l.gstPercent === "" ? null : Number(l.gstPercent),
+        productId: l.productId || null,
       })),
     };
 
@@ -351,11 +421,22 @@ const RecordChallan = () => {
                 <label className="mb-1 block text-[11px] font-semibold text-slate-500">
                   Item
                 </label>
-                <input
+                <ItemPicker
                   value={line.itemName}
-                  onChange={(e) => setLine(i, "itemName", e.target.value)}
+                  items={products}
                   placeholder="Cotton shirting"
-                  className={field}
+                  // Typed over by hand, so whatever product this used to be
+                  // is no longer what the line says. Dropping the id keeps
+                  // the reference honest rather than pointing at a product
+                  // whose name has been replaced.
+                  onChange={(name) =>
+                    setLines((rows) =>
+                      rows.map((r, ix) =>
+                        ix === i ? { ...r, itemName: name, productId: null } : r,
+                      ),
+                    )
+                  }
+                  onPick={(product) => fillFromProduct(i, product)}
                 />
               </div>
               <div className="sm:col-span-2">

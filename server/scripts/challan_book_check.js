@@ -419,6 +419,92 @@ const mk = () => {
     challanService.resetChallanTables?.();
   }
 
+  // ------------------------------------------------------------------
+  console.log("\nThe line carries its product and its rate through an edit");
+  // ------------------------------------------------------------------
+  /**
+   * The item box on the challan form suggests from the wholesaler's own
+   * products, and picking one sets product_id alongside the name. The name is
+   * still the content, exactly as it is on a sale line: a challan for
+   * something that was never on the list has to stay recordable.
+   *
+   * What this pins is the ROUND TRIP. `findById` is what the edit form reads,
+   * and it selected six columns, not gst_percent and not product_id. So
+   * opening a challan and saving it again dropped the GST rate off every line
+   * it had one on, and would have dropped the product link too. Nothing
+   * failed and nothing said anything: the form simply loaded a blank where a
+   * number had been, and wrote the blank back.
+   */
+  /**
+   * The id a picked line carries is the row from /api/dashboard/inventory,
+   * which is supplier_inventory.id, the same id the sale form's picker hands
+   * back. `supplier_id` on that table is the wholesaler: the marketplace half
+   * of this product calls him the supplier of the listing.
+   */
+  const catalogue = (await testPool.query(
+    `INSERT INTO products (name, category) VALUES ($1,'Textiles') RETURNING id`,
+    [`Shirting ${s}`])).rows[0].id;
+  const prod = (await testPool.query(
+    `INSERT INTO supplier_inventory (supplier_id, product_id, price, moq, stock, shipping_days, unit, hsn_code, gst_percent, status)
+     VALUES ($1,$2,250,1,500,2,'mtr','5208',12,'Active') RETURNING id`,
+    [owner, catalogue])).rows[0];
+
+  const withProduct = await challanBook.create(owner, {
+    kind: "sale", partyId: party, reason: "bill_to_follow",
+    lines: [{ itemName: "Picked off the list", quantity: 4, rate: 250,
+              gstPercent: 12, hsnCode: "5208",
+              productId: prod ? prod.id : null }],
+  });
+  check(!withProduct.error, "a challan saves a line that names a product",
+    withProduct.error);
+
+  const readBack = await challanService.findById(withProduct.challan.id, owner);
+  const line0 = (readBack?.items || [])[0] || {};
+  check(Number(line0.gst_percent) === 12,
+    "and findById gives the GST rate back, which the edit form reloads",
+    { got: line0.gst_percent });
+  if (prod) {
+    check(line0.product_id === prod.id,
+      "and the product the line was picked from", { got: line0.product_id });
+  }
+
+  const reEdited = await challanBook.update(withProduct.challan.id, owner, {
+    kind: "sale", partyId: party, reason: "bill_to_follow",
+    lines: [{ itemName: "Picked off the list", quantity: 9, rate: 250,
+              gstPercent: 12, hsnCode: "5208",
+              productId: prod ? prod.id : null }],
+  });
+  check(!reEdited.error, "the challan can be edited", reEdited.error);
+
+  const afterEdit = await challanService.findById(withProduct.challan.id, owner);
+  const line1 = (afterEdit?.items || [])[0] || {};
+  check(Number(line1.quantity) === 9, "the quantity changed", { got: line1.quantity });
+  check(Number(line1.gst_percent) === 12,
+    "and the GST rate survived the edit rather than coming back blank",
+    { got: line1.gst_percent });
+
+  /**
+   * And the same read on a database without those columns. findById picks its
+   * column list from a probe, so this is the branch that runs between a
+   * deploy and somebody pasting the migration.
+   */
+  await testPool.query(
+    `ALTER TABLE delivery_challan_items RENAME COLUMN product_id TO product_id_hidden`);
+  challanService.resetChallanTables?.();
+  try {
+    const legacyRead = await challanService.findById(withProduct.challan.id, owner);
+    check(!!legacyRead && (legacyRead.items || []).length === 1,
+      "a challan still opens on a database without the line columns",
+      legacyRead);
+    check((legacyRead.items || [])[0]?.product_id === undefined,
+      "and simply has no product on the line, rather than throwing",
+      (legacyRead.items || [])[0]);
+  } finally {
+    await testPool.query(
+      `ALTER TABLE delivery_challan_items RENAME COLUMN product_id_hidden TO product_id`);
+    challanService.resetChallanTables?.();
+  }
+
   console.log(fails ? `\n${fails} FAILED\n` : "\nall good\n");
   await testPool.end();
   process.exit(fails ? 1 : 0);

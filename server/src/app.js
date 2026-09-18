@@ -25,6 +25,7 @@ const importRoutes = require("./routes/importRoutes");
 const supplierRoutes = require("./routes/supplierRoutes");
 const purchaseRoutes = require("./routes/purchaseRoutes");
 const stockRoutes = require("./routes/stockRoutes");
+const dayBookRoutes = require("./routes/dayBookRoutes");
 const routeRoutes = require("./routes/routeRoutes");
 const webhookRoutes = require("./routes/webhookRoutes");
 
@@ -89,6 +90,9 @@ app.use("/api/purchases", purchaseRoutes);
 
 // What is on hand, summed from the stock ledger rather than stored.
 app.use("/api/stock", stockRoutes);
+
+// The day book, and what is payable by age.
+app.use("/api/daybook", dayBookRoutes);
 // Getting a wholesaler ready to be paid through the gateway, and what they have
 // been sent. See controllers/routeController.js for why only 'activated'
 // opens the gate.

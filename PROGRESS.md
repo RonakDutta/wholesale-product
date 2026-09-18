@@ -2613,6 +2613,50 @@ line it had just written. Nothing but rendering would have found it.
 
 ---
 
+## 18 Sept: the day book, and what you owe by age
+
+Two more off the survey, both cheap because everything they need already
+existed.
+
+**The day book.** Marg has Day Book, Tally and Busy have the same screen, and
+this product made a wholesaler open six to answer "what did we actually do
+today". One list now: sales, purchases, money in, money out, bills and both
+kinds of challan, newest first, with presets for today, yesterday, 7 days and
+30 days.
+
+READS ONLY, and that is the point. Every row already exists on some other
+screen and links back to it. A day book that computed anything of its own
+could disagree with the screen the entry came from.
+
+Money in and money out are shown apart and never netted. A day with a lakh in
+and a lakh out is not a quiet day, and one figure would say it was.
+
+Built as separate SELECTs unioned rather than one clever query. They have
+genuinely different shapes, and forcing them together is how a join quietly
+multiplies rows when a sale has two payments against it. Tables a database may
+not have yet are left OUT by a probe rather than guarded in SQL, because
+Postgres parses the whole statement before running any of it: naming
+`purchases` is enough to fail on a database without them, whatever the WHERE
+says.
+
+**What you owe, by age.** The ageing report has existed since the invoice work
+and reads the `invoices` table, which is the sales side. So a wholesaler could
+see what his customers owed him by age and had nothing at all for what he owed
+his mills, which is the one that gets a trader into trouble. Same buckets as
+the receivable side so the two read the same way round, dated from the
+SUPPLIER's own bill date where there is one, because that is when his credit
+period starts.
+
+**Verified.** Both endpoints driven against a real database with real rows
+from the stock suite: 14 entries across four kinds, the cancelled sale listed
+but correctly left out of the sold total, and the payable ageing agreeing with
+the two open purchases at 33,600. Both screens rendered. 37 of 37 suites
+green.
+
+**Migration to run:** none. Both read tables that already exist.
+
+---
+
 ## Left to do
 
 Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import {
+  Boxes,
   Plus,
   Search,
   Edit,
@@ -181,6 +182,33 @@ const MyProducts = () => {
   const { user } = useAuth();
   const [copiedId, setCopiedId] = useState(null);
   const [inventory, setInventory] = useState([]);
+  /**
+   * What he holds, per listing, out of the stock ledger.
+   *
+   * A separate call rather than a column on the inventory row, because the
+   * two numbers answer different questions and joining them would invite
+   * somebody to treat one as the other. Silent on failure and empty on a
+   * database without the migration: the product list is useful without it.
+   */
+  const [bookStock, setBookStock] = useState({});
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .get("/api/stock")
+      .then(({ data }) => {
+        if (!alive || data.ready === false) return;
+        const byId = {};
+        for (const row of data.items || []) {
+          if (row.product_id) byId[row.product_id] = Number(row.on_hand);
+        }
+        setBookStock(byId);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState("All");
@@ -383,6 +411,22 @@ const MyProducts = () => {
                     {item.pack_size ? ` · pack of ${trim(item.pack_size)}` : ""}
                     {item.moq ? ` · min ${trim(item.moq)}` : ""}
                   </p>
+                  {/* What he actually holds, from the stock ledger, not the
+                      shop-page offer figure beside it. Shown here because the
+                      product screen is where a wholesaler looks for it and
+                      there was nothing: stock lived only on its own screen.
+                      Only where the ledger has something to say, so a
+                      wholesaler who does not count stock sees nothing rather
+                      than a zero that looks like a claim. */}
+                  {bookStock[item.id] !== undefined && (
+                    <Link
+                      to="/seller/stock"
+                      className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 transition-colors hover:text-clay"
+                    >
+                      <Boxes className="h-3 w-3" />
+                      {trim(bookStock[item.id])} {item.unit || "pcs"} in your book
+                    </Link>
+                  )}
                 </div>
                 <span
                   className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${

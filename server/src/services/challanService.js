@@ -83,7 +83,11 @@ const challanTablesExist = async (db = pool) => {
   }
   return ready;
 };
-const resetChallanTables = () => { ready = null; hasStatusColumn = null; };
+const resetChallanTables = () => {
+  ready = null;
+  hasStatusColumn = false;
+  hasLineExtrasColumn = false;
+};
 
 /**
  * Does this database have delivery_challans.status yet?
@@ -91,19 +95,50 @@ const resetChallanTables = () => { ready = null; hasStatusColumn = null; };
  * It arrives with wholesale3_challans_two_kinds.sql. Without it the stampers
  * set invoice_id alone, exactly as they did before, rather than failing on a
  * column that is not there.
+ *
+ * ONLY A TRUE ANSWER IS CACHED, and that is the whole point.
+ *
+ * Migrations here are run by hand against a database the server is already
+ * connected to. Caching a false would pin "the column is not there" for the
+ * life of the process, so a wholesaler who runs the migration would see no
+ * change until somebody restarted the server, with nothing on any screen
+ * saying that is what was needed. A probe on a column that does not exist yet
+ * is cheap, and it stops being asked the moment the answer becomes yes.
  */
-let hasStatusColumn = null;
+let hasStatusColumn = false;
 const hasStatus = async (db = pool) => {
-  if (hasStatusColumn !== null) return hasStatusColumn;
+  if (hasStatusColumn) return true;
   try {
     const { rows } = await db.query(
       `SELECT 1 FROM information_schema.columns
         WHERE table_name = 'delivery_challans' AND column_name = 'status'`);
     hasStatusColumn = rows.length > 0;
   } catch {
-    hasStatusColumn = false;
+    return false;
   }
   return hasStatusColumn;
+};
+
+/**
+ * The line columns that arrive with wholesale3_challans_two_kinds.sql.
+ *
+ * Same rule as above, only a true answer is cached. These are read back into
+ * the edit form, so without them opening a challan and saving it again
+ * silently dropped the GST rate off every line and, once the picker existed,
+ * the product link with it.
+ */
+let hasLineExtrasColumn = false;
+const hasLineExtras = async (db = pool) => {
+  if (hasLineExtrasColumn) return true;
+  try {
+    const { rows } = await db.query(
+      `SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'delivery_challan_items' AND column_name = 'product_id'`);
+    hasLineExtrasColumn = rows.length > 0;
+  } catch {
+    return false;
+  }
+  return hasLineExtrasColumn;
 };
 
 /**
@@ -309,9 +344,12 @@ class ChallanService {
   /** Every challan against an order, through its sale. */
   async listForOrder(orderId, wholesalerId) {
     if (!(await challanTablesExist())) return [];
+    // Same reason as listForSale: status is the authority on billed, and
+    // invoice_id alone answers it wrongly for a challan closed by a sale.
+    const withStatus = await hasStatus();
     const rows = await pool.query(
       `SELECT dc.id, dc.challan_number, dc.issue_date, dc.total_value,
-              dc.amount_paid, dc.invoice_id
+              dc.amount_paid, dc.invoice_id${withStatus ? ", dc.status" : ""}
          FROM delivery_challans dc
         WHERE dc.wholesaler_id = $1
           AND (dc.order_id = $2
@@ -353,11 +391,23 @@ class ChallanService {
     );
     if (found.rows.length === 0) return null;
 
-    const items = await pool.query(
-      `SELECT item_name, hsn_code, quantity, unit, unit_price, total
-         FROM delivery_challan_items WHERE challan_id = $1 ORDER BY id`,
-      [challanId],
-    );
+    // Two separate strings rather than one with a conditional column list,
+    // because Postgres parses the whole statement before it runs any of it. A
+    // CASE or a COALESCE naming product_id still fails on a database that has
+    // not had the migration, which is the mistake this file already made once
+    // with `status`.
+    const items = (await hasLineExtras())
+      ? await pool.query(
+          `SELECT item_name, hsn_code, quantity, unit, unit_price, total,
+                  gst_percent, cess_percent, product_id
+             FROM delivery_challan_items WHERE challan_id = $1 ORDER BY id`,
+          [challanId],
+        )
+      : await pool.query(
+          `SELECT item_name, hsn_code, quantity, unit, unit_price, total
+             FROM delivery_challan_items WHERE challan_id = $1 ORDER BY id`,
+          [challanId],
+        );
 
     const supplier = await pool.query(
       `SELECT u.first_name, u.last_name, u.email, u.phone,
@@ -376,16 +426,34 @@ class ChallanService {
     };
   }
 
-  /** Every challan raised against one sale, newest first. */
+  /**
+   * Every challan raised against one sale, newest first.
+   *
+   * `status` comes back where the column exists, because invoice_id alone is
+   * not the answer to "is this billed". A challan billed through a SALE gets
+   * status 'billed' and a sale_id and never an invoice_id, so a screen
+   * reading invoice_id showed no badge at all on a challan the sale it is
+   * sitting on had just closed. Two separate strings rather than one with a
+   * conditional column: Postgres parses before it runs.
+   */
   async listForSale(saleId, wholesalerId) {
     if (!(await challanTablesExist())) return [];
-    const rows = await pool.query(
-      `SELECT id, challan_number, issue_date, total_value, amount_paid, invoice_id
-         FROM delivery_challans
-        WHERE sale_id = $1 AND wholesaler_id = $2
-        ORDER BY created_at DESC`,
-      [saleId, wholesalerId],
-    );
+    const rows = (await hasStatus())
+      ? await pool.query(
+          `SELECT id, challan_number, issue_date, total_value, amount_paid,
+                  invoice_id, status
+             FROM delivery_challans
+            WHERE sale_id = $1 AND wholesaler_id = $2
+            ORDER BY created_at DESC`,
+          [saleId, wholesalerId],
+        )
+      : await pool.query(
+          `SELECT id, challan_number, issue_date, total_value, amount_paid, invoice_id
+             FROM delivery_challans
+            WHERE sale_id = $1 AND wholesaler_id = $2
+            ORDER BY created_at DESC`,
+          [saleId, wholesalerId],
+        );
     return rows.rows;
   }
 

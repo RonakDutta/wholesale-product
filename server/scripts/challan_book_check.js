@@ -419,6 +419,152 @@ const mk = () => {
     challanService.resetChallanTables?.();
   }
 
+  // ------------------------------------------------------------------
+  console.log("\nThe line carries its product and its rate through an edit");
+  // ------------------------------------------------------------------
+  /**
+   * The item box on the challan form suggests from the wholesaler's own
+   * products, and picking one sets product_id alongside the name. The name is
+   * still the content, exactly as it is on a sale line: a challan for
+   * something that was never on the list has to stay recordable.
+   *
+   * What this pins is the ROUND TRIP. `findById` is what the edit form reads,
+   * and it selected six columns, not gst_percent and not product_id. So
+   * opening a challan and saving it again dropped the GST rate off every line
+   * it had one on, and would have dropped the product link too. Nothing
+   * failed and nothing said anything: the form simply loaded a blank where a
+   * number had been, and wrote the blank back.
+   */
+  /**
+   * The id a picked line carries is the row from /api/dashboard/inventory,
+   * which is supplier_inventory.id, the same id the sale form's picker hands
+   * back. `supplier_id` on that table is the wholesaler: the marketplace half
+   * of this product calls him the supplier of the listing.
+   */
+  const catalogue = (await testPool.query(
+    `INSERT INTO products (name, category) VALUES ($1,'Textiles') RETURNING id`,
+    [`Shirting ${s}`])).rows[0].id;
+  const prod = (await testPool.query(
+    `INSERT INTO supplier_inventory (supplier_id, product_id, price, moq, stock, shipping_days, unit, hsn_code, gst_percent, status)
+     VALUES ($1,$2,250,1,500,2,'mtr','5208',12,'Active') RETURNING id`,
+    [owner, catalogue])).rows[0];
+
+  const withProduct = await challanBook.create(owner, {
+    kind: "sale", partyId: party, reason: "bill_to_follow",
+    lines: [{ itemName: "Picked off the list", quantity: 4, rate: 250,
+              gstPercent: 12, hsnCode: "5208",
+              productId: prod ? prod.id : null }],
+  });
+  check(!withProduct.error, "a challan saves a line that names a product",
+    withProduct.error);
+
+  const readBack = await challanService.findById(withProduct.challan.id, owner);
+  const line0 = (readBack?.items || [])[0] || {};
+  check(Number(line0.gst_percent) === 12,
+    "and findById gives the GST rate back, which the edit form reloads",
+    { got: line0.gst_percent });
+  if (prod) {
+    check(line0.product_id === prod.id,
+      "and the product the line was picked from", { got: line0.product_id });
+  }
+
+  const reEdited = await challanBook.update(withProduct.challan.id, owner, {
+    kind: "sale", partyId: party, reason: "bill_to_follow",
+    lines: [{ itemName: "Picked off the list", quantity: 9, rate: 250,
+              gstPercent: 12, hsnCode: "5208",
+              productId: prod ? prod.id : null }],
+  });
+  check(!reEdited.error, "the challan can be edited", reEdited.error);
+
+  const afterEdit = await challanService.findById(withProduct.challan.id, owner);
+  const line1 = (afterEdit?.items || [])[0] || {};
+  check(Number(line1.quantity) === 9, "the quantity changed", { got: line1.quantity });
+  check(Number(line1.gst_percent) === 12,
+    "and the GST rate survived the edit rather than coming back blank",
+    { got: line1.gst_percent });
+
+  /**
+   * And the same read on a database without those columns. findById picks its
+   * column list from a probe, so this is the branch that runs between a
+   * deploy and somebody pasting the migration.
+   */
+  await testPool.query(
+    `ALTER TABLE delivery_challan_items RENAME COLUMN product_id TO product_id_hidden`);
+  challanService.resetChallanTables?.();
+  try {
+    const legacyRead = await challanService.findById(withProduct.challan.id, owner);
+    check(!!legacyRead && (legacyRead.items || []).length === 1,
+      "a challan still opens on a database without the line columns",
+      legacyRead);
+    check((legacyRead.items || [])[0]?.product_id === undefined,
+      "and simply has no product on the line, rather than throwing",
+      (legacyRead.items || [])[0]);
+  } finally {
+    await testPool.query(
+      `ALTER TABLE delivery_challan_items RENAME COLUMN product_id_hidden TO product_id`);
+    challanService.resetChallanTables?.();
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nA challan billed by a SALE says so on every screen");
+  // ------------------------------------------------------------------
+  /**
+   * Reported from the running app on 18 Sept: a brand new challan showed a
+   * due, and a billed one showed a due under its own Billed badge.
+   *
+   * Two faults, both from reading the wrong column.
+   *
+   * 1. The list worked out `total_value - amount_paid` and called it "due".
+   *    On a movement challan amount_paid is always zero, so every row printed
+   *    the whole value of the goods as a debt, on a document whose entire
+   *    point is that nothing is owed until the bill. The list query did not
+   *    even SELECT amount_paid, so the sum was `total - undefined`.
+   *
+   * 2. Every "is it billed" test outside the challan list read `invoice_id`.
+   *    A challan billed through a SALE gets status 'billed' and a sale_id and
+   *    NEVER an invoice_id, so those screens disagreed with each other about
+   *    the same document.
+   */
+  const forList = await challanBook.create(owner, {
+    kind: "sale", partyId: party,
+    lines: [{ itemName: "List check", quantity: 4, rate: 100 }],
+  });
+
+  const listed = (await challanBook.list(owner, "sale"))
+    .find((c) => c.id === forList.challan.id);
+  check(listed !== undefined, "a new challan appears in the list");
+  check(listed.amount_paid !== undefined,
+    "the list returns amount_paid, so a money test is a real test rather "
+    + "than total minus undefined", { got: listed.amount_paid });
+  check(Number(listed.amount_paid) === 0,
+    "and it is zero, because a challan takes no money", listed.amount_paid);
+
+  const billedBySale = mk();
+  await saleController.createSale({
+    user: { id: owner, role: "seller" },
+    body: { partyId: party, amountPaid: 0, paymentMethod: "cash",
+            challanIds: [forList.challan.id],
+            lines: [{ itemName: "List check", quantity: 4, rate: 100,
+                      gstPercent: 5, fromChallan: forList.challan.id }] },
+  }, billedBySale);
+  check(billedBySale.statusCode === 201, "it is billed from a sale",
+    billedBySale.body);
+
+  const afterBilling = (await challanBook.list(owner, "sale"))
+    .find((c) => c.id === forList.challan.id);
+  check(afterBilling.status === "billed", "the list says billed",
+    afterBilling.status);
+  check(!afterBilling.invoice_id,
+    "and carries NO invoice_id, which is why status has to be the authority",
+    afterBilling.invoice_id);
+
+  const onTheSale = await challanService.listForSale(
+    billedBySale.body.id, owner);
+  check(onTheSale.length === 1, "the sale screen lists it", onTheSale.length);
+  check(onTheSale[0].status === "billed",
+    "and gets the status, so the Billed badge can appear there too",
+    onTheSale[0].status);
+
   console.log(fails ? `\n${fails} FAILED\n` : "\nall good\n");
   await testPool.end();
   process.exit(fails ? 1 : 0);

@@ -37,6 +37,7 @@ cd server && npm run migrate
 | `wholesale3_party_state.sql` | The customer's declared state, which decides CGST plus SGST against IGST | **NOT RUN** |
 | `wholesale3_razorpay_route.sql` | Linked accounts, transfers and webhook deliveries, so a buyer's money reaches the wholesaler | run 14 Sept |
 | `wholesale3_challans_two_kinds.sql` | Sale and purchase challans, each with its own run of numbers, and a billed status | **NOT RUN** |
+| `wholesale3_stock_ledger.sql` | The stock ledger, and the product and challan links on a sale or purchase line | **NOT RUN** |
 
 **Three outstanding as of 17 Sept**, the two marked NOT RUN above and the
 opening balance one, which needs running a second time. Everything else in
@@ -2476,6 +2477,285 @@ database, and it is the one suite not in the count below.
 idempotent and safe to re-run. If `suppliers.opening_balance` already exists
 on Neon, because the file was pasted by hand after the purchases one, it
 changes nothing.
+
+---
+
+## 18 Sept: the item box suggests from the product list, everywhere
+
+Asked: "shouldn't when typing product name in challan, a list appear to select
+from our existing products as well?" Yes, and it did not.
+
+`ItemPicker` existed and was wired into ONE screen, the sale form. The challan
+form and the purchase form both had a plain text box, so the item name, the
+HSN and the GST rate were typed by hand on two of the three places a line is
+entered. The server had been ready for this the whole time: `challanBook`
+already reads `productId` off a line and writes `delivery_challan_items.
+product_id`. The client simply never sent it.
+
+Done:
+- the challan form uses `ItemPicker`, filling name, rate, unit, HSN and the
+  GST rate, and sends `productId` so the line remembers what it was picked
+  from. Typing a name that is on no list still works and leaves it null, which
+  is the rule the sale line has always had: the NAME is the content and the
+  product is a reference beside it.
+- typing over a picked name clears the id, so the reference cannot end up
+  pointing at a product whose name has been replaced.
+- the purchase form uses it too, filling name, unit, HSN and the GST rate but
+  DELIBERATELY NOT the rate. On a sale the list price is what he charges. On a
+  purchase the number that matters is what the mill charged, printed on the
+  bill in his hand. Filling it would put a plausible wrong number in a box he
+  might not check.
+
+**Two bugs found underneath it.**
+
+`challanService.findById` is what the edit form reloads, and it selected six
+columns: not `gst_percent`, not `product_id`. So opening a challan and saving
+it again dropped the GST rate off every line that had one, and would have
+dropped the product link with it. Nothing failed and nothing was said: the
+form loaded a blank where a number had been and wrote the blank back. Now
+picks its column list from a probe, as two separate SQL strings rather than
+one with a conditional column, because Postgres parses before it runs.
+
+`hasStatus` cached a FALSE answer. Migrations here are pasted by hand into a
+database the server is already connected to, so caching "the column is not
+there" pinned it for the life of the process: run the migration, see no
+change, with nothing on any screen saying a restart was what was needed. Only
+a true answer is cached now, which is the rule `challanBook` already followed
+and this file did not. The same trap would have bitten on the challan
+migration this week.
+
+**Verified.** `challan_book_check` extended with the round trip: a line saves
+a product, `findById` gives the GST rate and the product back, both survive an
+edit, and the same read works on a database where `product_id` is hidden.
+Seven challan suites green. Rendered all three forms: the challan picker
+filters as you type, excludes an Inactive product, and fills HSN 5208, rate 72
+and GST 5 on a pick; the purchase picker fills HSN 5515 and GST 12 and leaves
+the rate empty.
+
+**Migration to run:** none.
+
+---
+
+## 18 Sept: the stock ledger, and a credit limit that is no longer a lie
+
+Asked for straight off the 18 Sept survey: "do this one and the other stuff
+that can be easily done".
+
+**Nothing in the khata moved stock before this.** `supplier_inventory.stock`
+was written in exactly two files, both on the marketplace order path. A sale
+did not lower it, a purchase did not raise it, and a challan did not touch it,
+so the figure meant nothing to a wholesaler working from the sales book.
+
+`stock_ledger` is a LEDGER, not a counter. Quantity on hand is the SUM of its
+rows. A stored number written from six documents is how a figure drifts with
+nothing to say which write was wrong, and this product already had one of
+those. Every row names the document that caused it, so the register answers
+not just what the figure is but why.
+
+**The two numbers are kept apart, on purpose.** `supplier_inventory.stock` is
+what he OFFERS on the shop page, a reservation the marketplace decrements when
+an order is placed. The ledger is his own book stock. The Stock screen shows
+both side by side under "In your book" and "On your shop page" and explains
+the difference at the bottom, because a trader seeing two numbers for the same
+cloth will otherwise assume one is broken.
+
+**The double counting problem, which is the whole difficulty.** Goods leave on
+a sale challan and the bill is raised from that challan afterwards. If both
+move stock the goods leave twice, and each row looks correct on its own. Tally
+ties the two together with a Tracking Number; the same idea here is
+`sale_lines.from_challan_id`. The challan moves the goods. The bill raised
+from it moves nothing. A line typed straight onto a bill has no challan and
+moves the goods itself. The client had tracked this per line since the challan
+rework and simply never sent it.
+
+Who writes to it: sale (out), purchase (in), sale challan (out), purchase
+challan (in), and a reversing row on any cancel. Orders need no hook of their
+own, because accepting an order writes a sale and that sale moves the stock
+through the ordinary path. A hook here would double count for the same reason
+as above.
+
+**Reversal, never deletion.** Cancelling writes an opposite row pointing at
+the one it undoes. A cancelled document still happened and the register says
+so, greyed rather than hidden. Reversing twice is a no op, because cancel is
+exactly the button somebody presses twice on a slow connection.
+
+Two transactions had to grow to take this. `saleController.updateSaleStatus`
+was a bare `pool.query` and could stay one while cancelling moved only a
+status; it cannot now, because a cancel that marked the sale dead and then
+failed to give the goods back would leave stock permanently short.
+`challanBook.cancel` was the same.
+
+**The credit limit stops being a lie.** `parties.credit_limit` has existed
+since the opening balance migration, has been importable all along, and was
+read by no controller anywhere: a field that looked like a control and was
+not. It now warns, and deliberately does not block. Marg and Busy both offer a
+hard block, and both are entered at the counter BEFORE the goods move, which
+is the case where a block means something. Here the wholesaler is writing down
+a sale whose goods have already gone, and refusing it would not undo the sale,
+it would only leave the sale missing from the khata. There is a box for it on
+the customer form now too, since there was none.
+
+**Verified.** `stock_check.js`, a new suite, 30 checks. The one that matters
+is billing a challan and asserting the figure does NOT move again: 50, not 30,
+and three ledger rows rather than four. Also the purchase direction, editing a
+challan down from 20 to 15 giving 5 back rather than sending 15 out again,
+cancelling twice, and the whole thing running on a database where the ledger
+table is hidden. **37 of 37 suites green** on databases rebuilt from the
+migrations. Migration checked against a semicolon splitter, both on a database
+that had it and one that did not.
+
+Rendered the Stock screen, which caught a bug lint and the build both missed:
+the `Boxes` icon was used in the nav and never imported, so every seller screen
+threw `Boxes is not defined`. The guard in my own edit script had matched the
+line it had just written. Nothing but rendering would have found it.
+
+**Migration to run:** `wholesale3_stock_ledger.sql`
+
+---
+
+## 18 Sept: the day book, and what you owe by age
+
+Two more off the survey, both cheap because everything they need already
+existed.
+
+**The day book.** Marg has Day Book, Tally and Busy have the same screen, and
+this product made a wholesaler open six to answer "what did we actually do
+today". One list now: sales, purchases, money in, money out, bills and both
+kinds of challan, newest first, with presets for today, yesterday, 7 days and
+30 days.
+
+READS ONLY, and that is the point. Every row already exists on some other
+screen and links back to it. A day book that computed anything of its own
+could disagree with the screen the entry came from.
+
+Money in and money out are shown apart and never netted. A day with a lakh in
+and a lakh out is not a quiet day, and one figure would say it was.
+
+Built as separate SELECTs unioned rather than one clever query. They have
+genuinely different shapes, and forcing them together is how a join quietly
+multiplies rows when a sale has two payments against it. Tables a database may
+not have yet are left OUT by a probe rather than guarded in SQL, because
+Postgres parses the whole statement before running any of it: naming
+`purchases` is enough to fail on a database without them, whatever the WHERE
+says.
+
+**What you owe, by age.** The ageing report has existed since the invoice work
+and reads the `invoices` table, which is the sales side. So a wholesaler could
+see what his customers owed him by age and had nothing at all for what he owed
+his mills, which is the one that gets a trader into trouble. Same buckets as
+the receivable side so the two read the same way round, dated from the
+SUPPLIER's own bill date where there is one, because that is when his credit
+period starts.
+
+**Verified.** Both endpoints driven against a real database with real rows
+from the stock suite: 14 entries across four kinds, the cancelled sale listed
+but correctly left out of the sold total, and the payable ageing agreeing with
+the two open purchases at 33,600. Both screens rendered. 37 of 37 suites
+green.
+
+**Migration to run:** none. Both read tables that already exist.
+
+---
+
+## 18 Sept: a new challan claimed a debt it did not have
+
+Reported from the running app: "when i created challan, push some sale and
+then made challan again, it showed not billed while the earlier challan showed
+billed, and the new unbilled challan showed wrong due money".
+
+Reproduced by driving the exact sequence. Both halves were real, and both came
+from reading the wrong column on the CHALLAN LIST. The detail screen and the
+PDF had been fixed on 17 Sept; the list was never touched.
+
+**1. Every challan showed its whole value as a debt.** The row worked out
+`total_value - amount_paid` and printed it as "due". On a movement challan
+`amount_paid` is always zero, so a brand new challan for 400 rupees of cloth
+printed "400 due" on a document whose entire point is that nothing is owed
+until the bill. A challan carries no GST and never touches the party balance.
+
+Worse: `challanBook.list` did not SELECT `amount_paid` at all. The subtraction
+was `total - undefined` on every row, so the figure could not have been right
+even for the old payment-driven challans it was written for.
+
+**2. A challan billed by a SALE still printed a due.** The badge tested
+`status === 'billed' || invoice_id || purchase_id` and was right. The due
+beside it tested only `!invoice_id && !purchase_id`. A challan billed through a
+sale gets `status = 'billed'` and a `sale_id` and NEVER an `invoice_id`, so it
+printed a due in clay directly under its own green "Billed" badge. The comment
+sitting above that line claimed this had already been fixed.
+
+Fixed by the same rule the detail screen and the PDF use: only a challan that
+genuinely RECEIVED money has anything to say, and what it says is worded as a
+snapshot, "250 owing then", not a live balance. `amount_paid` is now selected
+by both list queries so the test is a real test.
+
+**The same fault was found on two more screens by sweeping for it.**
+`SaleDetail` and `SellerOrderDetail` both showed their Billed badge on
+`c.invoice_id` alone, so a challan closed by the very sale it was sitting on
+showed no badge at all. `listForSale` and `listForOrder` did not return
+`status`; they do now, probed, as separate SQL strings.
+
+**Verified.** Reproduced before and after: the old code printed "400 due" on
+the new challan and "1000 due" under the billed one, the new code prints
+nothing for either, and a genuine part-paid challan still shows "250 owing
+then" so the fix did not simply delete the figure. Pinned with new assertions
+in `challan_book_check`. 37 of 37 suites green.
+
+**Also, alignment.** The day book sized each kind badge to its own text, so
+"Sale", "Money in" and "Sale challan" started their party names at three
+different places and the list read as ragged. The badge now sits in a fixed
+width column, so every name lines up.
+
+**Migration to run:** none.
+
+---
+
+## 18 Sept: stock on the product screens, and the box that was never there
+
+Asked: "where is the stock option showing in product page? i dont see it there
+should we make it there? and when creating new product should we enter stock
+there ourselves too?"
+
+Both answers were no, and the second one was a bug.
+
+**The Add product form had no stock box at all.** `formData` carried a `stock`
+key, the form never asked for it, and line 230 sent `Number(formData.stock)`,
+which for an empty string is ZERO. So every product ever added through that
+screen was created holding nothing, silently. Nobody would have noticed,
+because until yesterday the figure was not used for anything.
+
+**And the product list never showed stock.** It lived on its own screen only,
+which is not where a wholesaler looks for it.
+
+Fixed:
+- a "How much do you have now" box on the product form, beside the rate.
+- the product list shows "145 mtr in your book" under each name, linking to
+  the Stock screen. Only where the ledger has something to say, so a
+  wholesaler who does not count stock sees nothing rather than a zero that
+  reads as a claim.
+
+**The figure does TWO things, and they are deliberately not the same thing.**
+It sets `supplier_inventory.stock`, what the shop page offers, and it writes
+an `opening` row to the stock ledger, where his book starts counting. The
+migration already had `'opening'` in its document_kind list for this.
+
+Without the ledger half the Stock screen would show nothing until his first
+sale and then show a NEGATIVE, because goods would be leaving a book that
+never recorded them arriving. That is checked: adding at 500 and selling 30
+leaves 470, not minus 30.
+
+One transaction, because an opening figure is not decoration. A listing that
+committed without its ledger row would leave the book short from day one with
+nothing on any screen saying why.
+
+A product added with no stock writes NO row, so somebody who does not count
+stock is not handed a zero he never claimed.
+
+**Verified.** Driven against a real database, then pinned in `stock_check`.
+Both screens rendered. 37 of 37 suites green.
+
+**Migration to run:** none beyond `wholesale3_stock_ledger.sql`, already
+listed.
 
 ---
 

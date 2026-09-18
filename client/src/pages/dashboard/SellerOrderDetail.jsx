@@ -499,7 +499,12 @@ const SellerOrderDetail = () => {
                       <span className="text-xs text-slate-500">
                         {dateLabel(c.issue_date)}
                       </span>
-                      {c.invoice_id && (
+                      {/* status is the authority, not invoice_id. A challan
+                          billed through a SALE gets status 'billed' and a
+                          sale_id and never an invoice_id, so reading
+                          invoice_id alone showed no badge at all on a challan
+                          the very sale it sits on had just closed. */}
+                      {(c.status === "billed" || c.invoice_id) && (
                         <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
                           Billed
                         </span>

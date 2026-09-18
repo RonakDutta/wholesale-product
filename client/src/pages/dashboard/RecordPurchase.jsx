@@ -8,6 +8,7 @@ import PendingChallans from "../../components/PendingChallans";
 import { useHotkey } from "../../hooks/useHotkey";
 import { useMasters } from "../../hooks/useMasters";
 import { money, toPaise, fromPaise } from "../../utils/money";
+import ItemPicker from "../../components/ItemPicker";
 import SupplierFormModal from "../../components/SupplierFormModal";
 
 /**
@@ -36,10 +37,12 @@ const blankLine = () => ({
   gstPercent: "",
   hsnCode: "",
   itcEligible: true,
+  productId: null,
 });
 
 const RecordPurchase = () => {
   const { units, taxRates } = useMasters();
+  const unitCodes = units.map((u) => u.code);
 
   const navigate = useNavigate();
   const { id: editingId } = useParams();
@@ -47,6 +50,9 @@ const RecordPurchase = () => {
   const [searchParams] = useSearchParams();
 
   const [suppliers, setSuppliers] = useState([]);
+  // His own products, for the item box. Same source the sale and challan
+  // forms read.
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notSetUp, setNotSetUp] = useState(false);
@@ -70,6 +76,21 @@ const RecordPurchase = () => {
   useEffect(() => {
     let alive = true;
     const load = async () => {
+      // His own products, for the item box. Silent on failure: the box still
+      // takes a typed name, which is what it did before there was a list.
+      try {
+        const { data } = await api.get("/api/dashboard/inventory");
+        if (alive) {
+          setProducts(
+            (data || [])
+              .filter((row) => row.status === "Active")
+              .map((row) => ({ ...row, rate: row.price })),
+          );
+        }
+      } catch {
+        if (alive) setProducts([]);
+      }
+
       try {
         const { data } = await api.get("/api/suppliers");
         if (alive) setSuppliers(data || []);
@@ -141,6 +162,35 @@ const RecordPurchase = () => {
       prev.map((line) => (line.key === key ? { ...line, [field]: value } : line)),
     );
 
+  /**
+   * A product picked off the list fills what it can.
+   *
+   * The rate is deliberately NOT one of them. On a sale the product list
+   * price is what he charges, so filling it is right. On a purchase the
+   * number that matters is what the mill charged, which is printed on the
+   * bill in front of him and has nothing to do with his own selling price.
+   * Filling it would be a plausible wrong number in a box he might not check,
+   * which is the one kind of mistake this book must not make.
+   */
+  const fillFromProduct = (key, product) =>
+    setLines((prev) =>
+      prev.map((line) =>
+        line.key === key
+          ? {
+              ...line,
+              itemName: product.name,
+              productId: product.id,
+              unit: unitCodes.includes(product.unit) ? product.unit : line.unit,
+              hsnCode: product.hsn_code || line.hsnCode,
+              gstPercent:
+                product.gst_percent === null || product.gst_percent === undefined
+                  ? line.gstPercent
+                  : String(Number(product.gst_percent)),
+            }
+          : line,
+      ),
+    );
+
   const removeLine = (key) =>
     setLines((prev) =>
       prev.length === 1 ? prev : prev.filter((line) => line.key !== key),
@@ -209,6 +259,7 @@ const RecordPurchase = () => {
             ...blankLine(),
             fromChallan: challan.id,
             itemName: l.itemName || "",
+            productId: l.productId || null,
             quantity: l.quantity ?? "",
             unit: l.unit || "pcs",
             rate: l.rate ?? "",
@@ -277,6 +328,10 @@ const RecordPurchase = () => {
         gstPercent: line.gstPercent === "" ? undefined : line.gstPercent,
         hsnCode: line.hsnCode || undefined,
         itcEligible: line.itcEligible,
+        // The listing, and the challan the goods already arrived on. The
+        // second is what stops the stock ledger bringing them in twice.
+        productId: line.productId || undefined,
+        fromChallan: line.fromChallan || undefined,
       })),
     };
 
@@ -512,13 +567,26 @@ const RecordPurchase = () => {
                   </span>
 
                   <div className="min-w-0 flex-1 space-y-2">
-                    <input
+                    {/* The same picker the sale and challan forms use. What
+                        the mill calls a cloth and what this wholesaler calls
+                        it are often different, so the name stays typeable and
+                        the list is only a shortcut. What it saves is the HSN
+                        and the GST rate, which are the two fields on a
+                        purchase line nobody remembers. */}
+                    <ItemPicker
                       value={line.itemName}
-                      onChange={(e) =>
-                        setLine(line.key, "itemName", e.target.value)
-                      }
+                      items={products}
                       placeholder="Item name"
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-colors focus:border-clay"
+                      onChange={(name) =>
+                        setLines((prev) =>
+                          prev.map((l) =>
+                            l.key === line.key
+                              ? { ...l, itemName: name, productId: null }
+                              : l,
+                          ),
+                        )
+                      }
+                      onPick={(product) => fillFromProduct(line.key, product)}
                     />
 
                     <div className="grid grid-cols-3 gap-2">

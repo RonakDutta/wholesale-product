@@ -40,6 +40,9 @@ const blankLine = () => ({
   // The server resolves it the same way and is the authority; this is only
   // so the total on screen is the total that gets saved.
   gstPercent: null,
+  // The listing this line was picked off, when it was. Sent, so the stock
+  // ledger can attribute the movement to a product rather than to a name.
+  productId: null,
 });
 
 /**
@@ -225,6 +228,7 @@ const RecordSale = () => {
           ? {
               ...line,
               itemName: item.name,
+              productId: item.id,
               rate: String(Number(item.rate)),
               unit: unitCodes.includes(item.unit) ? item.unit : line.unit,
               moq: item.moq === null ? null : Number(item.moq),
@@ -312,6 +316,7 @@ const RecordSale = () => {
             ...blankLine(),
             fromChallan: challan.id,
             itemName: l.itemName || "",
+            productId: l.productId || null,
             quantity: l.quantity ?? "",
             unit: l.unit || "pcs",
             rate: l.rate ?? "",
@@ -379,6 +384,11 @@ const RecordSale = () => {
         rate: line.rate || 0,
         hsnCode: line.hsnCode || undefined,
         gstPercent: line.gstPercent ?? undefined,
+        // Which listing this is, and which challan the goods already left on.
+        // The second one is why the stock ledger does not take the same cloth
+        // out twice: the challan moved it, so this line must not.
+        productId: line.productId || undefined,
+        fromChallan: line.fromChallan || undefined,
       })),
     };
 
@@ -396,6 +406,12 @@ const RecordSale = () => {
       toast.success(
         editing ? `${data.sale_number} saved.` : `${data.sale_number} recorded.`,
       );
+      // The sale is saved either way. A customer past his limit is something
+      // the wholesaler wants to know, not something that should have stopped
+      // him writing down goods that have already gone.
+      if (data.creditWarning?.message) {
+        toast.warning(data.creditWarning.message, { duration: 8000 });
+      }
       navigate(`/seller/sales/${data.id}`, { replace: true });
     } catch (error) {
       toast.error(
@@ -592,7 +608,16 @@ const RecordSale = () => {
                       value={line.itemName}
                       items={items}
                       placeholder="Item name"
-                      onChange={(name) => setLine(line.key, "itemName", name)}
+                      // Typed over, so the id no longer describes the line.
+                      onChange={(name) =>
+                        setLines((prev) =>
+                          prev.map((l) =>
+                            l.key === line.key
+                              ? { ...l, itemName: name, productId: null }
+                              : l,
+                          ),
+                        )
+                      }
                       onPick={(item) => fillFromItem(line.key, item)}
                     />
 

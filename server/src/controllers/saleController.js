@@ -1,6 +1,13 @@
 const pool = require("../config/db");
 const { clean, fromPaise, toPaise } = require("../utils/money");
 const saleInvoiceService = require("../services/saleInvoiceService");
+const stockLedger = require("../services/stockLedger");
+const { hasPartyLink } = require("../services/partyService");
+const { hasSaleLink } = require("../services/orderSaleService");
+const {
+  balanceExpression,
+  hasOpeningBalance,
+} = require("../services/khataBalance");
 const creditNoteService = require("../services/creditNoteService");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const gstService = require("../services/gstService");
@@ -108,6 +115,63 @@ const resolveRates = async (client, wholesalerId, lines) => {
 };
 
 /**
+ * Has this customer gone past the credit you allow him?
+ *
+ * TOLD, NEVER ENFORCED, and that is a decision rather than an omission. This
+ * is a book: the wholesaler is writing down a sale that has already happened,
+ * usually with the goods already gone. Refusing to record it would not undo
+ * the sale, it would only leave the sale missing from the khata, which is the
+ * one thing worse than a customer being over his limit.
+ *
+ * Marg and Busy both offer a hard block. Both are entered at the counter
+ * BEFORE the goods move, which is the case where a block means something.
+ *
+ * `parties.credit_limit` has existed since the opening balance migration and
+ * has been importable all along. Until this function nothing read it, so it
+ * was a field that looked like a control and was not. A zero or a null means
+ * no limit set, which is what almost every row says.
+ *
+ * Runs after the sale is committed and never inside its transaction: a
+ * warning that could fail the write would be enforcement by accident.
+ */
+const creditWarning = async (wholesalerId, partyId, partyName) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT credit_limit FROM parties WHERE id = $1 AND wholesaler_id = $2`,
+      [partyId, wholesalerId]);
+    const limit = Number(rows[0]?.credit_limit ?? 0);
+    if (!Number.isFinite(limit) || limit <= 0) return null;
+
+    const hasOrderParty = await hasPartyLink(pool);
+    const hasBridge = await hasSaleLink(pool);
+    const hasOpening = await hasOpeningBalance(pool);
+    const owed = await pool.query(
+      `SELECT ${balanceExpression({
+        hasOrderParty, hasBridge, hasOpening, partyRef: "p.id",
+      })} AS balance
+         FROM parties p WHERE p.id = $1 AND p.wholesaler_id = $2`,
+      [partyId, wholesalerId]);
+    const balance = Number(owed.rows[0]?.balance ?? 0);
+    if (balance <= limit) return null;
+
+    return {
+      partyName,
+      limit,
+      balance,
+      over: Math.round((balance - limit) * 100) / 100,
+      message:
+        `${partyName} now owes ${balance.toFixed(2)}, which is past the `
+        + `${limit.toFixed(2)} limit you set. The sale has been recorded.`,
+    };
+  } catch (err) {
+    // A warning that breaks the response would be worse than no warning. The
+    // sale is already saved by the time this runs.
+    console.warn("Could not check the credit limit:", err.message);
+    return null;
+  }
+};
+
+/**
  * Validates and normalises the lines on a sale. Returns either an error
  * message or the cleaned lines with their amounts already worked out.
  */
@@ -171,6 +235,13 @@ const buildLines = (rawLines, minHsn = 4) => {
       // the HSN printed on a bill already raised.
       hsnCode: hsn.hsn,
       amountPaise: Math.round(toPaise(rate) * quantity),
+      // Which listing this line is, when it was picked off one, and which
+      // challan the goods already went out on. Both optional and neither
+      // validated beyond being a value or nothing: a wrong id here costs a
+      // movement that cannot be attributed, and refusing the whole sale over
+      // it would be far worse than that. The stock ledger reads both.
+      productId: clean(raw.productId ?? raw.product_id) || null,
+      fromChallanId: clean(raw.fromChallan ?? raw.fromChallanId ?? raw.from_challan_id) || null,
     });
   }
 
@@ -292,7 +363,7 @@ exports.createSale = async (req, res) => {
     const saleId = sale.rows[0].id;
 
     for (const [i, line] of priced.entries()) {
-      await client.query(
+      const inserted = await client.query(
         // The cess rate AND what it came to, snapshot beside the GST for the
         // same reason: a term edited next year must not restate a bill raised
         // this year.
@@ -302,7 +373,8 @@ exports.createSale = async (req, res) => {
             ${has.has_cess ? ", cess_percent, cess_amount" : ""})
          VALUES ($1, $2, $3, $4, $5, $6, $7${has.has_line_gst ? ", $8" : ""}${
            has.has_cess ? (has.has_line_gst ? ", $9, $10" : ", $8, $9") : ""
-         })`,
+         })
+         RETURNING id`,
         [
           saleId,
           line.itemName,
@@ -319,7 +391,28 @@ exports.createSale = async (req, res) => {
             : []),
         ],
       );
+      // Which listing this line is, and which challan it already went out on.
+      // Stamped separately because the insert above builds its column list
+      // from schema probes, see stockLedger.stampLine.
+      await stockLedger.stampLine(
+        client, "sale_lines", inserted.rows[0]?.id, line);
     }
+
+    // The goods leave the building. Lines that came off a challan are skipped
+    // inside record(), because they left when the challan was written and
+    // counting them again here would take the same cloth out of stock twice.
+    //
+    // Dated with the sale, not with today, for the same reason the payment
+    // below is: a wholesaler writing up Monday's sales on Thursday moved the
+    // goods on Monday.
+    await stockLedger.record(client, wholesalerId, {
+      kind: "sale",
+      documentId: saleId,
+      documentNumber: saleNumber,
+      movedOn: clean(saleDate),
+      direction: "out",
+      lines: priced,
+    });
 
     // Money handed over at the same time as the goods is the normal case,
     // so it is recorded here rather than forcing a second trip.
@@ -384,6 +477,9 @@ exports.createSale = async (req, res) => {
       ...sale.rows[0],
       party_name: party.rows[0].name,
       amount_received: fromPaise(paidPaise),
+      // Told, never enforced. See creditWarning.
+      creditWarning: await creditWarning(
+        wholesalerId, partyId, party.rows[0].name),
     });
   } catch (err) {
     await client.query("ROLLBACK");
@@ -586,11 +682,34 @@ exports.updateSaleStatus = async (req, res) => {
       });
     }
 
-    const updated = await pool.query(
-      `UPDATE sales SET status = $1, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2 AND wholesaler_id = $3 RETURNING *`,
-      [status, id, wholesalerId],
-    );
+    // The status change and the stock coming back are one act.
+    //
+    // This was a bare pool.query until the stock ledger existed, and it could
+    // stay one while cancelling only moved a status. It cannot now: a cancel
+    // that marked the sale dead and then failed to give the goods back would
+    // leave stock permanently short, with a cancelled document standing next
+    // to it saying the goods never went. The credit note below is still raised
+    // outside the transaction, on purpose, for the reason stated there.
+    const client = await pool.connect();
+    let updated;
+    try {
+      await client.query("BEGIN");
+      updated = await client.query(
+        `UPDATE sales SET status = $1, updated_at = CURRENT_TIMESTAMP
+          WHERE id = $2 AND wholesaler_id = $3 RETURNING *`,
+        [status, id, wholesalerId],
+      );
+      if (status === "cancelled") {
+        await stockLedger.reverse(client, wholesalerId, "sale", id,
+          `Sale ${updated.rows[0]?.sale_number} cancelled`);
+      }
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
 
     // A cancelled sale must not leave a live bill standing against the
     // customer. Voiding the invoice was the old answer and it was the wrong

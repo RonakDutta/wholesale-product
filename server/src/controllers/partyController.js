@@ -230,7 +230,7 @@ exports.createParty = async (req, res) => {
   const wholesalerId = businessId(req);
   const {
     name, businessName, phone, city, state, address, gstin, notes,
-    openingBalance, openingBalanceOn,
+    openingBalance, openingBalanceOn, creditLimit,
   } = req.body;
 
   if (!clean(name)) {
@@ -287,6 +287,17 @@ exports.createParty = async (req, res) => {
       values.push(opening.amount, opening.on);
       casts.push("", "::date");
     }
+    // How much this customer may owe before the sale form says something. A
+    // blank or a zero means no limit, which is what almost every row carries.
+    // Nothing is ever refused on it, see creditWarning in saleController.
+    if (creditLimit !== undefined && String(creditLimit).trim() !== "") {
+      const limit = Number(creditLimit);
+      if (Number.isFinite(limit) && limit >= 0) {
+        columns.push("credit_limit");
+        values.push(limit);
+        casts.push("::numeric");
+      }
+    }
 
     const placeholders = values.map((_, i) => {
       const cast = i >= 8 ? casts[i - 8] || "" : "";
@@ -319,7 +330,7 @@ exports.updateParty = async (req, res) => {
   const { id } = req.params;
   const {
     name, businessName, phone, city, state, address, gstin, notes, status,
-    openingBalance, openingBalanceOn,
+    openingBalance, openingBalanceOn, creditLimit,
   } = req.body;
 
   if (name !== undefined && !clean(name)) {
@@ -396,6 +407,17 @@ exports.updateParty = async (req, res) => {
     if (parsed === undefined) return;
     if (openingBalance !== undefined) put("opening_balance", parsed.amount);
     if (openingBalanceOn !== undefined) put("opening_balance_on", parsed.on);
+  }
+
+  // Emptying the box clears the limit, the same way emptying a phone number
+  // removes it. A blank is "no limit", not "leave it alone".
+  if (creditLimit !== undefined) {
+    const blank = String(creditLimit).trim() === "";
+    const limit = blank ? null : Number(creditLimit);
+    if (!blank && (!Number.isFinite(limit) || limit < 0)) {
+      return res.status(400).json({ message: "Enter a credit limit of zero or more, or leave it empty." });
+    }
+    put("credit_limit", limit);
   }
 
   if (sets.length === 0) {

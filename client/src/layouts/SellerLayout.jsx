@@ -4,6 +4,8 @@ import { useHotkey, prettyCombo } from "../hooks/useHotkey";
 import {
   LayoutDashboard,
   Package,
+  Boxes,
+  BookOpen,
   ShoppingBag,
   ShoppingCart,
   Factory,
@@ -36,12 +38,18 @@ import Wordmark from "../components/Wordmark";
 // but only shown when the marketplace flag is on, so nothing is deleted.
 const NAV = [
   { path: "/seller", label: "Overview", icon: LayoutDashboard, exact: true },
+  // The day, in one list. Sits under Overview because it answers the same
+  // question at a different zoom: Overview is the month, this is today.
+  { path: "/seller/daybook", label: "Day book", icon: BookOpen, needs: "sales" },
   { path: "/seller/customers", label: "Customers", icon: Users, needs: "customers" },
   // One list. It used to be two, their own rate list and their shop listings,
   // which meant the same thing to them and differed only in which half of the
   // row each screen could show. Where a product is shown is now a control on
   // the product itself, which is where they look for it.
   { path: "/seller/products", label: "Products", icon: Package, needs: "products" },
+  // Behind the products permission, because it answers a question about what
+  // is being sold rather than about money.
+  { path: "/seller/stock", label: "Stock", icon: Boxes, needs: "products" },
   { path: "/seller/sales", label: "Sales", icon: ShoppingBag, needs: "sales" },
   // Marketplace orders, which are a different thing from a recorded sale.
   {
@@ -103,6 +111,8 @@ const PREFETCH = {
   "/seller/sales": () => import("../pages/dashboard/Sales"),
   "/seller/orders": () => import("../pages/dashboard/Orders"),
   "/seller/challans": () => import("../pages/dashboard/Challans"),
+  "/seller/stock": () => import("../pages/dashboard/Stock"),
+  "/seller/daybook": () => import("../pages/dashboard/DayBook"),
   "/seller/staff": () => import("../pages/dashboard/Staff"),
   "/seller/settings": () => import("../pages/dashboard/Settings"),
 };
@@ -179,6 +189,8 @@ const SellerLayout = () => {
    */
   const PALETTE_WORDS = {
     "/seller/customers": "party parties buyer khata account",
+    "/seller/stock": "godown inventory maal quantity how much left",
+    "/seller/daybook": "day book today rojmel what happened register",
     "/seller/suppliers": "mill vendor party purchase from",
     "/seller/purchases": "bill purchase inward buying",
     "/seller/sales": "sale outward selling kaata",

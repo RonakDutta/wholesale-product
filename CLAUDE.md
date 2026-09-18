@@ -168,14 +168,25 @@ ARE the state), then the city. Do not add a fourth chain of COALESCEs, and do
 not default an unknown location to a real place: `null` means "not told", which
 the service reads as the same state so a local sale bills correctly.
 
-**A challan moves stock, never the ledger.** `services/challanBook.js` holds
-the two kinds, `sale` for goods out and `purchase` for goods in, each with its
-own run of numbers. A challan exists because goods MOVED, not because anybody
-has or has not paid, it carries no GST, and it never touches the party balance.
-One that also moved the ledger would have every sale counted twice in the
-khata, once when the goods left and again when the bill went out, and both
-entries would look correct on their own. `delivery_challan_items.gst_percent`
-is the rate the line WILL be billed at, and nothing sums it.
+**A challan never moves the ledger.** `services/challanBook.js` holds the two
+kinds, `sale` for goods out and `purchase` for goods in, each with its own run
+of numbers. A challan exists because goods MOVED, not because anybody has or
+has not paid, it carries no GST, and it never touches the party balance. One
+that also moved the ledger would have every sale counted twice in the khata,
+once when the goods left and again when the bill went out, and both entries
+would look correct on their own. `delivery_challan_items.gst_percent` is the
+rate the line WILL be billed at, and nothing sums it.
+
+**Nothing in the khata moves stock, including the challan.** This line used to
+say a challan moves stock. It does not, and nothing else here does either:
+`supplier_inventory.stock` is written only by `orderController.js` and
+`orderStatusService.js`, both on the marketplace order path. A sale does not
+lower it, a purchase does not raise it, a challan does not touch it. That is
+deliberate and self-consistent, see the note at the top of `purchaseController.js`,
+but it means the stock figure is meaningless for a wholesaler using the khata.
+A stock ledger is the largest missing piece in this product and is written up
+in `ROADMAP.md` under the 18 Sept survey. Do not "fix" one document to move
+stock on its own: that makes the figure wrong in a new direction.
 
 The bill is NOT converted server side. The challan loads into the sale or
 purchase form and the ordinary path prices it, then `stampBilled` closes the

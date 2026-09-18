@@ -2710,6 +2710,55 @@ width column, so every name lines up.
 
 ---
 
+## 18 Sept: stock on the product screens, and the box that was never there
+
+Asked: "where is the stock option showing in product page? i dont see it there
+should we make it there? and when creating new product should we enter stock
+there ourselves too?"
+
+Both answers were no, and the second one was a bug.
+
+**The Add product form had no stock box at all.** `formData` carried a `stock`
+key, the form never asked for it, and line 230 sent `Number(formData.stock)`,
+which for an empty string is ZERO. So every product ever added through that
+screen was created holding nothing, silently. Nobody would have noticed,
+because until yesterday the figure was not used for anything.
+
+**And the product list never showed stock.** It lived on its own screen only,
+which is not where a wholesaler looks for it.
+
+Fixed:
+- a "How much do you have now" box on the product form, beside the rate.
+- the product list shows "145 mtr in your book" under each name, linking to
+  the Stock screen. Only where the ledger has something to say, so a
+  wholesaler who does not count stock sees nothing rather than a zero that
+  reads as a claim.
+
+**The figure does TWO things, and they are deliberately not the same thing.**
+It sets `supplier_inventory.stock`, what the shop page offers, and it writes
+an `opening` row to the stock ledger, where his book starts counting. The
+migration already had `'opening'` in its document_kind list for this.
+
+Without the ledger half the Stock screen would show nothing until his first
+sale and then show a NEGATIVE, because goods would be leaving a book that
+never recorded them arriving. That is checked: adding at 500 and selling 30
+leaves 470, not minus 30.
+
+One transaction, because an opening figure is not decoration. A listing that
+committed without its ledger row would leave the book short from day one with
+nothing on any screen saying why.
+
+A product added with no stock writes NO row, so somebody who does not count
+stock is not handed a zero he never claimed.
+
+**Verified.** Driven against a real database, then pinned in `stock_check`.
+Both screens rendered. 37 of 37 suites green.
+
+**Migration to run:** none beyond `wholesale3_stock_ledger.sql`, already
+listed.
+
+---
+
 ## Left to do
 
 Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.

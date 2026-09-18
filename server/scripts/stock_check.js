@@ -350,6 +350,73 @@ const onHand = async (owner, productId) => {
   check(!noLimit.body.creditWarning,
     "a customer with no limit set is never warned about", noLimit.body.creditWarning);
 
+  // ------------------------------------------------------------------
+  console.log("\nA new product opens the book with what he already holds");
+  // ------------------------------------------------------------------
+  /**
+   * The Add product form carried a `stock` key that the form never asked for,
+   * so the server was sent Number("") and every product ever added through
+   * that screen was created holding nothing.
+   *
+   * With a box for it, the figure does two different things on purpose: it
+   * sets what the shop page OFFERS, and it opens the book with an 'opening'
+   * ledger row. Without the second the Stock screen shows nothing until the
+   * first sale and then shows a NEGATIVE, because goods leave a book that
+   * never recorded them arriving.
+   */
+  const productController = require("../src/controllers/productController");
+
+  const added = mk();
+  await productController.addProduct({
+    user: { id: owner, role: "seller" },
+    body: { name: `Opening ${s}`, category: "Textiles", price: 300, moq: 1,
+            stock: 500, shippingDays: 2, unit: "mtr", visibility: "public" },
+  }, added);
+  check(added.statusCode === 201, "a product is added with an opening stock",
+    added.body);
+
+  const opened = (await testPool.query(
+    `SELECT si.id FROM supplier_inventory si
+       JOIN products p ON p.id = si.product_id
+      WHERE si.supplier_id = $1 AND p.name = $2`, [owner, `Opening ${s}`])).rows[0].id;
+  check(await onHand(owner, opened) === 500,
+    "and the book opens at 500, not at nothing", await onHand(owner, opened));
+
+  const openingRow = (await testPool.query(
+    `SELECT document_kind FROM stock_ledger
+      WHERE wholesaler_id = $1 AND product_id = $2`, [owner, opened])).rows[0];
+  check(openingRow?.document_kind === "opening",
+    "filed as an opening, so the register says where the figure came from",
+    openingRow);
+
+  const sellSome = mk();
+  await saleController.createSale({
+    user: { id: owner, role: "seller" },
+    body: { partyId: party, amountPaid: 0, paymentMethod: "cash",
+            lines: [{ itemName: `Opening ${s}`, quantity: 30, rate: 300,
+                      gstPercent: 5, productId: opened }] },
+  }, sellSome);
+  check(await onHand(owner, opened) === 470,
+    "selling 30 leaves 470, NOT minus 30, which is what it did without the "
+    + "opening row", await onHand(owner, opened));
+
+  const addedEmpty = mk();
+  await productController.addProduct({
+    user: { id: owner, role: "seller" },
+    body: { name: `NoStock ${s}`, category: "Textiles", price: 80, moq: 1,
+            stock: 0, shippingDays: 2, unit: "mtr", visibility: "public" },
+  }, addedEmpty);
+  const emptyId = (await testPool.query(
+    `SELECT si.id FROM supplier_inventory si
+       JOIN products p ON p.id = si.product_id
+      WHERE si.supplier_id = $1 AND p.name = $2`, [owner, `NoStock ${s}`])).rows[0].id;
+  const emptyRows = (await testPool.query(
+    `SELECT COUNT(*)::int n FROM stock_ledger
+      WHERE wholesaler_id = $1 AND product_id = $2`, [owner, emptyId])).rows[0].n;
+  check(emptyRows === 0,
+    "a product added with no stock writes NO row, so a wholesaler who does "
+    + "not count stock is not given a zero that looks like a claim", emptyRows);
+
   console.log(fails ? `\n${fails} FAILED\n` : "\nall good\n");
   await testPool.end();
   process.exit(fails ? 1 : 0);

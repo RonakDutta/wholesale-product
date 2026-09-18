@@ -528,7 +528,37 @@ const AddProduct = () => {
                 placeholder="10"
               />
             </div>
-            <div className="md:col-span-2">
+            {/* HOW MUCH HE HAS. There was no box for this at all: formData
+                carried a `stock` key, the form never asked for it, and the
+                server was sent Number("") which is zero. Every product ever
+                added through this screen was created with no stock.
+
+                It does two things, which are deliberately not the same thing.
+                It sets what the shop page OFFERS, and it opens his book stock
+                with an opening row in the stock ledger. Without the second,
+                the Stock screen would show nothing until his first sale and
+                then show a negative, because goods would be leaving a book
+                that never recorded them arriving. */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-2">
+                How much do you have now
+              </label>
+              <input
+                type="number"
+                name="stock"
+                step="any"
+                min="0"
+                value={formData.stock}
+                onChange={handleChange}
+                className="w-full bg-slate-50 border border-slate-200 focus:border-clay focus:ring-1 focus:ring-clay outline-none rounded-lg px-4 py-2.5 text-sm text-slate-900 transition-colors"
+                placeholder="0"
+              />
+              <p className="mt-2 text-xs text-slate-500">
+                Your opening stock. It starts your stock book and is what
+                buyers can order. Leave it empty if you are not counting stock.
+              </p>
+            </div>
+            <div>
               <label className="block text-xs font-semibold text-clay mb-2">
                 Bulk rate (₹ per {formData.unit || "unit"}), optional
               </label>

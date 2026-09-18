@@ -1,6 +1,7 @@
 const pool = require("../config/db");
 const { FEATURES } = require("../config/features");
 const { clean, optionalNumber } = require("../utils/money");
+const stockLedger = require("../services/stockLedger");
 const invoiceRepository = require("../repositories/invoiceRepository");
 const { checkHsn, minHsnDigits } = require("../services/hsnService");
 const { businessId } = require("../middlewares/businessContext");
@@ -114,23 +115,71 @@ exports.addProduct = async (req, res) => {
         ]
       : [];
 
-    await pool.query(
-      `INSERT INTO supplier_inventory
-      (supplier_id, product_id, price, discount_price, moq, stock, shipping_days, image_url, status, visibility${billingColumns})
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Active', $9${billingValues})`,
-      [
-        supplierId,
-        finalProductId,
-        price,
-        bulkPrice || null,
-        moq,
-        stock,
-        shippingDays,
-        imageUrl,
-        normalizeVisibility(visibility),
-        ...billingParams,
-      ],
-    );
+    /**
+     * The listing, and the stock it opens with.
+     *
+     * ONE TRANSACTION, because the opening figure is not decoration. If the
+     * listing committed and the ledger row did not, the book would start life
+     * short by however much he actually holds, with nothing on any screen
+     * saying why.
+     *
+     * The quantity he types here means "this is what I have right now", so it
+     * does two different things and they are deliberately not the same thing:
+     *
+     *   supplier_inventory.stock   what he OFFERS on the shop page
+     *   an 'opening' ledger row    where his book stock starts counting
+     *
+     * Without the ledger row the Stock screen would show nothing until his
+     * first sale, and then show a negative, because goods would be going out
+     * of a book that never recorded them coming in.
+     */
+    const client = await pool.connect();
+    let listingId;
+    try {
+      await client.query("BEGIN");
+      const listing = await client.query(
+        `INSERT INTO supplier_inventory
+        (supplier_id, product_id, price, discount_price, moq, stock, shipping_days, image_url, status, visibility${billingColumns})
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Active', $9${billingValues})
+        RETURNING id`,
+        [
+          supplierId,
+          finalProductId,
+          price,
+          bulkPrice || null,
+          moq,
+          stock,
+          shippingDays,
+          imageUrl,
+          normalizeVisibility(visibility),
+          ...billingParams,
+        ],
+      );
+      listingId = listing.rows[0].id;
+
+      const opening = Number(stock) || 0;
+      if (opening > 0) {
+        await stockLedger.record(client, supplierId, {
+          kind: "opening",
+          documentId: listingId,
+          documentNumber: null,
+          direction: "in",
+          note: "Opening stock, entered when the product was added",
+          lines: [{
+            itemName: clean(name) || "Product",
+            productId: listingId,
+            quantity: opening,
+            unit: clean(unit) || null,
+          }],
+        });
+      }
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
 
     res.status(201).json({ message: "Product listed successfully" });
   } catch (err) {

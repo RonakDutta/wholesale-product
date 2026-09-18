@@ -286,6 +286,19 @@ const RecordSale = () => {
     };
   }, [lines, discount, defaultGst]);
 
+  /**
+   * What this customer owed BEFORE this sale, off the list already fetched
+   * for the dropdown. Zero while editing, because an existing sale's own
+   * total is already inside that figure and showing it would double count
+   * the very bill being edited.
+   */
+  const owedBefore = editing
+    ? 0
+    : Math.max(
+        0,
+        Number(parties.find((p) => p.id === partyId)?.outstanding || 0),
+      );
+
   const dueAfter = fromPaise(
     Math.max(0, toPaise(totals.total) - Math.max(0, toPaise(amountPaid))),
   );
@@ -776,6 +789,29 @@ const RecordSale = () => {
             Leave this empty if they will pay later. Whatever is left shows up
             on their account.
           </p>
+
+          {/* WHAT HE ALREADY OWED, BEFORE THIS BILL.
+              "Paid the whole bill" below settles THIS bill and nothing else,
+              which is correct and was invisible: a wholesaler ticking it on a
+              customer carrying 40,000 from last week reasonably read it as
+              "he is square now". Marg and Busy both show the party balance on
+              the entry screen for exactly this reason.
+
+              Read off the customer list already loaded for the dropdown, so
+              it costs no extra request, and stated as at before this sale
+              because this sale is not saved yet. */}
+          {owedBefore > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-xs font-bold text-amber-900">
+                {parties.find((p) => p.id === partyId)?.name || "This customer"}{" "}
+                already owes ₹{money(owedBefore)}
+              </p>
+              <p className="mt-0.5 text-[11px] text-amber-800">
+                From earlier bills. The tick below settles this bill only, so
+                after it they would still owe ₹{money(owedBefore)}.
+              </p>
+            </div>
+          )}
 
           <PaidInFull
             id="sale-paid-in-full"

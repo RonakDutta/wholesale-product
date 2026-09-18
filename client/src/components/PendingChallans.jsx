@@ -100,7 +100,8 @@ const PendingChallans = ({ kind, otherId, selected = [], onChange, autoSelect })
             {challans.length} challan{challans.length === 1 ? "" : "s"} not billed yet
           </h3>
           <p className="mt-0.5 text-xs text-slate-600">
-            Tick to pull the items in. They will be marked billed when you save.
+            Tick to pull the items in. Once billed a challan is finished and
+            drops off this list, so the same goods cannot be billed twice.
           </p>
         </div>
       </div>

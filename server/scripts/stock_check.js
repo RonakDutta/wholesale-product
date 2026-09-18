@@ -417,6 +417,81 @@ const onHand = async (owner, productId) => {
     "a product added with no stock writes NO row, so a wholesaler who does "
     + "not count stock is not given a zero that looks like a claim", emptyRows);
 
+
+  // ------------------------------------------------------------------
+  console.log("\nThe 18 Sept audit findings, pinned");
+  // ------------------------------------------------------------------
+  const productCtl = require("../src/controllers/productController");
+  const dayBook = require("../src/controllers/dayBookController");
+  const orderSale = require("../src/services/orderSaleService");
+
+  /** Free typed lines must not collapse into one bucket. */
+  for (const [nm, qty] of [["Lot A", 10], ["Lot B", 20], ["Lot A", 5]]) {
+    await testPool.query(
+      `INSERT INTO stock_ledger (wholesaler_id, product_id, item_name, quantity, document_kind)
+       VALUES ($1, NULL, $2, $3, 'adjustment')`, [owner, nm, qty]);
+  }
+  const typed = (await stockLedger.balances(owner)).filter((r) => !r.product_id);
+  const lotA = typed.find((r) => r.name === "Lot A");
+  const lotB = typed.find((r) => r.name === "Lot B");
+  check(!!lotA && !!lotB,
+    "two different free typed items stay two rows. The GROUP BY named only "
+    + "product_id, so every free typed item in the book collapsed into one",
+    typed.map((r) => `${r.name}=${r.on_hand}`));
+  check(Number(lotA?.on_hand) === 15 && Number(lotB?.on_hand) === 20,
+    "and each one sums only its own movements",
+    { lotA: lotA?.on_hand, lotB: lotB?.on_hand });
+
+  /** A stock figure corrected by hand is a movement and must be recorded. */
+  const adj = mk();
+  await productCtl.updateInventoryItem({
+    user: { id: owner, role: "seller" },
+    params: { id: opened }, body: { stock: 400 },
+  }, adj);
+  const adjRows = (await testPool.query(
+    `SELECT document_kind, quantity FROM stock_ledger
+      WHERE wholesaler_id = $1 AND product_id = $2 AND document_kind = 'adjustment'`,
+    [owner, opened])).rows;
+  check(adjRows.length === 1,
+    "correcting the stock by hand writes an adjustment, which it did not before",
+    adjRows);
+  check(adjRows[0] && Number(adjRows[0].quantity) === -70,
+    "and it moves the BOOK from 470 to the 400 he typed, rather than the "
+    + "shop offer's own delta, so counting the shelf leaves the book agreeing",
+    adjRows[0]?.quantity);
+
+  /** Money paid to a mill on account, against no particular bill. */
+  const oldBill = (await testPool.query(
+    `INSERT INTO purchases (wholesaler_id, supplier_id, purchase_number, purchase_date,
+      status, subtotal, discount, tax_amount, total)
+     VALUES ($1,$2,$3,CURRENT_DATE-40,'received',10000,0,0,10000) RETURNING id`,
+    [owner, supplier, `AGE/${s}/1`])).rows[0].id;
+  const age1 = mk();
+  await dayBook.getPayableAgeing({ user: { id: owner, role: "seller" }, query: {} }, age1);
+  const ageBefore = Number(age1.body.total);
+  await testPool.query(
+    `INSERT INTO supplier_payments (wholesaler_id, supplier_id, purchase_id, amount, method, paid_on)
+     VALUES ($1,$2,NULL,6000,'cash',CURRENT_DATE)`, [owner, supplier]);
+  const age2 = mk();
+  await dayBook.getPayableAgeing({ user: { id: owner, role: "seller" }, query: {} }, age2);
+  check(Number(age2.body.total) === ageBefore - 6000,
+    "an ON ACCOUNT payment reduces the ageing. It joined on purchase_id, so "
+    + "every untagged payment, which is most of them in this trade, was ignored",
+    { before: ageBefore, after: age2.body.total });
+
+  /** A delivered order must not be read as an active one. */
+  const histOrder = (await testPool.query(
+    `INSERT INTO orders (buyer_id, supplier_id, inventory_item_id, quantity, total_amount, status)
+     VALUES ($1,$2,$3,1,100,'delivered') RETURNING id`,
+    [owner, owner, opened])).rows[0].id;
+  const del = mk();
+  await productCtl.deleteInventoryItem({
+    user: { id: owner, role: "seller" }, params: { id: opened } }, del);
+  check(/order history/.test(del.body?.message || ""),
+    "a DELIVERED order is history, not an active order. The query tested "
+    + "'Delivered' capitalised against lowercase data, so it was neither",
+    del.body);
+
   console.log(fails ? `\n${fails} FAILED\n` : "\nall good\n");
   await testPool.end();
   process.exit(fails ? 1 : 0);

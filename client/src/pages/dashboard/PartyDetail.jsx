@@ -124,6 +124,7 @@ const PartyDetail = () => {
 
   const { party, sales, payments } = data;
   const due = Number(party.outstanding || 0);
+  const creditLimit = Number(party.credit_limit || 0);
   const digits = String(party.phone || "").replace(/\D/g, "");
 
   return (
@@ -197,6 +198,22 @@ const PartyDetail = () => {
                   ? "In credit with you"
                   : "Account settled"}
             </p>
+            {/* The credit limit, beside the balance it is a limit ON. It was
+                stored, importable and editable and appeared on no screen, so
+                the one place a wholesaler looks before extending more credit
+                did not tell him what he had decided. */}
+            {creditLimit > 0 && (
+              <p
+                className={`mt-1.5 text-xs font-bold ${
+                  due > creditLimit ? "text-rose-600" : "text-slate-500"
+                }`}
+              >
+                Limit ₹{money(creditLimit)}
+                {due > creditLimit
+                  ? ` · over by ₹${money(due - creditLimit)}`
+                  : ""}
+              </p>
+            )}
           </div>
         </div>
 

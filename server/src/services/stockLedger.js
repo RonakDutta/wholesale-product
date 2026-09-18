@@ -28,9 +28,11 @@ const pool = require("../config/db");
  * exists. Tally does the same thing with a Tracking Number. Without it the
  * goods leave twice and both rows look correct on their own.
  *
- * Accepting a shop order writes a sale, and that sale moves the stock through
- * the ordinary sale path. So orders need no separate hook here, and adding one
- * would double count for exactly the reason above.
+ * Accepting a shop order writes a sale too, but NOT through saleController:
+ * orderSaleService writes its own SQL, so it calls record() itself. This
+ * header used to say orders needed no hook because they went "through the
+ * ordinary sale path", which was never true, and the result was that every
+ * marketplace order moved no stock at all.
  *
  * EVERY WRITE TAKES A CLIENT, never the pool. These rows belong to the same
  * transaction as the document that caused them: a sale that rolls back must
@@ -202,8 +204,15 @@ const reverse = async (client, wholesalerId, kind, documentId, note = null) => {
  *
  * Joined out to the listing so a caller gets the name he sees on the Products
  * screen rather than whatever was typed on the last document. Lines with no
- * product are grouped under their typed name, and say so, rather than being
+ * product are grouped under their TYPED NAME, and say so, rather than being
  * added together into one meaningless total.
+ *
+ * That last sentence described the intent and not the code until 18 Sept: the
+ * GROUP BY named only product_id, so every free typed item in the book,
+ * however many different things they were, collapsed into a single row whose
+ * name was whichever sorted first and whose quantity was all of them added
+ * up. Free typed lines are common here, because a wholesaler trading an
+ * uncatalogued lot types the name, so this was not a corner case.
  */
 const balances = async (wholesalerId, db = pool) => {
   if (!(await ledgerExists(db))) return [];
@@ -220,7 +229,8 @@ const balances = async (wholesalerId, db = pool) => {
        LEFT JOIN supplier_inventory si ON si.id = l.product_id
        LEFT JOIN products p ON p.id = si.product_id
       WHERE l.wholesaler_id = $1
-      GROUP BY l.product_id, p.name, si.stock
+      GROUP BY l.product_id, p.name, si.stock,
+               CASE WHEN l.product_id IS NULL THEN l.item_name END
       ORDER BY COALESCE(p.name, MIN(l.item_name))`,
     [wholesalerId],
   );

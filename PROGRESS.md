@@ -2759,6 +2759,98 @@ listed.
 
 ---
 
+## 18 Sept: an outside audit, checked claim by claim
+
+An audit report was handed over listing 13 findings. Every one was checked
+against the code rather than taken on trust. **Twelve were real, three of them
+bugs introduced by this session's own stock ledger work, and one was
+overclaimed.**
+
+**The overclaim.** The checkout `remainingAmount` finding was right that there
+is a bug and wrong about what it is. The second use of that figure IS
+correctly gated by a ternary. The real fault is that the 50/50 OPTION CARD is
+always on screen and printed variables that fall back to the whole subtotal
+when "full" is selected, so it advertised "Pay 50% Now 10,000, Remaining 50%
+10,000" on a 10,000 order: the card misdescribed the plan it was offering and
+its two halves came to twice the order. Fixed by computing the halves from the
+subtotal unconditionally, which the proposed fix would not have done.
+
+One other item, "credit limit never displayed on RecordSale", was already
+stale: that warning was built earlier the same day.
+
+**Fixed, in the order they matter:**
+
+*The payment screen could kill a paid order.* Leaving the QR view called
+`markPaymentFailed` on unmount, and `payment_failed` is terminal, so an order
+could never be paid again. Payments here are self declared: the buyer scans in
+their UPI app and comes back to press the button, so a back tap killed an
+order whose money may already have gone. There is no safe client side version
+of this, because the browser cannot tell "changed their mind" from "switched
+to GPay and is coming back", and the one it guesses wrong is unrecoverable.
+The unmount hook is gone. The explicit back BUTTON still cancels, which is a
+person deciding rather than a lifecycle event.
+
+*Deleting a listing was broken in both directions at once.* The query tested
+`status NOT IN ('Delivered','Cancelled')` against data the CHECK constraint
+proves is lowercase, so every delivered order counted as active and blocked
+the delete for ever. And it read `orders.inventory_item_id` only, so a live
+CART order did not protect the listing at all. `order_items` has NO foreign
+key to `supplier_inventory`, which was checked: a cart-only listing would have
+been hard deleted, orphaning the order history. That is worse than the report
+said.
+
+*Three of my own ledger bugs.* Free typed lines collapsed into one bucket
+because the GROUP BY named only `product_id`, and my comment claimed
+otherwise. Shop orders moved no book stock at all, because `orderSaleService`
+writes its own SQL rather than going through `saleController`, and my header
+comment claimed the opposite. Manual stock edits wrote no row. All three fixed
+and both false comments corrected.
+
+The manual edit fix needed a second pass. Writing the delta of
+`supplier_inventory.stock` was wrong, because that column is the shop offer
+and the two numbers are deliberately allowed to differ: correcting a count to
+400 would have left the book at 370. The adjustment now moves the BOOK to the
+figure typed, so counting the shelf leaves the book agreeing with the shelf.
+
+*Credit notes did not reduce what a customer owed.* A note had its own number
+and its own PDF and changed no figure anywhere, so a customer who returned
+fifty thousand rupees of cloth still showed as owing it, on his page, on the
+dashboard and on the statement asking him to pay. Now subtracted, and listed
+on the statement as its own kind.
+
+ONLY where the bill it reverses is still standing. `flow_check` caught the
+first attempt ending at minus 1420 on an account that should close at zero: a
+cancelled sale has already left the billed sum, so subtracting its note as
+well takes the same money off twice. The suite earned its keep.
+
+*The statement ignored the opening balance*, so a customer carried over from
+an old ledger got one short by whatever he arrived owing, disagreeing with his
+own page.
+
+*Payable ageing ignored on account payments.* It joined on `sp.purchase_id`,
+and in this trade most money to a mill is a round lumpsum against the account
+with no bill named, all of which carry NULL. Untagged money is now applied
+oldest bill first, which is what both sides assume when they reconcile.
+
+*Smaller ones:* the day book now lists credit notes and its payment rows link
+to the party account instead of nowhere; the platform master screen gained
+cards for Tax terms and Platform settings, whose pages existed with nothing
+linking to them; the customer page shows the credit limit beside the balance
+it limits, flagged in red when past it.
+
+**Not done, and deliberately:** debit notes, supplier statements, transporter
+and broker masters, multi godown and GSTR-1 JSON. All are real gaps, all are
+on ROADMAP.md, and none is a bug.
+
+**Verified.** 37 of 37 suites green. Six of the fixes are pinned with new
+assertions in `stock_check`, including the two that are easy to get subtly
+wrong: the adjustment moving the book rather than the offer, and on account
+money reducing the ageing.
+
+**Migration to run:** none.
+
+---
+
 ## Left to do
 
 Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.

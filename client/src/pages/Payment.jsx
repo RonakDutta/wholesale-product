@@ -19,7 +19,6 @@ const Payment = () => {
   // Tracks whether the payment reached a final state, so leaving the screen
   // after paying does not also mark the order failed.
   const resolvedRef = useRef(false);
-  const armedRef = useRef(false);
   const orderIdRef = useRef(orderId);
   orderIdRef.current = orderId;
 
@@ -36,23 +35,22 @@ const Payment = () => {
       })
       .catch(() => {});
 
-  // Abandoning the QR screen (browser back, closing the view) fails the order.
-  // Arming is delayed so React's development double-mount cannot cancel an
-  // order the moment the page opens, and it never arms for an order that is
-  // not awaiting payment: there is nothing left to abandon.
-  useEffect(() => {
-    if (payable !== true) return undefined;
-
-    const timer = setTimeout(() => {
-      armedRef.current = true;
-    }, 1500);
-
-    return () => {
-      clearTimeout(timer);
-      if (!armedRef.current || resolvedRef.current) return;
-      markPaymentFailed("Buyer left the payment screen before paying");
-    };
-  }, [payable]);
+  /**
+   * LEAVING THE QR SCREEN NO LONGER KILLS THE ORDER.
+   *
+   * This used to arm a flag after 1.5s and, on unmount, call
+   * markPaymentFailed. `payment_failed` is TERMINAL in orderStatusService, so
+   * the order could never be paid again. Payments here are self declared: the
+   * buyer scans the QR in their UPI app and comes back to press the button. A
+   * back tap, or anything else that unmounts this view, therefore killed an
+   * order whose money may already have left the buyer's bank.
+   *
+   * There is no safe version of this on the client. The browser cannot tell
+   * "changed their mind" from "switched to GPay and is coming back", and the
+   * one it guesses wrong is unrecoverable. An order left unpaid simply stays
+   * awaiting payment, which is true, and the buyer or the wholesaler can
+   * cancel it deliberately.
+   */
 
   useEffect(() => {
     const fetchPaymentDetails = async () => {

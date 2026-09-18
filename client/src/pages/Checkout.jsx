@@ -120,6 +120,19 @@ const Checkout = () => {
     ? Number((subtotal - initialAmount).toFixed(2))
     : subtotal;
 
+  /**
+   * What the 50/50 option WOULD cost, regardless of what is selected.
+   *
+   * The option card below is always on screen, and it used to print
+   * initialAmount and remainingAmount, both of which fall back to the whole
+   * subtotal when "full" is selected. So a buyer paying in full was shown a
+   * card offering "Pay 50% Now 10,000, Remaining 50% 10,000" on a 10,000
+   * order: the card misdescribed the very plan it was offering, and the two
+   * halves added up to twice the order.
+   */
+  const halfNow = Number((subtotal * 0.5).toFixed(2));
+  const halfLater = Number((subtotal - halfNow).toFixed(2));
+
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="max-w-6xl mx-auto px-4">
@@ -400,11 +413,11 @@ const Checkout = () => {
                   <div className="mt-3 pt-3 border-t border-slate-100 space-y-1">
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-slate-600 font-medium">Pay 50% Now</span>
-                      <span className="font-bold text-clay">₹{initialAmount.toLocaleString("en-IN")}</span>
+                      <span className="font-bold text-clay">₹{halfNow.toLocaleString("en-IN")}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-slate-500">Remaining 50%</span>
-                      <span className="font-semibold text-slate-700">₹{remainingAmount.toLocaleString("en-IN")}</span>
+                      <span className="font-semibold text-slate-700">₹{halfLater.toLocaleString("en-IN")}</span>
                     </div>
                   </div>
                 </div>

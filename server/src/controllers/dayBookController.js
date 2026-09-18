@@ -33,14 +33,14 @@ const buildQuery = (has) => {
 
   parts.push(`
     SELECT 'sale' AS kind, s.id, s.sale_number AS reference, s.sale_date AS on_date,
-           p.name AS other_party, s.total AS amount, s.status, s.created_at
+           p.name AS other_party, s.total AS amount, s.status, s.created_at, NULL::uuid AS link_id
       FROM sales s
       LEFT JOIN parties p ON p.id = s.party_id
      WHERE s.wholesaler_id = $1 AND s.sale_date >= $2::date AND s.sale_date <= $3::date`);
 
   parts.push(`
     SELECT 'payment_in' AS kind, pp.id, NULL AS reference, pp.paid_on AS on_date,
-           p.name AS other_party, pp.amount, pp.method AS status, pp.created_at
+           p.name AS other_party, pp.amount, pp.method AS status, pp.created_at, pp.party_id AS link_id
       FROM party_payments pp
       LEFT JOIN parties p ON p.id = pp.party_id
      WHERE pp.wholesaler_id = $1 AND pp.paid_on >= $2::date AND pp.paid_on <= $3::date`);
@@ -49,7 +49,7 @@ const buildQuery = (has) => {
     parts.push(`
       SELECT 'purchase' AS kind, pu.id, pu.purchase_number AS reference,
              pu.purchase_date AS on_date, su.name AS other_party, pu.total AS amount,
-             pu.status, pu.created_at
+             pu.status, pu.created_at, NULL::uuid AS link_id
         FROM purchases pu
         LEFT JOIN suppliers su ON su.id = pu.supplier_id
        WHERE pu.wholesaler_id = $1 AND pu.purchase_date >= $2::date
@@ -57,7 +57,7 @@ const buildQuery = (has) => {
 
     parts.push(`
       SELECT 'payment_out' AS kind, sp.id, NULL AS reference, sp.paid_on AS on_date,
-             su.name AS other_party, sp.amount, sp.method AS status, sp.created_at
+             su.name AS other_party, sp.amount, sp.method AS status, sp.created_at, sp.supplier_id AS link_id
         FROM supplier_payments sp
         LEFT JOIN suppliers su ON su.id = sp.supplier_id
        WHERE sp.wholesaler_id = $1 AND sp.paid_on >= $2::date AND sp.paid_on <= $3::date`);
@@ -66,9 +66,19 @@ const buildQuery = (has) => {
   parts.push(`
     SELECT 'invoice' AS kind, i.id, i.invoice_number AS reference,
            i.issue_date AS on_date, i.recipient_name AS other_party,
-           i.grand_total AS amount, i.payment_status AS status, i.created_at
+           i.grand_total AS amount, i.payment_status AS status, i.created_at, NULL::uuid AS link_id
       FROM invoices i
      WHERE i.supplier_id = $1 AND i.issue_date >= $2::date AND i.issue_date <= $3::date`);
+
+  // Credit notes. A return or a rate cut is a thing that happened that day and
+  // belongs in the day's list as much as the sale it reverses.
+  parts.push(`
+    SELECT 'credit_note' AS kind, cn.id, cn.note_number AS reference,
+           cn.issue_date AS on_date, cn.recipient_name AS other_party,
+           cn.grand_total AS amount, cn.reason AS status, cn.created_at, cn.invoice_id AS link_id
+      FROM credit_notes cn
+     WHERE cn.wholesaler_id = $1 AND cn.issue_date >= $2::date
+       AND cn.issue_date <= $3::date`);
 
   if (has.has_challan_kinds) {
     parts.push(`
@@ -76,7 +86,7 @@ const buildQuery = (has) => {
                   ELSE 'sale_challan' END AS kind,
              dc.id, dc.challan_number AS reference, dc.issue_date AS on_date,
              dc.recipient_name AS other_party, dc.total_value AS amount,
-             dc.status, dc.created_at
+             dc.status, dc.created_at, NULL::uuid AS link_id
         FROM delivery_challans dc
        WHERE dc.wholesaler_id = $1 AND dc.issue_date >= $2::date
          AND dc.issue_date <= $3::date`);
@@ -159,7 +169,22 @@ exports.getPayableAgeing = async (req, res) => {
     }
 
     const { rows } = await pool.query(
-      `WITH owed AS (
+      /**
+       * ON ACCOUNT PAYMENTS COUNT, and at first they did not.
+       *
+       * This joined payments to a purchase on sp.purchase_id, so only money
+       * tagged to a specific bill reduced the debt. In this trade most money
+       * going to a mill is a round lumpsum against the account rather than
+       * against one bill, and every one of those carries purchase_id NULL.
+       * They were all ignored, so bills looked wholly unpaid and the 60 and
+       * 90 day buckets filled with debt that had in fact been settled.
+       *
+       * Untagged money is applied OLDEST BILL FIRST, which is what a trader
+       * means by paying on account and what both sides assume when they
+       * reconcile. Anything left over after the bills are covered is money in
+       * hand with the mill and simply stops reducing buckets.
+       */
+      `WITH tagged AS (
          SELECT pu.id,
                 COALESCE(pu.supplier_invoice_date, pu.purchase_date) AS as_at,
                 pu.total - COALESCE((
@@ -167,6 +192,23 @@ exports.getPayableAgeing = async (req, res) => {
                    WHERE sp.purchase_id = pu.id), 0) AS due
            FROM purchases pu
           WHERE pu.wholesaler_id = $1 AND pu.status <> 'cancelled'
+       ),
+       on_account AS (
+         SELECT COALESCE(SUM(amount), 0) AS pot
+           FROM supplier_payments
+          WHERE wholesaler_id = $1 AND purchase_id IS NULL
+       ),
+       running AS (
+         SELECT t.id, t.as_at, t.due,
+                COALESCE(SUM(t.due) OVER (ORDER BY t.as_at, t.id
+                  ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS before_this
+           FROM tagged t WHERE t.due > 0
+       ),
+       owed AS (
+         SELECT r.id, r.as_at,
+                GREATEST(r.due - GREATEST(
+                  (SELECT pot FROM on_account) - r.before_this, 0), 0) AS due
+           FROM running r
        )
        SELECT CASE
                 WHEN CURRENT_DATE - as_at <= 0 THEN 'Not due yet'

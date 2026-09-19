@@ -40,6 +40,16 @@ const adv=async(o,id,s,extra={})=>{const r=mk();
  ck(!!D?.delivery_address,"and carries the address it was given",D?.delivery_address);
  ck(D?.contact_phone==="9812345678","and the phone",D?.contact_phone);
 
+ // An order left at pending, the way ones created before manual orders were
+ // written in as accepted still sit. It must not be stranded.
+ const stuck=(await tp.query(
+   "INSERT INTO orders (supplier_id,party_id,buyer_id,source,order_number,quantity,subtotal,total_amount,amount_paid,remaining_amount,status,payment_status) VALUES ($1,$2,NULL,'manual',$3,1,100,100,0,100,'pending','pending') RETURNING id",
+   [o,pty,`SO/OLD/${s}`])).rows[0].id;
+ const unstick=await adv(o,stuck,"supplier_accepted");
+ ck(unstick.body?.success===true,
+   "an order stuck at pending can be accepted, rather than sitting for ever",
+   unstick.body?.message);
+
  console.log("\n2. Down the spine to shipped");
  for (const step of ["processing","packed","ready_for_pickup"]) {
    const x=await adv(o,id,step);

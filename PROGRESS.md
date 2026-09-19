@@ -41,8 +41,11 @@ cd server && npm run migrate
 | `wholesale3_order_sequences.sql` | Orders get their own run of numbers, a source marker, and a billed quantity per line | run 19 Sept |
 | `wholesale3_order_number_per_owner.sql` | Order numbers unique per wholesaler, not platform wide | **NOT RUN** |
 
-**Nothing outstanding as of 18 Sept**, except the party state file below.
-Everything else in this table has been run.
+**One outstanding as of 19 Sept**: `wholesale3_order_number_per_owner.sql`.
+Until it is run, a second wholesaler's first shop order is refused, because
+the old index made an order number unique across the whole platform while the
+new series restarts at 1 for each wholesaler. Everything else in this table
+has been run.
 
 The three that were outstanding, the two challan kinds, the stock ledger and
 the opening balance re-run, all went in on 18 Sept. No restart was needed with
@@ -3014,6 +3017,62 @@ billed, shipping twice not billing twice, and a Rule 55 reason producing a
 challan and no invoice. **38 of 38 suites green.**
 
 **Migration to run:** `wholesale3_order_number_per_owner.sql`
+
+---
+
+## 19 Sept: a pending order with nowhere to go, and an empty day book
+
+Two reports, both real.
+
+**An order left at `pending` was stranded.** The lifecycle had `pending`
+going only to `payment_pending` or `cancelled`, so a seller looking at one
+had no Accept button and no way forward at all. Manual orders are written in
+as `supplier_accepted` and never sit there, but every order taken before that
+was built does, and so does any shop order whose buyer walked away from the
+payment screen. Fixed at both ends: `orderStatusService` now allows
+`pending -> supplier_accepted`, and `client/src/utils/orderStatus.js` offers
+"Accept order" as the next step from `pending`, which is what it already
+offered from `payment_completed`.
+
+**The day book showed nothing, and orders were the reason.** It listed
+sales, payments, purchases, bills, credit notes and challans, and not orders.
+So on a day spent taking orders, which is most of what the manual order work
+was for, the screen said "Nothing on these days" and was telling the truth
+about the wrong question. Tally's Day Book and Marg's both list every voucher
+of the day, order vouchers included. Orders are now a row, linking to the
+order, and are deliberately left OUT of the four money figures: an order is a
+promise, and counting it beside the sale under it would say the same goods
+twice. Verified: a day whose only activity is one typed order now has a row,
+and after shipping it, Sold still reads 4,000 once and not 8,000.
+
+**A second fault found while looking, not reported.** The credit note branch
+added on 18 Sept was the only one of the seven not behind a schema probe. On
+a database without `credit_notes` the WHOLE day book returned 500, because
+Postgres parses a statement before it runs any of it, so one missing table
+loses the other six sources with it. That is the exact trap the comment at
+the top of the file warns about and it was walked into anyway. Now guarded by
+`has_credit_notes`, with a suite that drops the table and asks again.
+
+**Raw statuses in the list.** An order row read `supplier_accepted`, an
+underscore and a machine word on a screen for traders. Every status now goes
+through `formatOrderStatus`, and payment methods through a small map so a row
+says UPI rather than "Upi".
+
+**A stale assertion in `smoke.js`**, failing since 17 Sept and nothing to do
+with either report. It branched on whether the challan tables existed to
+decide whether a part paid sale may be billed. That stopped being the
+question when `CHALLAN_WHEN_UNPAID` was defaulted OFF: what decides it is the
+flag, and with the flag off the bill is raised at removal, as section 31(1)
+requires. It now branches on the flag, and passes both ways.
+
+**Verified.** `daybook_check.js` is new: a day whose only activity is an
+order, that order shipped so the bill and the sale sit beside it without
+double counting, and a database with the credit note table dropped. The day
+book itself was rendered in a browser against a mock, which is how the raw
+`supplier_accepted` was spotted. **41 of 41 suites green**, smoke passing
+both with and without `CHALLAN_WHEN_UNPAID`.
+
+**No migration.** Nothing here adds a column.
 
 ---
 

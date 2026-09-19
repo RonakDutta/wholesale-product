@@ -63,6 +63,43 @@ const buildQuery = (has) => {
        WHERE sp.wholesaler_id = $1 AND sp.paid_on >= $2::date AND sp.paid_on <= $3::date`);
   }
 
+  /**
+   * ORDERS BELONG IN THE DAY BOOK.
+   *
+   * They were left out, and on a day whose only activity was orders taken the
+   * screen said "nothing on these days". That is wrong twice over: an order
+   * is the first thing that happens in the chain, and Tally's Day Book and
+   * Marg's both list every voucher of the day, order vouchers included.
+   *
+   * An order is a promise, not money, so it is listed and deliberately left
+   * out of the four totals below. The sale and the bill underneath it are
+   * what count, and counting the order too would say the same goods twice.
+   */
+  if (has.has_order_party) {
+    parts.push(`
+      SELECT 'order' AS kind, o.id, o.order_number AS reference,
+             o.created_at::date AS on_date,
+             COALESCE(p.name,
+                      NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''))
+               AS other_party,
+             o.total_amount AS amount, o.status, o.created_at, NULL::uuid AS link_id
+        FROM orders o
+        LEFT JOIN parties p ON p.id = o.party_id
+        LEFT JOIN users u ON u.id = o.buyer_id
+       WHERE o.supplier_id = $1 AND o.created_at::date >= $2::date
+         AND o.created_at::date <= $3::date`);
+  } else {
+    parts.push(`
+      SELECT 'order' AS kind, o.id, o.order_number AS reference,
+             o.created_at::date AS on_date,
+             NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), '') AS other_party,
+             o.total_amount AS amount, o.status, o.created_at, NULL::uuid AS link_id
+        FROM orders o
+        LEFT JOIN users u ON u.id = o.buyer_id
+       WHERE o.supplier_id = $1 AND o.created_at::date >= $2::date
+         AND o.created_at::date <= $3::date`);
+  }
+
   parts.push(`
     SELECT 'invoice' AS kind, i.id, i.invoice_number AS reference,
            i.issue_date AS on_date, i.recipient_name AS other_party,
@@ -72,6 +109,12 @@ const buildQuery = (has) => {
 
   // Credit notes. A return or a rate cut is a thing that happened that day and
   // belongs in the day's list as much as the sale it reverses.
+  //
+  // Behind the probe like every other table here. Naming credit_notes
+  // unguarded took the WHOLE day book down with a 500 on a database that did
+  // not have them yet, because Postgres parses the statement before it runs
+  // any of it, so one missing table loses the other six sources as well.
+  if (has.has_credit_notes) {
   parts.push(`
     SELECT 'credit_note' AS kind, cn.id, cn.note_number AS reference,
            cn.issue_date AS on_date, cn.recipient_name AS other_party,
@@ -79,6 +122,7 @@ const buildQuery = (has) => {
       FROM credit_notes cn
      WHERE cn.wholesaler_id = $1 AND cn.issue_date >= $2::date
        AND cn.issue_date <= $3::date`);
+  }
 
   if (has.has_challan_kinds) {
     parts.push(`
@@ -112,6 +156,24 @@ const hasChallanKinds = async () => {
   return challanKinds;
 };
 
+/**
+ * Can an order name a walk-in customer? Only a true is cached, so a migration
+ * run by hand takes effect without restarting the server.
+ */
+let orderParty = false;
+const hasOrderParty = async () => {
+  if (orderParty) return true;
+  try {
+    const { rows } = await pool.query(
+      `SELECT COUNT(*)::int n FROM information_schema.columns
+        WHERE table_name = 'orders' AND column_name = 'party_id'`);
+    orderParty = rows[0].n === 1;
+  } catch {
+    return false;
+  }
+  return orderParty;
+};
+
 exports.getDayBook = async (req, res) => {
   try {
     const today = new Date().toISOString().slice(0, 10);
@@ -121,6 +183,7 @@ exports.getDayBook = async (req, res) => {
     const has = {
       ...(await invoiceRepository.schemaExtras()),
       has_challan_kinds: await hasChallanKinds(),
+      has_order_party: await hasOrderParty(),
     };
 
     const { rows } = await pool.query(

@@ -91,28 +91,34 @@ const check = (cond, label, v) => { if (!cond) fails++;
     body: { lines: [{ itemName: "Cotton shirting", quantity: 3, rate: 142 }] } });
   check(e.statusCode === 200, "edit sale", { total: e.body.total });
 
-  // Since 10 Sept the bill waits until the sale is settled, and the goods go
-  // out on a delivery challan meanwhile. The whole rule stands down on a
-  // database whose migration has not been run, which is the case this file
-  // exists to cover, so both shapes are walked.
+  // Whether the bill waits for the money is CHALLAN_WHEN_UNPAID, and it has
+  // defaulted OFF since 17 Sept, because section 31(1) ties the invoice to
+  // REMOVAL of the goods and not to payment. This used to branch on whether
+  // the challan tables existed, which stopped being the question that decides
+  // it, so the suite asserted a 409 that the product no longer returns and
+  // had been failing on the default settings ever since.
   const challanService = require("../src/services/challanService");
   challanService.resetChallanTables();
   const hasChallans = await challanService.challanTablesExist();
-  console.log(`  (delivery challans ${hasChallans ? "on" : "not migrated, gate stands down"})`);
+  const waits =
+    String(process.env.CHALLAN_WHEN_UNPAID ?? "false").toLowerCase() === "true";
+  console.log(`  (delivery challans ${hasChallans ? "on" : "not migrated"}, bill ${waits ? "waits for payment" : "does not wait"})`);
 
-  if (hasChallans) {
+  if (waits) {
     const early = await call(sales.createInvoiceForSale, { user, params: { id: s.body.id } });
     check(early.statusCode === 409 && early.body?.code === "UNPAID", "part paid sale is not billed",
       { s: early.statusCode, outstanding: early.body?.outstanding });
-
-    const dc = await call(challans.createForSale, { user, business: { id: wid, owner: true }, params: { id: s.body.id }, body: {} });
-    check(dc.statusCode === 201, "delivery challan instead", { n: dc.body?.challan_number });
-    const dcFull = await challanService.findById(dc.body.id, wid);
-    check((await pdf.generateChallanPDF(dcFull)).length > 1000, "challan pdf", {});
   } else {
     const early = await call(sales.createInvoiceForSale, { user, params: { id: s.body.id } });
-    check(early.statusCode === 201, "without the migration a part paid sale still bills",
+    check(early.statusCode === 201, "on the default settings a part paid sale bills at removal",
       { s: early.statusCode });
+  }
+
+  if (hasChallans) {
+    const dc = await call(challans.createForSale, { user, business: { id: wid, owner: true }, params: { id: s.body.id }, body: {} });
+    check(dc.statusCode === 201, "delivery challan alongside", { n: dc.body?.challan_number });
+    const dcFull = await challanService.findById(dc.body.id, wid);
+    check((await pdf.generateChallanPDF(dcFull)).length > 1000, "challan pdf", {});
   }
 
   // Tagged to the sale. An untagged payment is money from the customer but

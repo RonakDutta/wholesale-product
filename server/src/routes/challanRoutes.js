@@ -13,6 +13,7 @@ const {
   listByKind,
   pendingForParty,
   challanReasons,
+  getChallanStats,
 } = require("../controllers/challanController");
 const authenticateToken = require("../middlewares/authMiddleware");
 const authorizeRoles = require("../middlewares/roleMiddleware");
@@ -33,6 +34,9 @@ router.get("/", requirePermission("invoices"), (req, res, next) =>
 // because goods moved, not because a sale went unpaid.
 router.post("/", requirePermission("invoices"), recordChallan);
 router.get("/reasons", requirePermission("invoices"), challanReasons);
+
+// The cards at the top of the screen. Before /:id, or "stats" is read as an id.
+router.get("/stats", requirePermission("invoices"), getChallanStats);
 // What a customer or supplier still has waiting to be billed. Read by the
 // sale and purchase forms the moment a party is picked.
 router.get("/pending/:id", requirePermission("invoices"), pendingForParty);

@@ -4,6 +4,7 @@ import { BookOpen, Clock } from "lucide-react";
 import api from "../../utils/axios";
 import { toast } from "sonner";
 import { money, dateLabel } from "../../utils/money";
+import { formatOrderStatus } from "../../utils/orderStatus";
 
 /**
  * The day book: everything that happened, in one list.
@@ -18,6 +19,9 @@ import { money, dateLabel } from "../../utils/money";
  */
 
 const KINDS = {
+  // An order is a promise, so it is listed but adds nothing to the four money
+  // figures above. The bill under it is what counts.
+  order: { label: "Order", tone: "bg-indigo-50 text-indigo-700", to: (r) => `/seller/orders/${r.id}` },
   sale: { label: "Sale", tone: "bg-sky-50 text-sky-700", to: (r) => `/seller/sales/${r.id}` },
   purchase: { label: "Purchase", tone: "bg-amber-50 text-amber-700", to: (r) => `/seller/purchases/${r.id}` },
   // Payments link to the party whose account they landed on, which is where
@@ -34,6 +38,15 @@ const KINDS = {
   invoice: { label: "Bill", tone: "bg-violet-50 text-violet-700", to: (r) => `/seller/invoices/${r.id}` },
   sale_challan: { label: "Sale challan", tone: "bg-slate-100 text-slate-600", to: (r) => `/seller/challans/${r.id}` },
   purchase_challan: { label: "Purchase challan", tone: "bg-slate-100 text-slate-600", to: (r) => `/seller/challans/${r.id}` },
+};
+
+// A payment carries its method here, not a status, and the ones traders use
+// are initialisms. "Upi" is not a word.
+const METHODS = { upi: "UPI", neft: "NEFT", rtgs: "RTGS", imps: "IMPS" };
+
+const statusLabel = (status) => {
+  const value = String(status || "").toLowerCase();
+  return METHODS[value] || formatOrderStatus(status);
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -196,7 +209,10 @@ const DayBook = () => {
                     <p className="truncate text-xs text-slate-500">
                       {dateLabel(row.on_date)}
                       {row.reference ? ` · ${row.reference}` : ""}
-                      {row.status ? ` · ${row.status}` : ""}
+                      {/* Never the raw column. An order carries statuses like
+                          supplier_accepted, and a trader should not have to
+                          read an underscore to know his order was taken. */}
+                      {row.status ? ` · ${statusLabel(row.status)}` : ""}
                     </p>
                   </div>
                   <span className="shrink-0 text-sm font-black text-espresso">

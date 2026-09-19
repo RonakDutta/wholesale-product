@@ -237,8 +237,42 @@ const nextPurchaseNumber = async (client, wholesalerId) => {
   return generated;
 };
 
+/**
+ * SO/1/26-27, the order's own run.
+ *
+ * Orders used to be numbered `ORD-<timestamp>-<buyer id>` in the controller,
+ * which is unique and is not a series: unreadable over a phone, never
+ * restarting on 1 April, and giving no clue that two orders are consecutive.
+ *
+ * Its own allocator rather than take(), because take() branches on
+ * has_series_fy, which describes whether the SALE and CHALLAN counters were
+ * migrated and says nothing about this one. order_sequences is created with
+ * financial_year already in its key, so there is no older shape to fall back
+ * to and no legacy prefix.
+ *
+ * Not statutory: an order is not a document GST governs, so Rule 46(b)'s
+ * sixteen characters are not imposed, only the character set.
+ *
+ * Must be called inside a transaction: the upsert locks the row until commit.
+ */
+const nextOrderNumber = async (client, wholesalerId) => {
+  const fy = financialYear();
+  const result = await client.query(
+    `INSERT INTO order_sequences (wholesaler_id, financial_year, last_number)
+     VALUES ($1, $2, 1)
+     ON CONFLICT (wholesaler_id, financial_year)
+     DO UPDATE SET last_number = order_sequences.last_number + 1
+     RETURNING last_number`,
+    [wholesalerId, fy],
+  );
+  const generated = `SO/${result.rows[0].last_number}/${fy}`;
+  validateSequenceNumber(generated, { statutory: false });
+  return generated;
+};
+
 module.exports = {
   nextSaleNumber,
+  nextOrderNumber,
   nextChallanNumber,
   nextPurchaseNumber,
   validateSequenceNumber,

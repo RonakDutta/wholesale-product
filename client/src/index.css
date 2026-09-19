@@ -209,3 +209,23 @@ html {
 .panel-scrollbar:hover::-webkit-scrollbar-thumb {
   background-color: rgb(61 46 36 / 0.32);
 }
+
+/**
+ * THE PAGE MUST NOT JUMP WHEN THE SCROLLBAR APPEARS.
+ *
+ * A short screen has no scrollbar, a long one does, and on a desktop browser
+ * that bar takes real width out of the viewport. Navigating between the two
+ * shifted the whole layout sideways by about 15px and shifted it back, which
+ * reads as the site flinching.
+ *
+ * `scrollbar-gutter: stable` is the modern answer: the space is reserved
+ * whether or not the bar is drawn, so nothing moves. It replaces the old
+ * trick of forcing `overflow-y: scroll` on every page, which left a dead grey
+ * bar on screens that did not need one.
+ *
+ * On the ROOT element, not on body, because that is where the browser puts
+ * the viewport scrollbar.
+ */
+html {
+  scrollbar-gutter: stable;
+}

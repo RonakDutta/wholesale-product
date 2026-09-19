@@ -1,3 +1,4 @@
+const pool = require("../config/db");
 const challanService = require("../services/challanService");
 const pdfService = require("../services/pdfService");
 const { businessId } = require("../middlewares/businessContext");
@@ -242,4 +243,59 @@ exports.challanReasons = (req, res) => {
     success: true,
     reasons: challanBook.REASONS.filter((r) => r.forKind === "both" || r.forKind === kind),
   });
+};
+
+/**
+ * The cards at the top of the Challans screen.
+ *
+ * Built because a member of staff may spend the whole day on this one screen,
+ * and a screen somebody lives on has to answer its own questions rather than
+ * sending them to the Overview for a number.
+ *
+ * Counted per KIND, because sale challans and purchase challans are two
+ * different jobs usually done by two different people, and a blended figure
+ * would be useless to both.
+ *
+ * "Waiting to be billed" is the one that matters: goods have gone and no bill
+ * stands against them yet. It is the working list, and its VALUE is what is
+ * exposed if nobody chases it.
+ */
+exports.getChallanStats = async (req, res) => {
+  try {
+    const owner = businessId(req);
+    const ready = await challanBook.hasTwoKinds();
+    if (!ready) return res.status(200).json({ ready: false });
+
+    const { rows } = await pool.query(
+      `SELECT kind,
+              COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
+              COALESCE(SUM(total_value) FILTER (WHERE status = 'pending'), 0) AS pending_value,
+              COUNT(*) FILTER (WHERE status = 'billed')::int AS billed,
+              COUNT(*) FILTER (WHERE status = 'cancelled')::int AS cancelled,
+              COUNT(*) FILTER (WHERE issue_date = CURRENT_DATE)::int AS today,
+              -- Waiting more than a week. A challan is a promise to bill, and
+              -- one left open a fortnight is either forgotten or a dispute.
+              COUNT(*) FILTER (WHERE status = 'pending'
+                               AND issue_date < CURRENT_DATE - 7)::int AS stale
+         FROM delivery_challans
+        WHERE wholesaler_id = $1
+        GROUP BY kind`,
+      [owner],
+    );
+
+    const blank = { pending: 0, pending_value: 0, billed: 0, cancelled: 0, today: 0, stale: 0 };
+    const out = { ready: true, sale: { ...blank }, purchase: { ...blank } };
+    for (const row of rows) {
+      const key = row.kind === "purchase" ? "purchase" : "sale";
+      out[key] = {
+        pending: row.pending, pending_value: Number(row.pending_value),
+        billed: row.billed, cancelled: row.cancelled,
+        today: row.today, stale: row.stale,
+      };
+    }
+    res.status(200).json(out);
+  } catch (err) {
+    console.error("Error reading the challan stats:", err);
+    res.status(500).json({ message: "Server error" });
+  }
 };

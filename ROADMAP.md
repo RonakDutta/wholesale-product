@@ -904,3 +904,131 @@ above to exist first:
    waits on. Do the comment correction on the same day, whichever way it goes.
 7. **GSTR-1 JSON.** The most commercially valuable and the one that needs the
    most care, because it is filed and wrong is expensive.
+
+---
+
+# 19 Sept: orders, and one chain from order to money
+
+**NOT AGREED YET.** Asked for on 19 Sept, with "do research first on this and
+correct me where im wrong". This is the research and the proposal. The
+corrections are at the top because two of them change what gets built.
+
+## Correction 1, the important one: a shipped order takes an INVOICE, not a challan
+
+Asked: "once order is marked shipped we create a delivery challan (or sales
+challan? idk please research)".
+
+**For an ordinary order, the tax invoice travels with the goods.** CGST s.31(1)(a)
+requires the invoice before or at the time of REMOVAL of the goods. A Rule 55
+delivery challan is for movement that is NOT a normal supply: job work, goods
+on approval, liquid gas where the quantity is not known at removal, and
+transport for reasons other than supply.
+
+There is one escape hatch and it is worth knowing: Rule 55(4) allows shipping
+on a delivery challan and raising the tax invoice after delivery WHERE THE
+INVOICE COULD NOT BE ISSUED AT REMOVAL. That is a real provision, not a
+loophole, but it is the exception. A marketplace order with a known quantity
+and a known price is not it.
+
+**This repository has already been burned by exactly this.** The 10 Sept
+challan was raised INSTEAD of an invoice whenever a sale was unpaid, and the
+17 Sept rework reversed it: holding the invoice back understated outward
+supply in GSTR-1 and left the customer unable to claim input credit. Wiring
+"shipped" to a challan would walk straight back into it.
+
+**So: marking an order shipped raises the TAX INVOICE.** The challan stays
+available on the same step, behind a Rule 55 reason the wholesaler picks, for
+the cases that genuinely need one.
+
+## Correction 2: the naming is already settled
+
+Tally calls it a Delivery Note. Marg calls it a Sale Challan. Busy calls it
+Material Issued to Party. All three are the same document.
+
+This product settled on **Sale challan** and **Purchase challan** on 17 Sept,
+and the instruction at the time was to drop "delivery challan" wording
+because a challan is not specifically a delivery note and now comes in two
+directions. Keep that. It pairs correctly with the purchase side, which
+"delivery challan" does not.
+
+## Correction 3: think hard before making the sale follow the invoice
+
+Asked: "sale is now generated after an invoice is raised".
+
+In Tally and Marg there is no separate sale and invoice. The Sales Voucher IS
+the tax invoice AND the accounting entry, one document. This product split
+them, and the split is load bearing: `sales` is the khata. The party balance,
+the statement, the settlement path, the stock ledger, the 22 state order
+lifecycle and `orderSaleService` all key off it.
+
+Inverting the direction is a large migration for no gain, because the thing
+actually wanted is the LINK, not the direction. The same outcome is reached by
+letting the invoice CREATE the sale where none exists, while keeping the sale
+as the record everything else reads:
+
+    order --ship--> invoice --> sale (written automatically)
+    counter sale --> sale --> invoice (unchanged, still the daily path)
+
+Both directions end with one sale and one invoice pointing at each other. The
+guard that matters: a sale must never be written twice for the same goods, so
+the invoice path writes a sale only when the invoice has no `sale_id` yet,
+the same way `orderSaleService` already refuses to write a second sale for an
+order it has already bridged.
+
+## Where the ask is right
+
+**Separate numbering per document type.** Correct, and it is how every one of
+these systems works: in Tally each voucher type carries its own numbering, so
+a sales order, a delivery note and a sales invoice never share a run. This
+product already does it for invoices, sales, challans (per kind), purchases
+and credit notes. What is missing is orders.
+
+**Several series inside one document type.** Also correct, and also standard.
+Tally calls it multiple voucher numbering series and the documented use is
+exactly this one: separate runs for wholesale against retail, or local
+against interstate. Here that is the sales channel, and invoices already have
+it. Sales and challans do not, and should.
+
+**A wholesaler defining his own series.** Correct. Tally's series configuration
+is prefix, suffix, starting number, width of the numeric part, whether to pad
+with zeroes, and an applicable-from date. That is the shape to copy. Today the
+four channels are hardcoded in `services/salesChannels.js`, so a wholesaler
+selling on Meesho has nowhere to put it.
+
+**Manual order entry.** Correct and standard: it is Tally's Sales Order
+voucher, entered by hand for an order taken on the phone or in person. Note
+that an order is not a sale and not stock: it is a promise. Tally closes it
+when fully billed and leaves it PARTIALLY closed otherwise, which is the
+behaviour to copy, because part shipment is normal in this trade.
+
+**Stats on the challan page, series stats on the Overview, a fuller invoice
+register.** All fine, all cheap once the links exist.
+
+**One screen per person per day.** Worth stating as a rule rather than a
+feature: if a member of staff lives on the Challans screen all day, that
+screen needs its own filters, its own totals, and its own keyboard path,
+rather than assuming they will hop to the Overview for a number.
+
+## The invoice register, as Marg and Busy show it
+
+Asked for: date first, and more on the row.
+
+Their sale registers carry, left to right: Date, Invoice number, Party, GSTIN,
+Taxable value, CGST, SGST, IGST, Invoice total, Received, Balance, Status.
+With column totals at the foot, which is the part that makes it a register
+rather than a list, and the part this product's screen does not have.
+
+## What this actually needs, in order
+
+1. **`order_sequences`,** so orders stop sharing a run with anything else.
+2. **A series master** the wholesaler can add to, replacing the hardcoded four
+   channels: code, label, prefix, next number, padding, applicable from.
+   Applied to invoices (already), sales and challans (not yet).
+3. **Manual order entry**, with partial closure.
+4. **Ship raises the invoice**, with a Rule 55 challan as the picked exception.
+5. **Invoice creates the sale** when there is not one, guarded against doubles.
+6. **The invoice register**, date first, tax columns, column totals.
+7. **Cards on Challans, series breakdown on the Overview.**
+
+1, 2 and 6 are self contained and can go first. 4 and 5 are the ones that
+touch the money path and want their own suite before they are trusted.

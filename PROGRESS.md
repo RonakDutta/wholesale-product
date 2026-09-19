@@ -34,13 +34,18 @@ cd server && npm run migrate
 | `wholesale3_purchases.sql` | Suppliers, purchases, purchase lines, money paid out, purchase numbering | run 14 Sept |
 | `wholesale3_master_settings.sql` | Platform formatting: decimals, digit grouping, currency, date format | run 14 Sept |
 | `wholesale3_opening_balance.sql` | What a customer or supplier already owed before this product | run 14 Sept, re-run 18 Sept for the supplier half |
-| `wholesale3_party_state.sql` | The customer's declared state, which decides CGST plus SGST against IGST | **NOT RUN** |
+| `wholesale3_party_state.sql` | The customer's declared state, which decides CGST plus SGST against IGST | run 19 Sept, after standing outstanding since 14 Sept |
 | `wholesale3_razorpay_route.sql` | Linked accounts, transfers and webhook deliveries, so a buyer's money reaches the wholesaler | run 14 Sept |
 | `wholesale3_challans_two_kinds.sql` | Sale and purchase challans, each with its own run of numbers, and a billed status | run 18 Sept |
 | `wholesale3_stock_ledger.sql` | The stock ledger, and the product and challan links on a sale or purchase line | run 18 Sept |
+| `wholesale3_order_sequences.sql` | Orders get their own run of numbers, a source marker, and a billed quantity per line | run 19 Sept |
+| `wholesale3_order_number_per_owner.sql` | Order numbers unique per wholesaler, not platform wide | **NOT RUN** |
 
-**Nothing outstanding as of 18 Sept**, except the party state file below.
-Everything else in this table has been run.
+**One outstanding as of 19 Sept**: `wholesale3_order_number_per_owner.sql`.
+Until it is run, a second wholesaler's first shop order is refused, because
+the old index made an order number unique across the whole platform while the
+new series restarts at 1 for each wholesaler. Everything else in this table
+has been run.
 
 The three that were outstanding, the two challan kinds, the stock ledger and
 the opening balance re-run, all went in on 18 Sept. No restart was needed with
@@ -2843,6 +2848,231 @@ wrong: the adjustment moving the book rather than the offer, and on account
 money reducing the ageing.
 
 **Migration to run:** none.
+
+---
+
+## 19 Sept: orders taken by hand, cards on challans, a proper invoice register
+
+The first three off the 19 Sept design. The research and the corrections that
+shaped it are in ROADMAP.md.
+
+**An order can be typed.** Everything on the Orders screen had arrived from
+the shop page, so a wholesaler whose customer rang up had nowhere to put it.
+`POST /api/orders/manual` and a Take an order screen.
+
+An order is a PROMISE, and the screen says so by what it does not have. It
+writes no sale, moves no stock, touches no balance and shows no money box,
+because all three of those start when the goods go and the bill is raised. An
+order that also moved the khata would count every sale twice, once when it was
+promised and again when it was billed. No GST either: what the customer is
+charged is settled on the bill, and a tax figure printed on a promise is one
+somebody will quote back.
+
+**Orders have their own run of numbers**, `SO/1/26-27`. They were numbered
+`ORD-<timestamp>-<8 chars of the buyer id>` in the controller, which is unique
+and is not a series: unreadable over a phone, never restarting on 1 April, and
+giving no hint that two orders are consecutive. Every other document here
+already had one. In Tally a sales order is its own voucher type for exactly
+this reason.
+
+**Two things were found while building it.**
+
+The seller's order list INNER joined `users` on `buyer_id`. A manual order has
+no buyer user at all, so every one of them would have been invisible on the
+screen that is supposed to list them. Now a LEFT join, falling back to the
+party's own name.
+
+And `orderController.js` replaces `module.exports` wholesale part way down, so
+the new handler appended below it was assigned to a dead alias and the route
+resolved to undefined. Assigned onto `module.exports` directly, with a note,
+because the next person appending to that file will hit the same thing.
+
+**Cards on the Challans screen**, per kind, because sale challans and purchase
+challans are two jobs usually done by two different people and a blended
+figure helps neither. Waiting to be billed, with the VALUE of the goods
+exposed; open over a week, which is the one that costs money; billed; today.
+Built on the principle that a screen somebody lives on all day has to answer
+its own questions rather than sending them to the Overview.
+
+**The invoice register, the way Marg and Busy show one.** Date first, because
+a register is read down the date column and a wholesaler looking for "the bill
+I raised on the 4th" was scanning the third. Then the number, the customer
+with their GSTIN, and the tax SPLIT as its own columns, because CGST, SGST and
+IGST are what get copied onto the return and one combined figure has to be
+taken apart by hand. A nil tax prints as a dash rather than 0.00, since every
+interstate bill has two nil columns and a page of zeroes hides the real
+figures.
+
+And column totals at the foot, which is the part that makes it a register
+rather than a list. Summed from the rows ON SCREEN rather than asked of the
+server, because that is the only total that cannot disagree with what is
+printed above it. Cancelled bills are listed but left out of the total: the
+number is spent, the money is not real.
+
+**Verified.** The manual order driven against a real database: numbered in its
+own run, consecutive, marked manual, no buyer, no sale, no stock, refused on a
+zero quantity, and both orders visible on the seller list. 37 of 37 suites
+green. All three screens rendered, and the register's footer checked against
+the rows: 58,000 taxable and 60,900 total with the cancelled bill correctly
+excluded.
+
+**Migration to run:** `wholesale3_order_sequences.sql`
+
+---
+
+## 19 Sept: shipping raises the bill, and one run of order numbers
+
+Both of the changes that needed a yes, plus the four things asked for while
+they were being built.
+
+**Shipping an order raises the tax invoice**, in `services/shipOrder.js`.
+s.31(1)(a) puts the invoice before or at REMOVAL, and shipping is removal, so
+this is the step that ties order, sale, invoice and challan together. A Rule
+55 challan is the exception and has to be ASKED for: the wholesaler picks a
+reason, and silence means an ordinary supply and an ordinary bill. The
+opposite default was this product's 17 Sept mistake and is not being repeated.
+
+Every step is idempotent, so shipping twice cannot bill twice. Checked:
+one invoice, and the stock does not move again.
+
+**The invoice creates the sale**, in the sense that mattered. Rather than
+inverting the spine, shipping ensures a sale exists and raises the bill from
+it, so a manual order that never went through the acceptance hook still ends
+with one sale, one invoice, and both pointing at each other.
+
+**Partial closure** writes `order_items.quantity_billed`, so a part shipment
+is a measurable state rather than a flag. Tally closes a sales order fully
+when completely billed and partially otherwise, which is what part shipment in
+this trade needs.
+
+**A manual order starts at `supplier_accepted`.** The lifecycle sends
+`pending` only to `payment_pending`, because on the marketplace a buyer pays
+before the wholesaler sees the order. Here the wholesaler wrote it down
+himself, so it IS accepted, and starting it there puts it on the ordinary
+spine with no new transition invented.
+
+### A deadlock that would have reached production
+
+`invoiceRepository.ensureSchema()`, called without a client, runs its DDL on a
+POOL connection. That is a different connection from whatever transaction the
+caller has open. `CREATE EXTENSION IF NOT EXISTS pgcrypto` takes heavy locks,
+the open transaction holds conflicting ones, and the two wait on each other
+for ever. No error, no timeout: the request simply never returns.
+
+`schemaEnsured` is per process, so it only ever bit the FIRST invoice raised
+from inside a transaction after a restart, which is the kind of fault that
+survives every test and then happens to a customer. Found because the new ship
+path is the first thing in this codebase to raise an invoice inside a
+transaction on a fresh process.
+
+It now probes for the table first and returns. The migrations own this schema,
+so on a migrated database nothing is built at all.
+
+### One run of order numbers, which was the right correction
+
+Asked: "i dont like the new id of manual order, its diff than that of regular
+order, shouldnt we show the old type order id instead?"
+
+Right that they must match, and the fix runs the other way. A shop order and
+one taken on the phone are the SAME document entered two ways, so they are one
+voucher type and take one series. But `ORD-<timestamp>-<8 chars of the buyer
+id>` is not a series at all: unreadable aloud, never restarting on 1 April,
+and giving no hint two orders are consecutive. So both draw on `SO/n/FY` now.
+Orders already numbered the old way keep their numbers, because a number read
+out to a customer cannot be restated.
+
+**That broke something, and the suite caught it.** `order_number` had a
+PLATFORM WIDE unique index, which the timestamp satisfied by accident. A real
+series restarts at 1 for every wholesaler, so the second wholesaler's first
+order was refused outright. `phase2_check` failed with "duplicate key value
+violates unique constraint". The index is now per wholesaler, which is what a
+series means.
+
+### The other four
+
+**A manual order carries the same particulars as a shop one:** where the goods
+go, who to ring, and the customer's own reference, prefilled from their record
+and typed over freely because goods often go to a godown or a transporter.
+Without them the detail screen rendered blanks.
+
+**The detail screen stopped depending on a buyer user.** It read the customer
+from `users` through `buyer_id` and the goods through a single
+`inventory_item_id`, both null on a manual order, so the page showed nothing
+where the customer and the goods belong. Now falls back to the party and to
+`order_items`, and finds the wholesaler through `orders.supplier_id` rather
+than only through the listing.
+
+**Stock movements are signed and coloured.** Goods in are green with a plus,
+out red with a minus, so a purchase is recognisable without reading which
+column it landed in.
+
+**The page no longer jumps when a scrollbar appears.** `scrollbar-gutter:
+stable` on the root element reserves the space whether or not the bar is
+drawn. It replaces the old trick of forcing `overflow-y: scroll` everywhere,
+which left a dead grey bar on short pages.
+
+**Verified.** `ship_check.js` is new: the spine from taken to shipped, the
+bill and the sale it raised, 40 metres leaving the book, the line marked
+billed, shipping twice not billing twice, and a Rule 55 reason producing a
+challan and no invoice. **38 of 38 suites green.**
+
+**Migration to run:** `wholesale3_order_number_per_owner.sql`
+
+---
+
+## 19 Sept: a pending order with nowhere to go, and an empty day book
+
+Two reports, both real.
+
+**An order left at `pending` was stranded.** The lifecycle had `pending`
+going only to `payment_pending` or `cancelled`, so a seller looking at one
+had no Accept button and no way forward at all. Manual orders are written in
+as `supplier_accepted` and never sit there, but every order taken before that
+was built does, and so does any shop order whose buyer walked away from the
+payment screen. Fixed at both ends: `orderStatusService` now allows
+`pending -> supplier_accepted`, and `client/src/utils/orderStatus.js` offers
+"Accept order" as the next step from `pending`, which is what it already
+offered from `payment_completed`.
+
+**The day book showed nothing, and orders were the reason.** It listed
+sales, payments, purchases, bills, credit notes and challans, and not orders.
+So on a day spent taking orders, which is most of what the manual order work
+was for, the screen said "Nothing on these days" and was telling the truth
+about the wrong question. Tally's Day Book and Marg's both list every voucher
+of the day, order vouchers included. Orders are now a row, linking to the
+order, and are deliberately left OUT of the four money figures: an order is a
+promise, and counting it beside the sale under it would say the same goods
+twice. Verified: a day whose only activity is one typed order now has a row,
+and after shipping it, Sold still reads 4,000 once and not 8,000.
+
+**A second fault found while looking, not reported.** The credit note branch
+added on 18 Sept was the only one of the seven not behind a schema probe. On
+a database without `credit_notes` the WHOLE day book returned 500, because
+Postgres parses a statement before it runs any of it, so one missing table
+loses the other six sources with it. That is the exact trap the comment at
+the top of the file warns about and it was walked into anyway. Now guarded by
+`has_credit_notes`, with a suite that drops the table and asks again.
+
+**Raw statuses in the list.** An order row read `supplier_accepted`, an
+underscore and a machine word on a screen for traders. Every status now goes
+through `formatOrderStatus`, and payment methods through a small map so a row
+says UPI rather than "Upi".
+
+**A stale assertion in `smoke.js`**, failing since 17 Sept and nothing to do
+with either report. It branched on whether the challan tables existed to
+decide whether a part paid sale may be billed. That stopped being the
+question when `CHALLAN_WHEN_UNPAID` was defaulted OFF: what decides it is the
+flag, and with the flag off the bill is raised at removal, as section 31(1)
+requires. It now branches on the flag, and passes both ways.
+
+**Verified.** `daybook_check.js` is new: a day whose only activity is an
+order, that order shipped so the bill and the sale sit beside it without
+double counting, and a database with the credit note table dropped. The day
+book itself was rendered in a browser against a mock, which is how the raw
+`supplier_accepted` was spotted. **41 of 41 suites green**, smoke passing
+both with and without `CHALLAN_WHEN_UNPAID`.
+
+**No migration.** Nothing here adds a column.
 
 ---
 

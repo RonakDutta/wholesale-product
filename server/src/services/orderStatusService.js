@@ -24,7 +24,18 @@ const { markSaleDelivered } = require("./orderSaleService");
  * second of each changed no behaviour. Do not let them back in.
  */
 const ORDER_STATUS_FLOW = {
-  pending: ['payment_pending', 'cancelled'],
+  // supplier_accepted is here for an order the WHOLESALER took, on the phone
+  // or at the counter. Manual orders are written straight in as accepted, so
+  // they do not normally pass through pending at all, but any that were
+  // created before that was true sit here with nowhere to go: the screen
+  // offers no step for pending and the only other exits are payment_pending,
+  // which is a marketplace idea, and cancelled. Without this they are
+  // stranded for ever.
+  //
+  // It is also a real move in its own right. A wholesaler accepting an order
+  // nobody has paid for yet is ordinary credit trade, and payment_status is a
+  // separate column that stays pending until money actually arrives.
+  pending: ['supplier_accepted', 'payment_pending', 'cancelled'],
   payment_pending: ['payment_completed', 'payment_failed', 'cancelled'],
   payment_completed: ['supplier_accepted', 'cancelled'],
   supplier_accepted: ['processing', 'cancelled'],

@@ -142,6 +142,11 @@ export const matchesOrderTab = (status, tabLabel) => {
  * database calls it; "Ready to send" is what they call it.
  */
 const NEXT_STEP = {
+  // An order sitting at pending with no step offered is an order nobody can
+  // move. Orders taken by hand are written in as accepted now, so this is
+  // mostly for ones created before that, but it is a real move either way:
+  // taking on an order before the money is ordinary credit trade.
+  pending: { to: "supplier_accepted", label: "Accept order" },
   payment_completed: { to: "supplier_accepted", label: "Accept order" },
   supplier_accepted: { to: "processing", label: "Start packing" },
   processing: { to: "packed", label: "Mark packed" },

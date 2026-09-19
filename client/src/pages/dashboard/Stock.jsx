@@ -75,11 +75,15 @@ const Movements = ({ productId }) => {
                   {row.reverses_id ? " (cancelled)" : ""}
                 </td>
                 <td className="px-4 py-2 font-medium">{row.document_number || "-"}</td>
+                {/* Signed and coloured, because a register is scanned down
+                    rather than read. Goods coming in are green with a plus,
+                    going out red with a minus, so a purchase is recognisable
+                    without reading which column it landed in. */}
                 <td className="px-4 py-2 text-right font-bold text-emerald-700">
-                  {qty > 0 ? trimmed(qty) : ""}
+                  {qty > 0 ? `+${trimmed(qty)}` : ""}
                 </td>
                 <td className="px-4 py-2 text-right font-bold text-rose-700">
-                  {qty < 0 ? trimmed(Math.abs(qty)) : ""}
+                  {qty < 0 ? `-${trimmed(Math.abs(qty))}` : ""}
                 </td>
                 <td className="px-4 py-2 text-right font-bold text-espresso">
                   {trimmed(row.running)}

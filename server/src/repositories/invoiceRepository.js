@@ -18,9 +18,44 @@ const UPDATABLE_INVOICE_COLUMNS = new Set([
   "email_sent_at",
 ]);
 
+/**
+ * Create the invoice tables if they are not there.
+ *
+ * IT CHECKS BEFORE IT BUILDS, and that is not an optimisation. Called without
+ * a client this runs its DDL on a POOL connection, which is a DIFFERENT
+ * connection from whatever transaction the caller may have open. On a
+ * database where the tables already exist that used to be a harmless no op,
+ * but `CREATE EXTENSION IF NOT EXISTS pgcrypto` still takes heavy locks, and
+ * an open transaction elsewhere holds locks that conflict with them. The two
+ * then wait on each other and neither ever finishes.
+ *
+ * It hung the first invoice raised from inside a transaction in a freshly
+ * started process, every time, with no error: the request simply never
+ * returned. `schemaEnsured` is per process, so it only ever bit the first
+ * one, which is exactly the kind of fault that reaches production.
+ *
+ * The migrations own this schema now. So on any database that has been
+ * migrated, which is all of them, the probe finds `invoices` and nothing is
+ * built at all. The DDL below is kept for a database that genuinely has
+ * nothing, where there is no transaction to deadlock against.
+ */
 async function ensureSchema(client = null) {
   if (schemaEnsured) return;
   const dbClient = client || pool;
+
+  // A plain read. It takes no lock worth the name and cannot block on one.
+  try {
+    const { rows } = await dbClient.query(
+      `SELECT to_regclass('public.invoices') IS NOT NULL AS built`);
+    if (rows[0]?.built) {
+      schemaEnsured = true;
+      return;
+    }
+  } catch {
+    // Fall through and try to build it. A probe that cannot run is not a
+    // reason to refuse to create the schema.
+  }
+
   try {
     await dbClient.query(`
       CREATE EXTENSION IF NOT EXISTS "pgcrypto";

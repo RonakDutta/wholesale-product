@@ -42,6 +42,12 @@ const RecordOrder = () => {
   const [addingParty, setAddingParty] = useState(false);
   const [expectedOn, setExpectedOn] = useState("");
   const [notes, setNotes] = useState("");
+  // The particulars a shop order carries. Without them the order detail
+  // screen showed blanks where the address and the phone belong, and the
+  // challan raised from it had nowhere to print a delivery address.
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [theirReference, setTheirReference] = useState("");
   const [lines, setLines] = useState([blankLine()]);
   const [saving, setSaving] = useState(false);
 
@@ -98,6 +104,21 @@ const RecordOrder = () => {
     [lines],
   );
 
+  /**
+   * Picking the customer fills the address and phone from their own record.
+   *
+   * Typed over freely: goods often go to a different shop, a godown or a
+   * transporter, which is exactly why the boxes exist rather than the order
+   * just pointing at the customer row.
+   */
+  const chooseParty = (id) => {
+    setPartyId(id);
+    const p = parties.find((x) => x.id === id);
+    if (!p) return;
+    if (!deliveryAddress) setDeliveryAddress(p.address || p.city || "");
+    if (!contactPhone) setContactPhone(p.phone || "");
+  };
+
   const owedBefore = Math.max(
     0,
     Number(parties.find((p) => p.id === partyId)?.outstanding || 0),
@@ -115,6 +136,9 @@ const RecordOrder = () => {
         partyId,
         notes,
         expectedOn: expectedOn || undefined,
+        deliveryAddress: deliveryAddress || undefined,
+        contactPhone: contactPhone || undefined,
+        theirReference: theirReference || undefined,
         lines: filled.map((l) => ({
           itemName: l.itemName,
           quantity: Number(l.quantity) || 0,
@@ -165,7 +189,7 @@ const RecordOrder = () => {
             <select
               id="order-party"
               value={partyId}
-              onChange={(e) => setPartyId(e.target.value)}
+              onChange={(e) => chooseParty(e.target.value)}
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
             >
               <option value="">Choose a customer</option>
@@ -337,6 +361,62 @@ const RecordOrder = () => {
               Before GST. The bill decides the tax.
             </p>
           </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <label
+            htmlFor="order-address"
+            className="mb-1.5 block text-sm font-bold text-espresso"
+          >
+            Where the goods go
+          </label>
+          <input
+            id="order-address"
+            value={deliveryAddress}
+            onChange={(e) => setDeliveryAddress(e.target.value)}
+            placeholder="Shop, godown or transporter"
+            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Filled from the customer. Change it if these are going somewhere
+            else.
+          </p>
+        </div>
+        <div>
+          <label
+            htmlFor="order-phone"
+            className="mb-1.5 block text-sm font-bold text-espresso"
+          >
+            Who to ring
+          </label>
+          <input
+            id="order-phone"
+            value={contactPhone}
+            onChange={(e) => setContactPhone(e.target.value)}
+            inputMode="tel"
+            placeholder="98765 43210"
+            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+          />
+        </div>
+        <div>
+          <label
+            htmlFor="order-ref"
+            className="mb-1.5 block text-sm font-bold text-espresso"
+          >
+            Their order number
+          </label>
+          <input
+            id="order-ref"
+            value={theirReference}
+            onChange={(e) => setTheirReference(e.target.value)}
+            placeholder="As they gave it"
+            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Optional. What the customer calls this order on their side.
+          </p>
         </div>
       </div>
 

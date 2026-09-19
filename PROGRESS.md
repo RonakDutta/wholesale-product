@@ -38,6 +38,7 @@ cd server && npm run migrate
 | `wholesale3_razorpay_route.sql` | Linked accounts, transfers and webhook deliveries, so a buyer's money reaches the wholesaler | run 14 Sept |
 | `wholesale3_challans_two_kinds.sql` | Sale and purchase challans, each with its own run of numbers, and a billed status | run 18 Sept |
 | `wholesale3_stock_ledger.sql` | The stock ledger, and the product and challan links on a sale or purchase line | run 18 Sept |
+| `wholesale3_order_sequences.sql` | Orders get their own run of numbers, a source marker, and a billed quantity per line | **NOT RUN** |
 
 **Nothing outstanding as of 18 Sept**, except the party state file below.
 Everything else in this table has been run.
@@ -2843,6 +2844,75 @@ wrong: the adjustment moving the book rather than the offer, and on account
 money reducing the ageing.
 
 **Migration to run:** none.
+
+---
+
+## 19 Sept: orders taken by hand, cards on challans, a proper invoice register
+
+The first three off the 19 Sept design. The research and the corrections that
+shaped it are in ROADMAP.md.
+
+**An order can be typed.** Everything on the Orders screen had arrived from
+the shop page, so a wholesaler whose customer rang up had nowhere to put it.
+`POST /api/orders/manual` and a Take an order screen.
+
+An order is a PROMISE, and the screen says so by what it does not have. It
+writes no sale, moves no stock, touches no balance and shows no money box,
+because all three of those start when the goods go and the bill is raised. An
+order that also moved the khata would count every sale twice, once when it was
+promised and again when it was billed. No GST either: what the customer is
+charged is settled on the bill, and a tax figure printed on a promise is one
+somebody will quote back.
+
+**Orders have their own run of numbers**, `SO/1/26-27`. They were numbered
+`ORD-<timestamp>-<8 chars of the buyer id>` in the controller, which is unique
+and is not a series: unreadable over a phone, never restarting on 1 April, and
+giving no hint that two orders are consecutive. Every other document here
+already had one. In Tally a sales order is its own voucher type for exactly
+this reason.
+
+**Two things were found while building it.**
+
+The seller's order list INNER joined `users` on `buyer_id`. A manual order has
+no buyer user at all, so every one of them would have been invisible on the
+screen that is supposed to list them. Now a LEFT join, falling back to the
+party's own name.
+
+And `orderController.js` replaces `module.exports` wholesale part way down, so
+the new handler appended below it was assigned to a dead alias and the route
+resolved to undefined. Assigned onto `module.exports` directly, with a note,
+because the next person appending to that file will hit the same thing.
+
+**Cards on the Challans screen**, per kind, because sale challans and purchase
+challans are two jobs usually done by two different people and a blended
+figure helps neither. Waiting to be billed, with the VALUE of the goods
+exposed; open over a week, which is the one that costs money; billed; today.
+Built on the principle that a screen somebody lives on all day has to answer
+its own questions rather than sending them to the Overview.
+
+**The invoice register, the way Marg and Busy show one.** Date first, because
+a register is read down the date column and a wholesaler looking for "the bill
+I raised on the 4th" was scanning the third. Then the number, the customer
+with their GSTIN, and the tax SPLIT as its own columns, because CGST, SGST and
+IGST are what get copied onto the return and one combined figure has to be
+taken apart by hand. A nil tax prints as a dash rather than 0.00, since every
+interstate bill has two nil columns and a page of zeroes hides the real
+figures.
+
+And column totals at the foot, which is the part that makes it a register
+rather than a list. Summed from the rows ON SCREEN rather than asked of the
+server, because that is the only total that cannot disagree with what is
+printed above it. Cancelled bills are listed but left out of the total: the
+number is spent, the money is not real.
+
+**Verified.** The manual order driven against a real database: numbered in its
+own run, consecutive, marked manual, no buyer, no sale, no stock, refused on a
+zero quantity, and both orders visible on the seller list. 37 of 37 suites
+green. All three screens rendered, and the register's footer checked against
+the rows: 58,000 taxable and 60,900 total with the cancelled bill correctly
+excluded.
+
+**Migration to run:** `wholesale3_order_sequences.sql`
 
 ---
 

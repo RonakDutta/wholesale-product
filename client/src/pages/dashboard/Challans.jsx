@@ -4,7 +4,7 @@ import { Download, Plus, Truck } from "lucide-react";
 import api from "../../utils/axios";
 import { downloadFile } from "../../utils/download";
 import { toast } from "sonner";
-import { rupees, dateLabel } from "../../utils/money";
+import { rupees, amount as money, dateLabel } from "../../utils/money";
 
 const FILTERS = [
   { value: "", label: "All" },
@@ -38,6 +38,23 @@ const Challans = () => {
   // cascading-render pattern the linter rightly refuses.
   const [loadedKind, setLoadedKind] = useState(null);
   const [downloading, setDownloading] = useState("");
+
+  /**
+   * The cards. Fetched once rather than per tab, because both kinds come back
+   * in one answer and a member of staff switching tabs all day should not
+   * refetch a figure that did not change.
+   */
+  const [stats, setStats] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    api
+      .get("/api/challans/stats")
+      .then(({ data }) => alive && data.ready !== false && setStats(data))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -124,6 +141,45 @@ const Challans = () => {
           </button>
         ))}
       </div>
+
+      {/* The cards, for the kind on screen. A member of staff may spend the
+          whole day here, and a screen somebody lives on has to answer its own
+          questions rather than sending them to the Overview for a number. */}
+      {stats && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            {
+              label: "Waiting to be billed",
+              value: stats[kind].pending,
+              sub: `₹${money(stats[kind].pending_value)} of goods`,
+              tone: stats[kind].pending > 0 ? "text-clay" : "text-espresso",
+            },
+            {
+              // The one that costs money. Goods gone a week with no bill is
+              // either forgotten or a dispute, and both want chasing.
+              label: "Open over a week",
+              value: stats[kind].stale,
+              sub: stats[kind].stale > 0 ? "Chase these" : "Nothing overdue",
+              tone: stats[kind].stale > 0 ? "text-rose-600" : "text-espresso",
+            },
+            { label: "Billed", value: stats[kind].billed, sub: "Finished" },
+            { label: "Today", value: stats[kind].today, sub: "Recorded today" },
+          ].map((card) => (
+            <div
+              key={card.label}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
+            >
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                {card.label}
+              </p>
+              <p className={`mt-0.5 text-2xl font-black ${card.tone || "text-espresso"}`}>
+                {card.value}
+              </p>
+              <p className="truncate text-[11px] text-slate-500">{card.sub}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {FILTERS.map((f) => (

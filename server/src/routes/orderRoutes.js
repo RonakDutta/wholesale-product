@@ -1,6 +1,7 @@
 const express = require("express");
 const {
   createOrder,
+  createManualOrder,
   getPaymentDetails,
   initiatePayment,
   updatePaymentStatus,
@@ -37,6 +38,12 @@ const router = express.Router();
 router.get("/supplier", authenticateToken, authorizeRoles("seller", "both"), requirePermission("orders"), getSupplierOrders);
 router.get("/buyer", authenticateToken, getBuyerOrders);
 router.post("/create", authenticateToken, createOrder);
+
+// An order the WHOLESALER types, for one taken on the phone or at the counter.
+// Behind the orders permission and the seller roles, unlike /create which is
+// the buyer placing one on the marketplace.
+router.post("/manual", authenticateToken, authorizeRoles("seller", "both"),
+  requirePermission("orders"), createManualOrder);
 router.get("/:orderId/payment-details", authenticateToken, getPaymentDetails);
 router.post("/:orderId/payment", authenticateToken, initiatePayment);
 router.post("/:orderId/send-installment-reminder", authenticateToken, authorizeRoles("seller", "both", "admin"), sendInstallmentReminder);

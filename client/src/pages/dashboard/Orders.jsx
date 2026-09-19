@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
+  Plus,
   Search,
   Eye,
   Clock,
@@ -181,6 +182,17 @@ const Orders = () => {
             )}
           </p>
         </div>
+
+        {/* An order taken on the phone or at the counter. Everything else on
+            this screen arrived from the shop page, so until now a wholesaler
+            whose customer rang up had nowhere to put it. */}
+        <Link
+          to="/seller/orders/new"
+          className="flex shrink-0 items-center gap-2 rounded-lg bg-clay px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-espresso"
+        >
+          <Plus className="h-4 w-4" />
+          Take an order
+        </Link>
       </div>
 
       {/* Filters and Search */}

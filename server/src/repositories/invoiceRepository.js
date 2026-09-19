@@ -918,6 +918,13 @@ class InvoiceRepository {
           i.discount,
           i.shipping_charge,
           i.taxable_amount,
+          -- The tax split, not just the total. A sale register in Marg or
+          -- Busy shows CGST, SGST and IGST as their own columns, because that
+          -- is what gets copied onto the return, and a single "tax" figure
+          -- has to be taken apart again by hand.
+          i.cgst,
+          i.sgst,
+          i.igst,
           i.total_tax,
           i.grand_total,
           i.payment_status,

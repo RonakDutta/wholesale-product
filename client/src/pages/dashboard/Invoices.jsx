@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Download,
@@ -108,6 +108,34 @@ const StatusChip = ({ invoice }) => {
  */
 export default function Invoices() {
   const [invoices, setInvoices] = useState([]);
+
+  /**
+   * The column totals at the foot.
+   *
+   * Summed from the rows ON SCREEN, not asked of the server, because that is
+   * the only figure that cannot disagree with what is printed above it. A
+   * server total for the whole filter would be a different number sitting
+   * under a page of rows that do not add up to it.
+   *
+   * A cancelled bill is left out. It is still listed, because it happened and
+   * its number is spent, but it is not money and must not be added into one.
+   */
+  const pageTotals = useMemo(
+    () =>
+      invoices.reduce(
+        (acc, inv) => {
+          if (inv.invoice_status === "Cancelled") return acc;
+          acc.taxable += Number(inv.taxable_amount || 0);
+          acc.cgst += Number(inv.cgst || 0);
+          acc.sgst += Number(inv.sgst || 0);
+          acc.igst += Number(inv.igst || 0);
+          acc.total += Number(inv.grand_total || 0);
+          return acc;
+        },
+        { taxable: 0, cgst: 0, sgst: 0, igst: 0, total: 0 },
+      ),
+    [invoices],
+  );
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -491,15 +519,37 @@ export default function Invoices() {
             <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-slate-100 bg-slate-50/50">
+                  {/* DATE FIRST, then the number. This is a register, and a
+                      register is read down the date column: a wholesaler
+                      looking for "the bill I raised on the 4th" was scanning
+                      the third column. Marg and Busy both lead with the date.
+
+                      The tax split gets its own columns for the same reason
+                      they do: those figures are what get copied onto the
+                      return, and one combined "tax" has to be taken apart by
+                      hand. Hidden below a large screen, where there is no
+                      room and the total is what matters. */}
                   <tr>
-                    <th className="px-6 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">
+                    <th className="whitespace-nowrap px-6 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">
+                      Date
+                    </th>
+                    <th className="px-3 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">
                       Invoice
                     </th>
                     <th className="px-3 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">
                       Customer
                     </th>
-                    <th className="whitespace-nowrap px-3 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">
-                      Date
+                    <th className="hidden px-3 py-3 text-right text-xs font-bold uppercase tracking-wider text-slate-500 lg:table-cell">
+                      Taxable
+                    </th>
+                    <th className="hidden px-3 py-3 text-right text-xs font-bold uppercase tracking-wider text-slate-500 lg:table-cell">
+                      CGST
+                    </th>
+                    <th className="hidden px-3 py-3 text-right text-xs font-bold uppercase tracking-wider text-slate-500 lg:table-cell">
+                      SGST
+                    </th>
+                    <th className="hidden px-3 py-3 text-right text-xs font-bold uppercase tracking-wider text-slate-500 lg:table-cell">
+                      IGST
                     </th>
                     <th className="px-3 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">
                       Status
@@ -518,7 +568,10 @@ export default function Invoices() {
                         window.location.href = `/seller/invoices/${invoice.id}`;
                       }}
                     >
-                      <td className="whitespace-nowrap px-6 py-3">
+                      <td className="whitespace-nowrap px-6 py-3 text-slate-600">
+                        {dateLabel(invoice.issue_date)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3">
                         <Link
                           to={`/seller/invoices/${invoice.id}`}
                           className="font-bold text-espresso hover:text-clay"
@@ -536,8 +589,21 @@ export default function Invoices() {
                           </p>
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-3 text-slate-600">
-                        {dateLabel(invoice.issue_date)}
+                      <td className="hidden whitespace-nowrap px-3 py-3 text-right text-slate-600 lg:table-cell">
+                        ₹{money(invoice.taxable_amount)}
+                      </td>
+                      {/* A blank rather than a zero where a tax does not
+                          apply. Every interstate bill has a nil CGST and
+                          SGST, and a column of 0.00 down the page is noise
+                          that hides the figures that are really there. */}
+                      <td className="hidden whitespace-nowrap px-3 py-3 text-right text-slate-600 lg:table-cell">
+                        {Number(invoice.cgst) > 0 ? `₹${money(invoice.cgst)}` : "-"}
+                      </td>
+                      <td className="hidden whitespace-nowrap px-3 py-3 text-right text-slate-600 lg:table-cell">
+                        {Number(invoice.sgst) > 0 ? `₹${money(invoice.sgst)}` : "-"}
+                      </td>
+                      <td className="hidden whitespace-nowrap px-3 py-3 text-right text-slate-600 lg:table-cell">
+                        {Number(invoice.igst) > 0 ? `₹${money(invoice.igst)}` : "-"}
                       </td>
                       <td className="px-3 py-3">
                         <StatusChip invoice={invoice} />
@@ -548,6 +614,35 @@ export default function Invoices() {
                     </tr>
                   ))}
                 </tbody>
+                {/* THE FOOT IS WHAT MAKES IT A REGISTER rather than a list,
+                    and it is the part Marg and Busy have that this screen did
+                    not. Totals the rows ON SCREEN, and says so: a page of a
+                    filtered, paginated list must not print a figure that
+                    looks like the month's. */}
+                <tfoot className="border-t-2 border-slate-200 bg-slate-50">
+                  <tr className="text-xs font-black text-espresso">
+                    <td className="px-6 py-3" colSpan={3}>
+                      This page, {invoices.length} bill
+                      {invoices.length === 1 ? "" : "s"}
+                    </td>
+                    <td className="hidden whitespace-nowrap px-3 py-3 text-right lg:table-cell">
+                      ₹{money(pageTotals.taxable)}
+                    </td>
+                    <td className="hidden whitespace-nowrap px-3 py-3 text-right lg:table-cell">
+                      ₹{money(pageTotals.cgst)}
+                    </td>
+                    <td className="hidden whitespace-nowrap px-3 py-3 text-right lg:table-cell">
+                      ₹{money(pageTotals.sgst)}
+                    </td>
+                    <td className="hidden whitespace-nowrap px-3 py-3 text-right lg:table-cell">
+                      ₹{money(pageTotals.igst)}
+                    </td>
+                    <td className="px-3 py-3" />
+                    <td className="whitespace-nowrap px-6 py-3 text-right">
+                      ₹{money(pageTotals.total)}
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </>

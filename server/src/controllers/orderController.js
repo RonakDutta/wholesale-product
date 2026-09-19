@@ -7,6 +7,7 @@ const {
   recordOrderPayment,
 } = require("../services/partyService");
 const { createSaleFromOrder, hasSaleLink, markSaleDelivered } = require("../services/orderSaleService");
+const { nextOrderNumber } = require("../services/seriesNumbers");
 const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange, cancelOrder } = require("../services/orderStatusService");
 const { geocodeOrderDestination } = require("../services/geocodingService");
 const { businessId } = require("../middlewares/businessContext");
@@ -166,8 +167,12 @@ const getSupplierOrders = async (req, res) => {
       SELECT 
         o.id,
         o.order_number,
-        COALESCE(wp.company_name, u.first_name || ' ' || u.last_name) as buyer,
-        u.first_name || ' ' || u.last_name as contact,
+        -- A manual order has no buyer user at all, so the party's own name is
+        -- what to show. Without this it read as an empty row, or vanished
+        -- entirely on the inner join below.
+        COALESCE(wp.company_name, NULLIF(TRIM(u.first_name || ' ' || u.last_name), ''),
+                 pt.name, 'Customer') as buyer,
+        COALESCE(NULLIF(TRIM(u.first_name || ' ' || u.last_name), ''), pt.name) as contact,
         COALESCE(items.first_product, p.name) as product,
         COALESCE(items.item_count, 1) as item_count,
         o.quantity as qty,
@@ -183,7 +188,10 @@ const getSupplierOrders = async (req, res) => {
       FROM orders o
       LEFT JOIN supplier_inventory si ON o.inventory_item_id = si.id
       LEFT JOIN products p ON si.product_id = p.id
-      JOIN users u ON o.buyer_id = u.id
+      -- LEFT, not inner. A manual order is typed by the wholesaler and has no
+      -- buyer_id, so an inner join here hid every one of them.
+      LEFT JOIN users u ON o.buyer_id = u.id
+      LEFT JOIN parties pt ON pt.id = o.party_id
       LEFT JOIN wholesaler_profiles wp ON u.id = wp.user_id
       LEFT JOIN LATERAL (
         SELECT COUNT(*)::int AS item_count, MIN(oi.product_name) AS first_product
@@ -1752,4 +1760,118 @@ module.exports = {
   refundOrder,
   generateInvoice,
   generatePackingSlip,
+};
+/**
+ * An order typed by the wholesaler, for one taken on the phone or at the
+ * counter.
+ *
+ * WHAT AN ORDER IS, and what it is not. It is a PROMISE: the customer has
+ * asked for goods and nothing has happened yet. So this writes no sale, moves
+ * no stock and touches no balance. All three start when the goods go and the
+ * bill is raised, which is the ship step, not this one. An order that also
+ * moved the khata would have every sale counted twice, once when it was
+ * promised and again when it was billed.
+ *
+ * NO BUYER USER. A shop order belongs to somebody with an account. This one
+ * belongs to a party in the wholesaler's own book and has `buyer_id` null,
+ * which is why the seller's order list had to stop inner joining `users`.
+ *
+ * Status starts at `pending`, not `payment_pending`. Nobody has been asked
+ * for money: the wholesaler took an order and will bill it when it ships.
+ */
+// Assigned onto module.exports rather than the `exports` alias, because this
+// file replaces module.exports wholesale further up and anything hung off the
+// alias after that point is silently dropped.
+module.exports.createManualOrder = async (req, res) => {
+  const wholesalerId = businessId(req);
+  const { partyId, lines, notes, expectedOn } = req.body || {};
+
+  if (!partyId) return res.status(400).json({ message: "Choose the customer." });
+  if (!Array.isArray(lines) || lines.length === 0) {
+    return res.status(400).json({ message: "Add at least one item to this order." });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const party = await client.query(
+      `SELECT id, name FROM parties WHERE id = $1 AND wholesaler_id = $2`,
+      [partyId, wholesalerId],
+    );
+    if (party.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ message: "Customer not found" });
+    }
+
+    const clean = [];
+    for (const [i, raw] of lines.entries()) {
+      const name = String(raw.itemName ?? raw.item_name ?? "").trim();
+      if (!name) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ message: `Line ${i + 1} has no item name.` });
+      }
+      const quantity = Number(raw.quantity);
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ message: `Enter a quantity for ${name}.` });
+      }
+      const rate = Number(raw.rate);
+      if (!Number.isFinite(rate) || rate < 0) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ message: `Enter a rate for ${name}.` });
+      }
+      clean.push({
+        name,
+        quantity,
+        rate,
+        // Rounded in paise, the same as everywhere else, so an odd rate does
+        // not drift a paisa from what the sale will later say.
+        amount: Math.round(rate * quantity * 100) / 100,
+        inventoryId: raw.productId || raw.inventory_item_id || null,
+        unit: String(raw.unit ?? "").trim() || null,
+      });
+    }
+
+    const subtotal =
+      Math.round(clean.reduce((sum, l) => sum + l.amount, 0) * 100) / 100;
+    const orderNumber = await nextOrderNumber(client, wholesalerId);
+
+    const order = await client.query(
+      `INSERT INTO orders
+         (supplier_id, party_id, buyer_id, source, order_number, quantity,
+          subtotal, total_amount, amount_paid, remaining_amount,
+          status, payment_status, notes, expected_delivery_date, updated_at)
+       VALUES ($1,$2,NULL,'manual',$3,$4,$5,$5,0,$5,
+               'pending','pending',$6,$7::date,CURRENT_TIMESTAMP)
+       RETURNING *`,
+      [
+        wholesalerId, partyId, orderNumber,
+        clean.reduce((n, l) => n + l.quantity, 0),
+        subtotal,
+        String(notes ?? "").trim() || null,
+        expectedOn || null,
+      ],
+    );
+
+    for (const line of clean) {
+      await client.query(
+        `INSERT INTO order_items
+           (order_id, inventory_item_id, product_name, quantity, unit_price, total_price, moq)
+         VALUES ($1,$2,$3,$4,$5,$6,1)`,
+        [order.rows[0].id, line.inventoryId, line.name,
+         line.quantity, line.rate, line.amount],
+      );
+    }
+
+    await client.query("COMMIT");
+    res.status(201).json({ ...order.rows[0], party_name: party.rows[0].name });
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    if (err.status) return res.status(err.status).json({ message: err.message, code: err.code });
+    console.error("Error recording a manual order:", err);
+    res.status(500).json({ message: "Server error" });
+  } finally {
+    client.release();
+  }
 };

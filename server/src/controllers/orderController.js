@@ -9,6 +9,7 @@ const {
 const { createSaleFromOrder, hasSaleLink, markSaleDelivered } = require("../services/orderSaleService");
 const { shipOrder } = require("../services/shipOrder");
 const { nextOrderNumber } = require("../services/seriesNumbers");
+const { resolveChannel } = require("../services/salesChannels");
 const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange, cancelOrder } = require("../services/orderStatusService");
 const { geocodeOrderDestination } = require("../services/geocodingService");
 const { businessId } = require("../middlewares/businessContext");
@@ -1915,30 +1916,46 @@ module.exports.createManualOrder = async (req, res) => {
       ? { address: line1, phone: String(contactPhone ?? "").trim() || null,
           reference: String(theirReference ?? "").trim() || null }
       : null;
-    const orderNumber = await nextOrderNumber(client, wholesalerId);
+    // Which channel/linkage this order belongs to.
+    const { channel: reqChannel } = req.body;
+    const { channel, linkage } = await resolveChannel(reqChannel, wholesalerId, client);
+    const orderNumber = await nextOrderNumber(client, wholesalerId, channel || "manual", { linkage });
+
+    const hasChannelCol = await client
+      .query(
+        `SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'orders' AND column_name = 'channel' LIMIT 1`,
+      )
+      .then((r) => r.rows.length > 0)
+      .catch(() => false);
+
+    const orderCols = [
+      "supplier_id", "party_id", "buyer_id", "source", "order_number", "quantity",
+      "subtotal", "total_amount", "amount_paid", "remaining_amount",
+      "status", "payment_status", "notes",
+    ];
+    if (hasChannelCol) orderCols.push("channel");
+    orderCols.push("delivery_address", "billing_address", "contact_phone");
+
+    const orderVals = [
+      wholesalerId, partyId, null, "manual", orderNumber,
+      clean.reduce((n, l) => n + l.quantity, 0),
+      subtotal, subtotal, 0, subtotal,
+      "supplier_accepted", "pending", String(notes ?? "").trim() || null,
+    ];
+    if (hasChannelCol) orderVals.push(channel || "manual");
+    orderVals.push(
+      address ? JSON.stringify(address) : null,
+      address ? JSON.stringify(address) : null,
+      String(contactPhone ?? "").trim() || null,
+    );
 
     const order = await client.query(
-      `INSERT INTO orders
-         (supplier_id, party_id, buyer_id, source, order_number, quantity,
-          subtotal, total_amount, amount_paid, remaining_amount,
-          status, payment_status, notes, expected_delivery_date, updated_at,
-          delivery_address, billing_address, contact_phone)
-       VALUES ($1,$2,NULL,'manual',$3,$4,$5,$5,0,$5,
-               'supplier_accepted','pending',$6,$7::date,CURRENT_TIMESTAMP,
-               $8,$9,$10)
+      `INSERT INTO orders (${orderCols.join(", ")}, expected_delivery_date, updated_at)
+       VALUES (${orderVals.map((_, i) => `$${i + 1}`).join(", ")},
+               $${orderVals.length + 1}::date, CURRENT_TIMESTAMP)
        RETURNING *`,
-      [
-        wholesalerId, partyId, orderNumber,
-        clean.reduce((n, l) => n + l.quantity, 0),
-        subtotal,
-        String(notes ?? "").trim() || null,
-        expectedOn || null,
-        // Stored as JSON, the shape the shop order uses and the detail screen
-        // already reads, rather than a second shape it would have to learn.
-        address ? JSON.stringify(address) : null,
-        address ? JSON.stringify(address) : null,
-        String(contactPhone ?? "").trim() || null,
-      ],
+      [...orderVals, expectedOn || null],
     );
 
     for (const line of clean) {

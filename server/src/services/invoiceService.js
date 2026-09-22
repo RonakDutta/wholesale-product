@@ -28,7 +28,7 @@ const addressLine = (address) => {
   return parts.length ? parts.join(", ") : null;
 };
 const { toInvoiceFields } = require("./transportDetails");
-const { parseChannel } = require("./salesChannels");
+const { parseChannel, resolveChannel } = require("./salesChannels");
 const pdfService = require("./pdfService");
 const emailService = require("./emailService");
 
@@ -619,7 +619,11 @@ class InvoiceService {
       // Which book this bill belongs to. Refused rather than defaulted on a
       // bad value, because a bill filed in the wrong run is a set of numbers
       // nobody can reconcile.
-      const { channel, error: channelError } = parseChannel(payload.channel);
+      const { channel, linkage, error: channelError } = await resolveChannel(
+        payload.channel,
+        supplierId,
+        client,
+      );
       if (channelError) throw new Error(channelError);
 
       const minDigits = await minHsnDigits();
@@ -690,7 +694,7 @@ class InvoiceService {
         // A bill typed by hand, so it belongs to whichever book the wholesaler
         // says. Defaults to the counter, which is where a typed bill usually
         // comes from.
-        { suffix: settings.numberSuffix, padTo: settings.numberPadTo, channel },
+        { suffix: settings.numberSuffix, padTo: settings.numberPadTo, channel, linkage },
       );
 
       const invoiceData = {

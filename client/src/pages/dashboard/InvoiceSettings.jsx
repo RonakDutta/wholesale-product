@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Save } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowLeft, Globe, Save } from "lucide-react";
 import { toast } from "sonner";
 import axios from "../../utils/axios";
 
@@ -134,6 +134,29 @@ export default function InvoiceSettings() {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Marketplace Linkages notice */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs max-w-3xl">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-clay/10 text-clay">
+            <Globe className="h-5 w-5" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-espresso">
+              Marketplace Series Numbers
+            </h4>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Selling on Amazon, Flipkart, or multiple marketplace channels? Manage independent invoice, sale, and order series numbers for each store.
+            </p>
+          </div>
+        </div>
+        <Link
+          to="/seller/settings"
+          className="shrink-0 text-center rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-bold text-espresso hover:bg-slate-100 transition-colors"
+        >
+          Manage Linkages
+        </Link>
       </div>
 
       <form onSubmit={handleSave} className="space-y-6 max-w-3xl">

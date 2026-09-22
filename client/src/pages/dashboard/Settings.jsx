@@ -1,16 +1,22 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import LocationPicker from "../../components/LocationPicker";
+import MarketplaceLinkageModal from "../../components/MarketplaceLinkageModal";
 import {
   Building2,
   ChevronRight,
   CreditCard,
   Database,
   FileText,
+  Globe,
+  Layers,
   Mail,
   MapPin,
+  Pencil,
   Phone,
+  Plus,
   Save,
+  Trash2,
   Truck,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -86,6 +92,57 @@ const Settings = () => {
       alive = false;
     };
   }, []);
+
+  const [linkages, setLinkages] = useState([]);
+  const [marketplaces, setMarketplaces] = useState([]);
+  const [linkagesLoading, setLinkagesLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedLinkage, setSelectedLinkage] = useState(null);
+
+  const loadLinkages = async () => {
+    try {
+      const res = await api.get("/api/marketplace-linkages");
+      if (res.data?.success) {
+        setLinkages(res.data.linkages || []);
+        setMarketplaces(res.data.marketplaces || []);
+      }
+    } catch (err) {
+      console.error("Failed to load marketplace linkages", err);
+    } finally {
+      setLinkagesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadLinkages();
+  }, []);
+
+  const handleToggleActive = async (linkage) => {
+    try {
+      await api.put(`/api/marketplace-linkages/${linkage.id}`, {
+        isActive: !linkage.is_active,
+      });
+      toast.success(
+        `Linkage "${linkage.linkage_name}" ${linkage.is_active ? "paused" : "activated"}.`,
+      );
+      loadLinkages();
+    } catch {
+      toast.error("Could not update linkage status.");
+    }
+  };
+
+  const handleDeleteLinkage = async (linkage) => {
+    if (!window.confirm(`Are you sure you want to remove "${linkage.linkage_name}"?`)) {
+      return;
+    }
+    try {
+      const res = await api.delete(`/api/marketplace-linkages/${linkage.id}`);
+      toast.success(res.data?.message || "Linkage removed.");
+      loadLinkages();
+    } catch {
+      toast.error("Could not remove linkage.");
+    }
+  };
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -421,6 +478,141 @@ const Settings = () => {
         </div>
       </div>
 
+      {/* Marketplace & Channel Linkages */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 bg-slate-50/60 p-5">
+          <div className="flex items-center gap-3">
+            <Globe className="h-5 w-5 text-slate-500" />
+            <div>
+              <h3 className="font-bold text-espresso">Marketplace & Channel Linkages</h3>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Connect channels like Amazon and Flipkart. Each linkage keeps its own independent sequence of invoice, sale, and order numbers.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedLinkage(null);
+              setModalOpen(true);
+            }}
+            className="flex shrink-0 items-center gap-1.5 rounded-xl bg-clay px-4 py-2 text-xs font-bold text-white shadow-sm shadow-clay/20 transition-colors hover:bg-espresso cursor-pointer"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add Linkage
+          </button>
+        </div>
+
+        <div className="p-5 sm:p-6 space-y-4">
+          {linkagesLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-clay border-t-transparent" />
+            </div>
+          ) : linkages.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-5 text-center sm:p-6">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-clay/10 text-clay">
+                <Layers className="h-5 w-5" />
+              </div>
+              <h4 className="mt-2 text-sm font-bold text-espresso">
+                Default Amazon & Flipkart Channels Active
+              </h4>
+              <p className="mx-auto mt-1 max-w-md text-xs text-slate-500">
+                You can currently record sales and invoices for Amazon (prefix <code className="font-bold">AZ/</code>) and Flipkart (prefix <code className="font-bold">FK/</code>).
+                To link multiple Amazon stores or multiple Flipkart accounts with independent series numbers, click <span className="font-bold text-clay">Add Linkage</span> above.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 overflow-hidden">
+              {linkages.map((l) => {
+                const isAmazon = l.marketplace === "amazon";
+                const isFlipkart = l.marketplace === "flipkart";
+
+                return (
+                  <div
+                    key={l.id}
+                    className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 hover:bg-slate-50/70 transition-colors"
+                  >
+                    <div className="space-y-1.5 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider ${
+                            isAmazon
+                              ? "bg-amber-100 text-amber-900 border border-amber-200"
+                              : isFlipkart
+                                ? "bg-blue-100 text-blue-900 border border-blue-200"
+                                : "bg-slate-100 text-slate-800 border border-slate-200"
+                          }`}
+                        >
+                          {l.marketplace}
+                        </span>
+                        <h4 className="font-bold text-sm text-espresso">
+                          {l.linkage_name}
+                        </h4>
+                        <span className="font-mono text-[11px] text-slate-400">
+                          ({l.code})
+                        </span>
+                        {!l.is_active && (
+                          <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                            Paused
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Independent document prefixes & samples */}
+                      <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-slate-600">
+                        <span className="rounded bg-slate-100 px-2 py-1 font-mono text-[11px]">
+                          <span className="font-sans text-slate-400 font-semibold mr-1">INV:</span>
+                          <span className="font-bold text-espresso">{l.sampleInvoiceNumber || l.invoice_prefix}</span>
+                        </span>
+                        <span className="rounded bg-slate-100 px-2 py-1 font-mono text-[11px]">
+                          <span className="font-sans text-slate-400 font-semibold mr-1">SALE:</span>
+                          <span className="font-bold text-espresso">{l.sampleSaleNumber || l.sale_prefix}</span>
+                        </span>
+                        <span className="rounded bg-slate-100 px-2 py-1 font-mono text-[11px]">
+                          <span className="font-sans text-slate-400 font-semibold mr-1">ORDER:</span>
+                          <span className="font-bold text-espresso">{l.sampleOrderNumber || l.order_prefix}</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleActive(l)}
+                        title={l.is_active ? "Pause this linkage" : "Activate this linkage"}
+                        className="cursor-pointer rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+                      >
+                        {l.is_active ? "Pause" : "Activate"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedLinkage(l);
+                          setModalOpen(true);
+                        }}
+                        title="Edit series configuration"
+                        className="flex cursor-pointer items-center gap-1 rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 hover:text-clay hover:bg-slate-50 transition-colors"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteLinkage(l)}
+                        title="Remove linkage"
+                        className="flex cursor-pointer items-center gap-1 rounded-lg border border-slate-200 bg-white p-1.5 text-rose-500 hover:bg-rose-50 hover:border-rose-200 transition-colors"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* The other half of settings, which lives with the invoices. */}
       <Link
         to="/seller/invoices/settings"
@@ -470,6 +662,17 @@ const Settings = () => {
         </button>
       </div>
 
+      {modalOpen && (
+        <MarketplaceLinkageModal
+          linkage={selectedLinkage}
+          marketplaces={marketplaces}
+          onClose={() => {
+            setModalOpen(false);
+            setSelectedLinkage(null);
+          }}
+          onSaved={loadLinkages}
+        />
+      )}
     </div>
   );
 };

@@ -28,6 +28,7 @@ const stockRoutes = require("./routes/stockRoutes");
 const dayBookRoutes = require("./routes/dayBookRoutes");
 const routeRoutes = require("./routes/routeRoutes");
 const webhookRoutes = require("./routes/webhookRoutes");
+const marketplaceLinkageRoutes = require("./routes/marketplaceLinkageRoutes");
 
 const app = express();
 
@@ -97,5 +98,6 @@ app.use("/api/daybook", dayBookRoutes);
 // been sent. See controllers/routeController.js for why only 'activated'
 // opens the gate.
 app.use("/api/seller/razorpay", routeRoutes);
+app.use("/api/marketplace-linkages", marketplaceLinkageRoutes);
 
 module.exports = app;

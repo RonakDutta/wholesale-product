@@ -33,12 +33,13 @@ const blankLine = () => ({
 
 const RecordOrder = () => {
   const navigate = useNavigate();
-  const { units } = useMasters();
+  const { units, salesChannels } = useMasters();
   const unitCodes = units.map((u) => u.code);
 
   const [parties, setParties] = useState([]);
   const [products, setProducts] = useState([]);
   const [partyId, setPartyId] = useState("");
+  const [channel, setChannel] = useState("shop");
   const [addingParty, setAddingParty] = useState(false);
   const [expectedOn, setExpectedOn] = useState("");
   const [notes, setNotes] = useState("");
@@ -134,6 +135,7 @@ const RecordOrder = () => {
     try {
       const { data } = await api.post("/api/orders/manual", {
         partyId,
+        channel,
         notes,
         expectedOn: expectedOn || undefined,
         deliveryAddress: deliveryAddress || undefined,
@@ -177,7 +179,7 @@ const RecordOrder = () => {
         </p>
       </div>
 
-      <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-2">
+      <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-3">
         <div>
           <label
             htmlFor="order-party"
@@ -214,6 +216,31 @@ const RecordOrder = () => {
               Already owes ₹{money(owedBefore)} on earlier bills.
             </p>
           )}
+        </div>
+
+        <div>
+          <label
+            htmlFor="order-channel"
+            className="mb-1.5 block text-sm font-bold text-espresso"
+          >
+            Where the order came from
+          </label>
+          <select
+            id="order-channel"
+            value={channel}
+            onChange={(e) => setChannel(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+          >
+            {salesChannels.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-slate-500">
+            {salesChannels.find((c) => c.code === channel)?.hint ||
+              "Each channel keeps its own independent series of order numbers."}
+          </p>
         </div>
 
         <div>

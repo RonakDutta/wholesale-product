@@ -1,5 +1,10 @@
 const invoiceRepository = require("../repositories/invoiceRepository");
-const { prefixFor, seriesKeyFor, DEFAULT_CHANNEL } = require("./salesChannels");
+const {
+  prefixFor,
+  seriesKeyFor,
+  DEFAULT_CHANNEL,
+  getLinkageConfig,
+} = require("./salesChannels");
 
 /**
  * The next invoice number for one wholesaler, in their own run.
@@ -146,7 +151,23 @@ class InvoiceNumberService {
      * reconcilable against that marketplace's own report.
      */
     const channel = seriesKeyFor(format.channel || DEFAULT_CHANNEL);
-    const seriesPrefix = prefixFor(channel, prefix);
+    const linkage =
+      format.linkage ||
+      (wholesalerId ? await getLinkageConfig(wholesalerId, channel, client) : null);
+    const seriesPrefix = format.prefix || prefixFor(channel, prefix, linkage);
+    const formatSuffix =
+      format.suffix !== undefined
+        ? format.suffix
+        : linkage?.number_suffix !== undefined
+          ? linkage.number_suffix
+          : "";
+    const formatPadTo =
+      format.padTo !== undefined
+        ? format.padTo
+        : linkage?.number_pad_to !== undefined
+          ? linkage.number_pad_to
+          : 6;
+
     // The counter is keyed on the financial year, not the calendar year, so
     // it resets on 1 April and an invoice raised in January carries on the
     // run that started the previous April.
@@ -167,9 +188,9 @@ class InvoiceNumberService {
     const head = String(seriesPrefix || "INV").trim() || "INV";
     const built = compose({
       prefix: head.endsWith("-") || head.endsWith("/") ? head : `${head}-`,
-      suffix: format.suffix ?? "",
+      suffix: formatSuffix ?? "",
       sequence: sequenceNumber,
-      padTo: format.padTo ?? 6,
+      padTo: formatPadTo,
       date: asOf,
     });
 
@@ -186,7 +207,7 @@ class InvoiceNumberService {
      */
     const unpadded = compose({
       prefix: head.endsWith("-") || head.endsWith("/") ? head : `${head}-`,
-      suffix: format.suffix ?? "",
+      suffix: formatSuffix ?? "",
       sequence: sequenceNumber,
       padTo: 0,
       date: asOf,

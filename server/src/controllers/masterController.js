@@ -22,10 +22,12 @@ exports.getMasters = async (req, res) => {
       masterService.uqcCodes(),
       masterService.taxTerms(),
     ]);
-    // The sales channels. A fixed product concept rather than a table, but
-    // served from here so the screens and the server cannot drift on what the
-    // four are called.
-    const { CHANNELS } = require("../services/salesChannels");
+    // The sales channels. Built-in defaults merged with the wholesaler's
+    // configured marketplace linkages.
+    const { CHANNELS, getWholesalerChannels } = require("../services/salesChannels");
+    const salesChannels = req.user?.id
+      ? await getWholesalerChannels(req.user.id)
+      : CHANNELS;
     /**
      * Rows that have been switched off, when the console asks for them.
      *
@@ -73,7 +75,7 @@ exports.getMasters = async (req, res) => {
       // The named tax combinations, with CGST and SGST derived. Empty until
       // wholesale3_tax_terms_and_cess.sql has been run.
       taxTerms,
-      salesChannels: CHANNELS,
+      salesChannels,
       // Read by every screen that shows an amount or a date, which is most of
       // them, so it rides along with the lists rather than costing its own
       // request on every page.

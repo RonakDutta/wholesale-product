@@ -1634,8 +1634,8 @@ class InvoiceRepository {
    * Which parts of wholesale 3.0 this database has. Callers outside this file
    * need it to decide whether a guard can apply at all.
    */
-  async schemaExtras(db = pool) {
-    return schemaExtras(db);
+  async schemaExtras() {
+    return schemaExtras();
   }
 
   // Tests point one process at more than one database.

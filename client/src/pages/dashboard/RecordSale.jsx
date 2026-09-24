@@ -18,6 +18,7 @@ import {
 // Short values on purpose here: this select sits beside the quantity box on a
 // phone, where "Kilogram (kg)" would not fit.
 import { useMasters } from "../../hooks/useMasters";
+import { channelChoices } from "../../utils/salesChannels";
 import { amount as money } from "../../utils/money";
 
 // Same paise arithmetic as the server, so the total on screen and the total
@@ -564,7 +565,7 @@ const RecordSale = () => {
             onChange={(e) => setChannel(e.target.value)}
             className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
           >
-            {salesChannels.map((c) => (
+            {channelChoices(salesChannels, channel).map((c) => (
               <option key={c.code} value={c.code}>
                 {c.label}
               </option>

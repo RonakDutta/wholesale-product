@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import ItemPicker from "../../components/ItemPicker";
 import PartyFormModal from "../../components/PartyFormModal";
 import { useMasters } from "../../hooks/useMasters";
+import { channelChoices } from "../../utils/salesChannels";
 import { amount as money } from "../../utils/money";
 
 /**
@@ -39,7 +40,9 @@ const RecordOrder = () => {
   const [parties, setParties] = useState([]);
   const [products, setProducts] = useState([]);
   const [partyId, setPartyId] = useState("");
-  const [channel, setChannel] = useState("shop");
+  // Which book the bill for this order will go into. A phone order is the
+  // counter, which is what every typed order was before this box existed.
+  const [channel, setChannel] = useState("counter");
   const [addingParty, setAddingParty] = useState(false);
   const [expectedOn, setExpectedOn] = useState("");
   const [notes, setNotes] = useState("");
@@ -179,7 +182,7 @@ const RecordOrder = () => {
         </p>
       </div>
 
-      <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-3">
+      <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-2">
         <div>
           <label
             htmlFor="order-party"
@@ -220,31 +223,6 @@ const RecordOrder = () => {
 
         <div>
           <label
-            htmlFor="order-channel"
-            className="mb-1.5 block text-sm font-bold text-espresso"
-          >
-            Where the order came from
-          </label>
-          <select
-            id="order-channel"
-            value={channel}
-            onChange={(e) => setChannel(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
-          >
-            {salesChannels.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-slate-500">
-            {salesChannels.find((c) => c.code === channel)?.hint ||
-              "Each channel keeps its own independent series of order numbers."}
-          </p>
-        </div>
-
-        <div>
-          <label
             htmlFor="order-expected"
             className="mb-1.5 block text-sm font-bold text-espresso"
           >
@@ -259,6 +237,31 @@ const RecordOrder = () => {
           />
           <p className="mt-1 text-xs text-slate-500">
             Optional. When the customer wants them.
+          </p>
+        </div>
+
+        <div>
+          <label
+            htmlFor="order-channel"
+            className="mb-1.5 block text-sm font-bold text-espresso"
+          >
+            Where the order came from
+          </label>
+          <select
+            id="order-channel"
+            value={channel}
+            onChange={(e) => setChannel(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors focus:border-clay"
+          >
+            {channelChoices(salesChannels, channel).map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-slate-500">
+            Decides which run of bill numbers its bill takes. The order number
+            is the same run for every order.
           </p>
         </div>
       </div>

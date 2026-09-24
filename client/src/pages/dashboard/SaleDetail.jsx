@@ -17,6 +17,8 @@ import { downloadFile } from "../../utils/download";
 import { toast } from "sonner";
 import RecordPaymentModal from "../../components/RecordPaymentModal";
 import { amount as money, dateLabel } from "../../utils/money";
+import { useMasters } from "../../hooks/useMasters";
+import { channelLabel } from "../../utils/salesChannels";
 
 // Which book a sale belongs to. Shown so a wholesaler can see why its bill
 // carries the number it does.
@@ -67,6 +69,7 @@ const NEXT_ACTIONS = {
 };
 
 const SaleDetail = () => {
+  const { salesChannels } = useMasters();
   const { id } = useParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -357,7 +360,7 @@ const SaleDetail = () => {
             <p className="mt-1 text-sm text-slate-500">
               {dateLabel(sale.sale_date)}
               {sale.channel && sale.channel !== "counter"
-                ? `  |  ${CHANNEL_TEXT[sale.channel] || sale.channel}`
+                ? `  |  ${CHANNEL_TEXT[sale.channel] || channelLabel(salesChannels, sale.channel)}`
                 : ""}
             </p>
             <Link

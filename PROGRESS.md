@@ -40,6 +40,7 @@ cd server && npm run migrate
 | `wholesale3_stock_ledger.sql` | The stock ledger, and the product and challan links on a sale or purchase line | run 18 Sept |
 | `wholesale3_order_sequences.sql` | Orders get their own run of numbers, a source marker, and a billed quantity per line | run 19 Sept |
 | `wholesale3_order_number_per_owner.sql` | Order numbers unique per wholesaler, not platform wide | **NOT RUN** |
+| `wholesale3_marketplace_linkages.sql` | A second Amazon or Flipkart account, each with its own run of bill numbers, and a channel on orders. REWRITTEN 24 Sept, safe whether or not the 22 Sept version was run | **NOT RUN** |
 
 **One outstanding as of 19 Sept**: `wholesale3_order_number_per_owner.sql`.
 Until it is run, a second wholesaler's first shop order is refused, because
@@ -3076,6 +3077,118 @@ both with and without `CHALLAN_WHEN_UNPAID`.
 
 ---
 
+## 24 Sept: the server would not start, and marketplace accounts made to fit
+
+Reported: "the server isn't working on Render" after a commit to `main` on
+22 Sept, `add multiple marketplace linkages with independent series numbers`.
+
+**Why it would not start.** `routes/marketplaceLinkageRoutes.js` imported
+`requireBusiness` from `middlewares/businessContext`, which exports no such
+thing. `router.use(undefined)` throws at require time, so the whole app died
+before it listened on a port. Every route was down, not just the new ones.
+Reproduced locally with `node -e "require('./src/app')"`: `TypeError: argument
+handler is required`. Render's own logs were not looked at, since this session
+cannot reach them, so this is the cause the code shows rather than one read
+off the host.
+
+**A second break was hiding behind it.** With the boot fixed, on a database
+where the new migration had not been run, which is how Neon sits until
+somebody runs it, taking an order by hand returned 500 and accepting an order
+wrote no sale. The new lookup for an account tried the missing table INSIDE the
+order's transaction, caught the error, and carried on, but Postgres had
+already aborted the transaction: every statement after it failed with "current
+transaction is aborted". `ship_check` against an unmigrated database showed it
+at once. Catching an error inside a transaction does not un-abort it. Probes
+now ask `to_regclass` first, which cannot fail.
+
+**What was kept.** The idea is right and is now built properly: a wholesaler
+with two Amazon seller accounts gets two settlement reports, and each has to be
+matched against its own run of bills. So an extra account is one more book,
+with its own prefix and its own counter in `invoice_sequences`, which was
+already keyed by series. The built in Amazon and Flipkart books are the first
+account on each and do not change.
+
+**What was taken back out, and why.**
+
+- *A run of ORDER numbers per account.* Orders were put on one run on 19 Sept,
+  on request, because a phone order and a shop order are the same document.
+  The new code gave each channel its own counter but printed `SO/` on all of
+  them, so a shop order and a phone order could both be `SO/1/26-27`. Orders
+  now carry a channel, which decides the run their BILL takes, and every order
+  is still numbered on the one `SO/` run.
+- *A run of SALE numbers per account.* A sale number is the wholesaler's own
+  reference, not a GST document, so Rule 46(b) asks nothing of it. Shop sales
+  had also quietly moved from `S/` to a new `S-SA/` run.
+- *A suffix and padding per account.* The built in Amazon and Flipkart books
+  follow the wholesaler's own number format. Extra accounts now do too, so one
+  screen decides what every bill looks like.
+- *The typed "channel identifier".* The code a sale stores is made by the
+  server, `amazon-2`, `amazon-3`, because it can never change once anything is
+  filed under it and nobody should have to invent one.
+- *Delete that silently paused instead.* Remove now removes, and only an
+  account with nothing in it. One with sales or bills is refused with the
+  reason and can be paused.
+- *The mock database suite.* It passed against an in memory stand in while the
+  real server could not boot. Replaced, see below.
+
+**Found while rebuilding, and fixed.**
+
+- A paused account's sales could not be billed into its own run. The lookup
+  read active accounts only, fell back to the counter's prefix, and opened a
+  fresh counter for it: a second `OM/1/26-27`. Paused accounts now still own
+  their run. They take no new sales, and the forms leave them out, except on a
+  sale already filed under one, so saving an edit does not move it to the
+  counter.
+- Nothing stopped two books sharing a prefix, which is the same bill number
+  twice. An account's prefix is refused if it equals, or begins, or is begun
+  by, the built in books' (`SA/`, `FK/`, `AZ/`), the wholesaler's own, or
+  another account's. The invoice settings screen checks the same thing when
+  the wholesaler's own prefix changes.
+- An account's prefix is fixed once a bill has gone out on it.
+- A typed order from the phone defaulted to "This shop" on the new form. It is
+  the counter now, which is what every typed order was before.
+- The sale written when a shop order is accepted is now filed under `shop`,
+  matching the bill raised at payment, which was always `shop`. It used to take
+  the column default, `counter`.
+
+**Where it lives.** "Selling on Amazon or Flipkart" on the bill numbering
+screen, `/seller/invoices/settings`, since bill numbers are all it changes.
+The sale, order and bill forms pick accounts up through `/api/masters`, which
+now returns each wholesaler's own. Routes are `/api/marketplace-accounts`,
+behind the `settings` permission. The table keeps the name
+`marketplace_linkages` so a database that ran the 22 Sept file is not left
+with an orphan.
+
+**The migration was rewritten, not added to**, because it may or may not have
+been run. It is safe either way and twice over: it drops the sale and order
+series columns if present, keeping the highest counter per year so the next
+number is past every number already issued, and puts the one-run keys back.
+Tested split on semicolons, the way the Neon editor runs it, against a
+database that never saw the old version and one that did, twice each. That
+test caught a semicolon in a comment in the first draft, exactly the trap
+CLAUDE.md describes.
+
+**Verified.** `scripts/marketplace_account_check.js`, 61 checks, against a
+migrated database and, in a child process, an unmigrated one. 38 of the other
+41 suites green against a fresh migrated database. The three that fail do so
+identically on the code as it was before today and for reasons outside this
+work: `challan_book_check` needs `pdftotext`, `master_settings_check` and
+`party_state_check` expect extra named databases. 13 of the main suites also
+green against an UNMIGRATED database, which is what production is right now.
+The real server booted and served the new routes over HTTP, and the settings
+card, the modal refusing a clashing prefix, and the order form were rendered
+in a browser at desktop and phone width.
+
+**Not done.** The import still accepts only the four built in books in its
+channel column, not an extra account. Nothing is pulled from Amazon or
+Flipkart, as before.
+
+**Migration to run:** `wholesale3_marketplace_linkages.sql`. Until it is run
+nothing changes: the settings card says adding accounts is not switched on,
+and filing a typed order under a marketplace is a 503.
+
+---
+
 ## Left to do
 
 Roughly in the order agreed. `ROADMAP.md` has the full list, in phases.
@@ -3125,7 +3238,7 @@ for many taxpayers. That is a commercial decision and it shapes the schema.
 
 ## Testing
 
-Thirty seven suites in `server/scripts/*_check.js`. They drive the real
+Forty two suites in `server/scripts/*_check.js`. They drive the real
 controllers against a local Postgres, so they catch schema drift that reading
 the code does not.
 

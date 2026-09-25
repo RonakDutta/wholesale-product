@@ -22,12 +22,20 @@ exports.getMasters = async (req, res) => {
       masterService.uqcCodes(),
       masterService.taxTerms(),
     ]);
-    // The sales channels. Built-in defaults merged with the wholesaler's
-    // configured marketplace linkages.
-    const { CHANNELS, getWholesalerChannels } = require("../services/salesChannels");
-    const salesChannels = req.user?.id
-      ? await getWholesalerChannels(req.user.id)
-      : CHANNELS;
+    // The sales channels. A fixed product concept rather than a table, but
+    // served from here so the screens and the server cannot drift on what the
+    // four are called.
+    //
+    // Plus the wholesaler's own extra marketplace accounts, for whoever's book
+    // this request is working on, so an employee sees the owner's accounts.
+    // A buyer has none and gets the four. Never allowed to cost the lists
+    // above: a failure here falls back to the four books.
+    const { CHANNELS, channelsFor } = require("../services/salesChannels");
+    const { businessId } = require("../middlewares/businessContext");
+    const salesChannels = await channelsFor(businessId(req)).catch((err) => {
+      console.error("Could not read marketplace accounts:", err.message);
+      return CHANNELS;
+    });
     /**
      * Rows that have been switched off, when the console asks for them.
      *

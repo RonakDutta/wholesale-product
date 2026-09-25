@@ -204,6 +204,16 @@ amounts cannot be changed from the sale side, which returns 409 with
 checkout; recomputing or retyping it moves the debt away from the figure he
 pressed pay on.
 
+**Bills run per channel, orders and sales do not.** Each sales channel,
+including a wholesaler's extra Amazon or Flipkart account (`amazon-2`, see
+`services/salesChannels.js`), has its own run of INVOICE numbers, because each
+marketplace reconciles against its own. Orders are one `SO/` run and sales one
+`S/` run for everything, on purpose: two counters printing the same prefix hand
+out the same number twice. Two runs must never share a prefix either, which is
+what `prefixClash` checks. Any lookup that can run inside a transaction must
+probe with `to_regclass` first: catching a failed statement does not undo the
+aborted transaction.
+
 **HSN codes are validated, never guessed.** `services/hsnService.js` checks the
 shape (4, 6 or 8 digits) and suggests from the wholesaler's own history plus a
 short curated textile list labelled as common rather than as verified. Nothing

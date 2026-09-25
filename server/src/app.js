@@ -28,7 +28,7 @@ const stockRoutes = require("./routes/stockRoutes");
 const dayBookRoutes = require("./routes/dayBookRoutes");
 const routeRoutes = require("./routes/routeRoutes");
 const webhookRoutes = require("./routes/webhookRoutes");
-const marketplaceLinkageRoutes = require("./routes/marketplaceLinkageRoutes");
+const marketplaceAccountRoutes = require("./routes/marketplaceAccountRoutes");
 
 const app = express();
 
@@ -98,6 +98,7 @@ app.use("/api/daybook", dayBookRoutes);
 // been sent. See controllers/routeController.js for why only 'activated'
 // opens the gate.
 app.use("/api/seller/razorpay", routeRoutes);
-app.use("/api/marketplace-linkages", marketplaceLinkageRoutes);
+// Extra Amazon and Flipkart accounts, each with its own run of bill numbers.
+app.use("/api/marketplace-accounts", marketplaceAccountRoutes);
 
 module.exports = app;

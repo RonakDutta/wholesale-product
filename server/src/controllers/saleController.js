@@ -21,7 +21,7 @@ const {
   TRANSPORT_COLUMNS,
   parseTransport,
 } = require("../services/transportDetails");
-const { parseChannel, resolveChannel } = require("../services/salesChannels");
+const { resolveChannel } = require("../services/salesChannels");
 
 /**
  * Recording a sale is the wholesaler's core action. They are usually writing
@@ -276,10 +276,7 @@ exports.createSale = async (req, res) => {
   // Which book this sale belongs to, and so which run of invoice numbers a
   // bill from it will draw on. Refused rather than defaulted, because a sale
   // filed in the wrong book is a run of numbers nobody can reconcile.
-  const { channel, linkage, error: channelError } = await resolveChannel(
-    req.body.channel,
-    wholesalerId,
-  );
+  const { channel, error: channelError } = await resolveChannel(req.body.channel, wholesalerId);
   if (channelError) return res.status(400).json({ message: channelError });
 
   const saleStatus = status || "confirmed";
@@ -332,7 +329,7 @@ exports.createSale = async (req, res) => {
         .json({ message: "Amount received cannot be more than the bill" });
     }
 
-    const saleNumber = await nextSaleNumber(client, wholesalerId, channel, { linkage });
+    const saleNumber = await nextSaleNumber(client, wholesalerId);
 
     // Named rather than positional, for the reason createInvoice was changed:
     // two optional column groups counted out by hand is how the lorry number
@@ -833,9 +830,13 @@ exports.updateSale = async (req, res) => {
   const { values: transport, error: transportError } = parseTransport(req.body);
   if (transportError) return res.status(400).json({ message: transportError });
 
+  // A paused account still owns the sales already filed under it, so editing
+  // one of those must not be refused for naming it.
   const { channel, error: channelError } = await resolveChannel(
     req.body.channel,
     wholesalerId,
+    undefined,
+    { allowPaused: true },
   );
   if (channelError) return res.status(400).json({ message: channelError });
 

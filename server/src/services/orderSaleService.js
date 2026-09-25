@@ -56,33 +56,46 @@ const resetSaleLink = () => { bridgeReady = null; };
 
 
 /**
- * Converts an accepted order into a confirmed sale.
+ * Write one accepted order into the sales book.
  *
- * Must be called inside the caller's transaction, so the order status move
- * and the sale creation either commit together or roll back together.
+ * Does nothing, rather than failing, when the order has no customer or the
+ * migration has not been run. Accepting an order is the wholesaler's action
+ * and must succeed; the book catching up is secondary and the backfill can
+ * finish the job later.
+ *
+ * @returns {Promise<object|null>} the sale row, or null if none was written
  */
 const createSaleFromOrder = async (client, orderId) => {
   const schema = await hasSaleLink(client);
   if (!schema) return null;
 
-  // The order must be confirmed or later: an order still waiting on payment
-  // is not goods moving.
-  const orderRes = await client.query(
-    "SELECT * FROM orders WHERE id = $1 FOR UPDATE",
+  // channel and source through to_jsonb, so this reads the same on a
+  // database where either column has not arrived yet: a missing key is a
+  // null, where naming a missing column is an error that aborts the
+  // caller's transaction.
+  const found = await client.query(
+    `SELECT o.id, o.order_number, o.supplier_id, o.party_id, o.subtotal,
+            o.total_amount, o.created_at,
+            to_jsonb(o) ->> 'channel' AS channel,
+            to_jsonb(o) ->> 'source' AS source
+       FROM orders o
+      WHERE o.id = $1`,
     [orderId],
   );
-  const order = orderRes.rows[0];
-  if (!order || !order.supplier_id || !order.party_id) return null;
+  const order = found.rows[0];
+  if (!order || !order.party_id || !order.supplier_id) return null;
 
-  // Idempotent: once a sale exists for this order, never write another one.
-  const existing = await client.query(
+  // One order, one sale. The unique index backs this up, but asking first
+  // keeps a re-accept from burning a sale number on a row that is refused.
+  const already = await client.query(
     "SELECT * FROM sales WHERE order_id = $1",
     [orderId],
   );
-  if (existing.rows.length > 0) return existing.rows[0];
+  if (already.rows.length > 0) return already.rows[0];
 
   const lines = await client.query(
-    `SELECT oi.id, oi.product_name, oi.quantity, oi.unit_price, oi.total_price,
+    `SELECT oi.product_name, oi.quantity, oi.total_price,
+            COALESCE(oi.unit_price, 0) AS unit_price,
             oi.inventory_item_id,
             si.unit, si.hsn_code, si.gst_percent
        FROM order_items oi
@@ -97,47 +110,40 @@ const createSaleFromOrder = async (client, orderId) => {
   // leftover and reading that would drop everything after the first product.
   const totalPaise = toPaise(order.total_amount);
   const subtotalPaise = toPaise(order.subtotal ?? order.total_amount);
-  const channel = order.channel || "shop";
 
-  const saleNumber = await nextSaleNumber(client, order.supplier_id, channel);
+  const saleNumber = await nextSaleNumber(client, order.supplier_id);
 
-  const saleCols = [
-    "wholesaler_id",
-    "party_id",
-    "order_id",
-    "sale_number",
-    "sale_date",
-    "source",
-    "status",
-    "subtotal",
-    "discount",
-  ];
-  if (schema.has_tax) saleCols.push("tax_amount");
-  if (schema.has_channel) saleCols.push("channel");
-  saleCols.push("total", "notes");
-
-  const saleVals = [
-    order.supplier_id,
-    order.party_id,
-    orderId,
-    saleNumber,
-    new Date(order.created_at).toISOString().slice(0, 10),
-    "retailer",
-    "confirmed",
-    fromPaise(subtotalPaise),
-    0,
-  ];
-  if (schema.has_tax) saleVals.push(0);
-  if (schema.has_channel) saleVals.push(channel);
-  saleVals.push(fromPaise(totalPaise), `Order ${order.order_number || orderId}`);
-
-  const placeholders = saleVals.map((_, i) => (i === 4 ? `$${i + 1}::date` : `$${i + 1}`));
+  /**
+   * The book the sale, and so its bill, belongs to. What the order was
+   * filed under when it was taken, and otherwise where it came from: a shop
+   * order is the shop channel by definition, which is also the run the bill
+   * raised at payment draws on, and one typed from a phone call is the
+   * counter, which is what every such sale was before orders had a channel.
+   */
+  const channel = order.channel || (order.source === "manual" ? "counter" : "shop");
 
   const sale = await client.query(
-    `INSERT INTO sales (${saleCols.join(", ")})
-     VALUES (${placeholders.join(", ")})
+    `INSERT INTO sales
+       (wholesaler_id, party_id, order_id, sale_number, sale_date, source,
+        status, subtotal, discount, ${schema.has_tax ? "tax_amount," : ""}
+        ${schema.has_channel ? "channel," : ""} total, notes)
+     VALUES ($1, $2, $3, $4, $5::date, 'retailer', 'confirmed',
+             $6, 0, ${schema.has_tax ? "0," : ""}
+             ${schema.has_channel ? "$9," : ""} $7, $8)
      RETURNING *`,
-    saleVals,
+    [
+      order.supplier_id,
+      order.party_id,
+      orderId,
+      saleNumber,
+      // Dated when the order was placed, not when it was accepted. The
+      // statement should show the goods on the day the customer bought them.
+      new Date(order.created_at).toISOString().slice(0, 10),
+      fromPaise(subtotalPaise),
+      fromPaise(totalPaise),
+      `${order.source === "manual" ? "Order" : "Shop order"} ${order.order_number || orderId}`,
+      ...(schema.has_channel ? [channel] : []),
+    ],
   );
   const saleId = sale.rows[0].id;
 

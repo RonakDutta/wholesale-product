@@ -6,6 +6,7 @@ const invoiceNumberService = require("../services/invoiceNumberService");
 // Whose invoices these are. The person doing the work is still req.user.id:
 // they are the name on a log entry, not the business the bill belongs to.
 const { businessId } = require("../middlewares/businessContext");
+const { headOf, prefixClash } = require("../services/salesChannels");
 
 class InvoiceController {
   async getInvoices(req, res) {
@@ -340,6 +341,26 @@ class InvoiceController {
           code: "BAD_NUMBER_FORMAT",
           sample: worst.number,
         });
+      }
+
+      /**
+       * The counter run must not take a prefix another run already prints,
+       * or both hand out the same numbers. Asked only when the prefix
+       * actually changes, so a wholesaler who happens to be on a clashing one
+       * already can still save the rest of this screen.
+       */
+      const current = await pool
+        .query("SELECT prefix FROM invoice_settings WHERE user_id = $1", [businessId(req)])
+        .then((r) => r.rows[0]?.prefix);
+      if (headOf(current || "INV") !== headOf(prefix)) {
+        const clash = await prefixClash(businessId(req), prefix, pool, { skipSettings: true });
+        if (clash) {
+          return res.status(400).json({
+            success: false,
+            message: `${headOf(prefix)} is too close to ${clash}. Two books starting the same way would print the same bill numbers.`,
+            code: "PREFIX_TAKEN",
+          });
+        }
       }
 
       if (!Number.isFinite(dueDays) || dueDays < 0 || dueDays > 365) {

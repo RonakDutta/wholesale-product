@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import axios from "../../utils/axios";
 import { rupees } from "../../utils/money";
 import { useMasters } from "../../hooks/useMasters";
+import { channelChoices } from "../../utils/salesChannels";
 import {
   Field,
   StateField,
@@ -325,7 +326,7 @@ export default function CreateInvoice() {
               onChange={(e) => setChannel(e.target.value)}
               className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-bold text-espresso focus:outline-none focus:ring-2 focus:ring-clay/20"
             >
-              {salesChannels.map((c) => (
+              {channelChoices(salesChannels, channel).map((c) => (
                 <option key={c.code} value={c.code}>
                   {c.label}
                 </option>

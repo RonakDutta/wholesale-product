@@ -2,8 +2,9 @@ const invoiceRepository = require("../repositories/invoiceRepository");
 const {
   prefixFor,
   seriesKeyFor,
+  findAccount,
+  isChannel,
   DEFAULT_CHANNEL,
-  getLinkageConfig,
 } = require("./salesChannels");
 
 /**
@@ -130,7 +131,7 @@ class InvoiceNumberService {
    * @param {string} prefix        their prefix from invoice_settings
    * @param {number} yearOverride  for backdating; otherwise this financial year
    * @param {string} wholesalerId  whose run to draw from
-   * @param {object} [format]      { suffix, padTo, channel } from
+   * @param {object} [format]      { suffix, padTo, channel, account } from
    *                               invoice_settings, plus which sales channel
    *                               this bill belongs to
    */
@@ -150,24 +151,24 @@ class InvoiceNumberService {
      * point of a separate series is that it is tellable apart at a glance and
      * reconcilable against that marketplace's own report.
      */
-    const channel = seriesKeyFor(format.channel || DEFAULT_CHANNEL);
-    const linkage =
-      format.linkage ||
-      (wholesalerId ? await getLinkageConfig(wholesalerId, channel, client) : null);
-    const seriesPrefix = format.prefix || prefixFor(channel, prefix, linkage);
-    const formatSuffix =
-      format.suffix !== undefined
-        ? format.suffix
-        : linkage?.number_suffix !== undefined
-          ? linkage.number_suffix
-          : "";
-    const formatPadTo =
-      format.padTo !== undefined
-        ? format.padTo
-        : linkage?.number_pad_to !== undefined
-          ? linkage.number_pad_to
-          : 6;
+    const asked = String(format.channel || DEFAULT_CHANNEL).toLowerCase();
 
+    /**
+     * A wholesaler's extra marketplace account is a run of its own. It is
+     * looked up even when paused, because a sale filed under it before the
+     * pause still bills into it. Not finding one is refused rather than filed
+     * under the counter: the counter's prefix on a counter of its own would
+     * print a number the counter run has already used.
+     */
+    let account = format.account || null;
+    if (!account && !isChannel(asked)) {
+      account = await findAccount(wholesalerId, asked, client || undefined);
+      if (!account) {
+        throw new Error(`No sales channel called "${asked}" for this wholesaler.`);
+      }
+    }
+    const channel = seriesKeyFor(asked, account);
+    const seriesPrefix = prefixFor(channel, prefix, account);
     // The counter is keyed on the financial year, not the calendar year, so
     // it resets on 1 April and an invoice raised in January carries on the
     // run that started the previous April.
@@ -188,9 +189,9 @@ class InvoiceNumberService {
     const head = String(seriesPrefix || "INV").trim() || "INV";
     const built = compose({
       prefix: head.endsWith("-") || head.endsWith("/") ? head : `${head}-`,
-      suffix: formatSuffix ?? "",
+      suffix: format.suffix ?? "",
       sequence: sequenceNumber,
-      padTo: formatPadTo,
+      padTo: format.padTo ?? 6,
       date: asOf,
     });
 
@@ -207,7 +208,7 @@ class InvoiceNumberService {
      */
     const unpadded = compose({
       prefix: head.endsWith("-") || head.endsWith("/") ? head : `${head}-`,
-      suffix: formatSuffix ?? "",
+      suffix: format.suffix ?? "",
       sequence: sequenceNumber,
       padTo: 0,
       date: asOf,

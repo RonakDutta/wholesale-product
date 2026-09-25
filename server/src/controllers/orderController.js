@@ -9,7 +9,24 @@ const {
 const { createSaleFromOrder, hasSaleLink, markSaleDelivered } = require("../services/orderSaleService");
 const { shipOrder } = require("../services/shipOrder");
 const { nextOrderNumber } = require("../services/seriesNumbers");
-const { resolveChannel } = require("../services/salesChannels");
+const { resolveChannel, DEFAULT_CHANNEL } = require("../services/salesChannels");
+
+/**
+ * Whether orders can say which book they belong to, from
+ * wholesale3_marketplace_linkages.sql. Caches only a TRUE, so running the
+ * migration takes effect on the next request.
+ */
+let orderChannelReady = false;
+const hasOrderChannel = async () => {
+  if (orderChannelReady) return true;
+  const { rows } = await pool.query(
+    `SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                     WHERE table_schema = 'public' AND table_name = 'orders'
+                       AND column_name = 'channel') AS ok`,
+  );
+  orderChannelReady = Boolean(rows[0]?.ok);
+  return orderChannelReady;
+};
 const { validateStatusTransition, mapPaymentStatusToOrderStatus, getOrderTimeline, recordStatusChange, cancelOrder } = require("../services/orderStatusService");
 const { geocodeOrderDestination } = require("../services/geocodingService");
 const { businessId } = require("../middlewares/businessContext");
@@ -1857,11 +1874,32 @@ module.exports.createManualOrder = async (req, res) => {
     // a second class document. Marg and Busy ask for exactly these on a sales
     // order: where it goes, who to ring, and their own reference.
     deliveryAddress, contactPhone, theirReference,
+    channel: askedChannel,
   } = req.body || {};
 
   if (!partyId) return res.status(400).json({ message: "Choose the customer." });
   if (!Array.isArray(lines) || lines.length === 0) {
     return res.status(400).json({ message: "Add at least one item to this order." });
+  }
+
+  /**
+   * Which book the order belongs to, so the sale and the bill it becomes land
+   * in that run. It does NOT pick the order's number: every order, typed or
+   * from the shop page, takes the one SO/ run, which is what was agreed on
+   * 19 Sept. Counter by default, since that is what a phone order is.
+   *
+   * Asymmetric before the migration, the same as the customer's state: naming
+   * a channel it cannot store is a loud 503, leaving it at the counter changes
+   * nothing.
+   */
+  const { channel, error: channelError } = await resolveChannel(askedChannel, wholesalerId);
+  if (channelError) return res.status(400).json({ message: channelError });
+  const canFile = await hasOrderChannel();
+  if (channel !== DEFAULT_CHANNEL && !canFile) {
+    return res.status(503).json({
+      message: "Orders cannot be filed under a marketplace yet. Leave it at Counter or phone for now.",
+      code: "ORDER_CHANNEL_NOT_SET_UP",
+    });
   }
 
   const client = await pool.connect();
@@ -1916,47 +1954,38 @@ module.exports.createManualOrder = async (req, res) => {
       ? { address: line1, phone: String(contactPhone ?? "").trim() || null,
           reference: String(theirReference ?? "").trim() || null }
       : null;
-    // Which channel/linkage this order belongs to.
-    const { channel: reqChannel } = req.body;
-    const { channel, linkage } = await resolveChannel(reqChannel, wholesalerId, client);
-    const orderNumber = await nextOrderNumber(client, wholesalerId, channel || "manual", { linkage });
-
-    const hasChannelCol = await client
-      .query(
-        `SELECT 1 FROM information_schema.columns
-          WHERE table_name = 'orders' AND column_name = 'channel' LIMIT 1`,
-      )
-      .then((r) => r.rows.length > 0)
-      .catch(() => false);
-
-    const orderCols = [
-      "supplier_id", "party_id", "buyer_id", "source", "order_number", "quantity",
-      "subtotal", "total_amount", "amount_paid", "remaining_amount",
-      "status", "payment_status", "notes",
-    ];
-    if (hasChannelCol) orderCols.push("channel");
-    orderCols.push("delivery_address", "billing_address", "contact_phone");
-
-    const orderVals = [
-      wholesalerId, partyId, null, "manual", orderNumber,
-      clean.reduce((n, l) => n + l.quantity, 0),
-      subtotal, subtotal, 0, subtotal,
-      "supplier_accepted", "pending", String(notes ?? "").trim() || null,
-    ];
-    if (hasChannelCol) orderVals.push(channel || "manual");
-    orderVals.push(
-      address ? JSON.stringify(address) : null,
-      address ? JSON.stringify(address) : null,
-      String(contactPhone ?? "").trim() || null,
-    );
+    const orderNumber = await nextOrderNumber(client, wholesalerId);
 
     const order = await client.query(
-      `INSERT INTO orders (${orderCols.join(", ")}, expected_delivery_date, updated_at)
-       VALUES (${orderVals.map((_, i) => `$${i + 1}`).join(", ")},
-               $${orderVals.length + 1}::date, CURRENT_TIMESTAMP)
+      `INSERT INTO orders
+         (supplier_id, party_id, buyer_id, source, order_number, quantity,
+          subtotal, total_amount, amount_paid, remaining_amount,
+          status, payment_status, notes, expected_delivery_date, updated_at,
+          delivery_address, billing_address, contact_phone)
+       VALUES ($1,$2,NULL,'manual',$3,$4,$5,$5,0,$5,
+               'supplier_accepted','pending',$6,$7::date,CURRENT_TIMESTAMP,
+               $8,$9,$10)
        RETURNING *`,
-      [...orderVals, expectedOn || null],
+      [
+        wholesalerId, partyId, orderNumber,
+        clean.reduce((n, l) => n + l.quantity, 0),
+        subtotal,
+        String(notes ?? "").trim() || null,
+        expectedOn || null,
+        // Stored as JSON, the shape the shop order uses and the detail screen
+        // already reads, rather than a second shape it would have to learn.
+        address ? JSON.stringify(address) : null,
+        address ? JSON.stringify(address) : null,
+        String(contactPhone ?? "").trim() || null,
+      ],
     );
+    if (canFile) {
+      await client.query("UPDATE orders SET channel = $1 WHERE id = $2", [
+        channel,
+        order.rows[0].id,
+      ]);
+      order.rows[0].channel = channel;
+    }
 
     for (const line of clean) {
       await client.query(
